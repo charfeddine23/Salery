@@ -51,12 +51,16 @@ import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.QuickActionButton
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
+import com.example.ui.theme.DebtBtnGradient
 import com.example.ui.theme.EmeraldNeon
+import com.example.ui.theme.ExpenseBtnGradient
+import com.example.ui.theme.IncomeBtnGradient
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
@@ -299,26 +303,29 @@ fun DashboardScreen(
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GlassButton(
+                QuickActionButton(
                     text = strings.addIncome,
                     icon = Icons.Default.Add,
-                    containerColor = EmeraldNeon,
+                    brush = IncomeBtnGradient,
+                    borderColor = Color(0x6034D399),
                     modifier = Modifier.weight(1f),
                     onClick = onAddIncomeClick
                 )
-                GlassButton(
+                QuickActionButton(
                     text = strings.addExpense,
                     icon = Icons.Default.Add,
-                    containerColor = RoseNeon,
+                    brush = ExpenseBtnGradient,
+                    borderColor = Color(0x60FB7185),
                     modifier = Modifier.weight(1f),
                     onClick = onAddExpenseClick
                 )
-                GlassButton(
+                QuickActionButton(
                     text = strings.addDebt,
                     icon = Icons.Default.CreditCard,
-                    containerColor = colors.primaryNeon,
+                    brush = DebtBtnGradient,
+                    borderColor = Color(0x6038BDF8),
                     modifier = Modifier.weight(1f),
                     onClick = onAddDebtClick
                 )

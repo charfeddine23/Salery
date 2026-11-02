@@ -73,7 +73,7 @@ fun AddTransactionDialog(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
             shape = RoundedCornerShape(26.dp),
-            backgroundColor = colors.glassSurface
+            backgroundColor = colors.dialogBackground
         ) {
             Column(
                 modifier = Modifier

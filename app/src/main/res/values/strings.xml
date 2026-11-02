@@ -45,7 +45,7 @@
     <string name="add_transaction">Add Transaction</string>
     <string name="add_income">Add Income</string>
     <string name="add_expense">Add Expense</string>
-    <string name="add_debt">Add Debt Record</string>
+    <string name="add_debt">Add Debt</string>
     <string name="amount">Amount (DZD)</string>
     <string name="category">Category</string>
     <string name="title_or_person">Title / Person</string>

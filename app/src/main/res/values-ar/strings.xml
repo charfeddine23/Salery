@@ -45,7 +45,7 @@
     <string name="add_transaction">إضافة معاملة</string>
     <string name="add_income">إضافة دخل</string>
     <string name="add_expense">إضافة مصروف</string>
-    <string name="add_debt">إضافة سجل دين</string>
+    <string name="add_debt">إضافة دين</string>
     <string name="amount">المبلغ (د.ج)</string>
     <string name="category">الفئة</string>
     <string name="title_or_person">العنوان / الشخص</string>

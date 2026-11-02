@@ -15,6 +15,7 @@ data class LiquidGlassColors(
     val bgEnd: Color,
     val glassSurface: Color,
     val glassCard: Color,
+    val dialogBackground: Color,
     val glassBorder: Color,
     val glassBorderSubtle: Color,
     val primaryNeon: Color,
@@ -35,6 +36,7 @@ val DarkLiquidGlassColors = LiquidGlassColors(
     bgEnd = DarkBgEnd,
     glassSurface = GlassDarkSurface,
     glassCard = GlassDarkCard,
+    dialogBackground = Color(0xF70E1726), // 97% solid opaque dark glass
     glassBorder = GlassDarkBorder,
     glassBorderSubtle = GlassDarkBorderSubtle,
     primaryNeon = CyanNeon,
@@ -55,6 +57,7 @@ val LightLiquidGlassColors = LiquidGlassColors(
     bgEnd = LightBgEnd,
     glassSurface = GlassLightSurface,
     glassCard = GlassLightCard,
+    dialogBackground = Color(0xFAFFFFFF), // 98% solid crystal white (no background bleed-through)
     glassBorder = GlassLightBorder,
     glassBorderSubtle = GlassLightBorderSubtle,
     primaryNeon = Color(0xFF0284C7),
