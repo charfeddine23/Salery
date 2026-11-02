@@ -79,9 +79,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         var owedToMe = 0.0
         for (d in debts) {
             if (!d.isPaid) {
-                val rem = if (d.remainingAmount > 0) d.remainingAmount else d.amount
-                if (d.type == DebtType.OWED_BY_ME) owedByMe += rem
-                else owedToMe += rem
+                if (d.type == DebtType.OWED_BY_ME) owedByMe += d.amount
+                else owedToMe += d.amount
             }
         }
 
@@ -225,100 +224,42 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
      * Debt Management with Auto-Payment:
      * Scans for pending debts with autoPayOnDueDate = true whose due date has arrived.
      */
-    /**
-     * Debt Management with Auto-Payment:
-     * Handles both one-time due date settlements and recurring monthly installments.
-     */
     suspend fun checkAndExecuteAutoPayDebts() {
         val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-        val currentYear = cal.get(Calendar.YEAR)
-        val currentMonth = cal.get(Calendar.MONTH) + 1
-        val currentDay = cal.get(Calendar.DAY_OF_MONTH)
-        val monthYearKey = "$currentYear-$currentMonth"
+        val dueDebts = dao.getDueAutoPayDebts(now)
 
-        val autoDebts = dao.getPendingAutoPayDebts()
+        for (debt in dueDebts) {
+            // Mark debt as paid
+            dao.updateDebt(
+                debt.copy(
+                    isPaid = true,
+                    paidDateMillis = now
+                )
+            )
 
-        for (debt in autoDebts) {
-            if (debt.isRecurringMonthlyInstallment) {
-                // Monthly recurring installment check
-                if (currentDay >= debt.installmentDayOfMonth && debt.lastInstallmentCreditedMonth != monthYearKey) {
-                    val payNow = if (debt.monthlyInstallmentAmount > 0) {
-                        minOf(debt.monthlyInstallmentAmount, debt.remainingAmount)
-                    } else debt.remainingAmount
-
-                    val newRemaining = (debt.remainingAmount - payNow).coerceAtLeast(0.0)
-                    val isFullySettled = newRemaining <= 0.0
-
-                    dao.updateDebt(
-                        debt.copy(
-                            remainingAmount = newRemaining,
-                            lastInstallmentCreditedMonth = monthYearKey,
-                            isPaid = isFullySettled,
-                            paidDateMillis = if (isFullySettled) now else null
-                        )
+            // Automatically record corresponding wallet transaction
+            if (debt.type == DebtType.OWED_BY_ME) {
+                dao.insertTransaction(
+                    TransactionEntity(
+                        type = TransactionType.EXPENSE,
+                        amount = debt.amount,
+                        category = "debt_payment",
+                        title = "Auto-Paid Debt: ${debt.personName}",
+                        note = "Automatic debt execution on due date (${debt.note})",
+                        dateMillis = now
                     )
-
-                    if (debt.type == DebtType.OWED_BY_ME) {
-                        dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = payNow,
-                                category = "debt_payment",
-                                title = "Auto-Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
-                                dateMillis = now
-                            )
-                        )
-                    } else {
-                        dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.INCOME,
-                                amount = payNow,
-                                category = "debt_collection",
-                                title = "Auto-Collected Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
-                                dateMillis = now
-                            )
-                        )
-                    }
-                    _toastEvent.emit("Auto-installment of $payNow DZD processed for ${debt.personName}")
-                }
+                )
             } else {
-                // One-time full debt settlement on due date
-                if (debt.dueDateMillis <= now) {
-                    val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
-                    dao.updateDebt(
-                        debt.copy(
-                            remainingAmount = 0.0,
-                            isPaid = true,
-                            paidDateMillis = now
-                        )
+                dao.insertTransaction(
+                    TransactionEntity(
+                        type = TransactionType.INCOME,
+                        amount = debt.amount,
+                        category = "debt_collection",
+                        title = "Auto-Received Debt: ${debt.personName}",
+                        note = "Automatic debt collection on due date (${debt.note})",
+                        dateMillis = now
                     )
-                    if (debt.type == DebtType.OWED_BY_ME) {
-                        dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = payAmount,
-                                category = "debt_payment",
-                                title = "Auto-Paid Debt: ${debt.personName}",
-                                note = "Automatic debt execution on due date (${debt.note})",
-                                dateMillis = now
-                            )
-                        )
-                    } else {
-                        dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.INCOME,
-                                amount = payAmount,
-                                category = "debt_collection",
-                                title = "Auto-Received Debt: ${debt.personName}",
-                                note = "Automatic debt collection on due date (${debt.note})",
-                                dateMillis = now
-                            )
-                        )
-                    }
-                }
+                )
             }
         }
     }
@@ -346,30 +287,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Debt Actions
-    fun addDebt(
-        type: DebtType,
-        personName: String,
-        amount: Double,
-        note: String,
-        dueDateMillis: Long,
-        autoPay: Boolean,
-        isRecurring: Boolean = false,
-        monthlyInstallment: Double = 0.0,
-        installmentDay: Int = 1
-    ) {
+    fun addDebt(type: DebtType, personName: String, amount: Double, note: String, dueDateMillis: Long, autoPay: Boolean) {
         viewModelScope.launch {
             dao.insertDebt(
                 DebtEntity(
                     type = type,
                     personName = personName,
                     amount = amount,
-                    remainingAmount = amount,
                     note = note,
                     dueDateMillis = dueDateMillis,
-                    autoPayOnDueDate = autoPay,
-                    isRecurringMonthlyInstallment = isRecurring,
-                    monthlyInstallmentAmount = monthlyInstallment,
-                    installmentDayOfMonth = installmentDay
+                    autoPayOnDueDate = autoPay
                 )
             )
         }
@@ -378,10 +305,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun markDebtAsPaid(debt: DebtEntity) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
             dao.updateDebt(
                 debt.copy(
-                    remainingAmount = 0.0,
                     isPaid = true,
                     paidDateMillis = now
                 )
@@ -391,7 +316,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 dao.insertTransaction(
                     TransactionEntity(
                         type = TransactionType.EXPENSE,
-                        amount = payAmount,
+                        amount = debt.amount,
                         category = "debt_payment",
                         title = "Paid Debt: ${debt.personName}",
                         note = "Manual settlement: ${debt.note}",
@@ -402,7 +327,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 dao.insertTransaction(
                     TransactionEntity(
                         type = TransactionType.INCOME,
-                        amount = payAmount,
+                        amount = debt.amount,
                         category = "debt_collection",
                         title = "Collected Debt: ${debt.personName}",
                         note = "Manual settlement: ${debt.note}",

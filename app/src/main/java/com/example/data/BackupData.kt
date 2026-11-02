@@ -57,11 +57,6 @@ data class BackupPayload(
             obj.put("isPaid", d.isPaid)
             if (d.paidDateMillis != null) obj.put("paidDateMillis", d.paidDateMillis)
             obj.put("createdDateMillis", d.createdDateMillis)
-            obj.put("isRecurringMonthlyInstallment", d.isRecurringMonthlyInstallment)
-            obj.put("monthlyInstallmentAmount", d.monthlyInstallmentAmount)
-            obj.put("installmentDayOfMonth", d.installmentDayOfMonth)
-            obj.put("remainingAmount", d.remainingAmount)
-            obj.put("lastInstallmentCreditedMonth", d.lastInstallmentCreditedMonth)
             debtsArray.put(obj)
         }
         root.put("debts", debtsArray)
@@ -118,12 +113,7 @@ data class BackupPayload(
                                 autoPayOnDueDate = obj.optBoolean("autoPayOnDueDate", true),
                                 isPaid = obj.optBoolean("isPaid", false),
                                 paidDateMillis = if (obj.has("paidDateMillis")) obj.getLong("paidDateMillis") else null,
-                                createdDateMillis = obj.optLong("createdDateMillis", System.currentTimeMillis()),
-                                isRecurringMonthlyInstallment = obj.optBoolean("isRecurringMonthlyInstallment", false),
-                                monthlyInstallmentAmount = obj.optDouble("monthlyInstallmentAmount", 0.0),
-                                installmentDayOfMonth = obj.optInt("installmentDayOfMonth", 1),
-                                remainingAmount = obj.optDouble("remainingAmount", obj.getDouble("amount")),
-                                lastInstallmentCreditedMonth = obj.optString("lastInstallmentCreditedMonth", "")
+                                createdDateMillis = obj.optLong("createdDateMillis", System.currentTimeMillis())
                             )
                         )
                     }

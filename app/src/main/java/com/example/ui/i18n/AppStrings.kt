@@ -53,13 +53,6 @@ interface StringsBundle {
     val markAsPaid: String
     val executePayment: String
 
-    val debtPaymentMode: String
-    val debtPayInFull: String
-    val debtMonthlyInstallments: String
-    val monthlyInstallmentAmount: String
-    val installmentDayOfMonth: String
-    val remainingBalance: String
-
     val addTransaction: String
     val addIncome: String
     val addExpense: String
@@ -157,13 +150,6 @@ object EnglishStrings : StringsBundle {
     override val markAsPaid = "Mark as Paid"
     override val executePayment = "Pay Now"
 
-    override val debtPaymentMode = "Payment Plan"
-    override val debtPayInFull = "Full Payment"
-    override val debtMonthlyInstallments = "Monthly Recurring Installments"
-    override val monthlyInstallmentAmount = "Monthly Installment (DZD)"
-    override val installmentDayOfMonth = "Installment Day of Month"
-    override val remainingBalance = "Remaining Balance"
-
     override val addTransaction = "Add Transaction"
     override val addIncome = "Add Income"
     override val addExpense = "Add Expense"
@@ -260,13 +246,6 @@ object ArabicStrings : StringsBundle {
     override val debtPaid = "تم السداد"
     override val markAsPaid = "تحديد كمسدد"
     override val executePayment = "سداد الآن"
-
-    override val debtPaymentMode = "طريقة السداد"
-    override val debtPayInFull = "سداد كامل في موعد الاستحقاق"
-    override val debtMonthlyInstallments = "أقساط شهرية تلقائية"
-    override val monthlyInstallmentAmount = "قيمة القسط الشهري (د.ج)"
-    override val installmentDayOfMonth = "يوم سداد القسط من كل شهر"
-    override val remainingBalance = "المبلغ المتبقي"
 
     override val addTransaction = "إضافة معاملة"
     override val addIncome = "إضافة دخل"

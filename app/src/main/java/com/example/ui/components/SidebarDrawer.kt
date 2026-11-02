@@ -129,7 +129,7 @@ fun SidebarDrawer(
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "v$APP_VERSION",
+                                text = "Liquid Glass v3",
                                 color = colors.primaryNeon,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold

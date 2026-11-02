@@ -30,7 +30,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,17 +57,7 @@ import java.util.Calendar
 fun AddDebtDialog(
     initialType: DebtType = DebtType.OWED_BY_ME,
     onDismiss: () -> Unit,
-    onSave: (
-        type: DebtType,
-        personName: String,
-        amount: Double,
-        note: String,
-        dueDateMillis: Long,
-        autoPay: Boolean,
-        isRecurring: Boolean,
-        monthlyInstallment: Double,
-        installmentDay: Int
-    ) -> Unit
+    onSave: (type: DebtType, personName: String, amount: Double, note: String, dueDateMillis: Long, autoPay: Boolean) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
@@ -78,27 +67,8 @@ fun AddDebtDialog(
     var personNameText by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
-    var dueDateMillis by remember { mutableLongStateOf(System.currentTimeMillis() + 30 * 86400000L) }
+    var dueDateMillis by remember { mutableLongStateOf(System.currentTimeMillis() + 7 * 86400000L) }
     var autoPayOnDueDate by remember { mutableStateOf(true) }
-
-    // Recurring Monthly Installments
-    var isRecurringInstallment by remember { mutableStateOf(false) }
-    var installmentAmountText by remember { mutableStateOf("") }
-    var installmentDay by remember { mutableIntStateOf(15) }
-
-    fun openInstallmentDayPicker() {
-        val now = Calendar.getInstance()
-        val datePicker = DatePickerDialog(
-            context,
-            { _, _, _, dayOfMonth ->
-                installmentDay = dayOfMonth
-            },
-            now.get(Calendar.YEAR),
-            now.get(Calendar.MONTH),
-            installmentDay.coerceIn(1, 28)
-        )
-        datePicker.show()
-    }
 
     fun openCalendarPicker() {
         val cal = Calendar.getInstance().apply { timeInMillis = dueDateMillis }
@@ -254,9 +224,9 @@ fun AddDebtDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Payment Plan Selector (Full Payment vs Monthly Installments)
+                // Interactive Calendar Date Picker for Due Date
                 Text(
-                    text = strings.debtPaymentMode,
+                    text = strings.debtDueDate,
                     color = colors.textSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
@@ -266,191 +236,59 @@ fun AddDebtDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(colors.glassCard)
-                        .padding(3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                        .clickable { openCalendarPicker() }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(
-                                if (!isRecurringInstallment) colors.primaryNeon.copy(alpha = 0.25f)
-                                else Color.Transparent
-                            )
-                            .clickable { isRecurringInstallment = false }
-                            .padding(vertical = 9.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = strings.pickFromCalendar,
+                            tint = colors.primaryNeon,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = strings.debtPayInFull,
-                            color = if (!isRecurringInstallment) colors.primaryNeon else colors.textMuted,
+                            text = formatDate(dueDateMillis),
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 14.sp
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(
-                                if (isRecurringInstallment) AmberNeon.copy(alpha = 0.25f)
-                                else Color.Transparent
-                            )
-                            .clickable { isRecurringInstallment = true }
-                            .padding(vertical = 9.dp),
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.primaryNeon.copy(alpha = 0.2f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = strings.debtMonthlyInstallments,
-                            color = if (isRecurringInstallment) AmberNeon else colors.textMuted,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            text = strings.pickFromCalendar,
+                            color = colors.primaryNeon,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (!isRecurringInstallment) {
-                    // Due Date Picker for One-Time Settlement
-                    Text(
-                        text = strings.debtDueDate,
-                        color = colors.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(colors.glassCard)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
-                            .clickable { openCalendarPicker() }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = strings.pickFromCalendar,
-                                tint = colors.primaryNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = formatDate(dueDateMillis),
-                                color = colors.textPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(colors.primaryNeon.copy(alpha = 0.2f))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = strings.pickFromCalendar,
-                                color = colors.primaryNeon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-
-                    // Quick Day Shortcuts
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(7, 14, 30, 60).forEach { days ->
-                            val targetMillis = System.currentTimeMillis() + days * 86400000L
-                            val isSelected = Math.abs(dueDateMillis - targetMillis) < 86400000L
-                            GlassPill(
-                                text = "+$days d",
-                                isSelected = isSelected,
-                                onClick = { dueDateMillis = targetMillis }
-                            )
-                        }
-                    }
-                } else {
-                    // Recurring Installments: Monthly Amount & Custom Day of Month
-                    OutlinedTextField(
-                        value = installmentAmountText,
-                        onValueChange = { installmentAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                        label = { Text(strings.monthlyInstallmentAmount) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = colors.textPrimary,
-                            unfocusedTextColor = colors.textPrimary,
-                            focusedBorderColor = AmberNeon,
-                            unfocusedBorderColor = colors.glassBorderSubtle,
-                            focusedLabelColor = AmberNeon,
-                            unfocusedLabelColor = colors.textSecondary
-                        ),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Compact Single-Line Day Picker
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(colors.glassCard)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
-                            .clickable { openInstallmentDayPicker() }
-                            .padding(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = strings.pickFromCalendar,
-                                tint = AmberNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = strings.installmentDayOfMonth,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(AmberNeon.copy(alpha = 0.2f))
-                                .border(1.dp, AmberNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 12.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = "Day $installmentDay",
-                                color = AmberNeon,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                // Quick Day Shortcuts
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(3, 7, 14, 30).forEach { days ->
+                        val targetMillis = System.currentTimeMillis() + days * 86400000L
+                        val isSelected = Math.abs(dueDateMillis - targetMillis) < 86400000L
+                        GlassPill(
+                            text = "+$days d",
+                            isSelected = isSelected,
+                            onClick = { dueDateMillis = targetMillis }
+                        )
                     }
                 }
 
@@ -474,8 +312,7 @@ fun AddDebtDialog(
                             fontSize = 14.sp
                         )
                         Text(
-                            text = if (isRecurringInstallment) "Auto-deducts monthly installment until settled"
-                            else "Auto-executes transaction when due",
+                            text = "Auto-executes transaction when due",
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )
@@ -485,7 +322,7 @@ fun AddDebtDialog(
                         onCheckedChange = { autoPayOnDueDate = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = if (isRecurringInstallment) AmberNeon else colors.primaryNeon,
+                            checkedTrackColor = colors.primaryNeon,
                             uncheckedThumbColor = colors.textMuted,
                             uncheckedTrackColor = colors.glassCard
                         )
@@ -514,28 +351,15 @@ fun AddDebtDialog(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                val totalAmount = amountText.toDoubleOrNull() ?: 0.0
-                val installmentAmount = installmentAmountText.toDoubleOrNull() ?: (totalAmount / 3.0)
-                val isValid = totalAmount > 0.0 && personNameText.isNotBlank() &&
-                        (!isRecurringInstallment || installmentAmount > 0.0)
-
+                val isValid = (amountText.toDoubleOrNull() ?: 0.0) > 0.0 && personNameText.isNotBlank()
                 GlassButton(
                     text = strings.save,
                     enabled = isValid,
                     containerColor = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        onSave(
-                            selectedType,
-                            personNameText.trim(),
-                            totalAmount,
-                            noteText.trim(),
-                            dueDateMillis,
-                            autoPayOnDueDate,
-                            isRecurringInstallment,
-                            if (isRecurringInstallment) installmentAmount else 0.0,
-                            installmentDay
-                        )
+                        val amount = amountText.toDoubleOrNull() ?: 0.0
+                        onSave(selectedType, personNameText.trim(), amount, noteText.trim(), dueDateMillis, autoPayOnDueDate)
                         onDismiss()
                     }
                 )
