@@ -63,7 +63,7 @@ fun ExpenseScreen(
         matchesSearch && matchesCategory
     }
 
-    val availableCategories = listOf("food", "shopping", "transport", "bills", "health", "entertainment", "education", "other")
+    val availableCategories = listOf("internet", "shopping", "bills", "transfer", "withdrawal", "food", "transport", "health", "entertainment", "other")
 
     LazyColumn(
         modifier = modifier

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -265,17 +266,41 @@ fun DebtItemCard(
                     }
                 }
 
-                Text(
-                    text = formatDzd(debt.amount, currencyCode),
-                    color = colors.textPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = formatDzd(debt.amount, currencyCode),
+                        color = colors.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    if (debt.isRecurringMonthlyInstallment && !debt.isPaid) {
+                        Text(
+                            text = "${strings.remainingBalance}: ${formatDzd(debt.remainingAmount, currencyCode)}",
+                            color = AmberNeon,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            if (debt.isRecurringMonthlyInstallment && !debt.isPaid) {
+                Spacer(modifier = Modifier.height(8.dp))
+                val paidRatio = ((debt.amount - debt.remainingAmount) / debt.amount).toFloat().coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { paidRatio },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = AmberNeon,
+                    trackColor = colors.glassBorderSubtle,
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Badges & Due Date Info
+            // Badges & Due Date / Installment Info
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,8 +325,31 @@ fun DebtItemCard(
                         )
                     }
 
-                    // Auto-pay badge
-                    if (debt.autoPayOnDueDate) {
+                    // Auto-pay or Installment badge
+                    if (debt.isRecurringMonthlyInstallment) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AmberNeon.copy(alpha = 0.18f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Autorenew,
+                                    contentDescription = null,
+                                    tint = AmberNeon,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "${debt.monthlyInstallmentAmount.toLong()} $currencyCode / mo • Day ${debt.installmentDayOfMonth}",
+                                    color = AmberNeon,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (debt.autoPayOnDueDate) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -327,9 +375,10 @@ fun DebtItemCard(
                     }
                 }
 
-                // Due Date Text
+                // Due Date Text or Installment Status
                 Text(
                     text = if (debt.isPaid) "Settled on ${formatDate(debt.paidDateMillis ?: debt.dueDateMillis)}"
+                    else if (debt.isRecurringMonthlyInstallment) "Monthly on Day ${debt.installmentDayOfMonth}"
                     else "Due: ${formatDate(debt.dueDateMillis)} ($daysLeft d)",
                     color = colors.textMuted,
                     fontSize = 11.sp

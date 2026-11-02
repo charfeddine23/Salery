@@ -90,7 +90,7 @@ fun LockScreen(
             )
 
             Text(
-                text = "Liquid Glass Security",
+                text = "v$APP_VERSION",
                 color = colors.primaryNeon,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold

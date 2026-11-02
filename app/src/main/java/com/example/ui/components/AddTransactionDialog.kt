@@ -60,11 +60,11 @@ fun AddTransactionDialog(
     var titleText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
 
-    val incomeCategories = listOf("salary", "freelance", "investment", "gift", "other")
-    val expenseCategories = listOf("food", "shopping", "transport", "bills", "health", "entertainment", "education", "other")
+    val incomeCategories = listOf("salary", "freelance", "transfer", "investment", "gift", "other")
+    val expenseCategories = listOf("internet", "shopping", "bills", "transfer", "withdrawal", "food", "transport", "health", "entertainment", "other")
 
     var selectedCategory by remember {
-        mutableStateOf(if (initialType == TransactionType.INCOME) "salary" else "food")
+        mutableStateOf(if (initialType == TransactionType.INCOME) "salary" else "internet")
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -125,7 +125,7 @@ fun AddTransactionDialog(
                             )
                             .clickable {
                                 selectedType = TransactionType.EXPENSE
-                                selectedCategory = "food"
+                                selectedCategory = "internet"
                             }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -189,7 +189,7 @@ fun AddTransactionDialog(
                 OutlinedTextField(
                     value = titleText,
                     onValueChange = { titleText = it },
-                    label = { Text(strings.titleOrPerson) },
+                    label = { Text(if (selectedType == TransactionType.EXPENSE) strings.expenseDescription else strings.incomeSource) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -222,7 +222,12 @@ fun AddTransactionDialog(
                         GlassPill(
                             text = strings.categoryName(cat),
                             isSelected = selectedCategory == cat,
-                            onClick = { selectedCategory = cat }
+                            onClick = {
+                                selectedCategory = cat
+                                if (titleText.isBlank()) {
+                                    titleText = strings.categoryName(cat)
+                                }
+                            }
                         )
                     }
                 }

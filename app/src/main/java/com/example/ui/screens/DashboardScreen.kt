@@ -25,12 +25,15 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.LocalAtm
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -446,6 +449,9 @@ fun TransactionRowItem(
     val icon: ImageVector = when (transaction.category.lowercase()) {
         "salary" -> Icons.Default.Paid
         "freelance" -> Icons.Default.Work
+        "internet", "telecom" -> Icons.Default.Wifi
+        "transfer" -> Icons.Default.Send
+        "withdrawal" -> Icons.Default.LocalAtm
         "food" -> Icons.Default.Fastfood
         "shopping" -> Icons.Default.ShoppingCart
         "bills" -> Icons.Default.Receipt

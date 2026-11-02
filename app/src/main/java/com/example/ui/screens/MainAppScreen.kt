@@ -71,6 +71,7 @@ import com.example.ui.components.PatternLockDialog
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.SidebarDrawer
 import com.example.ui.i18n.APP_NAME
+import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.EnglishStrings
@@ -136,51 +137,56 @@ fun MainAppScreen(
                 }
             )
         } else {
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet(
-                        drawerContainerColor = Color.Transparent,
-                        modifier = Modifier.width(320.dp)
-                    ) {
-                        SidebarDrawer(
-                            selectedRoute = currentRoute,
-                            onNavigate = { route ->
-                                currentRoute = route
-                                scope.launch { drawerState.close() }
-                            },
-                            userSettings = userSettings,
-                            onOpenSalaryScheduler = {
-                                scope.launch { drawerState.close() }
-                                showSalarySchedulerDialog = true
-                            },
-                            onOpenBackupRestore = {
-                                scope.launch { drawerState.close() }
-                                showBackupRestoreDialog = true
-                            },
-                            onOpenPatternLock = {
-                                scope.launch { drawerState.close() }
-                                showPatternLockDialog = true
-                            },
-                            onLockAppNow = {
-                                scope.launch { drawerState.close() }
-                                viewModel.lockApp()
-                            },
-                            onToggleTheme = {
-                                val next = if (userSettings.themeMode == "DARK") "LIGHT" else "DARK"
-                                viewModel.setThemeMode(next)
-                            },
-                            onSelectLanguage = { lang ->
-                                viewModel.setLanguage(lang)
+            // Keep Navigation Drawer permanently anchored on the LEFT side regardless of language
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            drawerContainerColor = Color.Transparent,
+                            modifier = Modifier.width(320.dp)
+                        ) {
+                            CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                                SidebarDrawer(
+                                    selectedRoute = currentRoute,
+                                    onNavigate = { route ->
+                                        currentRoute = route
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    userSettings = userSettings,
+                                    onOpenSalaryScheduler = {
+                                        scope.launch { drawerState.close() }
+                                        showSalarySchedulerDialog = true
+                                    },
+                                    onOpenBackupRestore = {
+                                        scope.launch { drawerState.close() }
+                                        showBackupRestoreDialog = true
+                                    },
+                                    onOpenPatternLock = {
+                                        scope.launch { drawerState.close() }
+                                        showPatternLockDialog = true
+                                    },
+                                    onLockAppNow = {
+                                        scope.launch { drawerState.close() }
+                                        viewModel.lockApp()
+                                    },
+                                    onToggleTheme = {
+                                        val next = if (userSettings.themeMode == "DARK") "LIGHT" else "DARK"
+                                        viewModel.setThemeMode(next)
+                                    },
+                                    onSelectLanguage = { lang ->
+                                        viewModel.setLanguage(lang)
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
-                }
-            ) {
-                GlassBackground {
-                    Scaffold(
-                        containerColor = Color.Transparent,
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                ) {
+                    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                        GlassBackground {
+                            Scaffold(
+                                containerColor = Color.Transparent,
+                                snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
                             MainTopAppBar(
                                 title = when (currentRoute) {
@@ -296,27 +302,38 @@ fun MainAppScreen(
                     }
                 }
             }
+        }
 
-            // Dialogs
-            if (showAddTransactionDialog) {
-                AddTransactionDialog(
-                    initialType = addTransactionType,
-                    onDismiss = { showAddTransactionDialog = false },
-                    onSave = { type, amount, category, title, note, dateMillis ->
-                        viewModel.addTransaction(type, amount, category, title, note, dateMillis)
-                    }
-                )
-            }
+        // Dialogs
+        if (showAddTransactionDialog) {
+            AddTransactionDialog(
+                initialType = addTransactionType,
+                onDismiss = { showAddTransactionDialog = false },
+                onSave = { type, amount, category, title, note, dateMillis ->
+                    viewModel.addTransaction(type, amount, category, title, note, dateMillis)
+                }
+            )
+        }
 
-            if (showAddDebtDialog) {
-                AddDebtDialog(
-                    initialType = addDebtType,
-                    onDismiss = { showAddDebtDialog = false },
-                    onSave = { type, person, amount, note, dueDateMillis, autoPay ->
-                        viewModel.addDebt(type, person, amount, note, dueDateMillis, autoPay)
-                    }
-                )
-            }
+        if (showAddDebtDialog) {
+            AddDebtDialog(
+                initialType = addDebtType,
+                onDismiss = { showAddDebtDialog = false },
+                onSave = { type, person, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay ->
+                    viewModel.addDebt(
+                        type = type,
+                        personName = person,
+                        amount = amount,
+                        note = note,
+                        dueDateMillis = dueDateMillis,
+                        autoPay = autoPay,
+                        isRecurring = isRecurring,
+                        monthlyInstallment = monthlyInstallment,
+                        installmentDay = installmentDay
+                    )
+                }
+            )
+        }
 
             if (showSalarySchedulerDialog) {
                 SalarySchedulerDialog(
@@ -400,7 +417,7 @@ fun MainTopAppBar(
                 letterSpacing = 0.4.sp
             )
             Text(
-                text = "Liquid Glass v3",
+                text = "v$APP_VERSION",
                 color = colors.primaryNeon,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold

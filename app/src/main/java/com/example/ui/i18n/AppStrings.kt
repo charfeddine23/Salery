@@ -12,7 +12,7 @@ import java.util.Locale
 // App Name, Version, and Developer Name MUST NEVER be translated or changed into Arabic script!
 const val APP_NAME = "SaleryPelse"
 const val DEVELOPER_NAME = "Kahlessenane Charfeddine"
-const val APP_VERSION = "1.0.0"
+const val APP_VERSION = "1.0.1"
 
 interface StringsBundle {
     val appName: String get() = APP_NAME
@@ -53,6 +53,13 @@ interface StringsBundle {
     val markAsPaid: String
     val executePayment: String
 
+    val debtPaymentMode: String
+    val debtPayInFull: String
+    val debtMonthlyInstallments: String
+    val monthlyInstallmentAmount: String
+    val installmentDayOfMonth: String
+    val remainingBalance: String
+
     val addTransaction: String
     val addIncome: String
     val addExpense: String
@@ -60,6 +67,11 @@ interface StringsBundle {
     val amount: String
     val category: String
     val titleOrPerson: String
+    val expenseDescription: String
+    val incomeSource: String
+    val pickFromCalendar: String
+    val selectDueDate: String
+    val selectPayday: String
     val note: String
     val date: String
     val save: String
@@ -145,6 +157,13 @@ object EnglishStrings : StringsBundle {
     override val markAsPaid = "Mark as Paid"
     override val executePayment = "Pay Now"
 
+    override val debtPaymentMode = "Payment Plan"
+    override val debtPayInFull = "Full Payment"
+    override val debtMonthlyInstallments = "Monthly Recurring Installments"
+    override val monthlyInstallmentAmount = "Monthly Installment (DZD)"
+    override val installmentDayOfMonth = "Installment Day of Month"
+    override val remainingBalance = "Remaining Balance"
+
     override val addTransaction = "Add Transaction"
     override val addIncome = "Add Income"
     override val addExpense = "Add Expense"
@@ -152,6 +171,11 @@ object EnglishStrings : StringsBundle {
     override val amount = "Amount (DZD)"
     override val category = "Category"
     override val titleOrPerson = "Title / Person"
+    override val expenseDescription = "Expense Description (e.g. Internet, Bill, Shopping)"
+    override val incomeSource = "Income Source / Title"
+    override val pickFromCalendar = "Pick from Calendar"
+    override val selectDueDate = "Select Due Date"
+    override val selectPayday = "Select Payday (Day of Month)"
     override val note = "Note (Optional)"
     override val date = "Date"
     override val save = "Save"
@@ -237,6 +261,13 @@ object ArabicStrings : StringsBundle {
     override val markAsPaid = "تحديد كمسدد"
     override val executePayment = "سداد الآن"
 
+    override val debtPaymentMode = "طريقة السداد"
+    override val debtPayInFull = "سداد كامل في موعد الاستحقاق"
+    override val debtMonthlyInstallments = "أقساط شهرية تلقائية"
+    override val monthlyInstallmentAmount = "قيمة القسط الشهري (د.ج)"
+    override val installmentDayOfMonth = "يوم سداد القسط من كل شهر"
+    override val remainingBalance = "المبلغ المتبقي"
+
     override val addTransaction = "إضافة معاملة"
     override val addIncome = "إضافة دخل"
     override val addExpense = "إضافة مصروف"
@@ -244,6 +275,11 @@ object ArabicStrings : StringsBundle {
     override val amount = "المبلغ (د.ج)"
     override val category = "الفئة"
     override val titleOrPerson = "العنوان / الشخص"
+    override val expenseDescription = "نوع المصروف (مثلاً: اشتراك انترنت، فواتير، تسوق، سحب...)"
+    override val incomeSource = "مصدر الدخل / العنوان"
+    override val pickFromCalendar = "اختيار من التقويم"
+    override val selectDueDate = "تحديد تاريخ الاستحقاق"
+    override val selectPayday = "تحديد يوم استلام الراتب"
     override val note = "ملاحظة (اختياري)"
     override val date = "التاريخ"
     override val save = "حفظ"
@@ -296,6 +332,9 @@ object ArabicStrings : StringsBundle {
             "freelance" -> "عمل حر"
             "investment" -> "استثمار"
             "gift" -> "هدية"
+            "internet", "telecom" -> "انترنت واتصالات"
+            "transfer" -> "تحويل مالي"
+            "withdrawal" -> "سحب نقدي"
             "food", "food & dining" -> "طعام ومطاعم"
             "shopping" -> "تسوق"
             "transport" -> "نقل ومواصلات"

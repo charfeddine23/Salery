@@ -1,7 +1,11 @@
 package com.example.ui.components
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Schedule
@@ -35,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -43,6 +49,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import java.util.Calendar
 
 @Composable
 fun SalarySchedulerDialog(
@@ -56,11 +63,26 @@ fun SalarySchedulerDialog(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val context = LocalContext.current
 
     var amountText by remember { mutableStateOf(currentAmount.toLong().toString()) }
     var payday by remember { mutableIntStateOf(currentPayday) }
     var employerText by remember { mutableStateOf(currentEmployer) }
     var autoCredit by remember { mutableStateOf(currentAutoCredit) }
+
+    fun openCalendarPaydayPicker() {
+        val now = Calendar.getInstance()
+        val datePicker = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                payday = dayOfMonth
+            },
+            now.get(Calendar.YEAR),
+            now.get(Calendar.MONTH),
+            payday.coerceIn(1, 28)
+        )
+        datePicker.show()
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         GlassCard(
@@ -151,24 +173,54 @@ fun SalarySchedulerDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Payday Selection
-                Text(
-                    text = "${strings.salaryPayday}: Day $payday",
-                    color = colors.textSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                // Payday (Day of Month) - Sleek Luxurious Single-Line Row
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.glassCard)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                        .clickable { openCalendarPaydayPicker() }
+                        .padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf(1, 5, 15, 20, 25, 28).forEach { day ->
-                        GlassPill(
-                            text = "$day",
-                            isSelected = payday == day,
-                            onClick = { payday = day }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = strings.pickFromCalendar,
+                            tint = colors.primaryNeon,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = strings.salaryPayday,
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.primaryNeon.copy(alpha = 0.2f))
+                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Day $payday",
+                                color = colors.primaryNeon,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
