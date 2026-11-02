@@ -1,0 +1,114 @@
+<resources>
+    <string name="app_name">SaleryPelse</string>
+    <string name="developer_name">Kahlessenane Charfeddine</string>
+    <string name="app_version">1.0.0</string>
+    <string name="currency_dzd">DZD</string>
+    <string name="currency_symbol">DA</string>
+
+    <!-- Navigation & Titles -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_income">Income</string>
+    <string name="nav_expenses">Expenses</string>
+    <string name="nav_debts">Debts</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Financial Summary -->
+    <string name="total_balance">Total Balance</string>
+    <string name="monthly_income">Monthly Income</string>
+    <string name="monthly_expense">Monthly Expenses</string>
+    <string name="active_debts">Active Debts</string>
+    <string name="recent_transactions">Recent Transactions</string>
+    <string name="see_all">See All</string>
+
+    <!-- Salary Scheduler -->
+    <string name="salary_scheduler_title">Smart Salary Scheduler</string>
+    <string name="salary_amount">Monthly Salary Amount</string>
+    <string name="salary_payday">Payday (Day of Month)</string>
+    <string name="salary_employer">Employer / Source</string>
+    <string name="salary_auto_credit">Auto-credit on payday</string>
+    <string name="salary_status_credited">Salary credited automatically</string>
+    <string name="salary_status_upcoming">Next payday: %1$s</string>
+    <string name="salary_received_today">Salary Deposited Today!</string>
+
+    <!-- Debts & Auto-Payment -->
+    <string name="debt_management">Debt Management</string>
+    <string name="debts_owed_by_me">I Owe (Payable)</string>
+    <string name="debts_owed_to_me">Owed to Me (Receivable)</string>
+    <string name="debt_auto_pay">Auto-pay on due date</string>
+    <string name="debt_due_date">Due Date</string>
+    <string name="debt_status_pending">Pending</string>
+    <string name="debt_status_paid">Paid</string>
+    <string name="mark_as_paid">Mark as Paid</string>
+    <string name="execute_payment">Pay Now</string>
+
+    <!-- Dialogs & Forms -->
+    <string name="add_transaction">Add Transaction</string>
+    <string name="add_income">Add Income</string>
+    <string name="add_expense">Add Expense</string>
+    <string name="add_debt">Add Debt Record</string>
+    <string name="amount">Amount (DZD)</string>
+    <string name="category">Category</string>
+    <string name="title_or_person">Title / Person</string>
+    <string name="note">Note (Optional)</string>
+    <string name="date">Date</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="confirm_delete">Are you sure you want to delete this record?</string>
+
+    <!-- Categories -->
+    <string name="cat_salary">Salary</string>
+    <string name="cat_freelance">Freelance</string>
+    <string name="cat_investment">Investment</string>
+    <string name="cat_gift">Gift</string>
+    <string name="cat_food">Food &amp; Dining</string>
+    <string name="cat_shopping">Shopping</string>
+    <string name="cat_transport">Transport</string>
+    <string name="cat_bills">Bills &amp; Utilities</string>
+    <string name="cat_health">Healthcare</string>
+    <string name="cat_entertainment">Entertainment</string>
+    <string name="cat_education">Education</string>
+    <string name="cat_other">Other</string>
+
+    <!-- Settings & Sidebar -->
+    <string name="settings_title">Liquid Glass Settings</string>
+    <string name="app_language">App Language</string>
+    <string name="lang_english">English</string>
+    <string name="lang_arabic">العربية (Arabic)</string>
+    <string name="theme_mode">Theme Appearance</string>
+    <string name="theme_dark">Dark Glass</string>
+    <string name="theme_light">Light Crystal</string>
+    <string name="theme_system">System Default</string>
+
+    <!-- Security & Pattern Lock -->
+    <string name="security_title">Security &amp; Privacy</string>
+    <string name="pattern_lock">Pattern Gesture Lock</string>
+    <string name="pattern_lock_desc">Protect app with 3x3 gesture lock</string>
+    <string name="set_pattern">Set New Pattern</string>
+    <string name="change_pattern">Change Pattern</string>
+    <string name="draw_pattern">Draw your unlock pattern</string>
+    <string name="draw_pattern_again">Confirm your pattern</string>
+    <string name="pattern_set_success">Pattern saved successfully</string>
+    <string name="pattern_mismatch">Patterns do not match. Try again.</string>
+    <string name="pattern_too_short">Connect at least 4 dots.</string>
+    <string name="unlock_app">Unlock SaleryPelse</string>
+    <string name="incorrect_pattern">Incorrect pattern! Try again.</string>
+
+    <!-- Backup & Restore -->
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="backup_drive_title">Google Drive &amp; Local Backup</string>
+    <string name="backup_now">Export &amp; Backup Data</string>
+    <string name="restore_now">Restore Data</string>
+    <string name="backup_success">Backup exported successfully</string>
+    <string name="restore_success">Data restored successfully</string>
+    <string name="backup_info">Securely export your data JSON or backup to Google Drive.</string>
+    <string name="google_drive_synced">Google Drive Cloud Status: Connected</string>
+    <string name="sync_with_drive">Sync with Google Drive</string>
+
+    <!-- About -->
+    <string name="about_app">About</string>
+    <string name="developer">Developer</string>
+    <string name="version">Version</string>
+    <string name="developed_with_pride">Designed with Liquid Glass v3</string>
+    <string name="empty_records">No records found. Tap + to add one.</string>
+</resources>

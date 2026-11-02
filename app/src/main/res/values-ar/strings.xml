@@ -1,0 +1,114 @@
+<resources>
+    <string name="app_name">SaleryPelse</string>
+    <string name="developer_name">Kahlessenane Charfeddine</string>
+    <string name="app_version">1.0.0</string>
+    <string name="currency_dzd">د.ج</string>
+    <string name="currency_symbol">د.ج</string>
+
+    <!-- Navigation & Titles -->
+    <string name="nav_dashboard">لوحة التحكم</string>
+    <string name="nav_income">المداخيل</string>
+    <string name="nav_expenses">المصاريف</string>
+    <string name="nav_debts">الديون</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Financial Summary -->
+    <string name="total_balance">الرصيد الإجمالي</string>
+    <string name="monthly_income">الدخل الشهري</string>
+    <string name="monthly_expense">مصاريف الشهر</string>
+    <string name="active_debts">الديون النشطة</string>
+    <string name="recent_transactions">أحدث المعاملات</string>
+    <string name="see_all">عرض الكل</string>
+
+    <!-- Salary Scheduler -->
+    <string name="salary_scheduler_title">جدولة الراتب الذكية</string>
+    <string name="salary_amount">قيمة الراتب الشهري</string>
+    <string name="salary_payday">يوم استلام الراتب (يوم من الشهر)</string>
+    <string name="salary_employer">جهة العمل / المصدر</string>
+    <string name="salary_auto_credit">إضافة تلقائية للرصيد في يوم الراتب</string>
+    <string name="salary_status_credited">تم إيداع الراتب تلقائياً في الرصيد</string>
+    <string name="salary_status_upcoming">موعد الراتب القادم: %1$s</string>
+    <string name="salary_received_today">تم إيداع الراتب اليوم!</string>
+
+    <!-- Debts & Auto-Payment -->
+    <string name="debt_management">إدارة الديون</string>
+    <string name="debts_owed_by_me">ديون عليّ (مستحقة للدفع)</string>
+    <string name="debts_owed_to_me">ديون لي (مستحقة للقبض)</string>
+    <string name="debt_auto_pay">دفع تلقائي في تاريخ الاستحقاق</string>
+    <string name="debt_due_date">تاريخ الاستحقاق</string>
+    <string name="debt_status_pending">قيد الانتظار</string>
+    <string name="debt_status_paid">تم السداد</string>
+    <string name="mark_as_paid">تحديد كمسدد</string>
+    <string name="execute_payment">سداد الآن</string>
+
+    <!-- Dialogs & Forms -->
+    <string name="add_transaction">إضافة معاملة</string>
+    <string name="add_income">إضافة دخل</string>
+    <string name="add_expense">إضافة مصروف</string>
+    <string name="add_debt">إضافة سجل دين</string>
+    <string name="amount">المبلغ (د.ج)</string>
+    <string name="category">الفئة</string>
+    <string name="title_or_person">العنوان / الشخص</string>
+    <string name="note">ملاحظة (اختياري)</string>
+    <string name="date">التاريخ</string>
+    <string name="save">حفظ</string>
+    <string name="cancel">إلغاء</string>
+    <string name="delete">حذف</string>
+    <string name="confirm_delete">هل أنت متأكد من رغبتك في حذف هذا السجل؟</string>
+
+    <!-- Categories -->
+    <string name="cat_salary">الراتب</string>
+    <string name="cat_freelance">عمل حر</string>
+    <string name="cat_investment">استثمار</string>
+    <string name="cat_gift">هدايا</string>
+    <string name="cat_food">الأطعمة والمطاعم</string>
+    <string name="cat_shopping">التسوق</string>
+    <string name="cat_transport">النقل والمواصلات</string>
+    <string name="cat_bills">الفواتير والخدمات</string>
+    <string name="cat_health">الصحة والعلاج</string>
+    <string name="cat_entertainment">الترفيه</string>
+    <string name="cat_education">التعليم</string>
+    <string name="cat_other">أخرى</string>
+
+    <!-- Settings & Sidebar -->
+    <string name="settings_title">إعدادات Liquid Glass</string>
+    <string name="app_language">لغة التطبيق</string>
+    <string name="lang_english">English</string>
+    <string name="lang_arabic">العربية (Arabic)</string>
+    <string name="theme_mode">مظهر التصميم</string>
+    <string name="theme_dark">زجاج داكن (Dark Glass)</string>
+    <string name="theme_light">كريستال مضيء (Light Crystal)</string>
+    <string name="theme_system">الافتراضي للنظام</string>
+
+    <!-- Security & Pattern Lock -->
+    <string name="security_title">الأمان والخصوصية</string>
+    <string name="pattern_lock">قفل النمط (Gesture Lock)</string>
+    <string name="pattern_lock_desc">حماية التطبيق بنمط 3x3 للإيماءات</string>
+    <string name="set_pattern">تعيين نمط جديد</string>
+    <string name="change_pattern">تغيير النمط</string>
+    <string name="draw_pattern">ارسم نمط إلغاء القفل</string>
+    <string name="draw_pattern_again">أعد رسم النمط للتأكيد</string>
+    <string name="pattern_set_success">تم حفظ النمط بنجاح</string>
+    <string name="pattern_mismatch">الأنماط غير متطابقة. أعد المحاولة.</string>
+    <string name="pattern_too_short">صل 4 نقاط على الأقل.</string>
+    <string name="unlock_app">فتح قفل SaleryPelse</string>
+    <string name="incorrect_pattern">النمط غير صحيح! حاول ثانية.</string>
+
+    <!-- Backup & Restore -->
+    <string name="backup_restore">النسخ الاحتياطي والاستعادة</string>
+    <string name="backup_drive_title">Google Drive والنسخ المحلي</string>
+    <string name="backup_now">تصدير وحفظ نسخة احتياطية</string>
+    <string name="restore_now">استعادة البيانات</string>
+    <string name="backup_success">تم تصدير النسخة الاحتياطية بنجاح</string>
+    <string name="restore_success">تم استعادة البيانات بنجاح</string>
+    <string name="backup_info">تصدير بياناتك بتنسيق JSON بأمان أو المزامنة مع Google Drive.</string>
+    <string name="google_drive_synced">حالة سحابة Google Drive: متصل</string>
+    <string name="sync_with_drive">مزامنة مع Google Drive</string>
+
+    <!-- About -->
+    <string name="about_app">حول التطبيق</string>
+    <string name="developer">المطور</string>
+    <string name="version">الإصدار</string>
+    <string name="developed_with_pride">مصمم بنمط Liquid Glass v3</string>
+    <string name="empty_records">لا توجد سجلات حالياً. انقر على + للإضافة.</string>
+</resources>
