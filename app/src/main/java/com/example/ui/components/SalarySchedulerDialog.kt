@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,8 +26,6 @@ import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -40,7 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -74,7 +75,7 @@ fun SalarySchedulerDialog(
         val now = Calendar.getInstance()
         val datePicker = DatePickerDialog(
             context,
-            { _, year, month, dayOfMonth ->
+            { _, _, _, dayOfMonth ->
                 payday = dayOfMonth
             },
             now.get(Calendar.YEAR),
@@ -130,101 +131,144 @@ fun SalarySchedulerDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Salary Amount (DZD)
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("${strings.salaryAmount} (${strings.currencyCode})") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
-                        focusedBorderColor = colors.primaryNeon,
-                        unfocusedBorderColor = colors.glassBorderSubtle,
-                        focusedLabelColor = colors.primaryNeon,
-                        unfocusedLabelColor = colors.textSecondary
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Employer
-                OutlinedTextField(
-                    value = employerText,
-                    onValueChange = { employerText = it },
-                    label = { Text(strings.salaryEmployer) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
-                        focusedBorderColor = colors.primaryNeon,
-                        unfocusedBorderColor = colors.glassBorderSubtle,
-                        focusedLabelColor = colors.primaryNeon,
-                        unfocusedLabelColor = colors.textSecondary
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Payday (Day of Month) - Sleek Luxurious Single-Line Row
+                // Sleek, perfectly aligned horizontal row: Salary Tracking + Payday Inputs
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(colors.glassCard)
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
-                        .clickable { openCalendarPaydayPicker() }
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = strings.pickFromCalendar,
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = strings.salaryPayday,
-                            color = colors.textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
-                    }
-
+                    // Compact, well-proportioned Salary Amount Input
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.primaryNeon.copy(alpha = 0.2f))
-                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .weight(1.3f)
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column {
                             Text(
-                                text = "Day $payday",
-                                color = colors.primaryNeon,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "${strings.salaryAmount} (${strings.currencyCode})",
+                                color = colors.textSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            BasicTextField(
+                                value = amountText,
+                                onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                                textStyle = TextStyle(
+                                    color = colors.textPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                cursorBrush = SolidColor(colors.primaryNeon)
+                            )
+                        }
+                    }
+
+                    // Matching Sleek Payday Box with Calendar Picker
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                            .clickable { openCalendarPaydayPicker() }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = strings.salaryPayday,
+                                    color = colors.textSecondary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Day $payday",
+                                    color = colors.primaryNeon,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = strings.pickFromCalendar,
+                                tint = colors.primaryNeon,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                // Quick Day Shortcuts (Scrollable Row)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(1, 5, 10, 15, 20, 25, 28).forEach { day ->
+                        GlassPill(
+                            text = "$day",
+                            isSelected = payday == day,
+                            onClick = { payday = day }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Compact Employer Field
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.glassCard)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Column {
+                        Text(
+                            text = strings.salaryEmployer,
+                            color = colors.textSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        BasicTextField(
+                            value = employerText,
+                            onValueChange = { employerText = it },
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            cursorBrush = SolidColor(colors.primaryNeon)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Auto Credit Switch
                 Row(
@@ -244,7 +288,7 @@ fun SalarySchedulerDialog(
                             fontSize = 13.sp
                         )
                         Text(
-                            text = "Automatic wallet deposit on payday",
+                            text = "Automatic deposit into wallet on payday",
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )

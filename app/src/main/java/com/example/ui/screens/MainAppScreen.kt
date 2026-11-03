@@ -75,6 +75,7 @@ import com.example.ui.components.PatternLockDialog
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.SidebarDrawer
 import com.example.ui.i18n.APP_NAME
+import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.EnglishStrings
@@ -140,49 +141,53 @@ fun MainAppScreen(
                 }
             )
         } else {
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet(
-                        drawerContainerColor = Color.Transparent,
-                        modifier = Modifier.width(320.dp)
-                    ) {
-                        SidebarDrawer(
-                            selectedRoute = currentRoute,
-                            onNavigate = { route ->
-                                currentRoute = route
-                                scope.launch { drawerState.close() }
-                            },
-                            userSettings = userSettings,
-                            onOpenSalaryScheduler = {
-                                scope.launch { drawerState.close() }
-                                showSalarySchedulerDialog = true
-                            },
-                            onOpenBackupRestore = {
-                                scope.launch { drawerState.close() }
-                                showBackupRestoreDialog = true
-                            },
-                            onOpenPatternLock = {
-                                scope.launch { drawerState.close() }
-                                showPatternLockDialog = true
-                            },
-                            onLockAppNow = {
-                                scope.launch { drawerState.close() }
-                                viewModel.lockApp()
-                            },
-                            onToggleTheme = {
-                                val next = if (userSettings.themeMode == "DARK") "LIGHT" else "DARK"
-                                viewModel.setThemeMode(next)
-                            },
-                            onSelectLanguage = { lang ->
-                                viewModel.setLanguage(lang)
-                            }
-                        )
+            // Sidebar / Navigation Drawer is strictly locked to the Left side (LTR) in both English & Arabic
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            drawerContainerColor = Color.Transparent,
+                            modifier = Modifier.width(320.dp)
+                        ) {
+                            SidebarDrawer(
+                                selectedRoute = currentRoute,
+                                onNavigate = { route ->
+                                    currentRoute = route
+                                    scope.launch { drawerState.close() }
+                                },
+                                userSettings = userSettings,
+                                onOpenSalaryScheduler = {
+                                    scope.launch { drawerState.close() }
+                                    showSalarySchedulerDialog = true
+                                },
+                                onOpenBackupRestore = {
+                                    scope.launch { drawerState.close() }
+                                    showBackupRestoreDialog = true
+                                },
+                                onOpenPatternLock = {
+                                    scope.launch { drawerState.close() }
+                                    showPatternLockDialog = true
+                                },
+                                onLockAppNow = {
+                                    scope.launch { drawerState.close() }
+                                    viewModel.lockApp()
+                                },
+                                onToggleTheme = {
+                                    val next = if (userSettings.themeMode == "DARK") "LIGHT" else "DARK"
+                                    viewModel.setThemeMode(next)
+                                },
+                                onSelectLanguage = { lang ->
+                                    viewModel.setLanguage(lang)
+                                }
+                            )
+                        }
                     }
-                }
-            ) {
-                GlassBackground {
-                    Scaffold(
+                ) {
+                    // Main App Content adopts the chosen layoutDirection (RTL in Arabic, LTR in English)
+                    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                        GlassBackground {
+                            Scaffold(
                         containerColor = Color.Transparent,
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
@@ -300,6 +305,8 @@ fun MainAppScreen(
                     }
                 }
             }
+        }
+    }
 
             // Dialogs
             if (showAddTransactionDialog) {
@@ -316,8 +323,18 @@ fun MainAppScreen(
                 AddDebtDialog(
                     initialType = addDebtType,
                     onDismiss = { showAddDebtDialog = false },
-                    onSave = { type, person, amount, note, dueDateMillis, autoPay ->
-                        viewModel.addDebt(type, person, amount, note, dueDateMillis, autoPay)
+                    onSave = { type, person, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay ->
+                        viewModel.addDebt(
+                            type = type,
+                            personName = person,
+                            amount = amount,
+                            note = note,
+                            dueDateMillis = dueDateMillis,
+                            autoPay = autoPay,
+                            isRecurring = isRecurring,
+                            monthlyInstallment = monthlyInstallment,
+                            installmentDay = installmentDay
+                        )
                     }
                 )
             }
@@ -417,7 +434,7 @@ fun MainTopAppBar(
                     letterSpacing = 0.4.sp
                 )
                 Text(
-                    text = "Liquid Glass v3",
+                    text = "v$APP_VERSION",
                     color = colors.primaryNeon,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold

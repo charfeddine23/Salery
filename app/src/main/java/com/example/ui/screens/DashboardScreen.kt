@@ -279,17 +279,34 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
-                        val paydayStatus = if (currentDay == userSettings.salaryPayday) {
-                            strings.salaryDepositedToday
-                        } else {
-                            "${strings.salaryPayday}: Day ${userSettings.salaryPayday} ($daysUntilPayday days left)"
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = formatDzd(userSettings.salaryAmount, strings.currencyCode),
+                                color = EmeraldNeon,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "•",
+                                color = colors.textMuted,
+                                fontSize = 12.sp
+                            )
+                            val paydayStatus = if (currentDay == userSettings.salaryPayday) {
+                                strings.salaryDepositedToday
+                            } else {
+                                "Day ${userSettings.salaryPayday} ($daysUntilPayday d)"
+                            }
+                            Text(
+                                text = paydayStatus,
+                                color = colors.primaryNeon,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
-                        Text(
-                            text = paydayStatus,
-                            color = colors.primaryNeon,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
                     }
 
                     Icon(
