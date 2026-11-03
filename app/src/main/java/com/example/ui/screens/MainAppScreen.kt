@@ -297,8 +297,13 @@ fun MainAppScreen(
                                         addDebtType = type
                                         showAddDebtDialog = true
                                     },
+                                    onEditDebt = { viewModel.updateDebt(it) },
+                                    onPartialPay = { debt, amount, recordInWallet ->
+                                        viewModel.makePartialPayment(debt, amount, recordInWallet)
+                                    },
                                     onPayDebtNow = { viewModel.markDebtAsPaid(it) },
-                                    onDeleteDebt = { viewModel.deleteDebt(it) }
+                                    onDeleteDebt = { viewModel.deleteDebt(it) },
+                                    onClearSettledDebts = { viewModel.clearSettledDebts() }
                                 )
                             }
                         }

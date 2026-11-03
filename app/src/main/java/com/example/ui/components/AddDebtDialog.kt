@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
@@ -57,6 +58,7 @@ import java.util.Calendar
 @Composable
 fun AddDebtDialog(
     initialType: DebtType = DebtType.OWED_BY_ME,
+    existingDebt: DebtEntity? = null,
     onDismiss: () -> Unit,
     onSave: (
         type: DebtType,
@@ -74,17 +76,30 @@ fun AddDebtDialog(
     val colors = LiquidGlassTheme.colors
     val context = LocalContext.current
 
-    var selectedType by remember { mutableStateOf(initialType) }
-    var personNameText by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("") }
-    var noteText by remember { mutableStateOf("") }
-    var dueDateMillis by remember { mutableLongStateOf(System.currentTimeMillis() + 30 * 86400000L) }
-    var autoPayOnDueDate by remember { mutableStateOf(true) }
+    var selectedType by remember { mutableStateOf(existingDebt?.type ?: initialType) }
+    var personNameText by remember { mutableStateOf(existingDebt?.personName ?: "") }
+    var amountText by remember {
+        val initialAmt = existingDebt?.amount?.let { a ->
+            if (a % 1.0 == 0.0) a.toLong().toString() else a.toString()
+        } ?: ""
+        mutableStateOf(initialAmt)
+    }
+    var noteText by remember { mutableStateOf(existingDebt?.note ?: "") }
+    var dueDateMillis by remember { mutableLongStateOf(existingDebt?.dueDateMillis ?: (System.currentTimeMillis() + 30 * 86400000L)) }
+    var autoPayOnDueDate by remember { mutableStateOf(existingDebt?.autoPayOnDueDate ?: true) }
 
     // Recurring Monthly Installments
-    var isRecurringInstallment by remember { mutableStateOf(false) }
-    var installmentAmountText by remember { mutableStateOf("") }
-    var installmentDay by remember { mutableIntStateOf(15) }
+    var isRecurringInstallment by remember { mutableStateOf(existingDebt?.isRecurringMonthlyInstallment ?: false) }
+    var installmentAmountText by remember {
+        val initialInst = existingDebt?.let { d ->
+            if (d.monthlyInstallmentAmount > 0) {
+                if (d.monthlyInstallmentAmount % 1.0 == 0.0) d.monthlyInstallmentAmount.toLong().toString()
+                else d.monthlyInstallmentAmount.toString()
+            } else ""
+        } ?: ""
+        mutableStateOf(initialInst)
+    }
+    var installmentDay by remember { mutableIntStateOf(existingDebt?.installmentDayOfMonth ?: 15) }
 
     fun openInstallmentDayPicker() {
         val now = Calendar.getInstance()
@@ -142,7 +157,7 @@ fun AddDebtDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = strings.addDebt,
+                        text = if (existingDebt != null) strings.editDebt else strings.addDebt,
                         color = colors.textPrimary,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold

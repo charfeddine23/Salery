@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,10 +22,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payment
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,10 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.DebtEntity
 import com.example.data.DebtType
+import com.example.ui.components.AddDebtDialog
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.GlassPill
+import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
@@ -58,18 +67,39 @@ import com.example.ui.theme.RoseNeon
 fun DebtScreen(
     debts: List<DebtEntity>,
     onAddDebtClick: (DebtType) -> Unit,
+    onEditDebt: (DebtEntity) -> Unit,
+    onPartialPay: (DebtEntity, Double, Boolean) -> Unit,
     onPayDebtNow: (DebtEntity) -> Unit,
     onDeleteDebt: (DebtEntity) -> Unit,
+    onClearSettledDebts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
 
     var activeTab by remember { mutableStateOf(DebtType.OWED_BY_ME) }
+    var statusFilter by remember { mutableStateOf("ALL") } // "ALL", "ACTIVE", "SETTLED"
 
-    val currentDebts = debts.filter { it.type == activeTab }
-    val pendingDebts = currentDebts.filter { !it.isPaid }
-    val totalPendingAmount = pendingDebts.sumOf { it.amount }
+    // Dialog States
+    var partialPaymentDebt by remember { mutableStateOf<DebtEntity?>(null) }
+    var editingDebt by remember { mutableStateOf<DebtEntity?>(null) }
+    var debtToDelete by remember { mutableStateOf<DebtEntity?>(null) }
+    var showClearSettledConfirm by remember { mutableStateOf(false) }
+
+    val debtsInTab = debts.filter { it.type == activeTab }
+    val pendingDebts = debtsInTab.filter { !it.isPaid }
+    val settledDebts = debtsInTab.filter { it.isPaid }
+
+    val totalPendingAmount = pendingDebts.sumOf { if (it.remainingAmount > 0) it.remainingAmount else it.amount }
+    val totalPaidAmount = debtsInTab.sumOf { (it.amount - it.remainingAmount).coerceAtLeast(0.0) }
+    val totalOriginalAmount = debtsInTab.sumOf { it.amount }
+    val tabProgress = if (totalOriginalAmount > 0) (totalPaidAmount / totalOriginalAmount).toFloat().coerceIn(0f, 1f) else 1f
+
+    val displayedDebts = when (statusFilter) {
+        "ACTIVE" -> pendingDebts
+        "SETTLED" -> settledDebts
+        else -> debtsInTab
+    }
 
     LazyColumn(
         modifier = modifier
@@ -81,7 +111,7 @@ fun DebtScreen(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
-        // Summary Card
+        // Comprehensive Debt Management Dashboard Card
         item {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,27 +119,100 @@ fun DebtScreen(
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = if (activeTab == DebtType.OWED_BY_ME) strings.debtsOwedByMe else strings.debtsOwedToMe,
-                        color = colors.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (activeTab == DebtType.OWED_BY_ME) strings.debtsOwedByMe else strings.debtsOwedToMe,
+                            color = colors.textSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    (if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon).copy(alpha = 0.18f)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "${pendingDebts.size} ${strings.filterActive}",
+                                color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
                         text = formatDzd(totalPendingAmount, strings.currencyCode),
                         color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon,
-                        fontSize = 28.sp,
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    GlassButton(
-                        text = strings.addDebt,
-                        icon = Icons.Default.Add,
-                        containerColor = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { onAddDebtClick(activeTab) }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Overall Tab Progress Bar
+                    LinearProgressIndicator(
+                        progress = { tabProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else EmeraldNeon,
+                        trackColor = colors.glassBorderSubtle
                     )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} (${(tabProgress * 100).toInt()}%)",
+                            color = EmeraldNeon,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${strings.totalAmount}: ${formatDzd(totalOriginalAmount, strings.currencyCode)}",
+                            color = colors.textMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Action Controls: Add Debt & Clear Settled Debts
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GlassButton(
+                            text = strings.addDebt,
+                            icon = Icons.Default.Add,
+                            containerColor = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onAddDebtClick(activeTab) }
+                        )
+
+                        if (settledDebts.isNotEmpty()) {
+                            GlassButton(
+                                text = "${strings.deleteSettledDebts} (${settledDebts.size})",
+                                icon = Icons.Default.DeleteSweep,
+                                containerColor = RoseNeon.copy(alpha = 0.85f),
+                                modifier = Modifier.weight(1f),
+                                onClick = { showClearSettledConfirm = true }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -137,10 +240,10 @@ fun DebtScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = strings.debtsOwedByMe,
+                        text = "${strings.debtsOwedByMe} (${debts.count { it.type == DebtType.OWED_BY_ME }})",
                         color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else colors.textMuted,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
 
@@ -157,21 +260,46 @@ fun DebtScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = strings.debtsOwedToMe,
+                        text = "${strings.debtsOwedToMe} (${debts.count { it.type == DebtType.OWED_TO_ME }})",
                         color = if (activeTab == DebtType.OWED_TO_ME) CyanNeon else colors.textMuted,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
             }
         }
 
-        if (currentDebts.isEmpty()) {
+        // Status Filter Chips (All, Active, Settled)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GlassPill(
+                    text = "${strings.filterAll} (${debtsInTab.size})",
+                    isSelected = statusFilter == "ALL",
+                    onClick = { statusFilter = "ALL" }
+                )
+                GlassPill(
+                    text = "${strings.filterActive} (${pendingDebts.size})",
+                    isSelected = statusFilter == "ACTIVE",
+                    onClick = { statusFilter = "ACTIVE" }
+                )
+                GlassPill(
+                    text = "${strings.filterSettled} (${settledDebts.size})",
+                    isSelected = statusFilter == "SETTLED",
+                    onClick = { statusFilter = "SETTLED" }
+                )
+            }
+        }
+
+        // Debts List
+        if (displayedDebts.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 32.dp),
+                        .padding(vertical = 36.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -182,12 +310,14 @@ fun DebtScreen(
                 }
             }
         } else {
-            items(currentDebts, key = { it.id }) { debt ->
+            items(displayedDebts, key = { it.id }) { debt ->
                 DebtItemCard(
                     debt = debt,
                     currencyCode = strings.currencyCode,
+                    onPartialPayClick = { partialPaymentDebt = debt },
                     onPayNow = { onPayDebtNow(debt) },
-                    onDelete = { onDeleteDebt(debt) }
+                    onEdit = { editingDebt = debt },
+                    onDelete = { debtToDelete = debt }
                 )
             }
         }
@@ -196,13 +326,200 @@ fun DebtScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+
+    // Dialog 1: Partial Payment
+    partialPaymentDebt?.let { targetDebt ->
+        PartialPaymentDialog(
+            debt = targetDebt,
+            currencyCode = strings.currencyCode,
+            onDismiss = { partialPaymentDebt = null },
+            onConfirmPayment = { amount, recordTransaction ->
+                onPartialPay(targetDebt, amount, recordTransaction)
+                partialPaymentDebt = null
+            }
+        )
+    }
+
+    // Dialog 2: Edit Debt
+    editingDebt?.let { targetDebt ->
+        AddDebtDialog(
+            initialType = targetDebt.type,
+            existingDebt = targetDebt,
+            onDismiss = { editingDebt = null },
+            onSave = { type, personName, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay ->
+                val ratio = if (targetDebt.amount > 0) (targetDebt.remainingAmount / targetDebt.amount) else 1.0
+                val updatedRemaining = (amount * ratio).coerceIn(0.0, amount)
+                val isSettled = updatedRemaining <= 0.001
+
+                val updatedEntity = targetDebt.copy(
+                    type = type,
+                    personName = personName,
+                    amount = amount,
+                    remainingAmount = updatedRemaining,
+                    note = note,
+                    dueDateMillis = dueDateMillis,
+                    autoPayOnDueDate = autoPay,
+                    isRecurringMonthlyInstallment = isRecurring,
+                    monthlyInstallmentAmount = monthlyInstallment,
+                    installmentDayOfMonth = installmentDay,
+                    isPaid = isSettled
+                )
+                onEditDebt(updatedEntity)
+                editingDebt = null
+            }
+        )
+    }
+
+    // Dialog 3: Delete Single Debt Confirmation
+    debtToDelete?.let { targetDebt ->
+        Dialog(onDismissRequest = { debtToDelete = null }) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                shape = RoundedCornerShape(22.dp),
+                backgroundColor = colors.dialogBackground
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(RoseNeon.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = RoseNeon,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = strings.confirmDelete,
+                            color = colors.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "${targetDebt.personName} • ${formatDzd(targetDebt.amount, strings.currencyCode)}",
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        GlassButton(
+                            text = strings.cancel,
+                            containerColor = colors.glassCard,
+                            modifier = Modifier.weight(1f),
+                            onClick = { debtToDelete = null }
+                        )
+                        GlassButton(
+                            text = strings.delete,
+                            icon = Icons.Default.Delete,
+                            containerColor = RoseNeon,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                onDeleteDebt(targetDebt)
+                                debtToDelete = null
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog 4: Clear All Settled Debts Confirmation
+    if (showClearSettledConfirm) {
+        Dialog(onDismissRequest = { showClearSettledConfirm = false }) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                shape = RoundedCornerShape(22.dp),
+                backgroundColor = colors.dialogBackground
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(RoseNeon.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = null,
+                                tint = RoseNeon,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = strings.deleteSettledDebts,
+                            color = colors.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = strings.clearSettledConfirm,
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        GlassButton(
+                            text = strings.cancel,
+                            containerColor = colors.glassCard,
+                            modifier = Modifier.weight(1f),
+                            onClick = { showClearSettledConfirm = false }
+                        )
+                        GlassButton(
+                            text = strings.delete,
+                            icon = Icons.Default.Delete,
+                            containerColor = RoseNeon,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                onClearSettledDebts()
+                                showClearSettledConfirm = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun DebtItemCard(
     debt: DebtEntity,
     currencyCode: String,
+    onPartialPayClick: () -> Unit,
     onPayNow: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
@@ -211,6 +528,12 @@ fun DebtItemCard(
     val now = System.currentTimeMillis()
     val isOverdue = !debt.isPaid && debt.dueDateMillis < now
     val daysLeft = ((debt.dueDateMillis - now) / 86400000L).coerceAtLeast(0)
+
+    val totalAmount = debt.amount
+    val remainingAmount = debt.remainingAmount
+    val paidAmount = (totalAmount - remainingAmount).coerceAtLeast(0.0)
+    val paidRatio = if (totalAmount > 0) (paidAmount / totalAmount).toFloat().coerceIn(0f, 1f) else 1f
+    val paidPercent = (paidRatio * 100).toInt()
 
     val statusColor = when {
         debt.isPaid -> EmeraldNeon
@@ -228,12 +551,16 @@ fun DebtItemCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            // Header Row: Icon, Person Name, and Total Amount
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -249,7 +576,7 @@ fun DebtItemCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = debt.personName,
                             color = colors.textPrimary,
@@ -260,12 +587,14 @@ fun DebtItemCard(
                             Text(
                                 text = debt.note,
                                 color = colors.textSecondary,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1
                             )
                         }
                     }
                 }
 
+                // Total Amount and Remaining Balance
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = formatDzd(debt.amount, currencyCode),
@@ -273,34 +602,52 @@ fun DebtItemCard(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
-                    if (debt.isRecurringMonthlyInstallment && !debt.isPaid) {
-                        Text(
-                            text = "${strings.remainingBalance}: ${formatDzd(debt.remainingAmount, currencyCode)}",
-                            color = AmberNeon,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Text(
+                        text = if (debt.isPaid) strings.fullySettled
+                        else "${strings.remainingBalance}: ${formatDzd(remainingAmount, currencyCode)}",
+                        color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
-            if (debt.isRecurringMonthlyInstallment && !debt.isPaid) {
-                Spacer(modifier = Modifier.height(8.dp))
-                val paidRatio = ((debt.amount - debt.remainingAmount) / debt.amount).toFloat().coerceIn(0f, 1f)
-                LinearProgressIndicator(
-                    progress = { paidRatio },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = AmberNeon,
-                    trackColor = colors.glassBorderSubtle,
+            // Visual Progress Tracking: Paid Amount vs. Total Amount & Percentage
+            Spacer(modifier = Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = { paidRatio },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                trackColor = colors.glassBorderSubtle
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${formatDzd(paidAmount, currencyCode)} ${strings.paidOutOf} ${formatDzd(totalAmount, currencyCode)}",
+                    color = EmeraldNeon,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$paidPercent%",
+                    color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Badges & Due Date / Installment Info
+            // Badges & Due Date / Installment Status
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -310,7 +657,7 @@ fun DebtItemCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Paid / Pending Badge
+                    // Paid / Pending / Overdue Badge
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -375,7 +722,7 @@ fun DebtItemCard(
                     }
                 }
 
-                // Due Date Text or Installment Status
+                // Due Date Text
                 Text(
                     text = if (debt.isPaid) "Settled on ${formatDate(debt.paidDateMillis ?: debt.dueDateMillis)}"
                     else if (debt.isRecurringMonthlyInstallment) "Monthly on Day ${debt.installmentDayOfMonth}"
@@ -385,28 +732,75 @@ fun DebtItemCard(
                 )
             }
 
-            // Actions row (Pay Now if pending)
-            if (!debt.isPaid) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Action Controls Row (Partial Pay, Settle Full, Edit, Delete)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!debt.isPaid) {
+                    // Partial Payment Button
                     GlassButton(
-                        text = if (debt.type == DebtType.OWED_BY_ME) strings.executePayment else strings.markAsPaid,
+                        text = strings.makePartialPayment,
+                        icon = Icons.Default.Payments,
+                        containerColor = AmberNeon,
+                        modifier = Modifier.weight(1.3f),
+                        onClick = onPartialPayClick
+                    )
+
+                    // Full Payoff Button
+                    GlassButton(
+                        text = strings.executePayment,
                         icon = Icons.Default.Payment,
                         containerColor = EmeraldNeon,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1.1f),
                         onClick = onPayNow
                     )
+                } else {
+                    // Settled Archive / Delete Action
+                    GlassButton(
+                        text = strings.delete,
+                        icon = Icons.Default.Delete,
+                        containerColor = RoseNeon.copy(alpha = 0.8f),
+                        modifier = Modifier.weight(1f),
+                        onClick = onDelete
+                    )
+                }
+
+                // Edit Button
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.glassCard)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = strings.editDebt,
+                        tint = colors.primaryNeon,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // Delete Button (if not already settled, settled has button above)
+                if (!debt.isPaid) {
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(46.dp)
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = colors.textMuted
+                            contentDescription = strings.delete,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }

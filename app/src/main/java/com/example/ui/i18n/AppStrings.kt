@@ -59,6 +59,20 @@ interface StringsBundle {
     val monthlyInstallmentAmount: String
     val installmentDayOfMonth: String
     val remainingBalance: String
+    val editDebt: String
+    val makePartialPayment: String
+    val partialPaymentAmount: String
+    val recordInWallet: String
+    val paidAmount: String
+    val totalAmount: String
+    val paidOutOf: String
+    val deleteSettledDebts: String
+    val clearSettledConfirm: String
+    val filterActive: String
+    val filterSettled: String
+    val filterAll: String
+    val debtProgress: String
+    val fullySettled: String
 
     val addTransaction: String
     val addIncome: String
@@ -163,6 +177,20 @@ object EnglishStrings : StringsBundle {
     override val monthlyInstallmentAmount = "Monthly Installment (DZD)"
     override val installmentDayOfMonth = "Installment Day of Month"
     override val remainingBalance = "Remaining Balance"
+    override val editDebt = "Edit Debt"
+    override val makePartialPayment = "Make Partial Payment"
+    override val partialPaymentAmount = "Payment Amount (DZD)"
+    override val recordInWallet = "Update Wallet Balance"
+    override val paidAmount = "Paid"
+    override val totalAmount = "Total"
+    override val paidOutOf = "paid of"
+    override val deleteSettledDebts = "Clear Settled Debts"
+    override val clearSettledConfirm = "Delete all settled debts? This action is permanent."
+    override val filterActive = "Active"
+    override val filterSettled = "Settled"
+    override val filterAll = "All"
+    override val debtProgress = "Progress"
+    override val fullySettled = "Fully Settled"
 
     override val addTransaction = "Add Transaction"
     override val addIncome = "Add Income"
@@ -267,6 +295,20 @@ object ArabicStrings : StringsBundle {
     override val monthlyInstallmentAmount = "قيمة القسط الشهري (د.ج)"
     override val installmentDayOfMonth = "يوم سداد القسط من كل شهر"
     override val remainingBalance = "المبلغ المتبقي"
+    override val editDebt = "تعديل الدين"
+    override val makePartialPayment = "تسجيل دفعة جزئية"
+    override val partialPaymentAmount = "مبلغ الدفعة (د.ج)"
+    override val recordInWallet = "تحديث رصيد المحفظة"
+    override val paidAmount = "المدفوع"
+    override val totalAmount = "الإجمالي"
+    override val paidOutOf = "مدفوع من"
+    override val deleteSettledDebts = "مسح الديون المسددة"
+    override val clearSettledConfirm = "هل تريد حذف جميع الديون المسددة نهائياً؟"
+    override val filterActive = "الجارية"
+    override val filterSettled = "المسددة"
+    override val filterAll = "الكل"
+    override val debtProgress = "نسبة الإنجاز"
+    override val fullySettled = "مسدد بالكامل"
 
     override val addTransaction = "إضافة معاملة"
     override val addIncome = "إضافة دخل"

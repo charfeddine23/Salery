@@ -414,9 +414,75 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun updateDebt(debt: DebtEntity) {
+        viewModelScope.launch {
+            dao.updateDebt(debt)
+            _toastEvent.emit("Debt updated successfully")
+        }
+    }
+
+    fun makePartialPayment(debt: DebtEntity, paymentAmount: Double, recordTransaction: Boolean = true) {
+        viewModelScope.launch {
+            if (paymentAmount <= 0) return@launch
+            val now = System.currentTimeMillis()
+            val actualPay = minOf(paymentAmount, debt.remainingAmount)
+            val newRemaining = (debt.remainingAmount - actualPay).coerceAtLeast(0.0)
+            val isFullySettled = newRemaining <= 0.001
+
+            val updatedDebt = debt.copy(
+                remainingAmount = newRemaining,
+                isPaid = isFullySettled,
+                paidDateMillis = if (isFullySettled) now else debt.paidDateMillis
+            )
+            dao.updateDebt(updatedDebt)
+
+            if (recordTransaction) {
+                if (debt.type == DebtType.OWED_BY_ME) {
+                    dao.insertTransaction(
+                        TransactionEntity(
+                            type = TransactionType.EXPENSE,
+                            amount = actualPay,
+                            category = "debt_payment",
+                            title = "Partial Payment: ${debt.personName}",
+                            note = if (isFullySettled) "Final settlement (${debt.note})" 
+                                   else "Partial payment - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                            dateMillis = now
+                        )
+                    )
+                } else {
+                    dao.insertTransaction(
+                        TransactionEntity(
+                            type = TransactionType.INCOME,
+                            amount = actualPay,
+                            category = "debt_collection",
+                            title = "Partial Collection: ${debt.personName}",
+                            note = if (isFullySettled) "Final collection (${debt.note})"
+                                   else "Partial collection - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                            dateMillis = now
+                        )
+                    )
+                }
+            }
+
+            if (isFullySettled) {
+                _toastEvent.emit("Debt with ${debt.personName} fully settled!")
+            } else {
+                _toastEvent.emit("Payment of ${actualPay.toLong()} DZD recorded. Remaining: ${newRemaining.toLong()} DZD")
+            }
+        }
+    }
+
     fun deleteDebt(debt: DebtEntity) {
         viewModelScope.launch {
             dao.deleteDebt(debt)
+            _toastEvent.emit("Debt record removed")
+        }
+    }
+
+    fun clearSettledDebts() {
+        viewModelScope.launch {
+            val count = dao.clearSettledDebts()
+            _toastEvent.emit("$count settled debts deleted")
         }
     }
 

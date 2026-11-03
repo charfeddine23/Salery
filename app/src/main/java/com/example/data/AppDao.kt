@@ -60,6 +60,9 @@ interface AppDao {
     @Delete
     suspend fun deleteDebt(debt: DebtEntity)
 
+    @Query("DELETE FROM debts WHERE isPaid = 1")
+    suspend fun clearSettledDebts(): Int
+
     @Query("DELETE FROM debts")
     suspend fun clearAllDebts()
 
