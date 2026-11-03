@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -175,27 +173,23 @@ fun SalarySchedulerDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Interactive Calendar Payday Picker
-                Text(
-                    text = "${strings.salaryPayday}: Day $payday",
-                    color = colors.textSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
+                // Payday (Day of Month) - Sleek Luxurious Single-Line Row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(52.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(colors.glassCard)
                         .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
                         .clickable { openCalendarPaydayPicker() }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.CalendarMonth,
                             contentDescription = strings.pickFromCalendar,
@@ -204,10 +198,11 @@ fun SalarySchedulerDialog(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Day $payday of every month",
+                            text = strings.salaryPayday,
                             color = colors.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
                         )
                     }
 
@@ -215,30 +210,17 @@ fun SalarySchedulerDialog(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(colors.primaryNeon.copy(alpha = 0.2f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = strings.pickFromCalendar,
-                            color = colors.primaryNeon,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // Quick Day Shortcuts (Scrollable across common paydays)
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val quickDays = listOf(1, 5, 10, 15, 20, 22, 25, 26, 27, 28, 30)
-                    items(quickDays) { day ->
-                        GlassPill(
-                            text = "Day $day",
-                            isSelected = payday == day,
-                            onClick = { payday = day }
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Day $payday",
+                                color = colors.primaryNeon,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
