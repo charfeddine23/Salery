@@ -417,11 +417,10 @@ fun MainTopAppBar(
             horizontalArrangement = Arrangement.Center
         ) {
             Image(
-                painter = painterResource(id = R.drawable.salery_brand_icon),
+                painter = painterResource(id = R.drawable.sp_brand_logo),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(9.dp)),
+                    .size(34.dp),
                 contentScale = ContentScale.Fit
             )
             Spacer(modifier = Modifier.width(10.dp))

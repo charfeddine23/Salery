@@ -105,11 +105,10 @@ fun SidebarDrawer(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(id = R.drawable.salery_brand_icon),
+                            painter = painterResource(id = R.drawable.sp_brand_logo),
                             contentDescription = APP_NAME,
                             modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(14.dp)),
+                                .size(50.dp),
                             contentScale = ContentScale.Fit
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -332,11 +331,10 @@ fun SidebarDrawer(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.salery_brand_icon),
+                    painter = painterResource(id = R.drawable.sp_brand_logo),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+                        .size(34.dp),
                     contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.height(6.dp))
