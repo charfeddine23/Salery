@@ -1,6 +1,10 @@
 package com.example.ui.components
 
 import android.app.DatePickerDialog
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,8 +54,10 @@ import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
+import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
+import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import java.util.Calendar
@@ -69,7 +76,8 @@ fun AddDebtDialog(
         autoPay: Boolean,
         isRecurring: Boolean,
         monthlyInstallment: Double,
-        installmentDay: Int
+        installmentDay: Int,
+        paidAmount: Double
     ) -> Unit
 ) {
     val strings = AppStrings.current
@@ -78,12 +86,25 @@ fun AddDebtDialog(
 
     var selectedType by remember { mutableStateOf(existingDebt?.type ?: initialType) }
     var personNameText by remember { mutableStateOf(existingDebt?.personName ?: "") }
+
     var amountText by remember {
         val initialAmt = existingDebt?.amount?.let { a ->
             if (a % 1.0 == 0.0) a.toLong().toString() else a.toString()
         } ?: ""
         mutableStateOf(initialAmt)
     }
+
+    // New: Paid Amount input state
+    var paidAmountText by remember {
+        val initialPaid = existingDebt?.let { d ->
+            val paid = (d.amount - d.remainingAmount).coerceAtLeast(0.0)
+            if (paid > 0) {
+                if (paid % 1.0 == 0.0) paid.toLong().toString() else paid.toString()
+            } else ""
+        } ?: ""
+        mutableStateOf(initialPaid)
+    }
+
     var noteText by remember { mutableStateOf(existingDebt?.note ?: "") }
     var dueDateMillis by remember { mutableLongStateOf(existingDebt?.dueDateMillis ?: (System.currentTimeMillis() + 30 * 86400000L)) }
     var autoPayOnDueDate by remember { mutableStateOf(existingDebt?.autoPayOnDueDate ?: true) }
@@ -100,6 +121,36 @@ fun AddDebtDialog(
         mutableStateOf(initialInst)
     }
     var installmentDay by remember { mutableIntStateOf(existingDebt?.installmentDayOfMonth ?: 15) }
+
+    // Contacts Picker Launcher
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri: Uri? ->
+        contactUri?.let { uri ->
+            try {
+                val cursor = context.contentResolver.query(
+                    uri,
+                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            val contactName = it.getString(nameIndex)
+                            if (!contactName.isNullOrBlank()) {
+                                personNameText = contactName.trim()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Graceful fallback
+            }
+        }
+    }
 
     fun openInstallmentDayPicker() {
         val now = Calendar.getInstance()
@@ -174,9 +225,9 @@ fun AddDebtDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Type Toggle (I Owe / Owed to Me)
+                // Debt Type Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -190,7 +241,7 @@ fun AddDebtDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (selectedType == DebtType.OWED_BY_ME) RoseNeon.copy(alpha = 0.25f)
+                                if (selectedType == DebtType.OWED_BY_ME) AmberNeon.copy(alpha = 0.25f)
                                 else Color.Transparent
                             )
                             .clickable { selectedType = DebtType.OWED_BY_ME }
@@ -199,7 +250,7 @@ fun AddDebtDialog(
                     ) {
                         Text(
                             text = strings.debtsOwedByMe,
-                            color = if (selectedType == DebtType.OWED_BY_ME) RoseNeon else colors.textMuted,
+                            color = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.textMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -228,11 +279,28 @@ fun AddDebtDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Person Name
+                // Title / Person with Contacts Picker Icon
                 OutlinedTextField(
                     value = personNameText,
                     onValueChange = { personNameText = it },
                     label = { Text(strings.titleOrPerson) },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                try {
+                                    contactPickerLauncher.launch(null)
+                                } catch (e: Exception) {
+                                    // Fallback if contacts app is not available
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContactPhone,
+                                contentDescription = strings.pickFromContacts,
+                                tint = colors.primaryNeon
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -248,11 +316,11 @@ fun AddDebtDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Amount
+                // Total Debt Amount (DZD) - No duplicated currency in label!
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("${strings.amount} (${strings.currencyCode})") },
+                    label = { Text(strings.amount) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -267,7 +335,49 @@ fun AddDebtDialog(
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Paid Amount Field ("المبلغ المدفوع")
+                OutlinedTextField(
+                    value = paidAmountText,
+                    onValueChange = { paidAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text(strings.paidAmount) },
+                    placeholder = { Text("0") },
+                    supportingText = {
+                        val total = amountText.toDoubleOrNull() ?: 0.0
+                        val paid = paidAmountText.toDoubleOrNull() ?: 0.0
+                        val rem = (total - paid).coerceAtLeast(0.0)
+                        val pct = if (total > 0) ((paid / total) * 100).toInt().coerceIn(0, 100) else 0
+                        if (paid > 0) {
+                            Text(
+                                text = "${strings.remainingBalance}: ${formatDzd(rem, strings.currencyCode)} ($pct% ${strings.paidOutOf} ${formatDzd(total, strings.currencyCode)})",
+                                color = if (rem <= 0.001) EmeraldNeon else AmberNeon,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        } else {
+                            Text(
+                                text = strings.initialPaidAmountHelp,
+                                color = colors.textMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        focusedBorderColor = EmeraldNeon,
+                        unfocusedBorderColor = colors.glassBorderSubtle,
+                        focusedLabelColor = EmeraldNeon,
+                        unfocusedLabelColor = colors.textSecondary
+                    ),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Payment Plan Selector (Full Payment vs Monthly Installments)
                 Text(
@@ -467,11 +577,26 @@ fun AddDebtDialog(
                             )
                         }
                     }
+
+                    // Quick Installment Day Shortcuts
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(1, 5, 10, 15, 20, 25, 28).forEach { day ->
+                            GlassPill(
+                                text = "Day $day",
+                                isSelected = installmentDay == day,
+                                onClick = { installmentDay = day }
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Auto-Payment Switch
+                // Auto Pay Switch
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -486,11 +611,11 @@ fun AddDebtDialog(
                             text = strings.debtAutoPay,
                             color = colors.textPrimary,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                         Text(
-                            text = if (isRecurringInstallment) "Auto-deducts monthly installment until settled"
-                            else "Auto-executes transaction when due",
+                            text = if (isRecurringInstallment) "Automatically execute installment on Day $installmentDay"
+                            else "Automatically deduct on due date (${formatDate(dueDateMillis)})",
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )
@@ -500,7 +625,7 @@ fun AddDebtDialog(
                         onCheckedChange = { autoPayOnDueDate = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = if (isRecurringInstallment) AmberNeon else colors.primaryNeon,
+                            checkedTrackColor = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
                             uncheckedThumbColor = colors.textMuted,
                             uncheckedTrackColor = colors.glassCard
                         )
@@ -530,9 +655,11 @@ fun AddDebtDialog(
                 Spacer(modifier = Modifier.height(22.dp))
 
                 val totalAmount = amountText.toDoubleOrNull() ?: 0.0
+                val paidAmount = paidAmountText.toDoubleOrNull() ?: 0.0
                 val installmentAmount = installmentAmountText.toDoubleOrNull() ?: (totalAmount / 3.0)
                 val isValid = totalAmount > 0.0 && personNameText.isNotBlank() &&
-                        (!isRecurringInstallment || installmentAmount > 0.0)
+                        (!isRecurringInstallment || installmentAmount > 0.0) &&
+                        (paidAmount <= totalAmount)
 
                 GlassButton(
                     text = strings.save,
@@ -549,7 +676,8 @@ fun AddDebtDialog(
                             autoPayOnDueDate,
                             isRecurringInstallment,
                             if (isRecurringInstallment) installmentAmount else 0.0,
-                            installmentDay
+                            installmentDay,
+                            paidAmount
                         )
                         onDismiss()
                     }

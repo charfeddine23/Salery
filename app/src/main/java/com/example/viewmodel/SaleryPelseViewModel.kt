@@ -355,23 +355,32 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         autoPay: Boolean,
         isRecurring: Boolean = false,
         monthlyInstallment: Double = 0.0,
-        installmentDay: Int = 1
+        installmentDay: Int = 1,
+        initialPaidAmount: Double = 0.0
     ) {
         viewModelScope.launch {
+            val validPaid = initialPaidAmount.coerceIn(0.0, amount)
+            val remaining = (amount - validPaid).coerceAtLeast(0.0)
+            val isSettled = remaining <= 0.001
+            val now = System.currentTimeMillis()
+
             dao.insertDebt(
                 DebtEntity(
                     type = type,
                     personName = personName,
                     amount = amount,
-                    remainingAmount = amount,
+                    remainingAmount = remaining,
                     note = note,
                     dueDateMillis = dueDateMillis,
                     autoPayOnDueDate = autoPay,
                     isRecurringMonthlyInstallment = isRecurring,
                     monthlyInstallmentAmount = monthlyInstallment,
-                    installmentDayOfMonth = installmentDay
+                    installmentDayOfMonth = installmentDay,
+                    isPaid = isSettled,
+                    paidDateMillis = if (isSettled) now else null
                 )
             )
+            _toastEvent.emit("Debt recorded successfully")
         }
     }
 

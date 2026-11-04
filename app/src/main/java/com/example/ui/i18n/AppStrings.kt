@@ -84,6 +84,8 @@ interface StringsBundle {
     val expenseDescription: String
     val incomeSource: String
     val pickFromCalendar: String
+    val pickFromContacts: String
+    val initialPaidAmountHelp: String
     val selectDueDate: String
     val selectPayday: String
     val note: String
@@ -202,6 +204,8 @@ object EnglishStrings : StringsBundle {
     override val expenseDescription = "Expense Description (e.g. Internet, Bill, Shopping)"
     override val incomeSource = "Income Source / Title"
     override val pickFromCalendar = "Pick from Calendar"
+    override val pickFromContacts = "Pick from Contacts"
+    override val initialPaidAmountHelp = "Amount already paid previously (if any)"
     override val selectDueDate = "Select Due Date"
     override val selectPayday = "Select Payday (Day of Month)"
     override val note = "Note (Optional)"
@@ -286,9 +290,8 @@ object ArabicStrings : StringsBundle {
     override val debtDueDate = "تاريخ الاستحقاق"
     override val debtPending = "قيد الانتظار"
     override val debtPaid = "تم السداد"
-    override val markAsPaid = "تحديد كمسدد"
-    override val executePayment = "سداد الآن"
-
+    override val markAsPaid = "سداد كامل"
+    override val executePayment = "سداد كامل"
     override val debtPaymentMode = "طريقة السداد"
     override val debtPayInFull = "سداد كامل في موعد الاستحقاق"
     override val debtMonthlyInstallments = "أقساط شهرية تلقائية"
@@ -296,7 +299,7 @@ object ArabicStrings : StringsBundle {
     override val installmentDayOfMonth = "يوم سداد القسط من كل شهر"
     override val remainingBalance = "المبلغ المتبقي"
     override val editDebt = "تعديل الدين"
-    override val makePartialPayment = "تسجيل دفعة جزئية"
+    override val makePartialPayment = "دفع جزئي"
     override val partialPaymentAmount = "مبلغ الدفعة (د.ج)"
     override val recordInWallet = "تحديث رصيد المحفظة"
     override val paidAmount = "المدفوع"
@@ -320,6 +323,8 @@ object ArabicStrings : StringsBundle {
     override val expenseDescription = "نوع المصروف (مثلاً: اشتراك انترنت، فواتير، تسوق، سحب...)"
     override val incomeSource = "مصدر الدخل / العنوان"
     override val pickFromCalendar = "اختيار من التقويم"
+    override val pickFromContacts = "اختيار من جهات الاتصال"
+    override val initialPaidAmountHelp = "المبلغ المسدد مسبقاً (إن وجد)"
     override val selectDueDate = "تحديد تاريخ الاستحقاق"
     override val selectPayday = "تحديد يوم استلام الراتب"
     override val note = "ملاحظة (اختياري)"

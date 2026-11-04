@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -346,9 +349,8 @@ fun DebtScreen(
             initialType = targetDebt.type,
             existingDebt = targetDebt,
             onDismiss = { editingDebt = null },
-            onSave = { type, personName, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay ->
-                val ratio = if (targetDebt.amount > 0) (targetDebt.remainingAmount / targetDebt.amount) else 1.0
-                val updatedRemaining = (amount * ratio).coerceIn(0.0, amount)
+            onSave = { type, personName, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay, paidAmount ->
+                val updatedRemaining = (amount - paidAmount).coerceIn(0.0, amount)
                 val isSettled = updatedRemaining <= 0.001
 
                 val updatedEntity = targetDebt.copy(
@@ -742,38 +744,58 @@ fun DebtItemCard(
             ) {
                 if (!debt.isPaid) {
                     // Partial Payment Button
-                    GlassButton(
+                    DebtActionButton(
                         text = strings.makePartialPayment,
                         icon = Icons.Default.Payments,
-                        containerColor = AmberNeon,
-                        modifier = Modifier.weight(1.3f),
+                        neonColor = AmberNeon,
+                        modifier = Modifier.weight(1f),
                         onClick = onPartialPayClick
                     )
 
                     // Full Payoff Button
-                    GlassButton(
+                    DebtActionButton(
                         text = strings.executePayment,
                         icon = Icons.Default.Payment,
-                        containerColor = EmeraldNeon,
-                        modifier = Modifier.weight(1.1f),
+                        neonColor = EmeraldNeon,
+                        modifier = Modifier.weight(1f),
                         onClick = onPayNow
                     )
                 } else {
-                    // Settled Archive / Delete Action
-                    GlassButton(
-                        text = strings.delete,
-                        icon = Icons.Default.Delete,
-                        containerColor = RoseNeon.copy(alpha = 0.8f),
-                        modifier = Modifier.weight(1f),
-                        onClick = onDelete
-                    )
+                    // Settled Badge
+                    Row(
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.12f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = strings.filterSettled,
+                            color = EmeraldNeon,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 // Edit Button
                 IconButton(
                     onClick = onEdit,
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(40.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(colors.glassCard)
                         .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
@@ -786,25 +808,72 @@ fun DebtItemCard(
                     )
                 }
 
-                // Delete Button (if not already settled, settled has button above)
-                if (!debt.isPaid) {
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.glassCard)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = strings.delete,
-                            tint = colors.textMuted,
-                            modifier = Modifier.size(18.dp)
+                // Delete Button
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (debt.isPaid) RoseNeon.copy(alpha = 0.15f) else colors.glassCard)
+                        .border(
+                            1.dp,
+                            if (debt.isPaid) RoseNeon.copy(alpha = 0.5f) else colors.glassBorderSubtle,
+                            RoundedCornerShape(12.dp)
                         )
-                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = strings.delete,
+                        tint = if (debt.isPaid) RoseNeon else colors.textMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DebtActionButton(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    neonColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(neonColor.copy(alpha = 0.14f))
+            .border(1.dp, neonColor.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = neonColor),
+                onClick = onClick
+            )
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = neonColor,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = neonColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

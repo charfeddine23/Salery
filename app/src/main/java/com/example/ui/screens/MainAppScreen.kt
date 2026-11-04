@@ -328,7 +328,7 @@ fun MainAppScreen(
                 AddDebtDialog(
                     initialType = addDebtType,
                     onDismiss = { showAddDebtDialog = false },
-                    onSave = { type, person, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay ->
+                    onSave = { type, person, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay, paidAmount ->
                         viewModel.addDebt(
                             type = type,
                             personName = person,
@@ -338,7 +338,8 @@ fun MainAppScreen(
                             autoPay = autoPay,
                             isRecurring = isRecurring,
                             monthlyInstallment = monthlyInstallment,
-                            installmentDay = installmentDay
+                            installmentDay = installmentDay,
+                            initialPaidAmount = paidAmount
                         )
                     }
                 )
