@@ -203,9 +203,7 @@ fun MainAppScreen(
                                     scope.launch {
                                         if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                     }
-                                },
-                                canLock = userSettings.patternLockEnabled,
-                                onLockClick = { viewModel.lockApp() }
+                                }
                             )
                         },
                         bottomBar = {
@@ -386,9 +384,7 @@ fun MainAppScreen(
 @Composable
 fun MainTopAppBar(
     title: String,
-    onMenuClick: () -> Unit,
-    canLock: Boolean,
-    onLockClick: () -> Unit
+    onMenuClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
 
@@ -417,7 +413,7 @@ fun MainTopAppBar(
             }
         }
 
-        // Screen Title with Brand Icon
+        // Screen Title with Brand Icon (Clean presentation without version number)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -430,43 +426,17 @@ fun MainTopAppBar(
                 contentScale = ContentScale.Fit
             )
             Spacer(modifier = Modifier.width(10.dp))
-            Column(horizontalAlignment = Alignment.Start) {
-                Text(
-                    text = title,
-                    color = colors.textPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.4.sp
-                )
-                Text(
-                    text = "v$APP_VERSION",
-                    color = colors.primaryNeon,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = title,
+                color = colors.textPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp
+            )
         }
 
-        // Lock App Button
-        if (canLock) {
-            GlassCard(
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(14.dp),
-                backgroundColor = colors.glassCard,
-                onClick = onLockClick
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Lock App",
-                        tint = colors.primaryNeon,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        } else {
-            Spacer(modifier = Modifier.size(44.dp))
-        }
+        // Right side balance spacer (matches 44dp menu button to ensure exact center alignment of title)
+        Spacer(modifier = Modifier.size(44.dp))
     }
 }
 
