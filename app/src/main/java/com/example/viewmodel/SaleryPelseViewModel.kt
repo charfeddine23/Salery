@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.example.notification.DebtReminderScheduler
 
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
@@ -113,6 +114,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             checkAndApplySalaryScheduler()
             checkAndExecuteAutoPayDebts()
             populateDefaultSampleDataIfEmpty()
+            val currentDebts = dao.getAllDebtsList()
+            DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
         }
     }
 
@@ -364,22 +367,24 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val isSettled = remaining <= 0.001
             val now = System.currentTimeMillis()
 
-            dao.insertDebt(
-                DebtEntity(
-                    type = type,
-                    personName = personName,
-                    amount = amount,
-                    remainingAmount = remaining,
-                    note = note,
-                    dueDateMillis = dueDateMillis,
-                    autoPayOnDueDate = autoPay,
-                    isRecurringMonthlyInstallment = isRecurring,
-                    monthlyInstallmentAmount = monthlyInstallment,
-                    installmentDayOfMonth = installmentDay,
-                    isPaid = isSettled,
-                    paidDateMillis = if (isSettled) now else null
-                )
+            val newEntity = DebtEntity(
+                type = type,
+                personName = personName,
+                amount = amount,
+                remainingAmount = remaining,
+                note = note,
+                dueDateMillis = dueDateMillis,
+                autoPayOnDueDate = autoPay,
+                isRecurringMonthlyInstallment = isRecurring,
+                monthlyInstallmentAmount = monthlyInstallment,
+                installmentDayOfMonth = installmentDay,
+                isPaid = isSettled,
+                paidDateMillis = if (isSettled) now else null
             )
+            val newId = dao.insertDebt(newEntity)
+            if (!isSettled) {
+                DebtReminderScheduler.scheduleDebtReminder(getApplication(), newEntity.copy(id = newId))
+            }
             _toastEvent.emit("Debt recorded successfully")
         }
     }
@@ -395,6 +400,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     paidDateMillis = now
                 )
             )
+            DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             // Record wallet impact
             if (debt.type == DebtType.OWED_BY_ME) {
                 dao.insertTransaction(
@@ -426,6 +432,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun updateDebt(debt: DebtEntity) {
         viewModelScope.launch {
             dao.updateDebt(debt)
+            if (debt.isPaid || debt.remainingAmount <= 0.001) {
+                DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
+            } else {
+                DebtReminderScheduler.scheduleDebtReminder(getApplication(), debt)
+            }
             _toastEvent.emit("Debt updated successfully")
         }
     }
@@ -444,6 +455,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 paidDateMillis = if (isFullySettled) now else debt.paidDateMillis
             )
             dao.updateDebt(updatedDebt)
+            if (isFullySettled) {
+                DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
+            } else {
+                DebtReminderScheduler.scheduleDebtReminder(getApplication(), updatedDebt)
+            }
 
             if (recordTransaction) {
                 if (debt.type == DebtType.OWED_BY_ME) {
@@ -484,6 +500,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun deleteDebt(debt: DebtEntity) {
         viewModelScope.launch {
             dao.deleteDebt(debt)
+            DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             _toastEvent.emit("Debt record removed")
         }
     }
@@ -617,3 +634,5 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 }
+
+typealias SaleryPulseViewModel = SaleryPelseViewModel

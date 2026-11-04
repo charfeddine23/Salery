@@ -15,7 +15,7 @@ class ExampleUnitTest {
 
   @Test
   fun appIdentity_andDeveloper_areCorrect() {
-    assertEquals("SaleryPelse", APP_NAME)
+    assertEquals("SaleryPulse", APP_NAME)
     assertEquals("Kahlessenane Charfeddine", DEVELOPER_NAME)
     assertEquals("1.0.1", APP_VERSION)
   }

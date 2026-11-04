@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "SaleryPelse"
+rootProject.name = "SaleryPulse"
 
 include(":app")

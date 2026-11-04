@@ -10,7 +10,7 @@ import java.util.Date
 import java.util.Locale
 
 // App Name, Version, and Developer Name MUST NEVER be translated or changed into Arabic script!
-const val APP_NAME = "SaleryPelse"
+const val APP_NAME = "SaleryPulse"
 const val DEVELOPER_NAME = "Kahlessenane Charfeddine"
 const val APP_VERSION = "1.0.1"
 
@@ -73,6 +73,8 @@ interface StringsBundle {
     val filterAll: String
     val debtProgress: String
     val fullySettled: String
+    val debtDueReminderTitle: String
+    val debtDueReminderBody: String
 
     val addTransaction: String
     val addIncome: String
@@ -193,6 +195,8 @@ object EnglishStrings : StringsBundle {
     override val filterAll = "All"
     override val debtProgress = "Progress"
     override val fullySettled = "Fully Settled"
+    override val debtDueReminderTitle = "Debt Due Tomorrow"
+    override val debtDueReminderBody = "Reminder: Payment of %s for %s is due tomorrow."
 
     override val addTransaction = "Add Transaction"
     override val addIncome = "Add Income"
@@ -225,7 +229,7 @@ object EnglishStrings : StringsBundle {
 
     override val securityTitle = "Security & Privacy"
     override val patternLock = "Pattern Gesture Lock"
-    override val patternLockDesc = "Protect SaleryPelse with 3x3 gesture matrix"
+    override val patternLockDesc = "Protect SaleryPulse with 3x3 gesture matrix"
     override val setPattern = "Set Gesture Pattern"
     override val changePattern = "Change Pattern"
     override val drawPattern = "Draw your unlock gesture pattern"
@@ -233,7 +237,7 @@ object EnglishStrings : StringsBundle {
     override val patternSaved = "Gesture pattern saved securely"
     override val patternMismatch = "Patterns do not match. Try again."
     override val patternTooShort = "Connect at least 4 dots."
-    override val unlockApp = "Unlock SaleryPelse"
+    override val unlockApp = "Unlock SaleryPulse"
     override val incorrectPattern = "Incorrect pattern! Try again."
 
     override val backupRestore = "Backup & Restore"
@@ -312,6 +316,8 @@ object ArabicStrings : StringsBundle {
     override val filterAll = "الكل"
     override val debtProgress = "نسبة الإنجاز"
     override val fullySettled = "مسدد بالكامل"
+    override val debtDueReminderTitle = "موعد استحقاق دين غداً"
+    override val debtDueReminderBody = "تذكير: سداد بقيمة %s لـ %s مستحق غداً."
 
     override val addTransaction = "إضافة معاملة"
     override val addIncome = "إضافة دخل"
@@ -344,7 +350,7 @@ object ArabicStrings : StringsBundle {
 
     override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"
-    override val patternLockDesc = "حماية SaleryPelse بمصفوفة إيماءات 3x3"
+    override val patternLockDesc = "حماية SaleryPulse بمصفوفة إيماءات 3x3"
     override val setPattern = "تعيين نمط جديد"
     override val changePattern = "تغيير النمط"
     override val drawPattern = "ارسم نمط إيماءة فتح القفل"
@@ -352,7 +358,7 @@ object ArabicStrings : StringsBundle {
     override val patternSaved = "تم حفظ نمط الإيماءة بنجاح"
     override val patternMismatch = "الأنماط غير متطابقة. أعد المحاولة."
     override val patternTooShort = "صل 4 نقاط على الأقل."
-    override val unlockApp = "فتح قفل SaleryPelse"
+    override val unlockApp = "فتح قفل SaleryPulse"
     override val incorrectPattern = "النمط غير صحيح! حاول ثانية."
 
     override val backupRestore = "النسخ الاحتياطي والاستعادة"

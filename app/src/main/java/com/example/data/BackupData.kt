@@ -15,7 +15,7 @@ data class BackupPayload(
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
-        root.put("appName", "SaleryPelse")
+        root.put("appName", "SaleryPulse")
         root.put("appVersion", appVersion)
         root.put("developer", developer)
         root.put("exportTimestamp", exportTimestamp)

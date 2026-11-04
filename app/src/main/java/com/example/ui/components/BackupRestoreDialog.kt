@@ -175,13 +175,13 @@ fun BackupRestoreDialog(
                             val json = onExportBackup()
                             // Copy to clipboard
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("SaleryPelse Backup", json))
+                            clipboard.setPrimaryClip(ClipData.newPlainText("SaleryPulse Backup", json))
 
                             // Share to Google Drive or other apps
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, json)
-                                putExtra(Intent.EXTRA_TITLE, "SaleryPelse_Backup.json")
+                                putExtra(Intent.EXTRA_TITLE, "SaleryPulse_Backup.json")
                                 type = "application/json"
                             }
                             val shareIntent = Intent.createChooser(sendIntent, "Save Backup to Google Drive / Files")

@@ -48,7 +48,7 @@ jobs:
           else
             echo "Creating consistent release keystore..."
             keytool -genkeypair -v -keystore my-upload-key.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android -dname "CN=SaleryPelse, OU=Finance, O=SaleryPelse, L=Algiers, C=DZ"
+              -storepass android -keypass android -dname "CN=SaleryPulse, OU=Finance, O=SaleryPulse, L=Algiers, C=DZ"
             echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
             echo "STORE_PASSWORD=android" >> $GITHUB_ENV
             echo "KEY_PASSWORD=android" >> $GITHUB_ENV
@@ -67,7 +67,7 @@ jobs:
             echo "Error: Release APK not found!"
             exit 1
           fi
-          NEW_APK_NAME="SaleryPelse-v${{ github.run_number }}.apk"
+          NEW_APK_NAME="SaleryPulse-v${{ github.run_number }}.apk"
           cp "$APK_FILE" "$NEW_APK_NAME"
           echo "apk_path=$NEW_APK_NAME" >> $GITHUB_OUTPUT
           
@@ -98,8 +98,8 @@ jobs:
         run: |
           gh release create "${{ steps.prepare_artifacts.outputs.tag_name }}" \
             "${{ steps.prepare_artifacts.outputs.apk_path }}" \
-            --title "SaleryPelse Release ${{ steps.prepare_artifacts.outputs.tag_name }}" \
-            --notes "### SaleryPelse Android Release
+            --title "SaleryPulse Release ${{ steps.prepare_artifacts.outputs.tag_name }}" \
+            --notes "### SaleryPulse Android Release
             - **Developer:** Kahlessenane Charfeddine
             - **Build:** ${{ steps.prepare_artifacts.outputs.tag_name }}
             - **UI:** Liquid Glass v3 (Light & Dark Mode)

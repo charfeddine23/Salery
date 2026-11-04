@@ -39,7 +39,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun SaleryPelseTheme(
+fun SaleryPulseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
@@ -56,3 +56,9 @@ fun SaleryPelseTheme(
         )
     }
 }
+
+@Composable
+fun SaleryPelseTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) = SaleryPulseTheme(darkTheme = darkTheme, content = content)

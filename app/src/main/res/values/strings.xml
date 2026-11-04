@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SaleryPelse</string>
+    <string name="app_name">SaleryPulse</string>
     <string name="developer_name">Kahlessenane Charfeddine</string>
     <string name="app_version">1.0.0</string>
     <string name="currency_dzd">DZD</string>
@@ -91,7 +91,7 @@
     <string name="pattern_set_success">Pattern saved successfully</string>
     <string name="pattern_mismatch">Patterns do not match. Try again.</string>
     <string name="pattern_too_short">Connect at least 4 dots.</string>
-    <string name="unlock_app">Unlock SaleryPelse</string>
+    <string name="unlock_app">Unlock SaleryPulse</string>
     <string name="incorrect_pattern">Incorrect pattern! Try again.</string>
 
     <!-- Backup & Restore -->

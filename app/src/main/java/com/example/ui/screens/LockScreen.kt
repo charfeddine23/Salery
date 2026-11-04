@@ -62,7 +62,7 @@ fun LockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Official SaleryPelse "SP" Brand Logo
+            // Official SaleryPulse "SP" Brand Logo
             Image(
                 painter = painterResource(id = R.drawable.sp_brand_logo),
                 contentDescription = APP_NAME,

@@ -1,5 +1,5 @@
 {
-  "name": "SaleryPelse",
+  "name": "SaleryPulse",
   "description": "Smart financial tracker with Liquid Glass UI, salary scheduler, debt auto-payments, and pattern lock by Kahlessenane Charfeddine.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

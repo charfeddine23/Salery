@@ -55,11 +55,8 @@ import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
-import com.example.ui.theme.AmberNeon
-import com.example.ui.theme.CyanNeon
-import com.example.ui.theme.EmeraldNeon
+import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
-import com.example.ui.theme.RoseNeon
 import java.util.Calendar
 
 @Composable
@@ -82,6 +79,7 @@ fun AddDebtDialog(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isDark = colors.isDark
     val context = LocalContext.current
 
     var selectedType by remember { mutableStateOf(existingDebt?.type ?: initialType) }
@@ -241,8 +239,14 @@ fun AddDebtDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (selectedType == DebtType.OWED_BY_ME) AmberNeon.copy(alpha = 0.25f)
+                                if (selectedType == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
                                 else Color.Transparent
+                            )
+                            .border(
+                                1.dp,
+                                if (selectedType == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
+                                else Color.Transparent,
+                                RoundedCornerShape(12.dp)
                             )
                             .clickable { selectedType = DebtType.OWED_BY_ME }
                             .padding(vertical = 10.dp),
@@ -250,7 +254,7 @@ fun AddDebtDialog(
                     ) {
                         Text(
                             text = strings.debtsOwedByMe,
-                            color = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.textMuted,
+                            color = if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else colors.textMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -261,8 +265,14 @@ fun AddDebtDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (selectedType == DebtType.OWED_TO_ME) CyanNeon.copy(alpha = 0.25f)
+                                if (selectedType == DebtType.OWED_TO_ME) DebtColors.receivableContainer(isDark)
                                 else Color.Transparent
+                            )
+                            .border(
+                                1.dp,
+                                if (selectedType == DebtType.OWED_TO_ME) DebtColors.receivableBorder(isDark)
+                                else Color.Transparent,
+                                RoundedCornerShape(12.dp)
                             )
                             .clickable { selectedType = DebtType.OWED_TO_ME }
                             .padding(vertical = 10.dp),
@@ -270,7 +280,7 @@ fun AddDebtDialog(
                     ) {
                         Text(
                             text = strings.debtsOwedToMe,
-                            color = if (selectedType == DebtType.OWED_TO_ME) CyanNeon else colors.textMuted,
+                            color = if (selectedType == DebtType.OWED_TO_ME) DebtColors.receivable(isDark) else colors.textMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -351,7 +361,9 @@ fun AddDebtDialog(
                         if (paid > 0) {
                             Text(
                                 text = "${strings.remainingBalance}: ${formatDzd(rem, strings.currencyCode)} ($pct% ${strings.paidOutOf} ${formatDzd(total, strings.currencyCode)})",
-                                color = if (rem <= 0.001) EmeraldNeon else AmberNeon,
+                                color = if (rem <= 0.001) DebtColors.settled(isDark)
+                                else if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
+                                else DebtColors.receivable(isDark),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -369,9 +381,9 @@ fun AddDebtDialog(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = colors.textPrimary,
                         unfocusedTextColor = colors.textPrimary,
-                        focusedBorderColor = EmeraldNeon,
+                        focusedBorderColor = DebtColors.settled(isDark),
                         unfocusedBorderColor = colors.glassBorderSubtle,
-                        focusedLabelColor = EmeraldNeon,
+                        focusedLabelColor = DebtColors.settled(isDark),
                         unfocusedLabelColor = colors.textSecondary
                     ),
                     singleLine = true
@@ -421,8 +433,14 @@ fun AddDebtDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(11.dp))
                             .background(
-                                if (isRecurringInstallment) AmberNeon.copy(alpha = 0.25f)
+                                if (isRecurringInstallment) DebtColors.autoPayContainer(isDark)
                                 else Color.Transparent
+                            )
+                            .border(
+                                1.dp,
+                                if (isRecurringInstallment) DebtColors.autoPayBorder(isDark)
+                                else Color.Transparent,
+                                RoundedCornerShape(11.dp)
                             )
                             .clickable { isRecurringInstallment = true }
                             .padding(vertical = 9.dp),
@@ -430,7 +448,7 @@ fun AddDebtDialog(
                     ) {
                         Text(
                             text = strings.debtMonthlyInstallments,
-                            color = if (isRecurringInstallment) AmberNeon else colors.textMuted,
+                            color = if (isRecurringInstallment) DebtColors.autoPay(isDark) else colors.textMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
@@ -519,9 +537,9 @@ fun AddDebtDialog(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = colors.textPrimary,
                             unfocusedTextColor = colors.textPrimary,
-                            focusedBorderColor = AmberNeon,
+                            focusedBorderColor = DebtColors.autoPay(isDark),
                             unfocusedBorderColor = colors.glassBorderSubtle,
-                            focusedLabelColor = AmberNeon,
+                            focusedLabelColor = DebtColors.autoPay(isDark),
                             unfocusedLabelColor = colors.textSecondary
                         ),
                         singleLine = true
@@ -549,7 +567,7 @@ fun AddDebtDialog(
                             Icon(
                                 imageVector = Icons.Default.CalendarMonth,
                                 contentDescription = strings.pickFromCalendar,
-                                tint = AmberNeon,
+                                tint = DebtColors.autoPay(isDark),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -565,13 +583,13 @@ fun AddDebtDialog(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(AmberNeon.copy(alpha = 0.2f))
-                                .border(1.dp, AmberNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .background(DebtColors.autoPayContainer(isDark))
+                                .border(1.dp, DebtColors.autoPayBorder(isDark), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 12.dp, vertical = 5.dp)
                         ) {
                             Text(
                                 text = "Day $installmentDay",
-                                color = AmberNeon,
+                                color = DebtColors.autoPay(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -625,7 +643,7 @@ fun AddDebtDialog(
                         onCheckedChange = { autoPayOnDueDate = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
+                            checkedTrackColor = if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                             uncheckedThumbColor = colors.textMuted,
                             uncheckedTrackColor = colors.glassCard
                         )
@@ -664,7 +682,7 @@ fun AddDebtDialog(
                 GlassButton(
                     text = strings.save,
                     enabled = isValid,
-                    containerColor = if (selectedType == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
+                    containerColor = if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         onSave(

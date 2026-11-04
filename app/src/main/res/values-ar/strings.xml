@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SaleryPelse</string>
+    <string name="app_name">SaleryPulse</string>
     <string name="developer_name">Kahlessenane Charfeddine</string>
     <string name="app_version">1.0.0</string>
     <string name="currency_dzd">د.ج</string>
@@ -91,7 +91,7 @@
     <string name="pattern_set_success">تم حفظ النمط بنجاح</string>
     <string name="pattern_mismatch">الأنماط غير متطابقة. أعد المحاولة.</string>
     <string name="pattern_too_short">صل 4 نقاط على الأقل.</string>
-    <string name="unlock_app">فتح قفل SaleryPelse</string>
+    <string name="unlock_app">فتح قفل SaleryPulse</string>
     <string name="incorrect_pattern">النمط غير صحيح! حاول ثانية.</string>
 
     <!-- Backup & Restore -->

@@ -121,12 +121,6 @@ fun SidebarDrawer(
                                 fontWeight = FontWeight.ExtraBold,
                                 letterSpacing = 0.5.sp
                             )
-                            Text(
-                                text = "v$APP_VERSION",
-                                color = colors.primaryNeon,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
                         }
                     }
 
@@ -237,7 +231,7 @@ fun SidebarDrawer(
             if (userSettings.patternLockEnabled) {
                 DrawerActionItem(
                     icon = Icons.Default.Lock,
-                    title = "Lock SaleryPelse Now",
+                    title = "Lock SaleryPulse Now",
                     subtitle = "Require pattern unlock immediately",
                     onClick = onLockAppNow
                 )

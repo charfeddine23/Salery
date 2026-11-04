@@ -48,6 +48,9 @@ interface AppDao {
     @Query("SELECT * FROM debts WHERE isPaid = 0 AND autoPayOnDueDate = 1")
     suspend fun getPendingAutoPayDebts(): List<DebtEntity>
 
+    @Query("SELECT * FROM debts WHERE id = :id LIMIT 1")
+    suspend fun getDebtById(id: Long): DebtEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDebt(debt: DebtEntity): Long
 

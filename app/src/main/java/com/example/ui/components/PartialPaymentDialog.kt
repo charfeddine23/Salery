@@ -49,8 +49,7 @@ import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
-import com.example.ui.theme.AmberNeon
-import com.example.ui.theme.EmeraldNeon
+import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
 
 @Composable
@@ -62,6 +61,7 @@ fun PartialPaymentDialog(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isDark = colors.isDark
 
     val totalAmount = debt.amount
     val currentRemaining = debt.remainingAmount
@@ -85,7 +85,7 @@ fun PartialPaymentDialog(
     val projectedProgress = if (totalAmount > 0) (projectedPaid / totalAmount).toFloat().coerceIn(0f, 1f) else 1f
     val currentProgress = if (totalAmount > 0) (currentPaid / totalAmount).toFloat().coerceIn(0f, 1f) else 1f
 
-    val accentColor = if (debt.type == DebtType.OWED_BY_ME) AmberNeon else EmeraldNeon
+    val accentColor = if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark)
 
     Dialog(onDismissRequest = onDismiss) {
         GlassCard(
@@ -168,13 +168,13 @@ fun PartialPaymentDialog(
                         ) {
                             Text(
                                 text = "${strings.paidAmount}: ${formatDzd(currentPaid, currencyCode)}",
-                                color = EmeraldNeon,
+                                color = DebtColors.settled(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "${strings.remainingBalance}: ${formatDzd(currentRemaining, currencyCode)}",
-                                color = AmberNeon,
+                                color = if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )

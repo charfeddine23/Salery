@@ -60,11 +60,8 @@ import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
-import com.example.ui.theme.AmberNeon
-import com.example.ui.theme.CyanNeon
-import com.example.ui.theme.EmeraldNeon
+import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
-import com.example.ui.theme.RoseNeon
 
 @Composable
 fun DebtScreen(
@@ -79,6 +76,7 @@ fun DebtScreen(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isDark = colors.isDark
 
     var activeTab by remember { mutableStateOf(DebtType.OWED_BY_ME) }
     var statusFilter by remember { mutableStateOf("ALL") } // "ALL", "ACTIVE", "SETTLED"
@@ -137,13 +135,20 @@ fun DebtScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    (if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon).copy(alpha = 0.18f)
+                                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
+                                    else DebtColors.receivableContainer(isDark)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
+                                    else DebtColors.receivableBorder(isDark),
+                                    RoundedCornerShape(10.dp)
                                 )
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = "${pendingDebts.size} ${strings.filterActive}",
-                                color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon,
+                                color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -154,7 +159,7 @@ fun DebtScreen(
 
                     Text(
                         text = formatDzd(totalPendingAmount, strings.currencyCode),
-                        color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else CyanNeon,
+                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                         fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -168,7 +173,7 @@ fun DebtScreen(
                             .fillMaxWidth()
                             .height(7.dp)
                             .clip(RoundedCornerShape(4.dp)),
-                        color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else EmeraldNeon,
+                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.settled(isDark),
                         trackColor = colors.glassBorderSubtle
                     )
 
@@ -180,7 +185,7 @@ fun DebtScreen(
                     ) {
                         Text(
                             text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} (${(tabProgress * 100).toInt()}%)",
-                            color = EmeraldNeon,
+                            color = DebtColors.settled(isDark),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -201,7 +206,7 @@ fun DebtScreen(
                         GlassButton(
                             text = strings.addDebt,
                             icon = Icons.Default.Add,
-                            containerColor = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else colors.primaryNeon,
+                            containerColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                             modifier = Modifier.weight(1f),
                             onClick = { onAddDebtClick(activeTab) }
                         )
@@ -210,7 +215,7 @@ fun DebtScreen(
                             GlassButton(
                                 text = "${strings.deleteSettledDebts} (${settledDebts.size})",
                                 icon = Icons.Default.DeleteSweep,
-                                containerColor = RoseNeon.copy(alpha = 0.85f),
+                                containerColor = DebtColors.danger(isDark),
                                 modifier = Modifier.weight(1f),
                                 onClick = { showClearSettledConfirm = true }
                             )
@@ -235,8 +240,14 @@ fun DebtScreen(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (activeTab == DebtType.OWED_BY_ME) AmberNeon.copy(alpha = 0.25f)
+                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
                             else Color.Transparent
+                        )
+                        .border(
+                            1.dp,
+                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
+                            else Color.Transparent,
+                            RoundedCornerShape(12.dp)
                         )
                         .clickable { activeTab = DebtType.OWED_BY_ME }
                         .padding(vertical = 10.dp),
@@ -244,7 +255,7 @@ fun DebtScreen(
                 ) {
                     Text(
                         text = "${strings.debtsOwedByMe} (${debts.count { it.type == DebtType.OWED_BY_ME }})",
-                        color = if (activeTab == DebtType.OWED_BY_ME) AmberNeon else colors.textMuted,
+                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else colors.textMuted,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
@@ -255,8 +266,14 @@ fun DebtScreen(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (activeTab == DebtType.OWED_TO_ME) CyanNeon.copy(alpha = 0.25f)
+                            if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableContainer(isDark)
                             else Color.Transparent
+                        )
+                        .border(
+                            1.dp,
+                            if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableBorder(isDark)
+                            else Color.Transparent,
+                            RoundedCornerShape(12.dp)
                         )
                         .clickable { activeTab = DebtType.OWED_TO_ME }
                         .padding(vertical = 10.dp),
@@ -264,7 +281,7 @@ fun DebtScreen(
                 ) {
                     Text(
                         text = "${strings.debtsOwedToMe} (${debts.count { it.type == DebtType.OWED_TO_ME }})",
-                        color = if (activeTab == DebtType.OWED_TO_ME) CyanNeon else colors.textMuted,
+                        color = if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivable(isDark) else colors.textMuted,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
@@ -388,13 +405,14 @@ fun DebtScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(RoseNeon.copy(alpha = 0.2f)),
+                                .background(DebtColors.dangerContainer(isDark))
+                                .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = RoseNeon,
+                                tint = DebtColors.danger(isDark),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -430,7 +448,7 @@ fun DebtScreen(
                         GlassButton(
                             text = strings.delete,
                             icon = Icons.Default.Delete,
-                            containerColor = RoseNeon,
+                            containerColor = DebtColors.danger(isDark),
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 onDeleteDebt(targetDebt)
@@ -459,13 +477,14 @@ fun DebtScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(RoseNeon.copy(alpha = 0.2f)),
+                                .background(DebtColors.dangerContainer(isDark))
+                                .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
                                 contentDescription = null,
-                                tint = RoseNeon,
+                                tint = DebtColors.danger(isDark),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -501,7 +520,7 @@ fun DebtScreen(
                         GlassButton(
                             text = strings.delete,
                             icon = Icons.Default.Delete,
-                            containerColor = RoseNeon,
+                            containerColor = DebtColors.danger(isDark),
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 onClearSettledDebts()
@@ -526,6 +545,7 @@ fun DebtItemCard(
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
+    val isDark = colors.isDark
 
     val now = System.currentTimeMillis()
     val isOverdue = !debt.isPaid && debt.dueDateMillis < now
@@ -538,9 +558,9 @@ fun DebtItemCard(
     val paidPercent = (paidRatio * 100).toInt()
 
     val statusColor = when {
-        debt.isPaid -> EmeraldNeon
-        isOverdue -> RoseNeon
-        else -> AmberNeon
+        debt.isPaid -> DebtColors.settled(isDark)
+        isOverdue -> DebtColors.danger(isDark)
+        else -> if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark)
     }
 
     GlassCard(
@@ -567,7 +587,8 @@ fun DebtItemCard(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(statusColor.copy(alpha = 0.2f)),
+                            .background(statusColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                            .border(1.dp, statusColor.copy(alpha = if (isDark) 0.40f else 0.30f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -607,7 +628,9 @@ fun DebtItemCard(
                     Text(
                         text = if (debt.isPaid) strings.fullySettled
                         else "${strings.remainingBalance}: ${formatDzd(remainingAmount, currencyCode)}",
-                        color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                        color = if (debt.isPaid) DebtColors.settled(isDark)
+                        else if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
+                        else DebtColors.receivable(isDark),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -622,7 +645,9 @@ fun DebtItemCard(
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
-                color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                color = if (debt.isPaid) DebtColors.settled(isDark)
+                else if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
+                else DebtColors.receivable(isDark),
                 trackColor = colors.glassBorderSubtle
             )
 
@@ -635,13 +660,15 @@ fun DebtItemCard(
             ) {
                 Text(
                     text = "${formatDzd(paidAmount, currencyCode)} ${strings.paidOutOf} ${formatDzd(totalAmount, currencyCode)}",
-                    color = EmeraldNeon,
+                    color = DebtColors.settled(isDark),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = "$paidPercent%",
-                    color = if (debt.isPaid) EmeraldNeon else AmberNeon,
+                    color = if (debt.isPaid) DebtColors.settled(isDark)
+                    else if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
+                    else DebtColors.receivable(isDark),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -663,7 +690,8 @@ fun DebtItemCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(statusColor.copy(alpha = 0.18f))
+                            .background(statusColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                            .border(1.dp, statusColor.copy(alpha = if (isDark) 0.45f else 0.35f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
@@ -679,20 +707,21 @@ fun DebtItemCard(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(AmberNeon.copy(alpha = 0.18f))
+                                .background(DebtColors.autoPayContainer(isDark))
+                                .border(1.dp, DebtColors.autoPayBorder(isDark), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Autorenew,
                                     contentDescription = null,
-                                    tint = AmberNeon,
+                                    tint = DebtColors.autoPay(isDark),
                                     modifier = Modifier.size(10.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "${debt.monthlyInstallmentAmount.toLong()} $currencyCode / mo • Day ${debt.installmentDayOfMonth}",
-                                    color = AmberNeon,
+                                    color = DebtColors.autoPay(isDark),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -702,20 +731,21 @@ fun DebtItemCard(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(CyanNeon.copy(alpha = 0.18f))
+                                .background(DebtColors.receivableContainer(isDark))
+                                .border(1.dp, DebtColors.receivableBorder(isDark), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Autorenew,
                                     contentDescription = null,
-                                    tint = CyanNeon,
+                                    tint = DebtColors.receivable(isDark),
                                     modifier = Modifier.size(10.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Auto-Pay",
-                                    color = CyanNeon,
+                                    color = DebtColors.receivable(isDark),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -747,7 +777,8 @@ fun DebtItemCard(
                     DebtActionButton(
                         text = strings.makePartialPayment,
                         icon = Icons.Default.Payments,
-                        neonColor = AmberNeon,
+                        neonColor = if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                        isDark = isDark,
                         modifier = Modifier.weight(1f),
                         onClick = onPartialPayClick
                     )
@@ -756,7 +787,8 @@ fun DebtItemCard(
                     DebtActionButton(
                         text = strings.executePayment,
                         icon = Icons.Default.Payment,
-                        neonColor = EmeraldNeon,
+                        neonColor = DebtColors.settled(isDark),
+                        isDark = isDark,
                         modifier = Modifier.weight(1f),
                         onClick = onPayNow
                     )
@@ -767,8 +799,8 @@ fun DebtItemCard(
                             .weight(1.3f)
                             .height(40.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(EmeraldNeon.copy(alpha = 0.12f))
-                            .border(1.dp, EmeraldNeon.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .background(DebtColors.settledContainer(isDark))
+                            .border(1.dp, DebtColors.settledBorder(isDark), RoundedCornerShape(12.dp))
                             .padding(horizontal = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -776,13 +808,13 @@ fun DebtItemCard(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = EmeraldNeon,
+                            tint = DebtColors.settled(isDark),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = strings.filterSettled,
-                            color = EmeraldNeon,
+                            color = DebtColors.settled(isDark),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -814,17 +846,17 @@ fun DebtItemCard(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (debt.isPaid) RoseNeon.copy(alpha = 0.15f) else colors.glassCard)
+                        .background(if (debt.isPaid) DebtColors.dangerContainer(isDark) else colors.glassCard)
                         .border(
                             1.dp,
-                            if (debt.isPaid) RoseNeon.copy(alpha = 0.5f) else colors.glassBorderSubtle,
+                            if (debt.isPaid) DebtColors.dangerBorder(isDark) else colors.glassBorderSubtle,
                             RoundedCornerShape(12.dp)
                         )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = strings.delete,
-                        tint = if (debt.isPaid) RoseNeon else colors.textMuted,
+                        tint = if (debt.isPaid) DebtColors.danger(isDark) else colors.textMuted,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -838,15 +870,18 @@ private fun DebtActionButton(
     text: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     neonColor: Color,
+    isDark: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val bgAlpha = if (isDark) 0.16f else 0.10f
+    val borderAlpha = if (isDark) 0.45f else 0.35f
     Box(
         modifier = modifier
             .height(40.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(neonColor.copy(alpha = 0.14f))
-            .border(1.dp, neonColor.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .background(neonColor.copy(alpha = bgAlpha))
+            .border(1.dp, neonColor.copy(alpha = borderAlpha), RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = neonColor),
