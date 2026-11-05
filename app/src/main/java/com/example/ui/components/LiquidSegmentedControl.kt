@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -44,17 +43,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.i18n.AppStrings
-import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 
 /**
- * Modern, fluid, animated segmented control for Theme Appearance:
- * Supports 3 dynamic states:
- * - "DARK" -> Dark Glass
- * - "LIGHT" -> Light Crystal
- * - "SYSTEM" -> System Default (dynamically tracks OS system theme)
+ * Clean, modern, flat segmented control for Theme Appearance:
+ * Removed heavy glass/skeuomorphic bevels and harsh borders.
+ * Styled with a smooth, neutral track and an elegant floating pill with soft drop-shadow.
  *
- * Engineered with non-overlapping geometry, fluid sliding pill, and crisp contrast.
+ * Supports 3 dynamic states:
+ * - "DARK" -> Dark
+ * - "LIGHT" -> Light
+ * - "SYSTEM" -> System Default
  */
 @Composable
 fun LiquidThemeSegmentedControl(
@@ -75,53 +74,43 @@ fun LiquidThemeSegmentedControl(
 
     val animatedIndex by animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
         label = "ThemeSegmentSlide"
     )
 
-    val activeIndicatorBrush = if (isDark) {
-        Brush.horizontalGradient(
-            listOf(
-                colors.primaryNeon.copy(alpha = 0.38f),
-                colors.secondaryNeon.copy(alpha = 0.28f)
-            )
-        )
-    } else {
-        Brush.horizontalGradient(
-            listOf(
-                Color(0xFF0284C7).copy(alpha = 0.24f),
-                Color(0xFF2563EB).copy(alpha = 0.18f)
-            )
-        )
-    }
+    // Flat, clean track colors (no thick glass borders)
+    val trackBgColor = if (isDark) Color(0xFF0F172A).copy(alpha = 0.85f) else Color(0xFFF1F5F9)
+    val trackBorderColor = if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
 
-    val activeBorderColor = if (isDark) {
-        colors.primaryNeon.copy(alpha = 0.65f)
-    } else {
-        Color(0xFF0284C7).copy(alpha = 0.55f)
-    }
+    // Clean, modern floating pill (solid, refined, flat)
+    val pillBgColor = if (isDark) Color(0xFF1E293B) else Color.White
+    val pillBorderColor = if (isDark) Color(0xFF475569).copy(alpha = 0.6f) else Color(0xFFCBD5E1).copy(alpha = 0.5f)
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.glassCard.copy(alpha = if (isDark) 0.65f else 0.90f))
-            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(trackBgColor)
+            .border(0.8.dp, trackBorderColor, RoundedCornerShape(12.dp))
             .padding(3.dp)
     ) {
         val segmentWidth = maxWidth / 3
 
-        // Animated Sliding Indicator Pill
+        // Animated Sliding Pill
         Box(
             modifier = Modifier
                 .offset(x = segmentWidth * animatedIndex)
                 .width(segmentWidth)
                 .fillMaxHeight()
-                .shadow(elevation = 3.dp, shape = RoundedCornerShape(11.dp))
-                .clip(RoundedCornerShape(11.dp))
-                .background(activeIndicatorBrush)
-                .border(1.2.dp, activeBorderColor, RoundedCornerShape(11.dp))
+                .shadow(
+                    elevation = if (isDark) 1.dp else 2.dp,
+                    shape = RoundedCornerShape(9.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.3f else 0.08f)
+                )
+                .clip(RoundedCornerShape(9.dp))
+                .background(pillBgColor)
+                .border(0.8.dp, pillBorderColor, RoundedCornerShape(9.dp))
         )
 
         // 3 Segment Items
@@ -130,6 +119,7 @@ fun LiquidThemeSegmentedControl(
                 text = strings.themeDark,
                 icon = Icons.Default.DarkMode,
                 isSelected = selectedIndex == 0,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -139,6 +129,7 @@ fun LiquidThemeSegmentedControl(
                 text = strings.themeLight,
                 icon = Icons.Default.LightMode,
                 isSelected = selectedIndex == 1,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -148,6 +139,7 @@ fun LiquidThemeSegmentedControl(
                 text = strings.themeSystem,
                 icon = Icons.Default.BrightnessAuto,
                 isSelected = selectedIndex == 2,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -162,27 +154,32 @@ private fun ThemeSegmentOption(
     text: String,
     icon: ImageVector,
     isSelected: Boolean,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val colors = LiquidGlassTheme.colors
+    val selectedTextColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
+    val unselectedTextColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val selectedIconColor = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFF0284C7)
+    val unselectedIconColor = if (isDarkTheme) Color(0xFF64748B) else Color(0xFF94A3B8)
+
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) colors.textPrimary else colors.textMuted,
+        targetValue = if (isSelected) selectedTextColor else unselectedTextColor,
         animationSpec = tween(durationMillis = 200),
         label = "ThemeTextColor"
     )
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) colors.primaryNeon else colors.textMuted,
+        targetValue = if (isSelected) selectedIconColor else unselectedIconColor,
         animationSpec = tween(durationMillis = 200),
         label = "ThemeIconColor"
     )
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(9.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = colors.primaryNeon),
+                indication = ripple(color = selectedIconColor.copy(alpha = 0.2f)),
                 onClick = onClick
             )
             .padding(horizontal = 2.dp),
@@ -198,12 +195,12 @@ private fun ThemeSegmentOption(
                 tint = iconTint,
                 modifier = Modifier.size(15.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = text,
                 color = textColor,
-                fontSize = 11.5.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -212,8 +209,9 @@ private fun ThemeSegmentOption(
 }
 
 /**
- * Modern, fluid, animated segmented control for Language (English / العربية).
- * Provides responsive sliding indicators, dynamic highlight styling, and tactile feedback.
+ * Clean, modern, flat segmented control for Language (English / العربية):
+ * Removed heavy glass/skeuomorphic borders and weird inner nested badges.
+ * Presents a refined, clean text switch with smooth sliding pill.
  */
 @Composable
 fun LiquidLanguageSegmentedControl(
@@ -228,70 +226,60 @@ fun LiquidLanguageSegmentedControl(
 
     val animatedIndex by animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
         label = "LangSegmentSlide"
     )
 
-    val activeIndicatorBrush = if (isDark) {
-        Brush.horizontalGradient(
-            listOf(
-                EmeraldNeon.copy(alpha = 0.35f),
-                colors.primaryNeon.copy(alpha = 0.24f)
-            )
-        )
-    } else {
-        Brush.horizontalGradient(
-            listOf(
-                Color(0xFF059669).copy(alpha = 0.22f),
-                Color(0xFF0284C7).copy(alpha = 0.16f)
-            )
-        )
-    }
+    // Flat, clean track colors (no thick glass borders)
+    val trackBgColor = if (isDark) Color(0xFF0F172A).copy(alpha = 0.85f) else Color(0xFFF1F5F9)
+    val trackBorderColor = if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
 
-    val activeBorderColor = if (isDark) {
-        EmeraldNeon.copy(alpha = 0.60f)
-    } else {
-        Color(0xFF059669).copy(alpha = 0.50f)
-    }
+    // Clean, modern floating pill (solid, refined, flat)
+    val pillBgColor = if (isDark) Color(0xFF1E293B) else Color.White
+    val pillBorderColor = if (isDark) Color(0xFF475569).copy(alpha = 0.6f) else Color(0xFFCBD5E1).copy(alpha = 0.5f)
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.glassCard.copy(alpha = if (isDark) 0.65f else 0.90f))
-            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(trackBgColor)
+            .border(0.8.dp, trackBorderColor, RoundedCornerShape(12.dp))
             .padding(3.dp)
     ) {
         val segmentWidth = maxWidth / 2
 
-        // Animated Sliding Indicator Pill
+        // Animated Sliding Pill
         Box(
             modifier = Modifier
                 .offset(x = segmentWidth * animatedIndex)
                 .width(segmentWidth)
                 .fillMaxHeight()
-                .shadow(elevation = 3.dp, shape = RoundedCornerShape(11.dp))
-                .clip(RoundedCornerShape(11.dp))
-                .background(activeIndicatorBrush)
-                .border(1.2.dp, activeBorderColor, RoundedCornerShape(11.dp))
+                .shadow(
+                    elevation = if (isDark) 1.dp else 2.dp,
+                    shape = RoundedCornerShape(9.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.3f else 0.08f)
+                )
+                .clip(RoundedCornerShape(9.dp))
+                .background(pillBgColor)
+                .border(0.8.dp, pillBorderColor, RoundedCornerShape(9.dp))
         )
 
-        // Language Options Row
+        // Language Options Row (Clean Typography, no nested chaotic badges)
         Row(modifier = Modifier.fillMaxSize()) {
-            LanguageSegmentItem(
+            LanguageSegmentOption(
                 label = "English",
-                subLabel = "EN",
                 isSelected = !isArabic,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
                 onClick = { onSelectLanguage("en") }
             )
-            LanguageSegmentItem(
+            LanguageSegmentOption(
                 label = "العربية",
-                subLabel = "AR",
                 isSelected = isArabic,
+                isDarkTheme = isDark,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -302,57 +290,39 @@ fun LiquidLanguageSegmentedControl(
 }
 
 @Composable
-private fun LanguageSegmentItem(
+private fun LanguageSegmentOption(
     label: String,
-    subLabel: String,
     isSelected: Boolean,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val colors = LiquidGlassTheme.colors
+    val selectedTextColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
+    val unselectedTextColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) colors.textPrimary else colors.textMuted,
+        targetValue = if (isSelected) selectedTextColor else unselectedTextColor,
         animationSpec = tween(durationMillis = 200),
         label = "LangTextColor"
     )
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(9.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = EmeraldNeon),
+                indication = ripple(color = Color(0xFF10B981).copy(alpha = 0.2f)),
                 onClick = onClick
-            )
-            .padding(horizontal = 4.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = label,
-                color = textColor,
-                fontSize = 12.5.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isSelected) EmeraldNeon.copy(alpha = 0.22f) else colors.glassBorderSubtle.copy(alpha = 0.35f))
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = subLabel,
-                    color = if (isSelected) EmeraldNeon else colors.textMuted,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 13.sp,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
