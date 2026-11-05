@@ -104,6 +104,7 @@ interface StringsBundle {
     val themeMode: String
     val themeDark: String
     val themeLight: String
+    val themeSystem: String
 
     val securityTitle: String
     val patternLock: String
@@ -229,8 +230,9 @@ object EnglishStrings : StringsBundle {
     override val langEnglish = "English"
     override val langArabic = "العربية"
     override val themeMode = "Theme Appearance"
-    override val themeDark = "Dark Glass"
-    override val themeLight = "Light Crystal"
+    override val themeDark = "Dark"
+    override val themeLight = "Light"
+    override val themeSystem = "System"
 
     override val securityTitle = "Security & Privacy"
     override val patternLock = "Pattern Gesture Lock"
@@ -355,8 +357,9 @@ object ArabicStrings : StringsBundle {
     override val langEnglish = "English"
     override val langArabic = "العربية"
     override val themeMode = "مظهر التصميم"
-    override val themeDark = "زجاج داكن (Dark Glass)"
-    override val themeLight = "كريستال مضيء (Light Crystal)"
+    override val themeDark = "داكن"
+    override val themeLight = "فاتح"
+    override val themeSystem = "تلقائي"
 
     override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"

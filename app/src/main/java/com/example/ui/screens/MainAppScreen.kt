@@ -174,9 +174,8 @@ fun MainAppScreen(
                                     scope.launch { drawerState.close() }
                                     viewModel.lockApp()
                                 },
-                                onToggleTheme = {
-                                    val next = if (userSettings.themeMode == "DARK") "LIGHT" else "DARK"
-                                    viewModel.setThemeMode(next)
+                                onSelectThemeMode = { mode ->
+                                    viewModel.setThemeMode(mode)
                                 },
                                 onSelectLanguage = { lang ->
                                     viewModel.setLanguage(lang)

@@ -67,7 +67,7 @@ fun SidebarDrawer(
     onOpenBackupRestore: () -> Unit,
     onOpenPatternLock: () -> Unit,
     onLockAppNow: () -> Unit,
-    onToggleTheme: () -> Unit,
+    onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -218,8 +218,8 @@ fun SidebarDrawer(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LiquidThemeSegmentedControl(
-                        isDark = colors.isDark,
-                        onToggle = onToggleTheme
+                        currentThemeMode = userSettings.themeMode,
+                        onSelectThemeMode = onSelectThemeMode
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

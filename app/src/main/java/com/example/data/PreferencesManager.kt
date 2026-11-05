@@ -15,7 +15,7 @@ data class UserSettings(
     val patternLockEnabled: Boolean = false,
     val patternLockHash: String = "",
     val language: String = "en", // "en" or "ar"
-    val themeMode: String = "DARK", // "DARK" or "LIGHT"
+    val themeMode: String = "DARK", // "DARK", "LIGHT", or "SYSTEM"
     val googleDriveConnected: Boolean = true,
     val lastBackupTimestamp: Long = 0L
 )

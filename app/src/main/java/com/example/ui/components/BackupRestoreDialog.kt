@@ -33,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentPaste
@@ -42,6 +41,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +73,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Clean, explicit, user-triggered Google Drive & Local Storage Backup and Restore dialog.
+ * Uses Android Storage Access Framework (SAF) contracts:
+ * - CreateDocument for direct Google Drive / Storage saving
+ * - OpenDocument for picking JSON files directly from Google Drive or local storage
+ */
 @Composable
 fun BackupRestoreDialog(
     lastBackupTimestamp: Long,
@@ -91,10 +97,39 @@ fun BackupRestoreDialog(
     var isLoading by remember { mutableStateOf(false) }
     var showManualPaste by remember { mutableStateOf(false) }
     var manualJsonText by remember { mutableStateOf("") }
+    var pendingExportJson by remember { mutableStateOf<String?>(null) }
 
-    // System File Picker for Restore (Direct access to Google Drive & Storage documents)
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+    // 1. SAF Create Document Launcher: Save backup directly into Google Drive folder or local storage
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null && pendingExportJson != null) {
+            isLoading = true
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                            output.write(pendingExportJson!!.toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                    statusMessage = strings.backupSuccess
+                    isErrorMessage = false
+                } catch (e: Exception) {
+                    statusMessage = "Write error: ${e.localizedMessage ?: "Failed to save"}"
+                    isErrorMessage = true
+                } finally {
+                    isLoading = false
+                    pendingExportJson = null
+                }
+            }
+        } else {
+            pendingExportJson = null
+        }
+    }
+
+    // 2. SAF Open Document Launcher: Pick JSON backup file directly from Google Drive or local files
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             isLoading = true
@@ -119,7 +154,7 @@ fun BackupRestoreDialog(
                         isErrorMessage = true
                     }
                 } catch (e: Exception) {
-                    statusMessage = "${strings.restoreError}: ${e.localizedMessage ?: "Read failure"}"
+                    statusMessage = "${strings.restoreError}: ${e.localizedMessage ?: "Failed to read"}"
                     isErrorMessage = true
                 } finally {
                     isLoading = false
@@ -232,7 +267,7 @@ fun BackupRestoreDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Explicit Manual Action 1: Backup to Google Drive
+                // Explicit Manual Action 1: Backup to Google Drive (SAF Document Creator)
                 GlassButton(
                     text = strings.backupToDrive,
                     icon = Icons.Default.CloudUpload,
@@ -244,28 +279,17 @@ fun BackupRestoreDialog(
                         scope.launch {
                             try {
                                 val json = onExportBackup()
+                                pendingExportJson = json
 
-                                // Copy to clipboard as safe backup
+                                // Copy to clipboard as quick safety backup
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("SaleryPulse Backup", json))
 
-                                // Launch share / Google Drive save intent
-                                val sendIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, json)
-                                    putExtra(Intent.EXTRA_SUBJECT, "SaleryPulse Backup (${formatDate(System.currentTimeMillis())})")
-                                    putExtra(Intent.EXTRA_TITLE, "SaleryPulse_Backup.json")
-                                    type = "application/json"
-                                }
-                                val shareIntent = Intent.createChooser(sendIntent, "Save Backup to Google Drive / Files")
-                                context.startActivity(shareIntent)
-
-                                statusMessage = strings.backupSuccess
-                                isErrorMessage = false
+                                // Launch Storage Access Framework Document Creator: user selects Google Drive folder or device storage
+                                createDocumentLauncher.launch("SaleryPulse_Backup.json")
                             } catch (e: Exception) {
                                 statusMessage = "Backup error: ${e.localizedMessage ?: "Unknown"}"
                                 isErrorMessage = true
-                            } finally {
                                 isLoading = false
                             }
                         }
@@ -274,7 +298,7 @@ fun BackupRestoreDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Explicit Manual Action 2: Restore from Google Drive
+                // Explicit Manual Action 2: Restore from Google Drive (SAF Document Picker filtered for JSON)
                 GlassButton(
                     text = strings.restoreFromDrive,
                     icon = Icons.Default.CloudDownload,
@@ -282,12 +306,56 @@ fun BackupRestoreDialog(
                     contentColor = colors.textPrimary,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        // Launch system picker where user can browse Google Drive files or local storage
-                        filePickerLauncher.launch("*/*")
+                        // Open system document picker filtered for JSON documents
+                        openDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Quick Share Intent Action (Direct share to Google Drive app or email)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            scope.launch {
+                                try {
+                                    val json = onExportBackup()
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, json)
+                                        putExtra(Intent.EXTRA_SUBJECT, "SaleryPulse Backup (${formatDate(System.currentTimeMillis())})")
+                                        putExtra(Intent.EXTRA_TITLE, "SaleryPulse_Backup.json")
+                                        type = "application/json"
+                                    }
+                                    val shareIntent = Intent.createChooser(sendIntent, "Share Backup to Google Drive / Apps")
+                                    context.startActivity(shareIntent)
+                                } catch (e: Exception) {
+                                    statusMessage = e.localizedMessage
+                                    isErrorMessage = true
+                                }
+                            }
+                        }
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Or share backup via Google Drive app",
+                        color = colors.textSecondary,
+                        fontSize = 11.5.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Loading Indicator
                 if (isLoading) {
@@ -354,7 +422,7 @@ fun BackupRestoreDialog(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { showManualPaste = !showManualPaste }
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -363,7 +431,7 @@ fun BackupRestoreDialog(
                             imageVector = Icons.Default.ContentPaste,
                             contentDescription = null,
                             tint = colors.textMuted,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
