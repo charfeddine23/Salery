@@ -139,6 +139,18 @@ interface StringsBundle {
     val developer: String
     val version: String
     val emptyRecords: String
+    val emptyTransactionsTitle: String
+    val emptyTransactionsDesc: String
+    val emptyIncomeTitle: String
+    val emptyIncomeDesc: String
+    val emptyExpensesTitle: String
+    val emptyExpensesDesc: String
+    val emptyDebtsTitle: String
+    val emptyDebtsDesc: String
+    val addFirstTransaction: String
+    val addFirstIncome: String
+    val addFirstExpense: String
+    val addFirstDebt: String
     val searchPlaceholder: String
     val allFilter: String
 
@@ -267,6 +279,18 @@ object EnglishStrings : StringsBundle {
     override val developer = "Developer"
     override val version = "Version"
     override val emptyRecords = "No records found. Tap + to add one."
+    override val emptyTransactionsTitle = "No Transactions Yet"
+    override val emptyTransactionsDesc = "Start tracking your financial balance by logging your first transaction."
+    override val emptyIncomeTitle = "No Income Records"
+    override val emptyIncomeDesc = "Record your monthly salary, freelance gigs, or returns."
+    override val emptyExpensesTitle = "No Expenses Logged"
+    override val emptyExpensesDesc = "Track where your money goes by adding daily purchases and bills."
+    override val emptyDebtsTitle = "No Debts Recorded"
+    override val emptyDebtsDesc = "Manage money you owe or money owed to you with automatic due-date plans."
+    override val addFirstTransaction = "Add Transaction"
+    override val addFirstIncome = "Add Income"
+    override val addFirstExpense = "Add Expense"
+    override val addFirstDebt = "Add Debt"
     override val searchPlaceholder = "Search transactions or notes..."
     override val allFilter = "All"
 
@@ -394,6 +418,18 @@ object ArabicStrings : StringsBundle {
     override val developer = "المطور"
     override val version = "الإصدار"
     override val emptyRecords = "لا توجد سجلات حالياً. انقر على + للإضافة."
+    override val emptyTransactionsTitle = "لا توجد معاملات بعد"
+    override val emptyTransactionsDesc = "ابدأ بتتبع رصيدك المالي عبر تسجيل أول معاملة لك."
+    override val emptyIncomeTitle = "لا توجد مداخيل مسجلة"
+    override val emptyIncomeDesc = "سجل راتبك الشهري، أرباح العمل الحر، أو العوائد المالية."
+    override val emptyExpensesTitle = "لا توجد مصاريف مسجلة"
+    override val emptyExpensesDesc = "راقب مصاريفك بدقة من خلال إضافة الفواتير والمشتريات اليومية."
+    override val emptyDebtsTitle = "لا توجد ديون مسجلة"
+    override val emptyDebtsDesc = "نظّم ما عليك من ديون وما لك لدى الآخرين مع جدول السداد التلقائي."
+    override val addFirstTransaction = "إضافة معاملة"
+    override val addFirstIncome = "إضافة دخل"
+    override val addFirstExpense = "إضافة مصروف"
+    override val addFirstDebt = "إضافة دين"
     override val searchPlaceholder = "البحث في المعاملات أو الملاحظات..."
     override val allFilter = "الكل"
 

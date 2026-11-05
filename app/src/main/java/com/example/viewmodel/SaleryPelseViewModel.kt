@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -109,84 +110,41 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _isAppLocked.value = true
         }
 
-        // Check Smart Salary Scheduler and Debt Auto-Payments
+        // Check Smart Salary Scheduler and Debt Auto-Payments (Zero mock data seeded)
         viewModelScope.launch {
+            cleanExistingMockDataIfPresent()
             checkAndApplySalaryScheduler()
             checkAndExecuteAutoPayDebts()
-            populateDefaultSampleDataIfEmpty()
             val currentDebts = dao.getAllDebtsList()
             DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
         }
     }
 
-    private suspend fun populateDefaultSampleDataIfEmpty() {
-        val count = dao.getAllTransactionsList().size
-        if (count == 0) {
-            // Seed initial transactions and debts so the user sees a rich Liquid Glass financial dashboard immediately
-            val cal = Calendar.getInstance()
-            dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.INCOME,
-                    amount = 85000.0,
-                    category = "salary",
-                    title = "Monthly Salary Deposit",
-                    note = "Enterprise Algiers main payroll",
-                    dateMillis = cal.timeInMillis - 86400000L * 5,
-                    isSalaryCredit = true
-                )
+    private suspend fun cleanExistingMockDataIfPresent() {
+        val prefs = getApplication<Application>().getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
+        val cleaned = prefs.getBoolean("mock_data_cleaned_permanent_v2", false)
+        if (!cleaned) {
+            val allTrans = dao.getAllTransactionsList()
+            val mockTitles = setOf(
+                "Monthly Salary Deposit",
+                "Supermarket & Groceries",
+                "Sonelgaz Electricity & Gas",
+                "UI/UX Mobile Design"
             )
-            dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.EXPENSE,
-                    amount = 14500.0,
-                    category = "shopping",
-                    title = "Supermarket & Groceries",
-                    note = "Monthly supply shopping",
-                    dateMillis = cal.timeInMillis - 86400000L * 3
-                )
-            )
-            dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.EXPENSE,
-                    amount = 4500.0,
-                    category = "bills",
-                    title = "Sonelgaz Electricity & Gas",
-                    note = "Home utilities bill",
-                    dateMillis = cal.timeInMillis - 86400000L * 2
-                )
-            )
-            dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.INCOME,
-                    amount = 15000.0,
-                    category = "freelance",
-                    title = "UI/UX Mobile Design",
-                    note = "Mobile app project completion",
-                    dateMillis = cal.timeInMillis - 86400000L * 1
-                )
-            )
+            for (t in allTrans) {
+                if (t.title in mockTitles) {
+                    dao.deleteTransaction(t)
+                }
+            }
 
-            // Seed sample debt with auto-pay
-            dao.insertDebt(
-                DebtEntity(
-                    type = DebtType.OWED_BY_ME,
-                    personName = "Mohamed Lamine",
-                    amount = 6000.0,
-                    note = "Car maintenance spare parts",
-                    dueDateMillis = cal.timeInMillis + 86400000L * 7,
-                    autoPayOnDueDate = true
-                )
-            )
-            dao.insertDebt(
-                DebtEntity(
-                    type = DebtType.OWED_TO_ME,
-                    personName = "Karim Benali",
-                    amount = 12000.0,
-                    note = "Laptop sale remaining balance",
-                    dueDateMillis = cal.timeInMillis + 86400000L * 12,
-                    autoPayOnDueDate = false
-                )
-            )
+            val allDebts = dao.getAllDebtsList()
+            val mockPersons = setOf("Mohamed Lamine", "Karim Benali")
+            for (d in allDebts) {
+                if (d.personName in mockPersons && (d.note.contains("spare parts") || d.note.contains("Laptop sale"))) {
+                    dao.deleteDebt(d)
+                }
+            }
+            prefs.edit().putBoolean("mock_data_cleaned_permanent_v2", true).apply()
         }
     }
 

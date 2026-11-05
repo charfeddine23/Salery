@@ -71,6 +71,7 @@ import com.example.ui.components.AddTransactionDialog
 import com.example.ui.components.BackupRestoreDialog
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
+import com.example.ui.components.BreathingSpLogo
 import com.example.ui.components.PatternLockDialog
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.SidebarDrawer
@@ -107,7 +108,8 @@ fun MainAppScreen(
     // Determine current localized strings bundle
     val isArabic = userSettings.language == "ar"
     val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
-    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+    // Strict LTR rule: Force Left-to-Right layout direction regardless of language (never flip or mirror)
+    val layoutDirection = LayoutDirection.Ltr
 
     // Active bottom navigation route
     var currentRoute by remember { mutableStateOf("dashboard") }
@@ -269,6 +271,10 @@ fun MainAppScreen(
                                         addDebtType = DebtType.OWED_BY_ME
                                         showAddDebtDialog = true
                                     },
+                                    onAddTransactionClick = {
+                                        addTransactionType = TransactionType.EXPENSE
+                                        showAddTransactionDialog = true
+                                    },
                                     onSeeAllClick = { currentRoute = "expenses" },
                                     onOpenSalaryScheduler = { showSalarySchedulerDialog = true },
                                     onDeleteTransaction = { viewModel.deleteTransaction(it) }
@@ -392,11 +398,10 @@ fun MainTopAppBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Menu Drawer Button
+        // Menu Drawer Button (fixed 44dp anchored to left)
         GlassCard(
             modifier = Modifier.size(44.dp),
             shape = RoundedCornerShape(14.dp),
@@ -413,28 +418,24 @@ fun MainTopAppBar(
             }
         }
 
-        // Screen Title with Brand Icon (Clean presentation without version number)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            SpLogoContainer(
-                size = 34.dp,
-                cornerRadius = 10.dp,
-                padding = 3.dp
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = title,
-                color = colors.textPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.4.sp
-            )
-        }
+        Spacer(modifier = Modifier.width(12.dp))
 
-        // Right side balance spacer (matches 44dp menu button to ensure exact center alignment of title)
-        Spacer(modifier = Modifier.size(44.dp))
+        // Fixed Icon Positioning with Persistent Dynamic Breathing Glow
+        BreathingSpLogo(
+            size = 36.dp
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Screen Title anchored directly next to the fixed icon
+        Text(
+            text = title,
+            color = colors.textPrimary,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.3.sp,
+            maxLines = 1
+        )
     }
 }
 

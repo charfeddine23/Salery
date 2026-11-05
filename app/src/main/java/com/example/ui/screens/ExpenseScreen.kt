@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,9 +36,11 @@ import com.example.data.TransactionType
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
+import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -158,18 +161,14 @@ fun ExpenseScreen(
 
         if (filteredList.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = strings.emptyRecords,
-                        color = colors.textMuted,
-                        fontSize = 13.sp
-                    )
-                }
+                LiquidEmptyStateCard(
+                    title = strings.emptyExpensesTitle,
+                    description = strings.emptyExpensesDesc,
+                    icon = Icons.Default.TrendingDown,
+                    iconColor = RoseNeon,
+                    actionText = strings.addFirstExpense,
+                    onActionClick = onAddExpenseClick
+                )
             }
         } else {
             items(filteredList, key = { it.id }) { item ->

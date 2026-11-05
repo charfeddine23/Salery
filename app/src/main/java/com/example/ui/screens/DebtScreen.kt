@@ -56,6 +56,7 @@ import com.example.ui.components.AddDebtDialog
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
+import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
@@ -316,18 +317,14 @@ fun DebtScreen(
         // Debts List
         if (displayedDebts.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 36.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = strings.emptyRecords,
-                        color = colors.textMuted,
-                        fontSize = 13.sp
-                    )
-                }
+                LiquidEmptyStateCard(
+                    title = strings.emptyDebtsTitle,
+                    description = strings.emptyDebtsDesc,
+                    icon = Icons.Default.CreditCard,
+                    iconColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                    actionText = strings.addFirstDebt,
+                    onActionClick = { onAddDebtClick(activeTab) }
+                )
             }
         } else {
             items(displayedDebts, key = { it.id }) { debt ->

@@ -54,6 +54,7 @@ import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
@@ -77,6 +78,7 @@ fun DashboardScreen(
     onAddIncomeClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onAddDebtClick: () -> Unit,
+    onAddTransactionClick: () -> Unit = {},
     onSeeAllClick: () -> Unit,
     onOpenSalaryScheduler: () -> Unit,
     onDeleteTransaction: (TransactionEntity) -> Unit,
@@ -421,18 +423,14 @@ fun DashboardScreen(
         val recentList = transactions.take(6)
         if (recentList.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = strings.emptyRecords,
-                        color = colors.textMuted,
-                        fontSize = 13.sp
-                    )
-                }
+                LiquidEmptyStateCard(
+                    title = strings.emptyTransactionsTitle,
+                    description = strings.emptyTransactionsDesc,
+                    icon = Icons.Default.Receipt,
+                    iconColor = CyanNeon,
+                    actionText = strings.addFirstTransaction,
+                    onActionClick = onAddTransactionClick
+                )
             }
         } else {
             items(recentList, key = { it.id }) { item ->

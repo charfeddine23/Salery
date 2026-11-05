@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,6 +36,7 @@ import com.example.data.TransactionType
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
+import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.EmeraldNeon
@@ -158,18 +160,14 @@ fun IncomeScreen(
 
         if (filteredList.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = strings.emptyRecords,
-                        color = colors.textMuted,
-                        fontSize = 13.sp
-                    )
-                }
+                LiquidEmptyStateCard(
+                    title = strings.emptyIncomeTitle,
+                    description = strings.emptyIncomeDesc,
+                    icon = Icons.Default.TrendingUp,
+                    iconColor = EmeraldNeon,
+                    actionText = strings.addFirstIncome,
+                    onActionClick = onAddIncomeClick
+                )
             }
         } else {
             items(filteredList, key = { it.id }) { item ->
