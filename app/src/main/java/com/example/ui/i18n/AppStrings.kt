@@ -120,12 +120,17 @@ interface StringsBundle {
 
     val backupRestore: String
     val backupDriveTitle: String
+    val backupToDrive: String
+    val restoreFromDrive: String
     val exportBackup: String
     val restoreBackup: String
     val backupSuccess: String
     val restoreSuccess: String
     val restoreError: String
     val backupInfo: String
+    val pasteJsonFallback: String
+    val lastBackupLabel: String
+    val neverBackedUp: String
     val googleDriveSynced: String
     val syncWithDrive: String
 
@@ -242,14 +247,19 @@ object EnglishStrings : StringsBundle {
 
     override val backupRestore = "Backup & Restore"
     override val backupDriveTitle = "Google Drive & Local Backup"
+    override val backupToDrive = "Backup to Google Drive"
+    override val restoreFromDrive = "Restore from Google Drive"
     override val exportBackup = "Export & Backup Data"
     override val restoreBackup = "Restore Data"
-    override val backupSuccess = "Backup exported successfully"
-    override val restoreSuccess = "Data restored successfully"
-    override val restoreError = "Invalid backup format or corrupted JSON"
-    override val backupInfo = "Securely backup financial records to Google Drive or export as JSON."
-    override val googleDriveSynced = "Google Drive Status: Connected & Synced"
-    override val syncWithDrive = "Sync with Google Drive"
+    override val backupSuccess = "Backup created! Choose Google Drive to save file."
+    override val restoreSuccess = "Data restored successfully from Google Drive"
+    override val restoreError = "Invalid backup format or corrupted JSON file"
+    override val backupInfo = "Securely backup your financial data to Google Drive or local storage."
+    override val pasteJsonFallback = "Or paste raw JSON directly"
+    override val lastBackupLabel = "Last Backup: %s"
+    override val neverBackedUp = "No backup performed yet"
+    override val googleDriveSynced = "Google Drive Manual Storage"
+    override val syncWithDrive = "Backup to Google Drive"
 
     override val aboutApp = "About"
     override val developer = "Developer"
@@ -363,14 +373,19 @@ object ArabicStrings : StringsBundle {
 
     override val backupRestore = "النسخ الاحتياطي والاستعادة"
     override val backupDriveTitle = "Google Drive والنسخ المحلي"
+    override val backupToDrive = "نسخ احتياطي إلى Google Drive"
+    override val restoreFromDrive = "استعادة من Google Drive"
     override val exportBackup = "تصدير وحفظ نسخة احتياطية"
     override val restoreBackup = "استعادة البيانات"
-    override val backupSuccess = "تم تصدير النسخة الاحتياطية بنجاح"
-    override val restoreSuccess = "تم استعادة البيانات بنجاح"
-    override val restoreError = "ملف النسخ غير صالح أو تالف"
-    override val backupInfo = "نسخ السجلات المالية بأمان إلى Google Drive أو تصدير ملف JSON."
-    override val googleDriveSynced = "حالة Google Drive: متصل ومزامن"
-    override val syncWithDrive = "مزامنة مع Google Drive"
+    override val backupSuccess = "تم إنشاء النسخة! اختر Google Drive للحفظ."
+    override val restoreSuccess = "تمت استعادة البيانات بنجاح من Google Drive"
+    override val restoreError = "ملف النسخة الاحتياطية غير صالح أو تالف"
+    override val backupInfo = "نسخ السجلات المالية بأمان إلى Google Drive أو ذاكرة الجهاز."
+    override val pasteJsonFallback = "أو لصق نص JSON مباشرة"
+    override val lastBackupLabel = "آخر نسخة: %s"
+    override val neverBackedUp = "لم يتم النسخ بعد"
+    override val googleDriveSynced = "تخزين يدوي عبر Google Drive"
+    override val syncWithDrive = "نسخ احتياطي إلى Google Drive"
 
     override val aboutApp = "حول التطبيق"
     override val developer = "المطور"

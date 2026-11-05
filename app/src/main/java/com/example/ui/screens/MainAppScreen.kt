@@ -74,6 +74,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.PatternLockDialog
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.SidebarDrawer
+import com.example.ui.components.SpLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
@@ -418,12 +419,10 @@ fun MainTopAppBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.sp_brand_logo),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(34.dp),
-                contentScale = ContentScale.Fit
+            SpLogoContainer(
+                size = 34.dp,
+                cornerRadius = 10.dp,
+                padding = 3.dp
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(

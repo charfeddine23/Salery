@@ -34,6 +34,7 @@ import com.example.R
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.PatternLockView
 import com.example.ui.components.PatternState
+import com.example.ui.components.SpLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
@@ -62,13 +63,11 @@ fun LockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Official SaleryPulse "SP" Brand Logo
-            Image(
-                painter = painterResource(id = R.drawable.sp_brand_logo),
-                contentDescription = APP_NAME,
-                modifier = Modifier
-                    .size(90.dp),
-                contentScale = ContentScale.Fit
+            // Official SaleryPulse "SP" Brand Logo in Dynamic Container
+            SpLogoContainer(
+                size = 90.dp,
+                cornerRadius = 24.dp,
+                padding = 10.dp
             )
 
             Spacer(modifier = Modifier.height(16.dp))

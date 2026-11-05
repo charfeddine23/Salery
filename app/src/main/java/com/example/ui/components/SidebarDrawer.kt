@@ -102,59 +102,23 @@ fun SidebarDrawer(
                 backgroundColor = colors.glassSurface,
                 shape = RoundedCornerShape(22.dp)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.sp_brand_logo),
-                            contentDescription = APP_NAME,
-                            modifier = Modifier
-                                .size(50.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            // Always latin characters for App Name!
-                            Text(
-                                text = APP_NAME,
-                                color = colors.textPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(
-                        color = colors.glassBorderSubtle,
-                        thickness = 0.8.dp
+                Row(
+                    modifier = Modifier.padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SpLogoContainer(
+                        size = 52.dp,
+                        cornerRadius = 16.dp,
+                        padding = 5.dp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Developer Tag: explicitly Kahlessenane Charfeddine
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = EmeraldNeon,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = strings.developer,
-                                color = colors.textMuted,
-                                fontSize = 10.sp
-                            )
-                            // Developer Name must always be Latin!
-                            Text(
-                                text = DEVELOPER_NAME,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = APP_NAME,
+                        color = colors.textPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.5.sp
+                    )
                 }
             }
 
@@ -216,7 +180,7 @@ fun SidebarDrawer(
             DrawerActionItem(
                 icon = Icons.Default.CloudDone,
                 title = strings.backupDriveTitle,
-                subtitle = if (userSettings.googleDriveConnected) "Google Drive Connected" else "Local JSON",
+                subtitle = "Manual Google Drive & JSON",
                 onClick = onOpenBackupRestore
             )
 
@@ -239,110 +203,104 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Theme Switcher & Language Switcher Cards
+            // Dynamic Theme & Language Switchers Card
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = strings.themeMode,
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LiquidThemeSegmentedControl(
+                        isDark = colors.isDark,
+                        onToggle = onToggleTheme
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.6.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = strings.appLanguage,
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LiquidLanguageSegmentedControl(
+                        currentLanguage = userSettings.language,
+                        onSelectLanguage = onSelectLanguage
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Dynamic Developer Footer & App Info Card
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                backgroundColor = colors.glassSurface,
                 shape = RoundedCornerShape(18.dp)
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    // Theme Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SpLogoContainer(
+                        size = 42.dp,
+                        cornerRadius = 13.dp,
+                        padding = 4.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (colors.isDark) Icons.Default.Brightness4 else Icons.Default.Brightness7,
-                                contentDescription = null,
-                                tint = colors.primaryNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = if (colors.isDark) strings.themeDark else strings.themeLight,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        GlassPill(
-                            text = if (colors.isDark) "Dark" else "Light",
-                            isSelected = true,
-                            onClick = onToggleTheme
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.5.dp)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Language Selector
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Language,
+                                imageVector = Icons.Default.Person,
                                 contentDescription = null,
                                 tint = EmeraldNeon,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = strings.appLanguage,
+                                text = DEVELOPER_NAME,
                                 color = colors.textPrimary,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GlassPill(
-                                text = "EN",
-                                isSelected = userSettings.language == "en",
-                                onClick = { onSelectLanguage("en") }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "v$APP_VERSION",
+                                color = colors.primaryNeon,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            GlassPill(
-                                text = "عربي",
-                                isSelected = userSettings.language == "ar",
-                                onClick = { onSelectLanguage("ar") }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "•",
+                                color = colors.textMuted,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Updated: Nov 5, 2026",
+                                color = colors.textMuted,
+                                fontSize = 10.sp
                             )
                         }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Footer with Version and Developer Credit
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.sp_brand_logo),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(34.dp),
-                    contentScale = ContentScale.Fit
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "$APP_NAME v$APP_VERSION",
-                    color = colors.textMuted,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Crafted by $DEVELOPER_NAME",
-                    color = colors.textMuted,
-                    fontSize = 11.sp
-                )
             }
         }
     }
