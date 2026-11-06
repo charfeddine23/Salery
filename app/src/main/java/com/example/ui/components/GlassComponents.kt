@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.neumorphicDepth
 
 @Composable
 fun GlassBackground(
@@ -53,66 +54,75 @@ fun GlassBackground(
 ) {
     val colors = LiquidGlassTheme.colors
 
-    // Subtle breathing pulse for liquid orbs
-    val transition = rememberInfiniteTransition(label = "liquid_glass_bg")
-    val pulse by transition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
+    if (colors.isNeumorphic) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(colors.bgStart),
+            content = content
+        )
+    } else {
+        // Subtle breathing pulse for liquid orbs
+        val transition = rememberInfiniteTransition(label = "liquid_glass_bg")
+        val pulse by transition.animateFloat(
+            initialValue = 0.85f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        )
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
-                )
-            )
-            .drawBehind {
-                // Liquid glowing diffuse orbs in the background
-                val orb1Radius = size.width * 0.45f * pulse
-                val orb2Radius = size.width * 0.38f * (2f - pulse)
-
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            colors.primaryNeon.copy(alpha = if (colors.isDark) 0.18f else 0.12f),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.2f, size.height * 0.15f),
-                        radius = orb1Radius
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
                     )
                 )
+                .drawBehind {
+                    // Liquid glowing diffuse orbs in the background
+                    val orb1Radius = size.width * 0.45f * pulse
+                    val orb2Radius = size.width * 0.38f * (2f - pulse)
 
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.85f, size.height * 0.45f),
-                        radius = orb2Radius
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.18f else 0.12f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.2f, size.height * 0.15f),
+                            radius = orb1Radius
+                        )
                     )
-                )
 
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            colors.successColor.copy(alpha = if (colors.isDark) 0.12f else 0.06f),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.35f, size.height * 0.8f),
-                        radius = orb1Radius * 0.9f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.85f, size.height * 0.45f),
+                            radius = orb2Radius
+                        )
                     )
-                )
-            },
-        content = content
-    )
+
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                colors.successColor.copy(alpha = if (colors.isDark) 0.12f else 0.06f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.35f, size.height * 0.8f),
+                            radius = orb1Radius * 0.9f
+                        )
+                    )
+                },
+            content = content
+        )
+    }
 }
 
 @Composable
@@ -134,27 +144,42 @@ fun GlassCard(
         )
     } else Modifier
 
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .border(
-                border = BorderStroke(
-                    width = borderWidth,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            borderColor,
-                            borderColor.copy(alpha = 0.2f),
-                            Color.Transparent,
-                            borderColor.copy(alpha = 0.4f)
+    if (colors.isNeumorphic) {
+        Box(
+            modifier = modifier
+                .neumorphicDepth(
+                    cornerRadius = 22.dp,
+                    elevation = 5.dp,
+                    isDark = colors.isDark,
+                    backgroundColor = backgroundColor
+                )
+                .clip(shape)
+                .then(clickModifier),
+            content = content
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .border(
+                    border = BorderStroke(
+                        width = borderWidth,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                borderColor,
+                                borderColor.copy(alpha = 0.2f),
+                                Color.Transparent,
+                                borderColor.copy(alpha = 0.4f)
+                            )
                         )
-                    )
-                ),
-                shape = shape
-            )
-            .background(backgroundColor, shape)
-            .then(clickModifier),
-        content = content
-    )
+                    ),
+                    shape = shape
+                )
+                .background(backgroundColor, shape)
+                .then(clickModifier),
+            content = content
+        )
+    }
 }
 
 @Composable
@@ -168,47 +193,91 @@ fun GlassButton(
     shape: Shape = RoundedCornerShape(16.dp),
     enabled: Boolean = true
 ) {
-    Box(
-        modifier = modifier
-            .height(50.dp)
-            .clip(shape)
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = if (enabled) {
-                        listOf(containerColor, containerColor.copy(alpha = 0.8f))
-                    } else {
-                        listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.3f))
-                    }
-                ),
-                shape = shape
-            )
-            .clickable(
-                enabled = enabled,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = Color.White),
-                onClick = onClick
-            )
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(18.dp)
+    val colors = LiquidGlassTheme.colors
+
+    if (colors.isNeumorphic) {
+        Box(
+            modifier = modifier
+                .height(50.dp)
+                .neumorphicDepth(
+                    cornerRadius = 16.dp,
+                    elevation = 4.dp,
+                    isDark = colors.isDark,
+                    backgroundColor = if (enabled) containerColor else (if (colors.isDark) Color(0xFF232731) else Color(0xFFD5DDE7))
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                .clip(shape)
+                .clickable(
+                    enabled = enabled,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick
+                )
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = text,
+                    color = contentColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            Text(
-                text = text,
-                color = contentColor,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .height(50.dp)
+                .clip(shape)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = if (enabled) {
+                            listOf(containerColor, containerColor.copy(alpha = 0.8f))
+                        } else {
+                            listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.3f))
+                        }
+                    ),
+                    shape = shape
+                )
+                .clickable(
+                    enabled = enabled,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick
+                )
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = text,
+                    color = contentColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -223,40 +292,85 @@ fun QuickActionButton(
     borderColor: Color = Color(0x33FFFFFF),
     contentColor: Color = Color.White
 ) {
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(14.dp))
-            .background(brush, RoundedCornerShape(14.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = Color.White),
-                onClick = onClick
-            )
-            .padding(horizontal = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(15.dp)
+    val colors = LiquidGlassTheme.colors
+
+    if (colors.isNeumorphic) {
+        Box(
+            modifier = modifier
+                .height(44.dp)
+                .neumorphicDepth(
+                    cornerRadius = 14.dp,
+                    elevation = 3.dp,
+                    isDark = colors.isDark
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                .clip(RoundedCornerShape(14.dp))
+                .background(brush)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick
+                )
+                .padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = text,
+                    color = contentColor,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
-            Text(
-                text = text,
-                color = contentColor,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .height(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(14.dp))
+                .background(brush, RoundedCornerShape(14.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick
+                )
+                .padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = text,
+                    color = contentColor,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.ui.i18n
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.example.data.DebtType
 import com.example.data.TransactionType
@@ -105,6 +106,9 @@ interface StringsBundle {
     val themeDark: String
     val themeLight: String
     val themeSystem: String
+    val designStyleTitle: String
+    val styleLiquidGlass: String
+    val styleNeumorphism: String
 
     val securityTitle: String
     val patternLock: String
@@ -118,6 +122,13 @@ interface StringsBundle {
     val patternTooShort: String
     val unlockApp: String
     val incorrectPattern: String
+    val biometricUnlock: String
+    val biometricUnlockDesc: String
+    val biometricPromptTitle: String
+    val biometricPromptSubtitle: String
+    val biometricUsePattern: String
+    val biometricUnlockAction: String
+    val biometricNotAvailable: String
 
     val backupRestore: String
     val backupDriveTitle: String
@@ -151,6 +162,30 @@ interface StringsBundle {
     val addFirstIncome: String
     val addFirstExpense: String
     val addFirstDebt: String
+    val stealthModeTitle: String
+    val stealthModeDesc: String
+    val stealthModeActive: String
+    val stealthModeDisabled: String
+    val stealthDoubleTapHint: String
+
+    val aiInsightsTitle: String
+    val aiInsightsSubtitle: String
+    val spendingVelocity: String
+    val salaryRunway: String
+    val debtPressure: String
+    val savingsMilestone: String
+    val smartTip: String
+
+    val balanceProjectionTitle: String
+    val balanceProjectionSubtitle: String
+    val forecast7Days: String
+    val forecast30Days: String
+    val forecast6Months: String
+    val projectedEndingBalance: String
+    val dailyBurnRate: String
+    val expectedInflow: String
+    val expectedOutflow: String
+    val tapToScrub: String
     val searchPlaceholder: String
     val allFilter: String
 
@@ -245,6 +280,9 @@ object EnglishStrings : StringsBundle {
     override val themeDark = "Dark"
     override val themeLight = "Light"
     override val themeSystem = "System"
+    override val designStyleTitle = "Design Style"
+    override val styleLiquidGlass = "Liquid Glass"
+    override val styleNeumorphism = "Neumorphism"
 
     override val securityTitle = "Security & Privacy"
     override val patternLock = "Pattern Gesture Lock"
@@ -258,6 +296,13 @@ object EnglishStrings : StringsBundle {
     override val patternTooShort = "Connect at least 4 dots."
     override val unlockApp = "Unlock SaleryPulse"
     override val incorrectPattern = "Incorrect pattern! Try again."
+    override val biometricUnlock = "Biometric Unlock (Fingerprint / Face)"
+    override val biometricUnlockDesc = "Quick authentication via fingerprint or facial recognition"
+    override val biometricPromptTitle = "Unlock SaleryPulse"
+    override val biometricPromptSubtitle = "Touch fingerprint sensor or verify face to continue"
+    override val biometricUsePattern = "Use Pattern Instead"
+    override val biometricUnlockAction = "Unlock with Biometrics"
+    override val biometricNotAvailable = "Biometric hardware unavailable or not enrolled"
 
     override val backupRestore = "Backup & Restore"
     override val backupDriveTitle = "Google Drive & Local Backup"
@@ -291,6 +336,30 @@ object EnglishStrings : StringsBundle {
     override val addFirstIncome = "Add Income"
     override val addFirstExpense = "Add Expense"
     override val addFirstDebt = "Add Debt"
+    override val stealthModeTitle = "Stealth Mode (Shake to Hide)"
+    override val stealthModeDesc = "Mask all balances and sensitive amounts for public privacy"
+    override val stealthModeActive = "Stealth Mode Active • Balances Masked"
+    override val stealthModeDisabled = "Stealth Mode Off"
+    override val stealthDoubleTapHint = "Double-tap icon or shake device to toggle"
+
+    override val aiInsightsTitle = "AI Financial Insights"
+    override val aiInsightsSubtitle = "Smart spending velocity & cashflow intelligence"
+    override val spendingVelocity = "Spending Velocity"
+    override val salaryRunway = "Salary Runway"
+    override val debtPressure = "Debt Pressure"
+    override val savingsMilestone = "Savings Milestone"
+    override val smartTip = "Smart Tip"
+
+    override val balanceProjectionTitle = "Future Balance Projection"
+    override val balanceProjectionSubtitle = "Forecasted cashflow based on salary, debts & daily burn"
+    override val forecast7Days = "7 Days"
+    override val forecast30Days = "30 Days"
+    override val forecast6Months = "6 Months"
+    override val projectedEndingBalance = "Projected Ending Balance"
+    override val dailyBurnRate = "Avg Daily Burn"
+    override val expectedInflow = "Scheduled Inflow"
+    override val expectedOutflow = "Estimated Outflow"
+    override val tapToScrub = "Drag across chart to inspect projected dates"
     override val searchPlaceholder = "Search transactions or notes..."
     override val allFilter = "All"
 
@@ -384,6 +453,9 @@ object ArabicStrings : StringsBundle {
     override val themeDark = "داكن"
     override val themeLight = "فاتح"
     override val themeSystem = "تلقائي"
+    override val designStyleTitle = "نمط التصميم"
+    override val styleLiquidGlass = "زجاج سائل (Liquid Glass)"
+    override val styleNeumorphism = "نيومورفيزم (Neumorphism)"
 
     override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"
@@ -397,6 +469,13 @@ object ArabicStrings : StringsBundle {
     override val patternTooShort = "صل 4 نقاط على الأقل."
     override val unlockApp = "فتح قفل SaleryPulse"
     override val incorrectPattern = "النمط غير صحيح! حاول ثانية."
+    override val biometricUnlock = "فتح القفل بالبصمة (Fingerprint / Face ID)"
+    override val biometricUnlockDesc = "دخول سريع وآمن باستخدام بصمة الإصبع أو التعرف على الوجه"
+    override val biometricPromptTitle = "فتح قفل SaleryPulse"
+    override val biometricPromptSubtitle = "المس مستشعر البصمة أو تحقق من الوجه للمتابعة"
+    override val biometricUsePattern = "استخدام النمط بدلاً من ذلك"
+    override val biometricUnlockAction = "فتح القفل بالبصمة"
+    override val biometricNotAvailable = "ميزة البصمة غير متوفرة أو غير مسجلة بالجهاز"
 
     override val backupRestore = "النسخ الاحتياطي والاستعادة"
     override val backupDriveTitle = "Google Drive والنسخ المحلي"
@@ -430,6 +509,30 @@ object ArabicStrings : StringsBundle {
     override val addFirstIncome = "إضافة دخل"
     override val addFirstExpense = "إضافة مصروف"
     override val addFirstDebt = "إضافة دين"
+    override val stealthModeTitle = "الوضع السري (هز الهاتف للإخفاء)"
+    override val stealthModeDesc = "إخفاء كل الأرصدة والمبالغ لحماية الخصوصية في الأماكن العامة"
+    override val stealthModeActive = "الوضع السري مفعل • الأرصدة مخفية"
+    override val stealthModeDisabled = "تم إيقاف الوضع السري"
+    override val stealthDoubleTapHint = "انقر مرتين على الشعار أو هز الهاتف للتبديل"
+
+    override val aiInsightsTitle = "التحليل المالي الذكي"
+    override val aiInsightsSubtitle = "تحليل ذكي لسرعة الإنفاق والتدفقات النقدية"
+    override val spendingVelocity = "سرعة الإنفاق"
+    override val salaryRunway = "مدرج الراتب"
+    override val debtPressure = "ضغط الديون"
+    override val savingsMilestone = "معدل الادخار"
+    override val smartTip = "نصيحة ذكية"
+
+    override val balanceProjectionTitle = "توقع الرصيد المستقبلي"
+    override val balanceProjectionSubtitle = "توقعات التدفق المالي بناءً على الراتب، الديون ومعدل الحرق اليومي"
+    override val forecast7Days = "7 أيام"
+    override val forecast30Days = "30 يوم"
+    override val forecast6Months = "6 أشهر"
+    override val projectedEndingBalance = "الرصيد المتوقع نهاية الفترة"
+    override val dailyBurnRate = "متوسط الحرق اليومي"
+    override val expectedInflow = "المداخيل المجدولة"
+    override val expectedOutflow = "المصاريف المتوقعة"
+    override val tapToScrub = "اسحب فوق المخطط لمعاينة الرصيد في تواريخ محددة"
     override val searchPlaceholder = "البحث في المعاملات أو الملاحظات..."
     override val allFilter = "الكل"
 
@@ -457,6 +560,7 @@ object ArabicStrings : StringsBundle {
 }
 
 val LocalStrings = staticCompositionLocalOf<StringsBundle> { EnglishStrings }
+val LocalStealthMode = compositionLocalOf { false }
 
 object AppStrings {
     val current: StringsBundle
@@ -464,11 +568,25 @@ object AppStrings {
         get() = LocalStrings.current
 }
 
-fun formatDzd(amount: Double, currencyText: String = "DZD"): String {
+fun formatDzdAmount(amount: Double, currencyText: String = "DZD", isStealth: Boolean = false): String {
+    if (isStealth) {
+        return "•••••• $currencyText"
+    }
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     formatter.maximumFractionDigits = 2
     formatter.minimumFractionDigits = 0
     return "${formatter.format(amount)} $currencyText"
+}
+
+@Composable
+fun formatDzd(amount: Double, currencyText: String = "DZD", isStealth: Boolean = LocalStealthMode.current): String {
+    return formatDzdAmount(amount, currencyText, isStealth)
+}
+
+@Composable
+fun formatCurrency(amount: Double, currencyText: String = "DZD"): String {
+    val isStealth = LocalStealthMode.current
+    return formatDzdAmount(amount, currencyText, isStealth)
 }
 
 fun formatDate(millis: Long): String {

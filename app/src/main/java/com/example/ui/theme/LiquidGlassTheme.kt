@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 @Immutable
 data class LiquidGlassColors(
     val isDark: Boolean,
+    val designStyle: String = "LIQUID_GLASS",
     val bgStart: Color,
     val bgCenter: Color,
     val bgEnd: Color,
@@ -27,10 +28,14 @@ data class LiquidGlassColors(
     val warningColor: Color,
     val errorColor: Color,
     val glassHighlightBrush: Brush
-)
+) {
+    val isNeumorphic: Boolean
+        get() = designStyle == "NEUMORPHISM"
+}
 
 val DarkLiquidGlassColors = LiquidGlassColors(
     isDark = true,
+    designStyle = "LIQUID_GLASS",
     bgStart = DarkBgStart,
     bgCenter = DarkBgCenter,
     bgEnd = DarkBgEnd,
@@ -52,6 +57,7 @@ val DarkLiquidGlassColors = LiquidGlassColors(
 
 val LightLiquidGlassColors = LiquidGlassColors(
     isDark = false,
+    designStyle = "LIQUID_GLASS",
     bgStart = LightBgStart,
     bgCenter = LightBgCenter,
     bgEnd = LightBgEnd,
@@ -68,6 +74,50 @@ val LightLiquidGlassColors = LiquidGlassColors(
     successColor = Color(0xFF059669),
     warningColor = Color(0xFFD97706),
     errorColor = Color(0xFFDC2626),
+    glassHighlightBrush = GlassHighlightGradient
+)
+
+val DarkNeumorphicColors = LiquidGlassColors(
+    isDark = true,
+    designStyle = "NEUMORPHISM",
+    bgStart = NeuDarkBackground,
+    bgCenter = NeuDarkBackground,
+    bgEnd = NeuDarkBackground,
+    glassSurface = NeuDarkCard,
+    glassCard = NeuDarkCard,
+    dialogBackground = NeuDarkCard,
+    glassBorder = NeuDarkHighlight.copy(alpha = 0.5f),
+    glassBorderSubtle = NeuDarkHighlight.copy(alpha = 0.25f),
+    primaryNeon = NeuRoyalBlueDark,
+    secondaryNeon = Color(0xFF60A5FA),
+    textPrimary = Color(0xFFF1F5F9),
+    textSecondary = Color(0xFF94A3B8),
+    textMuted = Color(0xFF64748B),
+    successColor = NeuVibrantGreenDark,
+    warningColor = Color(0xFFF59E0B),
+    errorColor = NeuBurntCoralDark,
+    glassHighlightBrush = GlassHighlightGradient
+)
+
+val LightNeumorphicColors = LiquidGlassColors(
+    isDark = false,
+    designStyle = "NEUMORPHISM",
+    bgStart = NeuLightBackground,
+    bgCenter = NeuLightBackground,
+    bgEnd = NeuLightBackground,
+    glassSurface = NeuLightCard,
+    glassCard = NeuLightCard,
+    dialogBackground = NeuLightCard,
+    glassBorder = NeuLightDarkShadow.copy(alpha = 0.4f),
+    glassBorderSubtle = NeuLightDarkShadow.copy(alpha = 0.25f),
+    primaryNeon = NeuRoyalBlue,
+    secondaryNeon = Color(0xFF1D4ED8),
+    textPrimary = Color(0xFF1E293B),
+    textSecondary = Color(0xFF475569),
+    textMuted = Color(0xFF64748B),
+    successColor = NeuVibrantGreen,
+    warningColor = Color(0xFFD97706),
+    errorColor = NeuBurntCoral,
     glassHighlightBrush = GlassHighlightGradient
 )
 

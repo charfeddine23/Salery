@@ -41,9 +41,15 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun SaleryPulseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    designStyle: String = "LIQUID_GLASS",
     content: @Composable () -> Unit
 ) {
-    val glassColors = if (darkTheme) DarkLiquidGlassColors else LightLiquidGlassColors
+    val glassColors = if (designStyle == "NEUMORPHISM") {
+        if (darkTheme) DarkNeumorphicColors else LightNeumorphicColors
+    } else {
+        if (darkTheme) DarkLiquidGlassColors else LightLiquidGlassColors
+    }
+
     val materialColors = if (darkTheme) DarkColorScheme else LightColorScheme
 
     CompositionLocalProvider(
@@ -60,5 +66,6 @@ fun SaleryPulseTheme(
 @Composable
 fun SaleryPelseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    designStyle: String = "LIQUID_GLASS",
     content: @Composable () -> Unit
-) = SaleryPulseTheme(darkTheme = darkTheme, content = content)
+) = SaleryPulseTheme(darkTheme = darkTheme, designStyle = designStyle, content = content)

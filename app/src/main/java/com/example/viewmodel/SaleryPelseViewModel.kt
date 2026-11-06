@@ -528,6 +528,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         _isAppLocked.value = false
     }
 
+    fun setBiometricEnabled(enabled: Boolean) {
+        prefsManager.updateSettings { it.copy(biometricEnabled = enabled) }
+    }
+
+    fun unlockAppByBiometrics() {
+        _isAppLocked.value = false
+    }
+
     // Appearance & Localization
     fun setLanguage(lang: String) {
         prefsManager.updateSettings { it.copy(language = lang) }
@@ -535,6 +543,29 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setThemeMode(mode: String) {
         prefsManager.updateSettings { it.copy(themeMode = mode) }
+    }
+
+    fun setDesignStyle(style: String) {
+        prefsManager.updateSettings { it.copy(designStyle = style) }
+    }
+
+    // Stealth Mode (Privacy / Shake to Hide)
+    fun toggleStealthMode(): Boolean {
+        val current = settings.value.stealthMode
+        val next = !current
+        prefsManager.updateSettings { it.copy(stealthMode = next) }
+        viewModelScope.launch {
+            if (next) {
+                _toastEvent.emit("Stealth Mode Active • Financial amounts masked")
+            } else {
+                _toastEvent.emit("Stealth Mode Disabled • Amounts revealed")
+            }
+        }
+        return next
+    }
+
+    fun setStealthMode(enabled: Boolean) {
+        prefsManager.updateSettings { it.copy(stealthMode = enabled) }
     }
 
     // Backup & Restore

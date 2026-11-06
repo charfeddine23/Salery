@@ -18,7 +18,7 @@ import com.example.notification.DebtReminderScheduler.EXTRA_DEBT_ID
 import com.example.notification.DebtReminderScheduler.EXTRA_IS_OWED_BY_ME
 import com.example.notification.DebtReminderScheduler.EXTRA_PERSON_NAME
 import com.example.notification.DebtReminderScheduler.EXTRA_REMAINING_AMOUNT
-import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.formatDzdAmount
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,7 +76,7 @@ class DebtReminderReceiver : BroadcastReceiver() {
         amount: Double,
         isOwedByMe: Boolean
     ) {
-        val formattedAmount = formatDzd(amount, "DZD")
+        val formattedAmount = formatDzdAmount(amount, "DZD")
 
         val title = if (isOwedByMe) {
             "Debt Due Tomorrow: $formattedAmount"

@@ -58,6 +58,9 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+
 @Composable
 fun SidebarDrawer(
     selectedRoute: String,
@@ -67,6 +70,8 @@ fun SidebarDrawer(
     onOpenBackupRestore: () -> Unit,
     onOpenPatternLock: () -> Unit,
     onLockAppNow: () -> Unit,
+    onToggleStealthMode: () -> Unit = {},
+    onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -184,11 +189,15 @@ fun SidebarDrawer(
                 onClick = onOpenBackupRestore
             )
 
-            // Pattern Lock Security
+            // Pattern Lock & Biometric Security
             DrawerActionItem(
                 icon = Icons.Default.Lock,
                 title = strings.patternLock,
-                subtitle = if (userSettings.patternLockEnabled) "Enabled (3x3 Matrix)" else "Disabled",
+                subtitle = when {
+                    userSettings.patternLockEnabled && userSettings.biometricEnabled -> "Pattern & Biometrics Active"
+                    userSettings.patternLockEnabled -> "Pattern Lock Active"
+                    else -> "Disabled"
+                },
                 onClick = onOpenPatternLock
             )
 
@@ -201,15 +210,39 @@ fun SidebarDrawer(
                 )
             }
 
+            // Stealth Mode (Privacy / Shake to Hide)
+            DrawerActionItem(
+                icon = if (userSettings.stealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                title = strings.stealthModeTitle,
+                subtitle = if (userSettings.stealthMode) strings.stealthModeActive else strings.stealthDoubleTapHint,
+                onClick = onToggleStealthMode
+            )
+
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Dynamic Theme & Language Switchers Card
+            // Dynamic Design Style, Theme & Language Switchers Card
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = strings.designStyleTitle,
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LiquidDesignStyleSegmentedControl(
+                        currentDesignStyle = userSettings.designStyle,
+                        onSelectDesignStyle = onSelectDesignStyle
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.6.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     Text(
                         text = strings.themeMode,
                         color = colors.textSecondary,

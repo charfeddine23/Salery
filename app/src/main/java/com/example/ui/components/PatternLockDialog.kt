@@ -33,15 +33,26 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.example.security.BiometricAuthManager
+
 @Composable
 fun PatternLockDialog(
     isCurrentlyEnabled: Boolean,
+    isBiometricEnabled: Boolean = false,
     onDismiss: () -> Unit,
     onSavePattern: (List<Int>) -> Unit,
-    onDisablePattern: () -> Unit
+    onDisablePattern: () -> Unit,
+    onToggleBiometric: (Boolean) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isBiometricAvailable = remember { BiometricAuthManager.isBiometricAvailable(context) }
 
     var firstPattern by remember { mutableStateOf<List<Int>?>(null) }
     var patternState by remember { mutableStateOf(PatternState.INPUT) }
@@ -139,7 +150,62 @@ fun PatternLockDialog(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Biometric Unlock Option (Fingerprint / Face ID)
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    backgroundColor = colors.glassCard
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fingerprint,
+                                contentDescription = null,
+                                tint = if (isBiometricAvailable) colors.primaryNeon else colors.textMuted,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.size(10.dp))
+                            Column {
+                                Text(
+                                    text = strings.biometricUnlock,
+                                    color = colors.textPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (isBiometricAvailable) strings.biometricUnlockDesc else strings.biometricNotAvailable,
+                                    color = colors.textMuted,
+                                    fontSize = 10.5.sp,
+                                    lineHeight = 13.sp
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isBiometricEnabled && isBiometricAvailable,
+                            onCheckedChange = { onToggleBiometric(it) },
+                            enabled = isBiometricAvailable,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = colors.primaryNeon,
+                                uncheckedThumbColor = colors.textSecondary,
+                                uncheckedTrackColor = colors.glassSurface
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 if (isCurrentlyEnabled) {
                     GlassButton(

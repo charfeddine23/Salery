@@ -14,10 +14,13 @@ data class UserSettings(
     val lastCreditedMonthYear: String = "",
     val patternLockEnabled: Boolean = false,
     val patternLockHash: String = "",
+    val biometricEnabled: Boolean = false,
     val language: String = "en", // "en" or "ar"
     val themeMode: String = "DARK", // "DARK", "LIGHT", or "SYSTEM"
+    val designStyle: String = "LIQUID_GLASS", // "LIQUID_GLASS" or "NEUMORPHISM"
     val googleDriveConnected: Boolean = true,
-    val lastBackupTimestamp: Long = 0L
+    val lastBackupTimestamp: Long = 0L,
+    val stealthMode: Boolean = false
 )
 
 class PreferencesManager(context: Context) {
@@ -36,10 +39,13 @@ class PreferencesManager(context: Context) {
             lastCreditedMonthYear = prefs.getString("last_credited_month", "") ?: "",
             patternLockEnabled = prefs.getBoolean("pattern_lock_enabled", false),
             patternLockHash = prefs.getString("pattern_lock_hash", "") ?: "",
+            biometricEnabled = prefs.getBoolean("biometric_enabled", false),
             language = prefs.getString("app_language", "en") ?: "en",
             themeMode = prefs.getString("theme_mode", "DARK") ?: "DARK",
+            designStyle = prefs.getString("design_style", "LIQUID_GLASS") ?: "LIQUID_GLASS",
             googleDriveConnected = prefs.getBoolean("gdrive_connected", true),
-            lastBackupTimestamp = prefs.getLong("last_backup_time", 0L)
+            lastBackupTimestamp = prefs.getLong("last_backup_time", 0L),
+            stealthMode = prefs.getBoolean("stealth_mode", false)
         )
     }
 
@@ -53,10 +59,13 @@ class PreferencesManager(context: Context) {
             .putString("last_credited_month", updated.lastCreditedMonthYear)
             .putBoolean("pattern_lock_enabled", updated.patternLockEnabled)
             .putString("pattern_lock_hash", updated.patternLockHash)
+            .putBoolean("biometric_enabled", updated.biometricEnabled)
             .putString("app_language", updated.language)
             .putString("theme_mode", updated.themeMode)
+            .putString("design_style", updated.designStyle)
             .putBoolean("gdrive_connected", updated.googleDriveConnected)
             .putLong("last_backup_time", updated.lastBackupTimestamp)
+            .putBoolean("stealth_mode", updated.stealthMode)
             .apply()
         _settingsFlow.value = updated
     }

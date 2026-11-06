@@ -90,6 +90,13 @@ import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.input.pointer.pointerInput
+import com.example.sensor.RememberShakeDetector
+import com.example.ui.i18n.LocalStealthMode
+
 @Composable
 fun MainAppScreen(
     viewModel: SaleryPelseViewModel
@@ -104,6 +111,11 @@ fun MainAppScreen(
     val transactions by viewModel.allTransactions.collectAsState()
     val debts by viewModel.allDebts.collectAsState()
     val summary by viewModel.financialSummary.collectAsState()
+
+    // Shake to Hide / Stealth Mode Sensor Listener
+    RememberShakeDetector(enabled = !isAppLocked) {
+        viewModel.toggleStealthMode()
+    }
 
     // Determine current localized strings bundle
     val isArabic = userSettings.language == "ar"
@@ -135,13 +147,18 @@ fun MainAppScreen(
 
     CompositionLocalProvider(
         LocalStrings provides activeStrings,
-        LocalLayoutDirection provides layoutDirection
+        LocalLayoutDirection provides layoutDirection,
+        LocalStealthMode provides userSettings.stealthMode
     ) {
         if (isAppLocked) {
             LockScreen(
                 onUnlockAttempt = { pattern ->
                     viewModel.unlockApp(pattern)
-                }
+                },
+                onBiometricUnlock = {
+                    viewModel.unlockAppByBiometrics()
+                },
+                isBiometricEnabled = userSettings.biometricEnabled
             )
         } else {
             // Sidebar / Navigation Drawer is strictly locked to the Left side (LTR) in both English & Arabic
@@ -176,6 +193,12 @@ fun MainAppScreen(
                                     scope.launch { drawerState.close() }
                                     viewModel.lockApp()
                                 },
+                                onToggleStealthMode = {
+                                    viewModel.toggleStealthMode()
+                                },
+                                onSelectDesignStyle = { style ->
+                                    viewModel.setDesignStyle(style)
+                                },
                                 onSelectThemeMode = { mode ->
                                     viewModel.setThemeMode(mode)
                                 },
@@ -205,7 +228,9 @@ fun MainAppScreen(
                                     scope.launch {
                                         if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                     }
-                                }
+                                },
+                                isStealthMode = userSettings.stealthMode,
+                                onToggleStealth = { viewModel.toggleStealthMode() }
                             )
                         },
                         bottomBar = {
@@ -258,6 +283,7 @@ fun MainAppScreen(
                                 "dashboard" -> DashboardScreen(
                                     summary = summary,
                                     transactions = transactions,
+                                    debts = debts,
                                     userSettings = userSettings,
                                     onAddIncomeClick = {
                                         addTransactionType = TransactionType.INCOME
@@ -378,9 +404,11 @@ fun MainAppScreen(
             if (showPatternLockDialog) {
                 PatternLockDialog(
                     isCurrentlyEnabled = userSettings.patternLockEnabled,
+                    isBiometricEnabled = userSettings.biometricEnabled,
                     onDismiss = { showPatternLockDialog = false },
                     onSavePattern = { pattern -> viewModel.saveNewPattern(pattern) },
-                    onDisablePattern = { viewModel.disablePatternLock() }
+                    onDisablePattern = { viewModel.disablePatternLock() },
+                    onToggleBiometric = { enabled -> viewModel.setBiometricEnabled(enabled) }
                 )
             }
         }
@@ -390,7 +418,9 @@ fun MainAppScreen(
 @Composable
 fun MainTopAppBar(
     title: String,
-    onMenuClick: () -> Unit
+    onMenuClick: () -> Unit,
+    isStealthMode: Boolean = false,
+    onToggleStealth: () -> Unit = {}
 ) {
     val colors = LiquidGlassTheme.colors
 
@@ -420,10 +450,18 @@ fun MainTopAppBar(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Fixed Icon Positioning with Persistent Dynamic Breathing Glow
-        BreathingSpLogo(
-            size = 36.dp
-        )
+        // Fixed Icon Positioning with Double-Tap to Toggle Stealth Mode & Breathing Glow
+        Box(
+            modifier = Modifier.pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { onToggleStealth() }
+                )
+            }
+        ) {
+            BreathingSpLogo(
+                size = 36.dp
+            )
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 
@@ -436,6 +474,25 @@ fun MainTopAppBar(
             letterSpacing = 0.3.sp,
             maxLines = 1
         )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Stealth Mode / Privacy Toggle Action Button
+        GlassCard(
+            modifier = Modifier.size(42.dp),
+            shape = RoundedCornerShape(13.dp),
+            backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
+            onClick = onToggleStealth
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = "Stealth Mode Toggle",
+                    tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
     }
 }
 

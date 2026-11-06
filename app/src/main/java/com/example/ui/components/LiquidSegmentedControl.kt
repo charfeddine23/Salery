@@ -326,3 +326,119 @@ private fun LanguageSegmentOption(
         )
     }
 }
+
+/**
+ * Clean segmented control for Design Style:
+ * Allows user to toggle between "Liquid Glass" and "Neumorphism".
+ */
+@Composable
+fun LiquidDesignStyleSegmentedControl(
+    currentDesignStyle: String,
+    onSelectDesignStyle: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strings = AppStrings.current
+    val colors = LiquidGlassTheme.colors
+    val isDark = colors.isDark
+    val isNeumorphic = currentDesignStyle == "NEUMORPHISM"
+    val selectedIndex = if (isNeumorphic) 1 else 0
+
+    val animatedIndex by animateFloatAsState(
+        targetValue = selectedIndex.toFloat(),
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        label = "DesignStyleSlide"
+    )
+
+    val trackBgColor = if (isDark) Color(0xFF0F172A).copy(alpha = 0.85f) else Color(0xFFF1F5F9)
+    val trackBorderColor = if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
+
+    val pillBgColor = if (isDark) Color(0xFF1E293B) else Color.White
+    val pillBorderColor = if (isDark) Color(0xFF475569).copy(alpha = 0.6f) else Color(0xFFCBD5E1).copy(alpha = 0.5f)
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(trackBgColor)
+            .border(0.8.dp, trackBorderColor, RoundedCornerShape(12.dp))
+            .padding(3.dp)
+    ) {
+        val segmentWidth = maxWidth / 2
+
+        Box(
+            modifier = Modifier
+                .offset(x = segmentWidth * animatedIndex)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .shadow(
+                    elevation = if (isDark) 1.dp else 2.dp,
+                    shape = RoundedCornerShape(9.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.3f else 0.08f)
+                )
+                .clip(RoundedCornerShape(9.dp))
+                .background(pillBgColor)
+                .border(0.8.dp, pillBorderColor, RoundedCornerShape(9.dp))
+        )
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            DesignStyleOption(
+                label = strings.styleLiquidGlass,
+                isSelected = !isNeumorphic,
+                isDarkTheme = isDark,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                onClick = { onSelectDesignStyle("LIQUID_GLASS") }
+            )
+            DesignStyleOption(
+                label = strings.styleNeumorphism,
+                isSelected = isNeumorphic,
+                isDarkTheme = isDark,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                onClick = { onSelectDesignStyle("NEUMORPHISM") }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesignStyleOption(
+    label: String,
+    isSelected: Boolean,
+    isDarkTheme: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val selectedTextColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
+    val unselectedTextColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) selectedTextColor else unselectedTextColor,
+        animationSpec = tween(durationMillis = 200),
+        label = "DesignStyleTextColor"
+    )
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(9.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = Color(0xFF3B82F6).copy(alpha = 0.2f)),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 12.5.sp,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
