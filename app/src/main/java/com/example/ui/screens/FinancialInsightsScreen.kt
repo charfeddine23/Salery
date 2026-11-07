@@ -31,13 +31,25 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +85,8 @@ fun FinancialInsightsScreen(
     debts: List<DebtEntity>,
     userSettings: UserSettings,
     onBackClick: () -> Unit,
+    onLockToVault: (Double) -> Unit = {},
+    onUnlockFromVault: (Double) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     BackHandler(onBack = onBackClick)
@@ -150,101 +164,183 @@ fun FinancialInsightsScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                // 1. Hero Wealth Status Card with Dynamic 90fps Money Bag
+                // 1. Hero Wealth Status Card with Dynamic 90fps Money Bag & Dynamic Cash Flow Glow
                 item {
-                    GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = colors.glassCard,
-                        shape = RoundedCornerShape(26.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(22.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    val locked = userSettings.vaultLockedAmount
+                    val spendable = (summary.totalBalance - locked).coerceAtLeast(0.0)
+
+                    val isSurplus = summary.monthlyIncome > summary.monthlyExpenses * 1.20
+                    val isDeficit = summary.monthlyExpenses > summary.monthlyIncome && summary.monthlyExpenses > 0
+                    val glowColor1 = when {
+                        isSurplus -> EmeraldNeon
+                        isDeficit -> RoseNeon
+                        else -> CyanNeon
+                    }
+                    val glowColor2 = when {
+                        isSurplus -> CyanNeon
+                        isDeficit -> AmberNeon
+                        else -> Color(0xFF6366F1)
+                    }
+
+                    val infiniteTransition = rememberInfiniteTransition(label = "insights_glow")
+                    val glowPulse by infiniteTransition.animateFloat(
+                        initialValue = 0.30f,
+                        targetValue = 0.65f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2800, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "insights_glow_pulse"
+                    )
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Canvas(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .graphicsLayer {
+                                    alpha = glowPulse
+                                    scaleX = 1.05f
+                                    scaleY = 1.05f
+                                }
                         ) {
-                            // Large interactive Money Bag visualizer
-                            DynamicMoneyBag(
-                                totalBalance = summary.totalBalance,
-                                onClick = { /* Already on insights screen */ },
-                                size = 72.dp
+                            val centerOffset = Offset(size.width / 2f, size.height / 2f)
+                            val glowRadius = size.maxDimension * 0.60f
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        glowColor1.copy(alpha = 0.35f),
+                                        glowColor2.copy(alpha = 0.18f),
+                                        Color.Transparent
+                                    ),
+                                    center = centerOffset,
+                                    radius = glowRadius
+                                ),
+                                radius = glowRadius,
+                                center = centerOffset
                             )
+                        }
 
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Text(
-                                text = strings.totalBalance,
-                                color = colors.textMuted,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = formatDzd(summary.totalBalance, strings.currencyCode, isStealth),
-                                color = colors.textPrimary,
-                                fontSize = 30.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.5.sp
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Wealth Status Tier Badge
-                            val tierLabel = when {
-                                summary.totalBalance >= 120000.0 -> if (isArabic) "سيولة ممتازة واحتياطي وفير" else "Abundant Capital & Surplus"
-                                summary.totalBalance >= 40000.0 -> if (isArabic) "احتياطي مالي صحي ومتوازن" else "Healthy Capital Reserves"
-                                else -> if (isArabic) "مرحلة تعزيز السيولة والادخار" else "Capital Building Phase"
-                            }
-                            val tierColor = when {
-                                summary.totalBalance >= 120000.0 -> EmeraldNeon
-                                summary.totalBalance >= 40000.0 -> CyanNeon
-                                else -> AmberNeon
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(tierColor.copy(alpha = 0.16f))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = colors.glassCard,
+                            shape = RoundedCornerShape(26.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(22.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = tierColor,
-                                        modifier = Modifier.size(14.dp)
+                                // Large interactive Money Bag visualizer
+                                DynamicMoneyBag(
+                                    totalBalance = summary.totalBalance,
+                                    onClick = { /* Already on insights screen */ },
+                                    size = 72.dp
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = if (locked > 0) (if (isArabic) "الرصيد المتاح للصرف" else "Spendable Balance") else strings.totalBalance,
+                                    color = colors.textMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = formatDzd(if (locked > 0) spendable else summary.totalBalance, strings.currencyCode, isStealth),
+                                    color = colors.textPrimary,
+                                    fontSize = 30.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp
+                                )
+
+                                if (locked > 0) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(AmberNeon.copy(alpha = 0.15f))
+                                            .border(1.dp, AmberNeon.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = AmberNeon,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = (if (isArabic) "الجيب الآمن المحجوز: " else "Safe Pocket Reserved: ") +
+                                                    formatDzd(locked, strings.currencyCode, isStealth),
+                                            color = AmberNeon,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Wealth Status Tier Badge
+                                val tierLabel = when {
+                                    summary.totalBalance >= 120000.0 -> if (isArabic) "سيولة ممتازة واحتياطي وفير" else "Abundant Capital & Surplus"
+                                    summary.totalBalance >= 40000.0 -> if (isArabic) "احتياطي مالي صحي ومتوازن" else "Healthy Capital Reserves"
+                                    else -> if (isArabic) "مرحلة تعزيز السيولة والادخار" else "Capital Building Phase"
+                                }
+                                val tierColor = when {
+                                    summary.totalBalance >= 120000.0 -> EmeraldNeon
+                                    summary.totalBalance >= 40000.0 -> CyanNeon
+                                    else -> AmberNeon
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(tierColor.copy(alpha = 0.16f))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = tierColor,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = tierLabel,
+                                            color = tierColor,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Cashflow Ratio Pillars
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    CashflowPillar(
+                                        title = strings.monthlyIncome,
+                                        amount = formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth),
+                                        color = EmeraldNeon,
+                                        icon = Icons.Default.TrendingUp,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = tierLabel,
-                                        color = tierColor,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
+                                    CashflowPillar(
+                                        title = strings.monthlyExpense,
+                                        amount = formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth),
+                                        color = RoseNeon,
+                                        icon = Icons.Default.TrendingDown,
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Cashflow Ratio Pillars
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                CashflowPillar(
-                                    title = strings.monthlyIncome,
-                                    amount = formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth),
-                                    color = EmeraldNeon,
-                                    icon = Icons.Default.TrendingUp,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                CashflowPillar(
-                                    title = strings.monthlyExpense,
-                                    amount = formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth),
-                                    color = RoseNeon,
-                                    icon = Icons.Default.TrendingDown,
-                                    modifier = Modifier.weight(1f)
-                                )
                             }
                         }
                     }

@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -179,12 +180,8 @@ fun SmartBudgetAlertCard(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(AmberNeon.copy(alpha = 0.25f), RoseNeon.copy(alpha = 0.25f))
-                                )
-                            )
-                            .border(1.dp, AmberNeon.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                            .background(AmberNeon.copy(alpha = 0.14f))
+                            .border(1.dp, AmberNeon.copy(alpha = 0.28f), RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -237,23 +234,21 @@ fun SmartBudgetAlertCard(
                     val isSelected = alert.categoryId == selectedCategoryKey
                     val isCritical = alert.percentage >= 80.0
                     val chipBg = when {
-                        isSelected && isCritical -> AmberNeon.copy(alpha = 0.22f)
-                        isSelected -> colors.primaryNeon.copy(alpha = 0.2f)
-                        isCritical -> AmberNeon.copy(alpha = 0.1f)
-                        else -> colors.glassSurface.copy(alpha = 0.5f)
+                        isSelected -> colors.primaryNeon.copy(alpha = 0.16f)
+                        isCritical -> AmberNeon.copy(alpha = 0.08f)
+                        else -> colors.glassSurface
                     }
                     val chipBorder = when {
-                        isSelected && isCritical -> AmberNeon
-                        isSelected -> colors.primaryNeon
-                        isCritical -> AmberNeon.copy(alpha = 0.4f)
+                        isSelected -> colors.primaryNeon.copy(alpha = 0.45f)
+                        isCritical -> AmberNeon.copy(alpha = 0.25f)
                         else -> colors.glassBorderSubtle
                     }
 
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(chipBg)
-                            .border(1.dp, chipBorder, RoundedCornerShape(12.dp))
+                            .border(1.dp, chipBorder, RoundedCornerShape(14.dp))
                             .clickable { selectedCategoryKey = alert.categoryId }
                             .padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -286,17 +281,35 @@ fun SmartBudgetAlertCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Highlight Threshold Alert Box (Banner)
+            // Highlight Threshold Alert Box (Banner) - Harmonized with theme
             val isWarning = currentAlert.percentage >= 80.0
-            val bannerBorderColor = if (isWarning) AmberNeon.copy(alpha = 0.6f) else EmeraldNeon.copy(alpha = 0.3f)
-            val bannerBg = if (isWarning) AmberNeon.copy(alpha = 0.12f) else colors.glassSurface.copy(alpha = 0.4f)
+            val bannerBorderBrush = if (isWarning) {
+                Brush.linearGradient(
+                    listOf(
+                        AmberNeon.copy(alpha = 0.35f),
+                        colors.glassBorderSubtle,
+                        AmberNeon.copy(alpha = 0.15f)
+                    )
+                )
+            } else {
+                Brush.linearGradient(
+                    listOf(
+                        colors.glassBorderSubtle,
+                        colors.glassBorderSubtle
+                    )
+                )
+            }
+            val bannerBg = colors.glassSurface
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(bannerBg)
-                    .border(1.dp, bannerBorderColor, RoundedCornerShape(18.dp))
+                    .border(
+                        BorderStroke(1.dp, bannerBorderBrush),
+                        RoundedCornerShape(20.dp)
+                    )
                     .padding(16.dp)
             ) {
                 Column {
@@ -407,14 +420,14 @@ fun SmartBudgetAlertCard(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Proactive Advice Box: نصيحة سريعة لتفادي العجز
+                    // Proactive Advice Box: نصيحة سريعة لتفادي العجز - Harmonized with theme
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(colors.glassCard)
-                            .border(1.dp, AmberNeon.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                            .padding(12.dp)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                            .padding(13.dp)
                     ) {
                         Row(verticalAlignment = Alignment.Top) {
                             Box(
@@ -459,13 +472,13 @@ fun SmartBudgetAlertCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Button 1: Send Local Android Notification (تنبيه النظام)
+                // Button 1: Send Alert (تنبيه)
                 GlassButton(
-                    text = if (isArabic) "إرسال إشعار للنظام 🔔" else "Send Local Alert 🔔",
+                    text = if (isArabic) "إرسال تنبيه" else "Send Alert",
                     icon = Icons.Default.Notifications,
                     containerColor = colors.primaryNeon,
                     contentColor = if (colors.isDark) Color(0xFF0F172A) else Color.White,
-                    modifier = Modifier.weight(1.3f),
+                    modifier = Modifier.weight(1.2f),
                     onClick = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             pendingAlertToNotify = currentAlert

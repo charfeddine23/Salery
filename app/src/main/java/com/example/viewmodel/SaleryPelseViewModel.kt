@@ -15,6 +15,7 @@ import com.example.data.UserSettings
 import com.example.ui.components.toPatternHash
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.i18n.formatDzdAmount
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -566,6 +567,43 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setStealthMode(enabled: Boolean) {
         prefsManager.updateSettings { it.copy(stealthMode = enabled) }
+    }
+
+    // Quick Vault / Safe Pocket Actions
+    fun lockToVault(amount: Double) {
+        if (amount <= 0.0) return
+        prefsManager.updateSettings { current ->
+            current.copy(vaultLockedAmount = current.vaultLockedAmount + amount)
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تم حجز ${formatDzdAmount(amount)} دج في الجيب الآمن بنجاح 🔒"
+                else "Safe Pocket: ${formatDzdAmount(amount)} DZD locked securely in vault 🔒"
+            )
+        }
+    }
+
+    fun unlockFromVault(amount: Double) {
+        if (amount <= 0.0) return
+        prefsManager.updateSettings { current ->
+            val remaining = (current.vaultLockedAmount - amount).coerceAtLeast(0.0)
+            current.copy(vaultLockedAmount = remaining)
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تم سحب ${formatDzdAmount(amount)} دج إلى الرصيد المتاح 🔓"
+                else "Safe Pocket: ${formatDzdAmount(amount)} DZD released to spendable balance 🔓"
+            )
+        }
+    }
+
+    fun setVaultLockedAmount(amount: Double) {
+        val safe = amount.coerceAtLeast(0.0)
+        prefsManager.updateSettings { current ->
+            current.copy(vaultLockedAmount = safe)
+        }
     }
 
     // Backup & Restore

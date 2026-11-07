@@ -307,7 +307,9 @@ fun MainAppScreen(
                                     },
                                     onSeeAllClick = { currentRoute = "expenses" },
                                     onOpenSalaryScheduler = { showSalarySchedulerDialog = true },
-                                    onDeleteTransaction = { viewModel.deleteTransaction(it) }
+                                    onDeleteTransaction = { viewModel.deleteTransaction(it) },
+                                    onLockToVault = { viewModel.lockToVault(it) },
+                                    onUnlockFromVault = { viewModel.unlockFromVault(it) }
                                 )
                                 "income" -> IncomeScreen(
                                     transactions = transactions,
@@ -344,7 +346,9 @@ fun MainAppScreen(
                                     transactions = transactions,
                                     debts = debts,
                                     userSettings = userSettings,
-                                    onBackClick = { currentRoute = "dashboard" }
+                                    onBackClick = { currentRoute = "dashboard" },
+                                    onLockToVault = { viewModel.lockToVault(it) },
+                                    onUnlockFromVault = { viewModel.unlockFromVault(it) }
                                 )
                             }
                         }

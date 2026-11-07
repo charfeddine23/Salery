@@ -57,6 +57,7 @@ import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
+import com.example.ui.components.TotalBalanceVaultCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
@@ -84,6 +85,8 @@ fun DashboardScreen(
     onSeeAllClick: () -> Unit,
     onOpenSalaryScheduler: () -> Unit,
     onDeleteTransaction: (TransactionEntity) -> Unit,
+    onLockToVault: (Double) -> Unit = {},
+    onUnlockFromVault: (Double) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -100,142 +103,14 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
-        // Main Liquid Glass Wallet Balance Card
+        // Main Total Balance & Money Vault Card (Dynamic Cash Flow Glow, Burn Rate & Quick Vault Pocket)
         item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard,
-                shape = RoundedCornerShape(26.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(22.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = strings.totalBalance,
-                            color = colors.textSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(colors.primaryNeon.copy(alpha = 0.18f))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = strings.currencyCode,
-                                color = colors.primaryNeon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Prominent Balance
-                    Text(
-                        text = formatDzd(summary.totalBalance, strings.currencyCode),
-                        color = colors.textPrimary,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Monthly Income vs Expense Mini Stats
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Income
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.glassSurface)
-                                .padding(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(EmeraldNeon.copy(alpha = 0.2f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TrendingUp,
-                                        contentDescription = null,
-                                        tint = EmeraldNeon,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = strings.monthlyIncome,
-                                        color = colors.textMuted,
-                                        fontSize = 10.sp
-                                    )
-                                    Text(
-                                        text = formatDzd(summary.monthlyIncome, strings.currencyCode),
-                                        color = EmeraldNeon,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Expense
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.glassSurface)
-                                .padding(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(RoseNeon.copy(alpha = 0.2f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TrendingDown,
-                                        contentDescription = null,
-                                        tint = RoseNeon,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = strings.monthlyExpense,
-                                        color = colors.textMuted,
-                                        fontSize = 10.sp
-                                    )
-                                    Text(
-                                        text = formatDzd(summary.monthlyExpenses, strings.currencyCode),
-                                        color = RoseNeon,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            TotalBalanceVaultCard(
+                summary = summary,
+                userSettings = userSettings,
+                onLockToVault = onLockToVault,
+                onUnlockFromVault = onUnlockFromVault
+            )
         }
 
         // Smart Salary Scheduler Card Banner

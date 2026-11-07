@@ -20,7 +20,8 @@ data class UserSettings(
     val designStyle: String = "LIQUID_GLASS", // "LIQUID_GLASS" or "NEUMORPHISM"
     val googleDriveConnected: Boolean = true,
     val lastBackupTimestamp: Long = 0L,
-    val stealthMode: Boolean = false
+    val stealthMode: Boolean = false,
+    val vaultLockedAmount: Double = 0.0
 )
 
 class PreferencesManager(context: Context) {
@@ -45,7 +46,8 @@ class PreferencesManager(context: Context) {
             designStyle = prefs.getString("design_style", "LIQUID_GLASS") ?: "LIQUID_GLASS",
             googleDriveConnected = prefs.getBoolean("gdrive_connected", true),
             lastBackupTimestamp = prefs.getLong("last_backup_time", 0L),
-            stealthMode = prefs.getBoolean("stealth_mode", false)
+            stealthMode = prefs.getBoolean("stealth_mode", false),
+            vaultLockedAmount = prefs.getFloat("vault_locked_amount", 0.0f).toDouble()
         )
     }
 
@@ -66,6 +68,7 @@ class PreferencesManager(context: Context) {
             .putBoolean("gdrive_connected", updated.googleDriveConnected)
             .putLong("last_backup_time", updated.lastBackupTimestamp)
             .putBoolean("stealth_mode", updated.stealthMode)
+            .putFloat("vault_locked_amount", updated.vaultLockedAmount.toFloat())
             .apply()
         _settingsFlow.value = updated
     }
