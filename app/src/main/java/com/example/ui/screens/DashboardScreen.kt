@@ -123,7 +123,7 @@ fun DashboardScreen(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassSurface,
+                backgroundColor = colors.glassCard,
                 shape = RoundedCornerShape(20.dp),
                 onClick = onOpenSalaryScheduler
             ) {

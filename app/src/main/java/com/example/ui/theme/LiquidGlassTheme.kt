@@ -83,8 +83,8 @@ val DarkNeumorphicColors = LiquidGlassColors(
     bgStart = NeuDarkBackground,
     bgCenter = NeuDarkBackground,
     bgEnd = NeuDarkBackground,
-    glassSurface = NeuDarkCard,
-    glassCard = NeuDarkCard,
+    glassSurface = Color(0xFF181C24), // Recessed inner widget surface
+    glassCard = NeuDarkCard,          // 0xFF202530 extruded card surface
     dialogBackground = NeuDarkCard,
     glassBorder = NeuDarkHighlight.copy(alpha = 0.5f),
     glassBorderSubtle = NeuDarkHighlight.copy(alpha = 0.25f),

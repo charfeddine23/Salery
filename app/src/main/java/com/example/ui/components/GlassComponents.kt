@@ -149,11 +149,10 @@ fun GlassCard(
             modifier = modifier
                 .neumorphicDepth(
                     cornerRadius = 22.dp,
-                    elevation = 5.dp,
+                    elevation = 6.dp,
                     isDark = colors.isDark,
                     backgroundColor = backgroundColor
                 )
-                .clip(shape)
                 .then(clickModifier),
             content = content
         )

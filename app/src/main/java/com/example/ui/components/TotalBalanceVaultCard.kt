@@ -145,41 +145,43 @@ fun TotalBalanceVaultCard(
             .fillMaxWidth()
             .animateContentSize()
     ) {
-        // 3. Dynamic Cash Flow Ambient Glow (Rendered behind the card)
-        Canvas(
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer {
-                    alpha = glowPulse
-                    scaleX = 1.05f
-                    scaleY = 1.05f
-                }
-        ) {
-            val centerOffset = Offset(size.width / 2f, size.height / 2f)
-            val glowRadius = size.maxDimension * 0.65f
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        glowColor1.copy(alpha = 0.40f),
-                        glowColor2.copy(alpha = 0.22f),
-                        Color.Transparent
+        // 3. Dynamic Cash Flow Ambient Glow (Rendered behind the card in Liquid Glass mode only)
+        if (!colors.isNeumorphic) {
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        alpha = glowPulse
+                        scaleX = 1.05f
+                        scaleY = 1.05f
+                    }
+            ) {
+                val centerOffset = Offset(size.width / 2f, size.height / 2f)
+                val glowRadius = size.maxDimension * 0.65f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            glowColor1.copy(alpha = 0.40f),
+                            glowColor2.copy(alpha = 0.22f),
+                            Color.Transparent
+                        ),
+                        center = centerOffset,
+                        radius = glowRadius
                     ),
-                    center = centerOffset,
-                    radius = glowRadius
-                ),
-                radius = glowRadius,
-                center = centerOffset
-            )
+                    radius = glowRadius,
+                    center = centerOffset
+                )
+            }
         }
 
-        // Main Liquid Glass Balance Card
+        // Main Total Balance Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
             backgroundColor = colors.glassCard,
-            shape = RoundedCornerShape(26.dp)
+            shape = RoundedCornerShape(22.dp)
         ) {
             Column(
-                modifier = Modifier.padding(22.dp)
+                modifier = Modifier.padding(20.dp)
             ) {
                 // Top Header Row with Cash Flow Status Badge
                 Row(
@@ -399,6 +401,7 @@ fun TotalBalanceVaultCard(
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.glassSurface)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
                             .padding(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -439,6 +442,7 @@ fun TotalBalanceVaultCard(
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.glassSurface)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
                             .padding(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
