@@ -69,6 +69,7 @@ import com.example.data.TransactionType
 import com.example.ui.components.AddDebtDialog
 import com.example.ui.components.AddTransactionDialog
 import com.example.ui.components.BackupRestoreDialog
+import com.example.ui.components.DynamicMoneyBag
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
 import com.example.ui.components.BreathingSpLogo
@@ -222,6 +223,7 @@ fun MainAppScreen(
                                     "income" -> activeStrings.navIncome
                                     "expenses" -> activeStrings.navExpenses
                                     "debts" -> activeStrings.navDebts
+                                    "insights" -> if (isArabic) "التحليل المالي الذكي" else "Financial Insights"
                                     else -> APP_NAME
                                 },
                                 onMenuClick = {
@@ -229,6 +231,8 @@ fun MainAppScreen(
                                         if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                     }
                                 },
+                                totalBalance = summary.totalBalance,
+                                onOpenInsights = { currentRoute = "insights" },
                                 isStealthMode = userSettings.stealthMode,
                                 onToggleStealth = { viewModel.toggleStealthMode() }
                             )
@@ -335,6 +339,13 @@ fun MainAppScreen(
                                     onDeleteDebt = { viewModel.deleteDebt(it) },
                                     onClearSettledDebts = { viewModel.clearSettledDebts() }
                                 )
+                                "insights" -> FinancialInsightsScreen(
+                                    summary = summary,
+                                    transactions = transactions,
+                                    debts = debts,
+                                    userSettings = userSettings,
+                                    onBackClick = { currentRoute = "dashboard" }
+                                )
                             }
                         }
                     }
@@ -396,8 +407,7 @@ fun MainAppScreen(
                     lastBackupTimestamp = userSettings.lastBackupTimestamp,
                     onDismiss = { showBackupRestoreDialog = false },
                     onExportBackup = { viewModel.exportBackupJson() },
-                    onRestoreBackup = { json -> viewModel.restoreFromJson(json) },
-                    onSyncGoogleDrive = { viewModel.syncGoogleDrive() }
+                    onRestoreBackup = { json -> viewModel.restoreFromJson(json) }
                 )
             }
 
@@ -419,6 +429,8 @@ fun MainAppScreen(
 fun MainTopAppBar(
     title: String,
     onMenuClick: () -> Unit,
+    totalBalance: Double = 0.0,
+    onOpenInsights: () -> Unit = {},
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {}
 ) {
@@ -476,6 +488,15 @@ fun MainTopAppBar(
         )
 
         Spacer(modifier = Modifier.weight(1f))
+
+        // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon)
+        DynamicMoneyBag(
+            totalBalance = totalBalance,
+            onClick = onOpenInsights,
+            size = 40.dp
+        )
+
+        Spacer(modifier = Modifier.width(8.dp))
 
         // Stealth Mode / Privacy Toggle Action Button
         GlassCard(

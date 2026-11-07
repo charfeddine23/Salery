@@ -84,8 +84,7 @@ fun BackupRestoreDialog(
     lastBackupTimestamp: Long,
     onDismiss: () -> Unit,
     onExportBackup: suspend () -> String,
-    onRestoreBackup: suspend (String) -> Boolean,
-    onSyncGoogleDrive: (() -> Unit)? = null
+    onRestoreBackup: suspend (String) -> Boolean
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors

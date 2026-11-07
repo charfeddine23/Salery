@@ -49,14 +49,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.remember
-import com.example.ai.FinancialInsightsEngine
 import com.example.data.DebtEntity
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.ui.components.BalanceProjectionChart
-import com.example.ui.components.FinancialInsightsCard
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
@@ -93,16 +90,6 @@ fun DashboardScreen(
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = userSettings.language == "ar"
-
-    val insights = remember(transactions, debts, summary, userSettings, isArabic) {
-        FinancialInsightsEngine.generateInsights(
-            transactions = transactions,
-            debts = debts,
-            summary = summary,
-            userSettings = userSettings,
-            isArabic = isArabic
-        )
-    }
 
     LazyColumn(
         modifier = modifier
@@ -371,12 +358,7 @@ fun DashboardScreen(
             }
         }
 
-        // 1. AI Financial Insights Card (التحليل المالي الذكي)
-        item {
-            FinancialInsightsCard(insights = insights)
-        }
-
-        // 2. Future Balance Projection Chart (توقع الرصيد المستقبلي)
+        // Future Balance Projection Chart (توقع الرصيد المستقبلي)
         item {
             BalanceProjectionChart(
                 currentBalance = summary.totalBalance,
