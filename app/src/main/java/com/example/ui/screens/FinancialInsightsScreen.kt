@@ -45,10 +45,12 @@ import com.example.ai.FinancialInsightsEngine
 import com.example.data.DebtEntity
 import com.example.data.TransactionEntity
 import com.example.data.UserSettings
+import com.example.ui.components.BalanceProjectionChart
 import com.example.ui.components.DynamicMoneyBag
 import com.example.ui.components.FinancialInsightsCard
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
+import com.example.ui.components.SmartBudgetAlertCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
@@ -248,7 +250,16 @@ fun FinancialInsightsScreen(
                     }
                 }
 
-                // 2. Main AI Financial Insights Engine Carousel / Cards
+                // 2. Smart Budget Threshold Alerts & Local Notifications (80% Spending Cap Warning & Deficit Advice)
+                item {
+                    SmartBudgetAlertCard(
+                        transactions = transactions,
+                        isArabic = isArabic,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // 3. Main AI Financial Insights Engine Carousel / Cards
                 item {
                     FinancialInsightsCard(
                         insights = insights,
@@ -256,7 +267,18 @@ fun FinancialInsightsScreen(
                     )
                 }
 
-                // 3. Deep-Dive Metrics Cards
+                // 4. Future Balance Projection Chart (توقع الرصيد المستقبلي)
+                item {
+                    BalanceProjectionChart(
+                        currentBalance = summary.totalBalance,
+                        transactions = transactions,
+                        debts = debts,
+                        userSettings = userSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // 5. Deep-Dive Metrics Cards
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(

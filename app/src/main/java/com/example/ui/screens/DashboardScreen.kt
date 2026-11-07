@@ -53,7 +53,6 @@ import com.example.data.DebtEntity
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
-import com.example.ui.components.BalanceProjectionChart
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
@@ -358,15 +357,6 @@ fun DashboardScreen(
             }
         }
 
-        // Future Balance Projection Chart (توقع الرصيد المستقبلي)
-        item {
-            BalanceProjectionChart(
-                currentBalance = summary.totalBalance,
-                transactions = transactions,
-                debts = debts,
-                userSettings = userSettings
-            )
-        }
 
         // Active Debts Mini Banner
         item {
