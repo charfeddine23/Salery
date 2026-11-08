@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.LocalAtm
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -393,6 +394,14 @@ fun TransactionRowItem(
                     color = colors.textMuted,
                     fontSize = 11.sp
                 )
+                if (transaction.note.isNotBlank()) {
+                    Text(
+                        text = transaction.note,
+                        color = colors.textMuted.copy(alpha = 0.8f),
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
+                }
             }
 
             Column(horizontalAlignment = Alignment.End) {
@@ -409,6 +418,30 @@ fun TransactionRowItem(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
+                }
+                if (transaction.isPaidFromSavings) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AmberNeon.copy(alpha = 0.16f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Savings,
+                            contentDescription = null,
+                            tint = AmberNeon,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = strings.paidFromSavingsBadge,
+                            color = AmberNeon,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 

@@ -1,10 +1,12 @@
 package com.example.ui.theme
 
 import android.graphics.BlurMaskFilter
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -47,7 +49,7 @@ val NeuRoyalBlueDark = Color(0xFF3B82F6)  // Balances/Primary in Dark
  */
 fun Modifier.neumorphicDepth(
     cornerRadius: Dp = 20.dp,
-    elevation: Dp = 6.dp,
+    elevation: Dp = 4.dp,
     isDark: Boolean = false,
     isPressed: Boolean = false,
     backgroundColor: Color = if (isDark) NeuDarkCard else NeuLightCard,
@@ -63,24 +65,11 @@ fun Modifier.neumorphicDepth(
         }
 
         if (!isPressed) {
-            val blurRadius = (elevPx * 1.5f).coerceAtLeast(1f)
-            val offsetDist = (elevPx * 0.85f).coerceAtLeast(1f)
+            val blurRadius = (elevPx * 1.1f).coerceAtLeast(1f)
+            val offsetDist = (elevPx * 0.70f).coerceAtLeast(1f)
 
-            // 1a. Ambient diffused dark shadow (larger radius, softer)
-            paint.color = darkShadowColor.copy(alpha = if (isDark) 0.50f else 0.30f).toArgb()
-            paint.maskFilter = BlurMaskFilter(blurRadius * 2.2f, BlurMaskFilter.Blur.NORMAL)
-            canvas.nativeCanvas.drawRoundRect(
-                offsetDist * 1.3f,
-                offsetDist * 1.3f,
-                size.width + offsetDist * 1.3f,
-                size.height + offsetDist * 1.3f,
-                cornerPx,
-                cornerPx,
-                paint
-            )
-
-            // 1b. Direct contact dark shadow
-            paint.color = darkShadowColor.toArgb()
+            // 1. Direct contact dark shadow (compact spread contained within screen margins)
+            paint.color = darkShadowColor.copy(alpha = if (isDark) 0.85f else 0.50f).toArgb()
             paint.maskFilter = BlurMaskFilter(blurRadius, BlurMaskFilter.Blur.NORMAL)
             canvas.nativeCanvas.drawRoundRect(
                 offsetDist,
@@ -93,41 +82,41 @@ fun Modifier.neumorphicDepth(
             )
 
             // 2. Top-left light highlight (soft ambient light on top-left edge)
-            paint.color = lightShadowColor.toArgb()
-            paint.maskFilter = BlurMaskFilter(blurRadius * 1.1f, BlurMaskFilter.Blur.NORMAL)
+            paint.color = lightShadowColor.copy(alpha = if (isDark) 0.55f else 0.85f).toArgb()
+            paint.maskFilter = BlurMaskFilter(blurRadius * 0.85f, BlurMaskFilter.Blur.NORMAL)
             canvas.nativeCanvas.drawRoundRect(
-                -offsetDist * 0.85f,
-                -offsetDist * 0.85f,
-                size.width - offsetDist * 0.85f,
-                size.height - offsetDist * 0.85f,
+                -offsetDist * 0.75f,
+                -offsetDist * 0.75f,
+                size.width - offsetDist * 0.75f,
+                size.height - offsetDist * 0.75f,
                 cornerPx,
                 cornerPx,
                 paint
             )
 
-            // 3. Flat solid surface on top
+            // 3. Flat solid surface on top with exact rounded corner radius
             paint.maskFilter = null
             paint.color = backgroundColor.toArgb()
             canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, cornerPx, cornerPx, paint)
 
-            // 4. Beveled specular gradient edge stroke (light top-left, shadow bottom-right)
+            // 4. Beveled specular gradient edge stroke (matching 1.dp border width)
             val strokePaint = android.graphics.Paint().apply {
                 isAntiAlias = true
                 style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 1.5f
+                strokeWidth = 1.dp.toPx()
                 shader = android.graphics.LinearGradient(
                     0f, 0f, size.width, size.height,
                     intArrayOf(
-                        lightShadowColor.copy(alpha = if (isDark) 0.55f else 0.80f).toArgb(),
-                        lightShadowColor.copy(alpha = if (isDark) 0.20f else 0.35f).toArgb(),
+                        lightShadowColor.copy(alpha = if (isDark) 0.50f else 0.75f).toArgb(),
+                        lightShadowColor.copy(alpha = if (isDark) 0.15f else 0.30f).toArgb(),
                         android.graphics.Color.TRANSPARENT,
-                        darkShadowColor.copy(alpha = if (isDark) 0.70f else 0.40f).toArgb()
+                        darkShadowColor.copy(alpha = if (isDark) 0.60f else 0.35f).toArgb()
                     ),
                     floatArrayOf(0f, 0.25f, 0.70f, 1f),
                     android.graphics.Shader.TileMode.CLAMP
                 )
             }
-            canvas.nativeCanvas.drawRoundRect(0.75f, 0.75f, size.width - 0.75f, size.height - 0.75f, cornerPx, cornerPx, strokePaint)
+            canvas.nativeCanvas.drawRoundRect(0.5f, 0.5f, size.width - 0.5f, size.height - 0.5f, cornerPx, cornerPx, strokePaint)
         } else {
             // Concave / Inset effect: Solid base + inner shadow appearance
             paint.clearShadowLayer()
@@ -151,13 +140,14 @@ fun Modifier.neumorphicDepth(
 fun NeumorphicCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 20.dp,
-    elevation: Dp = 5.dp,
+    elevation: Dp = 4.dp,
     isDark: Boolean = LiquidGlassTheme.colors.isDark,
     isPressed: Boolean = false,
     backgroundColor: Color = if (isDark) NeuDarkCard else NeuLightCard,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val shape = RoundedCornerShape(cornerRadius)
     val clickModifier = if (onClick != null) {
         Modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
@@ -175,7 +165,26 @@ fun NeumorphicCard(
                 isPressed = isPressed,
                 backgroundColor = backgroundColor
             )
-            .then(clickModifier),
-        content = content
-    )
+            .then(clickModifier)
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(shape)
+                .border(
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (isDark) NeuDarkHighlight.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.60f)
+                    ),
+                    shape = shape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+        ) {
+            content()
+        }
+    }
 }

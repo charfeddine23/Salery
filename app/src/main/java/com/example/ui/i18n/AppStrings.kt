@@ -189,6 +189,13 @@ interface StringsBundle {
     val searchPlaceholder: String
     val allFilter: String
 
+    val savingsWalletTitle: String
+    val savingsWalletDesc: String
+    val transferToSavings: String
+    val withdrawFromSavings: String
+    val spendFromSavings: String
+    val paidFromSavingsBadge: String
+
     fun categoryName(cat: String): String
 }
 
@@ -363,6 +370,13 @@ object EnglishStrings : StringsBundle {
     override val searchPlaceholder = "Search transactions or notes..."
     override val allFilter = "All"
 
+    override val savingsWalletTitle = "Savings Wallet"
+    override val savingsWalletDesc = "Protected savings segregated from spendable balance"
+    override val transferToSavings = "Deposit to Savings"
+    override val withdrawFromSavings = "Withdraw to Available"
+    override val spendFromSavings = "Spend from Savings"
+    override val paidFromSavingsBadge = "Savings Wallet"
+
     override fun categoryName(cat: String): String = cat
 }
 
@@ -535,6 +549,13 @@ object ArabicStrings : StringsBundle {
     override val tapToScrub = "اسحب فوق المخطط لمعاينة الرصيد في تواريخ محددة"
     override val searchPlaceholder = "البحث في المعاملات أو الملاحظات..."
     override val allFilter = "الكل"
+
+    override val savingsWalletTitle = "محفظة الادخار"
+    override val savingsWalletDesc = "مدخراتك المحمية بمعزل عن الرصيد المتاح للصرف اليومي"
+    override val transferToSavings = "تحويل للادخار"
+    override val withdrawFromSavings = "سحب للمتاح"
+    override val spendFromSavings = "صرف من الادخار"
+    override val paidFromSavingsBadge = "محفظة الادخار"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

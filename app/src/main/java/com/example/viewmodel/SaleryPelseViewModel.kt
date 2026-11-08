@@ -31,6 +31,8 @@ import com.example.notification.DebtReminderScheduler
 
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
+    val grossBalance: Double = 0.0,
+    val savingsBalance: Double = 0.0,
     val monthlyIncome: Double = 0.0,
     val monthlyExpenses: Double = 0.0,
     val pendingDebtsOwedByMe: Double = 0.0,
@@ -50,11 +52,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     val allDebts: StateFlow<List<DebtEntity>> = dao.getAllDebts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Financial calculations
+    // Financial calculations: Total Balance dynamically reflects all Incomes and Expenses
     val financialSummary: StateFlow<FinancialSummary> = combine(
         allTransactions,
-        allDebts
-    ) { transactions, debts ->
+        allDebts,
+        settings
+    ) { transactions, debts, userSettings ->
         val calendar = Calendar.getInstance()
         val currentYear = calendar.get(Calendar.YEAR)
         val currentMonth = calendar.get(Calendar.MONTH)
@@ -88,8 +91,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
 
+        val savings = userSettings.savingsWalletBalance
+        // Available spendable balance: Total Income minus Total Expenses minus Savings Wallet
+        val available = totalInc - totalExp - savings
+        val gross = totalInc - totalExp
+
         FinancialSummary(
-            totalBalance = totalInc - totalExp,
+            totalBalance = available,
+            grossBalance = gross,
+            savingsBalance = savings,
             monthlyIncome = monthInc,
             monthlyExpenses = monthExp,
             pendingDebtsOwedByMe = owedByMe,
@@ -569,40 +579,114 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         prefsManager.updateSettings { it.copy(stealthMode = enabled) }
     }
 
-    // Quick Vault / Safe Pocket Actions
-    fun lockToVault(amount: Double) {
+    // Savings Wallet (محفظة الادخار) Actions
+    fun transferToSavings(amount: Double) {
         if (amount <= 0.0) return
+        val currentAvailable = financialSummary.value.totalBalance
+        if (amount > currentAvailable && currentAvailable > 0) {
+            viewModelScope.launch {
+                val isAr = settings.value.language == "ar"
+                _toastEvent.emit(
+                    if (isAr) "تنبيه: المبلغ المراد تحويله أكبر من الرصيد المتاح (${formatDzdAmount(currentAvailable)} دج)"
+                    else "Notice: Amount exceeds available balance (${formatDzdAmount(currentAvailable)} DZD)"
+                )
+            }
+        }
         prefsManager.updateSettings { current ->
-            current.copy(vaultLockedAmount = current.vaultLockedAmount + amount)
+            val updated = current.savingsWalletBalance + amount
+            current.copy(
+                savingsWalletBalance = updated,
+                vaultLockedAmount = updated
+            )
         }
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             _toastEvent.emit(
-                if (isAr) "تم حجز ${formatDzdAmount(amount)} دج في الجيب الآمن بنجاح 🔒"
-                else "Safe Pocket: ${formatDzdAmount(amount)} DZD locked securely in vault 🔒"
+                if (isAr) "تم تحويل ${formatDzdAmount(amount)} دج إلى محفظة الادخار بنجاح 💰"
+                else "Savings Wallet: ${formatDzdAmount(amount)} DZD transferred to savings 💰"
             )
         }
     }
 
-    fun unlockFromVault(amount: Double) {
+    fun withdrawFromSavings(amount: Double) {
         if (amount <= 0.0) return
         prefsManager.updateSettings { current ->
-            val remaining = (current.vaultLockedAmount - amount).coerceAtLeast(0.0)
-            current.copy(vaultLockedAmount = remaining)
+            val updated = (current.savingsWalletBalance - amount).coerceAtLeast(0.0)
+            current.copy(
+                savingsWalletBalance = updated,
+                vaultLockedAmount = updated
+            )
         }
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             _toastEvent.emit(
-                if (isAr) "تم سحب ${formatDzdAmount(amount)} دج إلى الرصيد المتاح 🔓"
-                else "Safe Pocket: ${formatDzdAmount(amount)} DZD released to spendable balance 🔓"
+                if (isAr) "تم استرجاع ${formatDzdAmount(amount)} دج إلى الرصيد المتاح بنجاح 🔄"
+                else "Savings Wallet: ${formatDzdAmount(amount)} DZD withdrawn back to available balance 🔄"
             )
         }
     }
 
+    fun spendFromSavings(amount: Double, title: String, category: String, note: String) {
+        if (amount <= 0.0) return
+        val currentSavings = settings.value.savingsWalletBalance
+        if (amount > currentSavings) {
+            viewModelScope.launch {
+                val isAr = settings.value.language == "ar"
+                _toastEvent.emit(
+                    if (isAr) "رصيد محفظة الادخار غير كافٍ (${formatDzdAmount(currentSavings)} دج)"
+                    else "Insufficient savings wallet balance (${formatDzdAmount(currentSavings)} DZD)"
+                )
+            }
+            return
+        }
+
+        // 1. Deduct directly from savings balance
+        prefsManager.updateSettings { current ->
+            val updated = (current.savingsWalletBalance - amount).coerceAtLeast(0.0)
+            current.copy(
+                savingsWalletBalance = updated,
+                vaultLockedAmount = updated
+            )
+        }
+
+        // 2. Automatically record in Expenses page (صفحة المصاريف)
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val savingsTagNote = if (isAr) {
+                if (note.isNotBlank()) "تم الصرف من محفظة الادخار • $note" else "تم الصرف مباشرة من محفظة الادخار"
+            } else {
+                if (note.isNotBlank()) "Paid from Savings Wallet • $note" else "Paid directly from Savings Wallet"
+            }
+
+            dao.insertTransaction(
+                TransactionEntity(
+                    type = TransactionType.EXPENSE,
+                    amount = amount,
+                    category = category.ifBlank { "savings_expense" },
+                    title = title.ifBlank { if (isAr) "مصروف من محفظة الادخار" else "Savings Expense" },
+                    note = savingsTagNote,
+                    dateMillis = System.currentTimeMillis(),
+                    isPaidFromSavings = true
+                )
+            )
+
+            _toastEvent.emit(
+                if (isAr) "تم تسجيل المصروف بنجاح (${formatDzdAmount(amount)} دج) وخصمه من محفظة الادخار 💳"
+                else "Expense of ${formatDzdAmount(amount)} DZD recorded and deducted from Savings Wallet 💳"
+            )
+        }
+    }
+
+    // Keep vault aliases for dashboard compatibility
+    fun lockToVault(amount: Double) = transferToSavings(amount)
+    fun unlockFromVault(amount: Double) = withdrawFromSavings(amount)
     fun setVaultLockedAmount(amount: Double) {
         val safe = amount.coerceAtLeast(0.0)
         prefsManager.updateSettings { current ->
-            current.copy(vaultLockedAmount = safe)
+            current.copy(
+                savingsWalletBalance = safe,
+                vaultLockedAmount = safe
+            )
         }
     }
 

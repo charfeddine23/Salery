@@ -18,5 +18,6 @@ data class TransactionEntity(
     val title: String,
     val note: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
-    val isSalaryCredit: Boolean = false
+    val isSalaryCredit: Boolean = false,
+    val isPaidFromSavings: Boolean = false
 )

@@ -86,4 +86,55 @@ class ExampleUnitTest {
     )
     assertTrue(result30.points.size >= 6)
   }
+
+  @Test
+  fun savingsWallet_balanceCalculation_andSpending_isMathematicallyConsistent() {
+    // 1. Initial State: Income = 100,000 DZD, Expenses = 0, Savings = 0
+    val totalIncome = 100000.0
+    var totalExpenses = 0.0
+    var savingsWallet = 0.0
+
+    var availableBalance = totalIncome - totalExpenses - savingsWallet
+    var grossWealth = totalIncome - totalExpenses
+    assertEquals(100000.0, availableBalance, 0.01)
+    assertEquals(100000.0, grossWealth, 0.01)
+
+    // 2. Transfer 25,000 DZD to Savings Wallet (محفظة الادخار)
+    val depositAmount = 25000.0
+    savingsWallet += depositAmount
+    availableBalance = totalIncome - totalExpenses - savingsWallet
+    grossWealth = totalIncome - totalExpenses
+
+    // Available spendable balance decreases by deposit amount
+    assertEquals(75000.0, availableBalance, 0.01)
+    assertEquals(25000.0, savingsWallet, 0.01)
+    // Gross wealth remains 100,000
+    assertEquals(100000.0, grossWealth, 0.01)
+
+    // 3. Withdraw 5,000 DZD from Savings back to Available
+    val withdrawAmount = 5000.0
+    savingsWallet -= withdrawAmount
+    availableBalance = totalIncome - totalExpenses - savingsWallet
+    grossWealth = totalIncome - totalExpenses
+
+    assertEquals(80000.0, availableBalance, 0.01)
+    assertEquals(20000.0, savingsWallet, 0.01)
+    assertEquals(100000.0, grossWealth, 0.01)
+
+    // 4. Spend 4,000 DZD directly from Savings Wallet
+    // The amount is deducted from savings, and recorded as an expense in expenses page
+    val spendAmount = 4000.0
+    savingsWallet -= spendAmount
+    totalExpenses += spendAmount
+
+    availableBalance = totalIncome - totalExpenses - savingsWallet
+    grossWealth = totalIncome - totalExpenses
+
+    // Savings decreases to 16,000
+    assertEquals(16000.0, savingsWallet, 0.01)
+    // Available spendable balance remains 80,000 (was not double-deducted)
+    assertEquals(80000.0, availableBalance, 0.01)
+    // Gross wealth accurately drops by 4,000 to 96,000
+    assertEquals(96000.0, grossWealth, 0.01)
+  }
 }

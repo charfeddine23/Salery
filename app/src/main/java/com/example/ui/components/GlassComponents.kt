@@ -41,10 +41,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.NeuDarkHighlight
 import com.example.ui.theme.neumorphicDepth
 
 @Composable
@@ -128,7 +130,8 @@ fun GlassBackground(
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(22.dp),
+    shape: Shape = RoundedCornerShape(20.dp),
+    cornerRadius: Dp? = null,
     borderColor: Color = LiquidGlassTheme.colors.glassBorder,
     backgroundColor: Color = LiquidGlassTheme.colors.glassCard,
     borderWidth: Dp = 1.dp,
@@ -144,18 +147,46 @@ fun GlassCard(
         )
     } else Modifier
 
+    val density = LocalDensity.current
+    val effectiveCornerRadius = cornerRadius ?: if (shape is RoundedCornerShape) {
+        with(density) { shape.topStart.toPx(androidx.compose.ui.geometry.Size.Unspecified, this).toDp() }
+    } else {
+        20.dp
+    }
+
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
                 .neumorphicDepth(
-                    cornerRadius = 22.dp,
-                    elevation = 6.dp,
+                    cornerRadius = effectiveCornerRadius,
+                    elevation = 4.dp,
                     isDark = colors.isDark,
                     backgroundColor = backgroundColor
                 )
-                .then(clickModifier),
-            content = content
-        )
+                .then(clickModifier)
+        ) {
+            // Inner crisp border matching stroke width and corner curvature
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .border(
+                        border = BorderStroke(
+                            width = borderWidth,
+                            color = if (colors.isDark) NeuDarkHighlight.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.60f)
+                        ),
+                        shape = shape
+                    )
+            )
+            // Fully clipped content container (uniform smooth clipping on all 4 corners)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+            ) {
+                content()
+            }
+        }
     } else {
         Box(
             modifier = modifier

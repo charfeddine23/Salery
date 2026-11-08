@@ -95,15 +95,15 @@ fun TotalBalanceVaultCard(
     val isArabic = userSettings.language == "ar"
     val isStealth = LocalStealthMode.current
 
-    val lockedAmount = userSettings.vaultLockedAmount
-    val grossBalance = summary.totalBalance
-    val spendableBalance = (grossBalance - lockedAmount).coerceAtLeast(0.0)
+    val lockedAmount = summary.savingsBalance
+    val grossBalance = summary.grossBalance
+    val spendableBalance = summary.totalBalance
 
     // Calculate Daily Burn Rate & Days Remaining
     val cal = Calendar.getInstance()
     val daysElapsed = cal.get(Calendar.DAY_OF_MONTH).coerceAtLeast(1)
     val dailyBurnRate = if (summary.monthlyExpenses > 0) summary.monthlyExpenses / daysElapsed else 0.0
-    val daysRemaining = if (dailyBurnRate > 0) (spendableBalance / dailyBurnRate).toInt() else 999
+    val daysRemaining = if (dailyBurnRate > 0) (spendableBalance.coerceAtLeast(0.0) / dailyBurnRate).toInt() else 999
 
     // Cash flow ratio calculations for ambient dynamic glow
     // Surplus: monthlyIncome > monthlyExpenses * 1.25
@@ -140,29 +140,27 @@ fun TotalBalanceVaultCard(
     var showCustomDepositDialog by remember { mutableStateOf(false) }
     var customDepositInput by remember { mutableStateOf("") }
 
-    Box(
+    // Main Total Balance Card (Exact curvature, stroke, and style as Smart Salary Scheduler)
+    GlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .animateContentSize()
+            .animateContentSize(),
+        backgroundColor = colors.glassCard,
+        shape = RoundedCornerShape(20.dp),
+        cornerRadius = 20.dp
     ) {
-        // 3. Dynamic Cash Flow Ambient Glow (Rendered behind the card in Liquid Glass mode only)
+        // Subtle Dynamic Cash Flow Ambient Glow (Rendered safely inside the clipped card bounds)
         if (!colors.isNeumorphic) {
             Canvas(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        alpha = glowPulse
-                        scaleX = 1.05f
-                        scaleY = 1.05f
-                    }
+                modifier = Modifier.matchParentSize()
             ) {
-                val centerOffset = Offset(size.width / 2f, size.height / 2f)
-                val glowRadius = size.maxDimension * 0.65f
+                val centerOffset = Offset(size.width * 0.5f, size.height * 0.35f)
+                val glowRadius = size.maxDimension * 0.55f
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            glowColor1.copy(alpha = 0.40f),
-                            glowColor2.copy(alpha = 0.22f),
+                            glowColor1.copy(alpha = 0.22f * glowPulse),
+                            glowColor2.copy(alpha = 0.12f * glowPulse),
                             Color.Transparent
                         ),
                         center = centerOffset,
@@ -174,15 +172,9 @@ fun TotalBalanceVaultCard(
             }
         }
 
-        // Main Total Balance Card
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = colors.glassCard,
-            shape = RoundedCornerShape(22.dp)
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
                 // Top Header Row with Cash Flow Status Badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -202,7 +194,7 @@ fun TotalBalanceVaultCard(
                         )
                         if (lockedAmount > 0) {
                             Text(
-                                text = if (isArabic) "مستثنى منه مدخرات الجيب الآمن" else "Safe Pocket reserve excluded",
+                                text = if (isArabic) "مستثنى منه رصيد محفظة الادخار" else "Savings wallet reserve excluded",
                                 color = EmeraldNeon,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -260,14 +252,14 @@ fun TotalBalanceVaultCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = Icons.Default.Savings,
                             contentDescription = null,
                             tint = AmberNeon,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = (if (isArabic) "إجمالي المحفظة: " else "Gross Vault Net Worth: ") +
+                            text = (if (isArabic) "إجمالي الثروة (المتاح + الادخار): " else "Gross Wealth (Available + Savings): ") +
                                     formatDzd(grossBalance, strings.currencyCode, isStealth),
                             color = colors.textMuted,
                             fontSize = 11.sp,
@@ -276,16 +268,16 @@ fun TotalBalanceVaultCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // 1. Burn Rate & Days Remaining Indicator Widget
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(colors.glassSurface)
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
-                        .padding(14.dp)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                        .padding(12.dp)
                 ) {
                     Column {
                         Row(
@@ -388,7 +380,7 @@ fun TotalBalanceVaultCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Monthly Income vs Expense Mini Stats
                 Row(
@@ -399,9 +391,9 @@ fun TotalBalanceVaultCard(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(colors.glassSurface)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
                             .padding(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -440,9 +432,9 @@ fun TotalBalanceVaultCard(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(colors.glassSurface)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
                             .padding(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -478,23 +470,23 @@ fun TotalBalanceVaultCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // 2. Quick Vault / Reserve Pocket Section (الجيب الآمن)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(
                             if (lockedAmount > 0) AmberNeon.copy(alpha = 0.10f) else colors.glassSurface
                         )
                         .border(
                             1.dp,
                             if (lockedAmount > 0) AmberNeon.copy(alpha = 0.45f) else colors.glassBorderSubtle,
-                            RoundedCornerShape(18.dp)
+                            RoundedCornerShape(14.dp)
                         )
                         .clickable { isVaultExpanded = !isVaultExpanded }
-                        .padding(14.dp)
+                        .padding(12.dp)
                 ) {
                     Column {
                         Row(
@@ -522,17 +514,17 @@ fun TotalBalanceVaultCard(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = if (isArabic) "الجيب الآمن / الخزنة السريعة" else "Safe Pocket / Quick Vault",
+                                        text = if (isArabic) "محفظة الادخار / الجيب الآمن" else "Savings Wallet / Safe Pocket",
                                         color = colors.textPrimary,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = if (lockedAmount > 0) {
-                                            (if (isArabic) "محجوز عن الصرف اليومي: " else "Locked from spending: ") +
+                                            (if (isArabic) "رصيد الادخار المحمي: " else "Protected Savings: ") +
                                                     formatDzd(lockedAmount, strings.currencyCode, isStealth)
                                         } else {
-                                            if (isArabic) "احجز جزءاً من مدخراتك لمنع الصرف غير المقصود" else "Lock savings to prevent accidental spending"
+                                            if (isArabic) "حول جزءاً من رصيدك للادخار لمنع الصرف غير المقصود" else "Transfer funds to savings to segregate from daily spending"
                                         },
                                         color = if (lockedAmount > 0) AmberNeon else colors.textMuted,
                                         fontSize = 11.sp,
@@ -661,7 +653,6 @@ fun TotalBalanceVaultCard(
                 }
             }
         }
-    }
 
     // Custom Amount Deposit Modal
     if (showCustomDepositDialog) {

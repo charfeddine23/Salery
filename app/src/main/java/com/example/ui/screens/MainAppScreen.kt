@@ -347,8 +347,11 @@ fun MainAppScreen(
                                     debts = debts,
                                     userSettings = userSettings,
                                     onBackClick = { currentRoute = "dashboard" },
-                                    onLockToVault = { viewModel.lockToVault(it) },
-                                    onUnlockFromVault = { viewModel.unlockFromVault(it) }
+                                    onTransferToSavings = { viewModel.transferToSavings(it) },
+                                    onWithdrawFromSavings = { viewModel.withdrawFromSavings(it) },
+                                    onSpendFromSavings = { amount, title, category, note ->
+                                        viewModel.spendFromSavings(amount, title, category, note)
+                                    }
                                 )
                             }
                         }

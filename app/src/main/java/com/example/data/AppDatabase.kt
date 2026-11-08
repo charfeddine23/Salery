@@ -7,6 +7,9 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
 class Converters {
     @TypeConverter
     fun fromTransactionType(value: TransactionType): String = value.name
@@ -25,9 +28,15 @@ class Converters {
     }.getOrDefault(DebtType.OWED_BY_ME)
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE transactions ADD COLUMN isPaidFromSavings INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [TransactionEntity::class, DebtEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -45,6 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "salerypelse_database"
                 )
+                    .addMigrations(MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

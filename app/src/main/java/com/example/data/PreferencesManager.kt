@@ -21,7 +21,8 @@ data class UserSettings(
     val googleDriveConnected: Boolean = true,
     val lastBackupTimestamp: Long = 0L,
     val stealthMode: Boolean = false,
-    val vaultLockedAmount: Double = 0.0
+    val vaultLockedAmount: Double = 0.0,
+    val savingsWalletBalance: Double = 0.0
 )
 
 class PreferencesManager(context: Context) {
@@ -32,6 +33,7 @@ class PreferencesManager(context: Context) {
     val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
     private fun loadSettings(): UserSettings {
+        val savedSavings = prefs.getFloat("savings_wallet_balance", prefs.getFloat("vault_locked_amount", 0.0f)).toDouble()
         return UserSettings(
             salaryAmount = prefs.getFloat("salary_amount", 85000.0f).toDouble(),
             salaryPayday = prefs.getInt("salary_payday", 25),
@@ -47,29 +49,36 @@ class PreferencesManager(context: Context) {
             googleDriveConnected = prefs.getBoolean("gdrive_connected", true),
             lastBackupTimestamp = prefs.getLong("last_backup_time", 0L),
             stealthMode = prefs.getBoolean("stealth_mode", false),
-            vaultLockedAmount = prefs.getFloat("vault_locked_amount", 0.0f).toDouble()
+            vaultLockedAmount = savedSavings,
+            savingsWalletBalance = savedSavings
         )
     }
 
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
         val updated = transform(_settingsFlow.value)
+        val finalUpdated = if (updated.savingsWalletBalance != updated.vaultLockedAmount) {
+            updated.copy(vaultLockedAmount = updated.savingsWalletBalance)
+        } else {
+            updated
+        }
         prefs.edit()
-            .putFloat("salary_amount", updated.salaryAmount.toFloat())
-            .putInt("salary_payday", updated.salaryPayday)
-            .putString("salary_employer", updated.salaryEmployer)
-            .putBoolean("salary_auto_credit", updated.salaryAutoCredit)
-            .putString("last_credited_month", updated.lastCreditedMonthYear)
-            .putBoolean("pattern_lock_enabled", updated.patternLockEnabled)
-            .putString("pattern_lock_hash", updated.patternLockHash)
-            .putBoolean("biometric_enabled", updated.biometricEnabled)
-            .putString("app_language", updated.language)
-            .putString("theme_mode", updated.themeMode)
-            .putString("design_style", updated.designStyle)
-            .putBoolean("gdrive_connected", updated.googleDriveConnected)
-            .putLong("last_backup_time", updated.lastBackupTimestamp)
-            .putBoolean("stealth_mode", updated.stealthMode)
-            .putFloat("vault_locked_amount", updated.vaultLockedAmount.toFloat())
+            .putFloat("salary_amount", finalUpdated.salaryAmount.toFloat())
+            .putInt("salary_payday", finalUpdated.salaryPayday)
+            .putString("salary_employer", finalUpdated.salaryEmployer)
+            .putBoolean("salary_auto_credit", finalUpdated.salaryAutoCredit)
+            .putString("last_credited_month", finalUpdated.lastCreditedMonthYear)
+            .putBoolean("pattern_lock_enabled", finalUpdated.patternLockEnabled)
+            .putString("pattern_lock_hash", finalUpdated.patternLockHash)
+            .putBoolean("biometric_enabled", finalUpdated.biometricEnabled)
+            .putString("app_language", finalUpdated.language)
+            .putString("theme_mode", finalUpdated.themeMode)
+            .putString("design_style", finalUpdated.designStyle)
+            .putBoolean("gdrive_connected", finalUpdated.googleDriveConnected)
+            .putLong("last_backup_time", finalUpdated.lastBackupTimestamp)
+            .putBoolean("stealth_mode", finalUpdated.stealthMode)
+            .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
+            .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
             .apply()
-        _settingsFlow.value = updated
+        _settingsFlow.value = finalUpdated
     }
 }
