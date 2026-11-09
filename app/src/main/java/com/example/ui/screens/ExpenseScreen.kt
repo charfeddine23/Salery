@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.ui.components.GlassButton
@@ -40,7 +41,6 @@ import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.LiquidGlassTheme
-import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -59,14 +59,19 @@ fun ExpenseScreen(
     val expenseList = transactions.filter { it.type == TransactionType.EXPENSE }
     val totalExpense = expenseList.sumOf { it.amount }
 
+    val availableCategories = remember {
+        ExpenseCategories.getExpenseCategories().map { it.id }
+    }
+
     val filteredList = expenseList.filter { item ->
         val matchesSearch = item.title.contains(searchQuery, ignoreCase = true) ||
                 item.note.contains(searchQuery, ignoreCase = true)
-        val matchesCategory = selectedCategoryFilter == null || item.category.equals(selectedCategoryFilter, ignoreCase = true)
+        val normalizedItemCat = ExpenseCategories.findCategory(item.category).id
+        val matchesCategory = selectedCategoryFilter == null ||
+                item.category.equals(selectedCategoryFilter, ignoreCase = true) ||
+                normalizedItemCat.equals(selectedCategoryFilter, ignoreCase = true)
         matchesSearch && matchesCategory
     }
-
-    val availableCategories = listOf("internet", "shopping", "bills", "transfer", "withdrawal", "food", "transport", "health", "entertainment", "other")
 
     LazyColumn(
         modifier = modifier
@@ -153,7 +158,9 @@ fun ExpenseScreen(
                     GlassPill(
                         text = strings.categoryName(cat),
                         isSelected = selectedCategoryFilter == cat,
-                        onClick = { selectedCategoryFilter = cat }
+                        onClick = {
+                            selectedCategoryFilter = if (selectedCategoryFilter == cat) null else cat
+                        }
                     )
                 }
             }

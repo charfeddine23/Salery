@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DebtEntity
+import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
@@ -341,18 +342,7 @@ fun TransactionRowItem(
     val amountColor = if (isIncome) EmeraldNeon else RoseNeon
     val prefix = if (isIncome) "+" else "-"
 
-    val icon: ImageVector = when (transaction.category.lowercase()) {
-        "salary" -> Icons.Default.Paid
-        "freelance" -> Icons.Default.Work
-        "internet", "telecom" -> Icons.Default.Wifi
-        "transfer" -> Icons.Default.Send
-        "withdrawal" -> Icons.Default.LocalAtm
-        "food" -> Icons.Default.Fastfood
-        "shopping" -> Icons.Default.ShoppingCart
-        "bills" -> Icons.Default.Receipt
-        "debt_payment", "debt_collection" -> Icons.Default.CreditCard
-        else -> Icons.Default.AccountBalanceWallet
-    }
+    val icon: ImageVector = ExpenseCategories.getIcon(transaction.category)
 
     GlassCard(
         modifier = Modifier.fillMaxWidth(),

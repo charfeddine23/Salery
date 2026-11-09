@@ -3,16 +3,20 @@ package com.example
 import com.example.ai.FinancialInsightsEngine
 import com.example.analytics.BalanceProjectionEngine
 import com.example.analytics.ForecastPeriod
+import com.example.data.ExpenseCategories
 import com.example.data.DebtType
 import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.ui.components.toPatternHash
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.i18n.EnglishStrings
 import com.example.ui.i18n.formatDzdAmount
 import com.example.viewmodel.FinancialSummary
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -136,5 +140,47 @@ class ExampleUnitTest {
     assertEquals(80000.0, availableBalance, 0.01)
     // Gross wealth accurately drops by 4,000 to 96,000
     assertEquals(96000.0, grossWealth, 0.01)
+  }
+
+  @Test
+  fun predefinedCategories_containsFoodTransportUtilities_andResolvesAccurately() {
+    val expenseCategories = ExpenseCategories.getExpenseCategories()
+    assertTrue(expenseCategories.isNotEmpty())
+
+    val categoryIds = expenseCategories.map { it.id }
+    assertTrue("Should contain food category", categoryIds.contains("food"))
+    assertTrue("Should contain transport category", categoryIds.contains("transport"))
+    assertTrue("Should contain utilities category", categoryIds.contains("utilities"))
+    assertTrue("Should contain shopping category", categoryIds.contains("shopping"))
+    assertTrue("Should contain health category", categoryIds.contains("health"))
+
+    // Test resolution by id and keywords
+    val foodCat = ExpenseCategories.findCategory("food")
+    assertEquals("food", foodCat.id)
+    assertNotNull(foodCat.icon)
+
+    val transportCat = ExpenseCategories.findCategory("transport")
+    assertEquals("transport", transportCat.id)
+    assertNotNull(transportCat.icon)
+
+    val utilitiesCat = ExpenseCategories.findCategory("utilities")
+    assertEquals("utilities", utilitiesCat.id)
+    assertNotNull(utilitiesCat.icon)
+
+    // Keyword fallback checks
+    assertEquals("food", ExpenseCategories.findCategory("طعام").id)
+    assertEquals("transport", ExpenseCategories.findCategory("نقل").id)
+    assertEquals("utilities", ExpenseCategories.findCategory("bills").id)
+  }
+
+  @Test
+  fun categoryTranslations_matchEnglishAndArabic() {
+    assertEquals("Food & Dining", EnglishStrings.categoryName("food"))
+    assertEquals("Transport", EnglishStrings.categoryName("transport"))
+    assertEquals("Utilities", EnglishStrings.categoryName("utilities"))
+
+    assertEquals("طعام ومطاعم", ArabicStrings.categoryName("food"))
+    assertEquals("نقل ومواصلات", ArabicStrings.categoryName("transport"))
+    assertEquals("فواتير وخدمات", ArabicStrings.categoryName("utilities"))
   }
 }

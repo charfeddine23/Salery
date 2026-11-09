@@ -377,7 +377,32 @@ object EnglishStrings : StringsBundle {
     override val spendFromSavings = "Spend from Savings"
     override val paidFromSavingsBadge = "Savings Wallet"
 
-    override fun categoryName(cat: String): String = cat
+    override fun categoryName(cat: String): String {
+        return when (cat.lowercase()) {
+            "food", "food & dining" -> "Food & Dining"
+            "transport" -> "Transport"
+            "utilities", "bills", "bills & utilities" -> "Utilities"
+            "shopping" -> "Shopping"
+            "housing", "rent" -> "Housing & Rent"
+            "health", "healthcare" -> "Healthcare"
+            "entertainment" -> "Entertainment"
+            "education" -> "Education"
+            "internet", "telecom" -> "Internet & Phone"
+            "personal_care" -> "Personal Care"
+            "travel" -> "Travel & Trips"
+            "savings_expense", "savings" -> "Savings Reserve"
+            "salary" -> "Salary"
+            "freelance" -> "Freelance"
+            "investment" -> "Investment"
+            "transfer" -> "Transfer"
+            "withdrawal" -> "Withdrawal"
+            "gift" -> "Gift"
+            "debt_payment" -> "Debt Payment"
+            "debt_collection" -> "Debt Collection"
+            "other", "other_income" -> "Other"
+            else -> cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        }
+    }
 }
 
 object ArabicStrings : StringsBundle {
@@ -567,14 +592,19 @@ object ArabicStrings : StringsBundle {
             "transfer" -> "تحويل مالي"
             "withdrawal" -> "سحب نقدي"
             "food", "food & dining" -> "طعام ومطاعم"
-            "shopping" -> "تسوق"
+            "shopping" -> "تسوق ومشتريات"
             "transport" -> "نقل ومواصلات"
-            "bills", "bills & utilities" -> "فواتير وخدمات"
+            "utilities", "bills", "bills & utilities" -> "فواتير وخدمات"
+            "housing", "rent" -> "سكن وإيجار"
             "health", "healthcare" -> "صحة وعلاج"
-            "entertainment" -> "ترفيه"
-            "education" -> "تعليم"
+            "entertainment" -> "ترفيه وأنشطة"
+            "education" -> "تعليم ودراسة"
+            "personal_care" -> "عناية شخصية"
+            "travel" -> "سفر ورحلات"
+            "savings_expense", "savings" -> "محفظة الادخار"
             "debt_payment" -> "سداد دين"
             "debt_collection" -> "تحصيل دين"
+            "other", "other_income" -> "أخرى / متنوعة"
             else -> cat
         }
     }

@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.ai.FinancialInsightsEngine
 import com.example.data.DebtEntity
+import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.UserSettings
 import com.example.ui.components.BalanceProjectionChart
@@ -1208,7 +1209,7 @@ private fun SpendFromSavingsDialog(
     var categorySelected by remember { mutableStateOf("shopping") }
     var noteInput by remember { mutableStateOf("") }
 
-    val categories = listOf("shopping", "bills", "health", "food", "transport", "other")
+    val categories = remember { ExpenseCategories.getExpenseCategories() }
 
     Dialog(onDismissRequest = onDismiss) {
         GlassCard(
@@ -1289,18 +1290,30 @@ private fun SpendFromSavingsDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Category selector
-                Text(
-                    text = if (isArabic) "التصنيف:" else "Category:",
-                    color = colors.textSecondary,
-                    fontSize = 11.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isArabic) "التصنيف:" else "Category:",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = strings.categoryName(categorySelected),
+                        color = RoseNeon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(categories) { cat ->
-                        val isSelected = cat == categorySelected
+                        val isSelected = cat.id == categorySelected
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
@@ -1310,15 +1323,30 @@ private fun SpendFromSavingsDialog(
                                     if (isSelected) RoseNeon else colors.glassBorderSubtle,
                                     RoundedCornerShape(10.dp)
                                 )
-                                .clickable { categorySelected = cat }
+                                .clickable {
+                                    val prev = strings.categoryName(categorySelected)
+                                    categorySelected = cat.id
+                                    if (titleInput.isBlank() || titleInput == prev) {
+                                        titleInput = strings.categoryName(cat.id)
+                                    }
+                                }
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text(
-                                text = strings.categoryName(cat),
-                                color = if (isSelected) RoseNeon else colors.textPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = cat.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) RoseNeon else colors.textPrimary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = strings.categoryName(cat.id),
+                                    color = if (isSelected) RoseNeon else colors.textPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
