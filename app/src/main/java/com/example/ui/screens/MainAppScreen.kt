@@ -223,7 +223,7 @@ fun MainAppScreen(
                                     "income" -> activeStrings.navIncome
                                     "expenses" -> activeStrings.navExpenses
                                     "debts" -> activeStrings.navDebts
-                                    "insights" -> if (isArabic) "التحليل المالي الذكي" else "Financial Insights"
+                                    "insights" -> if (isArabic) "الادخار" else "Savings"
                                     else -> APP_NAME
                                 },
                                 onMenuClick = {
