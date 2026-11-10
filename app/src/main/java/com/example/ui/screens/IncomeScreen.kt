@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -30,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.ui.components.GlassButton
@@ -38,9 +39,13 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
 
 @Composable
 fun IncomeScreen(
@@ -51,6 +56,9 @@ fun IncomeScreen(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
@@ -67,120 +75,260 @@ fun IncomeScreen(
 
     val availableCategories = listOf("salary", "freelance", "investment", "gift", "other")
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-
-        // Total Income Card
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard,
-                shape = RoundedCornerShape(24.dp)
+    if (layoutInfo.columns >= 2) {
+        // Adaptive 2-column layout for tablets and landscape
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            // Left Column: Total Income Hero Card + Category Filters
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = strings.monthlyIncome,
-                        color = colors.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = formatDzd(totalIncome, strings.currencyCode),
-                        color = EmeraldNeon,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    GlassButton(
-                        text = strings.addIncome,
-                        icon = Icons.Default.Add,
-                        containerColor = EmeraldNeon,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onAddIncomeClick
-                    )
-                }
-            }
-        }
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-        // Search Bar
-        item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text(strings.searchPlaceholder, color = colors.textMuted, fontSize = 13.sp) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = colors.textSecondary
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
-                    focusedBorderColor = colors.primaryNeon,
-                    unfocusedBorderColor = colors.glassBorderSubtle
-                ),
-                singleLine = true
-            )
-        }
-
-        // Category Filter Row
-        item {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
                 item {
-                    GlassPill(
-                        text = strings.allFilter,
-                        isSelected = selectedCategoryFilter == null,
-                        onClick = { selectedCategoryFilter = null }
+                    TotalIncomeHeroCard(
+                        totalIncome = totalIncome,
+                        strings = strings,
+                        dimens = dimens,
+                        typo = typo,
+                        onAddIncomeClick = onAddIncomeClick
                     )
                 }
-                items(availableCategories) { cat ->
-                    GlassPill(
-                        text = strings.categoryName(cat),
-                        isSelected = selectedCategoryFilter == cat,
-                        onClick = { selectedCategoryFilter = cat }
+
+                item {
+                    Text(
+                        text = strings.category,
+                        color = colors.textPrimary,
+                        fontSize = typo.titleSm,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = dimens.spacingSm)
                     )
                 }
+
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            GlassPill(
+                                text = strings.allFilter,
+                                isSelected = selectedCategoryFilter == null,
+                                onClick = { selectedCategoryFilter = null }
+                            )
+                        }
+                        items(availableCategories) { cat ->
+                            GlassPill(
+                                text = strings.categoryName(cat),
+                                isSelected = selectedCategoryFilter == cat,
+                                onClick = { selectedCategoryFilter = if (selectedCategoryFilter == cat) null else cat }
+                            )
+                        }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+
+            // Right Column: Search & Income Transactions List
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                item {
+                    IncomeSearchBar(
+                        searchQuery = searchQuery,
+                        onSearchChange = { searchQuery = it },
+                        strings = strings,
+                        dimens = dimens,
+                        typo = typo
+                    )
+                }
+
+                if (filteredList.isEmpty()) {
+                    item {
+                        LiquidEmptyStateCard(
+                            title = strings.emptyIncomeTitle,
+                            description = strings.emptyIncomeDesc,
+                            icon = Icons.Default.TrendingUp,
+                            iconColor = EmeraldNeon,
+                            actionText = strings.addFirstIncome,
+                            onActionClick = onAddIncomeClick
+                        )
+                    }
+                } else {
+                    items(filteredList, key = { it.id }) { item ->
+                        TransactionRowItem(
+                            transaction = item,
+                            currencyCode = strings.currencyCode,
+                            onDelete = { onDeleteTransaction(item) }
+                        )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
         }
+    } else {
+        // Single-column smooth vertical flow for Phones
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-        if (filteredList.isEmpty()) {
             item {
-                LiquidEmptyStateCard(
-                    title = strings.emptyIncomeTitle,
-                    description = strings.emptyIncomeDesc,
-                    icon = Icons.Default.TrendingUp,
-                    iconColor = EmeraldNeon,
-                    actionText = strings.addFirstIncome,
-                    onActionClick = onAddIncomeClick
+                TotalIncomeHeroCard(
+                    totalIncome = totalIncome,
+                    strings = strings,
+                    dimens = dimens,
+                    typo = typo,
+                    onAddIncomeClick = onAddIncomeClick
                 )
             }
-        } else {
-            items(filteredList, key = { it.id }) { item ->
-                TransactionRowItem(
-                    transaction = item,
-                    currencyCode = strings.currencyCode,
-                    onDelete = { onDeleteTransaction(item) }
-                )
-            }
-        }
 
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
+            item {
+                IncomeSearchBar(
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    strings = strings,
+                    dimens = dimens,
+                    typo = typo
+                )
+            }
+
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        GlassPill(
+                            text = strings.allFilter,
+                            isSelected = selectedCategoryFilter == null,
+                            onClick = { selectedCategoryFilter = null }
+                        )
+                    }
+                    items(availableCategories) { cat ->
+                        GlassPill(
+                            text = strings.categoryName(cat),
+                            isSelected = selectedCategoryFilter == cat,
+                            onClick = { selectedCategoryFilter = if (selectedCategoryFilter == cat) null else cat }
+                        )
+                    }
+                }
+            }
+
+            if (filteredList.isEmpty()) {
+                item {
+                    LiquidEmptyStateCard(
+                        title = strings.emptyIncomeTitle,
+                        description = strings.emptyIncomeDesc,
+                        icon = Icons.Default.TrendingUp,
+                        iconColor = EmeraldNeon,
+                        actionText = strings.addFirstIncome,
+                        onActionClick = onAddIncomeClick
+                    )
+                }
+            } else {
+                items(filteredList, key = { it.id }) { item ->
+                    TransactionRowItem(
+                        transaction = item,
+                        currencyCode = strings.currencyCode,
+                        onDelete = { onDeleteTransaction(item) }
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
         }
     }
+}
+
+@Composable
+private fun TotalIncomeHeroCard(
+    totalIncome: Double,
+    strings: StringsBundle,
+    dimens: com.example.ui.theme.AdaptiveDimens,
+    typo: com.example.ui.theme.AdaptiveTypography,
+    onAddIncomeClick: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = colors.glassCard,
+        shape = RoundedCornerShape(dimens.cornerRadiusLg)
+    ) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
+            Text(
+                text = strings.monthlyIncome,
+                color = colors.textSecondary,
+                fontSize = typo.body,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(dimens.spacingXs))
+            Text(
+                text = formatDzd(totalIncome, strings.currencyCode),
+                color = EmeraldNeon,
+                fontSize = typo.display,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Spacer(modifier = Modifier.height(dimens.spacingMd))
+            GlassButton(
+                text = strings.addIncome,
+                icon = Icons.Default.Add,
+                containerColor = EmeraldNeon,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onAddIncomeClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun IncomeSearchBar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    strings: StringsBundle,
+    dimens: com.example.ui.theme.AdaptiveDimens,
+    typo: com.example.ui.theme.AdaptiveTypography
+) {
+    val colors = LiquidGlassTheme.colors
+
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        placeholder = { Text(strings.searchPlaceholder, color = colors.textMuted, fontSize = typo.body) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = colors.textSecondary,
+                modifier = Modifier.size(dimens.iconSizeSm)
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(dimens.cornerRadiusMd),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = colors.textPrimary,
+            unfocusedTextColor = colors.textPrimary,
+            focusedBorderColor = colors.primaryNeon,
+            unfocusedBorderColor = colors.glassBorderSubtle
+        ),
+        singleLine = true
+    )
 }

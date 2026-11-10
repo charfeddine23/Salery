@@ -78,13 +78,19 @@ import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SmartBudgetAlertCard
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
 import com.example.ui.i18n.formatDzdAmount
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.NeuRoyalBlue
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
@@ -111,6 +117,9 @@ fun FinancialInsightsScreen(
 
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val isArabic = userSettings.language == "ar"
     val isStealth = LocalStealthMode.current
 
@@ -138,12 +147,12 @@ fun FinancialInsightsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = dimens.screenPaddingH, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 GlassCard(
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.size(dimens.buttonHeight),
+                    shape = RoundedCornerShape(dimens.cornerRadiusSm),
                     backgroundColor = colors.glassCard,
                     onClick = onBackClick
                 ) {
@@ -152,139 +161,175 @@ fun FinancialInsightsScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = colors.textPrimary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(dimens.iconSizeMd)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(dimens.spacingMd))
 
                 Column {
                     Text(
                         text = if (isArabic) "الادخار" else "Savings",
                         color = colors.textPrimary,
-                        fontSize = 19.sp,
+                        fontSize = typo.titleLg,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.3.sp
                     )
                     Text(
                         text = if (isArabic) "إدارة المدخرات والمحفظة الاحتياطية" else "Savings & Reserve Management",
                         color = colors.primaryNeon,
-                        fontSize = 11.5.sp,
+                        fontSize = typo.bodySm,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
+            if (layoutInfo.columns >= 2) {
+                // Adaptive 2-column layout for tablets and landscape
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = dimens.screenPaddingH),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+                ) {
+                    // Left Column: Savings Wallet & Smart Budget Alerts
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                    ) {
+                        item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-                // 1. Savings Wallet Card (محفظة الادخار) - At the top of the Savings screen
-                item {
-                    SavingsWalletCard(
-                        savingsBalance = summary.savingsBalance,
-                        availableBalance = summary.totalBalance,
-                        grossBalance = summary.grossBalance,
-                        isArabic = isArabic,
-                        isStealth = isStealth,
-                        onOpenDeposit = { showDepositDialog = true },
-                        onOpenWithdraw = { showWithdrawDialog = true },
-                        onOpenSpend = { showSpendDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // 3. Smart Budget Threshold Alerts & Local Notifications (80% Spending Cap Warning & Deficit Advice)
-                item {
-                    SmartBudgetAlertCard(
-                        transactions = transactions,
-                        isArabic = isArabic,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // 3. Main AI Financial Insights Engine Carousel / Cards
-                item {
-                    FinancialInsightsCard(
-                        insights = insights,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // 4. Future Balance Projection Chart (توقع الرصيد المستقبلي)
-                item {
-                    BalanceProjectionChart(
-                        currentBalance = summary.totalBalance,
-                        transactions = transactions,
-                        debts = debts,
-                        userSettings = userSettings,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // 5. Deep-Dive Metrics Cards
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = if (isArabic) "مؤشرات الذكاء المالي التفصيلية" else "Deep-Dive Financial Metrics",
-                            color = colors.textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-
-                        // Spending Velocity Metric
-                        InsightMetricTile(
-                            icon = Icons.Default.Speed,
-                            iconTint = CyanNeon,
-                            title = strings.spendingVelocity,
-                            value = formatDzd(summary.monthlyExpenses / 30.0, strings.currencyCode, isStealth),
-                            subtitle = if (isArabic) "متوسط الحرق اليومي لمصاريفك" else "Average daily living expenditure burn rate"
-                        )
-
-                        // Salary Runway Metric
-                        val daysToPayday = (userSettings.salaryPayday - java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)).let {
-                            if (it < 0) it + 30 else it
+                        item {
+                            SavingsWalletCard(
+                                savingsBalance = summary.savingsBalance,
+                                availableBalance = summary.totalBalance,
+                                grossBalance = summary.grossBalance,
+                                isArabic = isArabic,
+                                isStealth = isStealth,
+                                onOpenDeposit = { showDepositDialog = true },
+                                onOpenWithdraw = { showWithdrawDialog = true },
+                                onOpenSpend = { showSpendDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                        InsightMetricTile(
-                            icon = Icons.Default.Schedule,
-                            iconTint = EmeraldNeon,
-                            title = strings.salaryRunway,
-                            value = if (isArabic) "$daysToPayday يوماً متبقية" else "$daysToPayday Days remaining",
-                            subtitle = "${userSettings.salaryEmployer} • Day ${userSettings.salaryPayday}"
-                        )
 
-                        // Debt Liquidity Ratio Metric
-                        val debtRatio = if (summary.totalBalance > 0) (summary.pendingDebtsOwedByMe / summary.totalBalance) * 100.0 else 0.0
-                        InsightMetricTile(
-                            icon = Icons.Default.CreditCard,
-                            iconTint = if (debtRatio > 35.0) RoseNeon else AmberNeon,
-                            title = strings.debtPressure,
-                            value = formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode, isStealth),
-                            subtitle = if (isArabic) "تمثل ${debtRatio.toInt()}% من رصيدك الحالي" else "Represents ${debtRatio.toInt()}% of available balance"
-                        )
+                        item {
+                            SmartBudgetAlertCard(
+                                transactions = transactions,
+                                isArabic = isArabic,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
-                        // Net Savings Cushion Metric
-                        val netSavings = (summary.monthlyIncome - summary.monthlyExpenses).coerceAtLeast(0.0)
-                        InsightMetricTile(
-                            icon = Icons.Default.Savings,
-                            iconTint = EmeraldNeon,
-                            title = strings.savingsMilestone,
-                            value = formatDzd(netSavings, strings.currencyCode, isStealth),
-                            subtitle = if (isArabic) "الفائض المالي الصافي للشهر الحالي" else "Current net monthly surplus retained"
-                        )
+                        item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+                    }
+
+                    // Right Column: AI Insights, Balance Projection & Deep Dive Metrics
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                    ) {
+                        item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                        item {
+                            FinancialInsightsCard(
+                                insights = insights,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            BalanceProjectionChart(
+                                currentBalance = summary.totalBalance,
+                                transactions = transactions,
+                                debts = debts,
+                                userSettings = userSettings,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            DeepDiveMetricsContent(
+                                summary = summary,
+                                userSettings = userSettings,
+                                strings = strings,
+                                colors = colors,
+                                isArabic = isArabic,
+                                isStealth = isStealth,
+                                typo = typo
+                            )
+                        }
+
+                        item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
                     }
                 }
+            } else {
+                // Single-column smooth vertical flow for Phones
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = dimens.screenPaddingH),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                ) {
+                    item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-                item {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    item {
+                        SavingsWalletCard(
+                            savingsBalance = summary.savingsBalance,
+                            availableBalance = summary.totalBalance,
+                            grossBalance = summary.grossBalance,
+                            isArabic = isArabic,
+                            isStealth = isStealth,
+                            onOpenDeposit = { showDepositDialog = true },
+                            onOpenWithdraw = { showWithdrawDialog = true },
+                            onOpenSpend = { showSpendDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        SmartBudgetAlertCard(
+                            transactions = transactions,
+                            isArabic = isArabic,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        FinancialInsightsCard(
+                            insights = insights,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        BalanceProjectionChart(
+                            currentBalance = summary.totalBalance,
+                            transactions = transactions,
+                            debts = debts,
+                            userSettings = userSettings,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        DeepDiveMetricsContent(
+                            summary = summary,
+                            userSettings = userSettings,
+                            strings = strings,
+                            colors = colors,
+                            isArabic = isArabic,
+                            isStealth = isStealth,
+                            typo = typo
+                        )
+                    }
+
+                    item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
                 }
             }
         }
@@ -376,6 +421,68 @@ private fun CashflowPillar(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DeepDiveMetricsContent(
+    summary: FinancialSummary,
+    userSettings: UserSettings,
+    strings: StringsBundle,
+    colors: com.example.ui.theme.LiquidGlassColors,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    typo: com.example.ui.theme.AdaptiveTypography
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = if (isArabic) "مؤشرات الذكاء المالي التفصيلية" else "Deep-Dive Financial Metrics",
+            color = colors.textPrimary,
+            fontSize = typo.titleSm,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+
+        // Spending Velocity Metric
+        InsightMetricTile(
+            icon = Icons.Default.Speed,
+            iconTint = CyanNeon,
+            title = strings.spendingVelocity,
+            value = formatDzd(summary.monthlyExpenses / 30.0, strings.currencyCode, isStealth),
+            subtitle = if (isArabic) "متوسط الحرق اليومي لمصاريفك" else "Average daily living expenditure burn rate"
+        )
+
+        // Salary Runway Metric
+        val daysToPayday = (userSettings.salaryPayday - java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)).let {
+            if (it < 0) it + 30 else it
+        }
+        InsightMetricTile(
+            icon = Icons.Default.Schedule,
+            iconTint = EmeraldNeon,
+            title = strings.salaryRunway,
+            value = if (isArabic) "$daysToPayday يوماً متبقية" else "$daysToPayday Days remaining",
+            subtitle = "${userSettings.salaryEmployer} • Day ${userSettings.salaryPayday}"
+        )
+
+        // Debt Liquidity Ratio Metric
+        val debtRatio = if (summary.totalBalance > 0) (summary.pendingDebtsOwedByMe / summary.totalBalance) * 100.0 else 0.0
+        InsightMetricTile(
+            icon = Icons.Default.CreditCard,
+            iconTint = if (debtRatio > 35.0) RoseNeon else AmberNeon,
+            title = strings.debtPressure,
+            value = formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode, isStealth),
+            subtitle = if (isArabic) "تمثل ${debtRatio.toInt()}% من رصيدك الحالي" else "Represents ${debtRatio.toInt()}% of available balance"
+        )
+
+        // Net Savings Cushion Metric
+        val netSavings = (summary.monthlyIncome - summary.monthlyExpenses).coerceAtLeast(0.0)
+        InsightMetricTile(
+            icon = Icons.Default.Savings,
+            iconTint = EmeraldNeon,
+            title = strings.savingsMilestone,
+            value = formatDzd(netSavings, strings.currencyCode, isStealth),
+            subtitle = if (isArabic) "الفائض المالي الصافي للشهر الحالي" else "Current net monthly surplus retained"
+        )
     }
 }
 

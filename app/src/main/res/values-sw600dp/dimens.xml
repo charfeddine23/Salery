@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Responsive Typography Sizing for 7-8" Tablets & Foldables (sw >= 600dp) -->
+    <dimen name="text_caption">12sp</dimen>
+    <dimen name="text_body_xs">12.5sp</dimen>
+    <dimen name="text_body_sm">13.5sp</dimen>
+    <dimen name="text_body">15sp</dimen>
+    <dimen name="text_body_lg">17sp</dimen>
+    <dimen name="text_title_sm">18sp</dimen>
+    <dimen name="text_title">21sp</dimen>
+    <dimen name="text_title_lg">23sp</dimen>
+    <dimen name="text_headline">28sp</dimen>
+    <dimen name="text_display">34sp</dimen>
+    <dimen name="text_hero">38sp</dimen>
+
+    <!-- Responsive Layout Paddings & Margins -->
+    <dimen name="screen_padding_horizontal">24dp</dimen>
+    <dimen name="screen_padding_vertical">16dp</dimen>
+    <dimen name="card_padding_small">14dp</dimen>
+    <dimen name="card_padding">20dp</dimen>
+    <dimen name="card_padding_large">24dp</dimen>
+
+    <!-- Spacing & Gaps -->
+    <dimen name="spacing_xs">6dp</dimen>
+    <dimen name="spacing_sm">10dp</dimen>
+    <dimen name="spacing_md">16dp</dimen>
+    <dimen name="spacing_lg">20dp</dimen>
+    <dimen name="spacing_xl">26dp</dimen>
+    <dimen name="spacing_xxl">36dp</dimen>
+
+    <!-- Corner Radii -->
+    <dimen name="corner_radius_xs">8dp</dimen>
+    <dimen name="corner_radius_sm">12dp</dimen>
+    <dimen name="corner_radius_md">16dp</dimen>
+    <dimen name="corner_radius_lg">24dp</dimen>
+    <dimen name="corner_radius_xl">28dp</dimen>
+    <dimen name="corner_radius_pill">999dp</dimen>
+
+    <!-- Icon & Component Dimensions -->
+    <dimen name="icon_size_xs">16dp</dimen>
+    <dimen name="icon_size_sm">20dp</dimen>
+    <dimen name="icon_size_md">26dp</dimen>
+    <dimen name="icon_size_lg">32dp</dimen>
+    <dimen name="icon_size_xl">42dp</dimen>
+
+    <dimen name="button_height">52dp</dimen>
+    <dimen name="fab_size">64dp</dimen>
+    <dimen name="app_bar_height">72dp</dimen>
+    <dimen name="bottom_bar_height">74dp</dimen>
+    <dimen name="dialog_max_width">520dp</dimen>
+    <dimen name="content_max_width">1100dp</dimen>
+</resources>

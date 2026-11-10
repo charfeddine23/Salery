@@ -52,14 +52,16 @@ fun SaleryPulseTheme(
 
     val materialColors = if (darkTheme) DarkColorScheme else LightColorScheme
 
-    CompositionLocalProvider(
-        LocalLiquidGlass provides glassColors
-    ) {
-        MaterialTheme(
-            colorScheme = materialColors,
-            typography = Typography,
-            content = content
-        )
+    ProvideAdaptiveDesign {
+        CompositionLocalProvider(
+            LocalLiquidGlass provides glassColors
+        ) {
+            MaterialTheme(
+                colorScheme = materialColors,
+                typography = Typography,
+                content = content
+            )
+        }
     }
 }
 

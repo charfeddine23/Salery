@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.NeuDarkHighlight
 import com.example.ui.theme.neumorphicDepth
 
@@ -85,42 +87,63 @@ fun GlassBackground(
                     )
                 )
                 .drawBehind {
-                    // Liquid glowing diffuse orbs in the background
-                    val orb1Radius = size.width * 0.45f * pulse
-                    val orb2Radius = size.width * 0.38f * (2f - pulse)
+                    // Resolution-independent glowing diffuse aurora orbs
+                    val minDim = minOf(size.width, size.height)
+                    val orb1Radius = minDim * 0.52f * pulse
+                    val orb2Radius = minDim * 0.46f * (2f - pulse)
+                    val orb3Radius = minDim * 0.42f * pulse
 
+                    // Aurora Orb 1: Primary Cyan Neon (top-start)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.18f else 0.12f),
+                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.20f else 0.14f),
+                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.05f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.2f, size.height * 0.15f),
+                            center = Offset(size.width * 0.18f, size.height * 0.16f),
                             radius = orb1Radius
                         )
                     )
 
+                    // Aurora Orb 2: Secondary Violet/Blue Neon (mid-end)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
+                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.16f else 0.10f),
+                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.06f else 0.03f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.85f, size.height * 0.45f),
+                            center = Offset(size.width * 0.84f, size.height * 0.42f),
                             radius = orb2Radius
                         )
                     )
 
+                    // Aurora Orb 3: Emerald Success Neon (bottom-start)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                colors.successColor.copy(alpha = if (colors.isDark) 0.12f else 0.06f),
+                                colors.successColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.35f, size.height * 0.8f),
-                            radius = orb1Radius * 0.9f
+                            center = Offset(size.width * 0.30f, size.height * 0.82f),
+                            radius = orb3Radius
                         )
                     )
+
+                    // Aurora Orb 4: Ambient subtle glow on large displays / landscape (bottom-end)
+                    if (size.width >= 600f) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.primaryNeon.copy(alpha = if (colors.isDark) 0.10f else 0.05f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.78f, size.height * 0.88f),
+                                radius = minDim * 0.38f
+                            )
+                        )
+                    }
                 },
             content = content
         )
@@ -224,13 +247,15 @@ fun GlassButton(
     enabled: Boolean = true
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
-                .height(50.dp)
+                .height(dimens.buttonHeight)
                 .neumorphicDepth(
-                    cornerRadius = 16.dp,
+                    cornerRadius = dimens.cornerRadiusMd,
                     elevation = 4.dp,
                     isDark = colors.isDark,
                     backgroundColor = if (enabled) containerColor else (if (colors.isDark) Color(0xFF232731) else Color(0xFFD5DDE7))
@@ -242,7 +267,7 @@ fun GlassButton(
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = dimens.spacingLg),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -253,14 +278,14 @@ fun GlassButton(
                         imageVector = icon,
                         contentDescription = null,
                         tint = contentColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(dimens.iconSizeSm)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(dimens.spacingSm))
                 }
                 Text(
                     text = text,
                     color = contentColor,
-                    fontSize = 15.sp,
+                    fontSize = typo.bodyLg,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -268,7 +293,7 @@ fun GlassButton(
     } else {
         Box(
             modifier = modifier
-                .height(50.dp)
+                .height(dimens.buttonHeight)
                 .clip(shape)
                 .background(
                     brush = Brush.horizontalGradient(
@@ -286,7 +311,7 @@ fun GlassButton(
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = dimens.spacingLg),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -297,14 +322,14 @@ fun GlassButton(
                         imageVector = icon,
                         contentDescription = null,
                         tint = contentColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(dimens.iconSizeSm)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(dimens.spacingSm))
                 }
                 Text(
                     text = text,
                     color = contentColor,
-                    fontSize = 15.sp,
+                    fontSize = typo.bodyLg,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -323,17 +348,19 @@ fun QuickActionButton(
     contentColor: Color = Color.White
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
-                .height(44.dp)
+                .height((dimens.buttonHeight - 4.dp).coerceAtLeast(44.dp))
                 .neumorphicDepth(
-                    cornerRadius = 14.dp,
+                    cornerRadius = dimens.cornerRadiusMd,
                     elevation = 3.dp,
                     isDark = colors.isDark
                 )
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(dimens.cornerRadiusMd))
                 .background(brush)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -352,14 +379,14 @@ fun QuickActionButton(
                         imageVector = icon,
                         contentDescription = null,
                         tint = contentColor,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(dimens.iconSizeSm)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(
                     text = text,
                     color = contentColor,
-                    fontSize = 11.5.sp,
+                    fontSize = typo.bodyXs,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )

@@ -46,6 +46,8 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
 
@@ -66,6 +68,8 @@ fun TotalBalanceVaultCard(
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val strings = AppStrings.current
     val isArabic = userSettings.language == "ar"
     val isStealth = LocalStealthMode.current
@@ -103,9 +107,9 @@ fun TotalBalanceVaultCard(
 
     GlassCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
         backgroundColor = colors.glassCard,
-        cornerRadius = 20.dp
+        cornerRadius = dimens.cornerRadiusLg
     ) {
         // Subtle Dynamic Cash Flow Ambient Glow (Rendered safely inside clipped card bounds)
         if (!colors.isNeumorphic) {
@@ -131,7 +135,7 @@ fun TotalBalanceVaultCard(
         }
 
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(dimens.cardPadding)
         ) {
             // Top Header Row with Cash Flow Status Badge
             Row(
@@ -147,14 +151,14 @@ fun TotalBalanceVaultCard(
                             strings.totalBalance
                         },
                         color = colors.textSecondary,
-                        fontSize = 13.sp,
+                        fontSize = typo.body,
                         fontWeight = FontWeight.Medium
                     )
                     if (lockedAmount > 0) {
                         Text(
                             text = if (isArabic) "مستثنى منه رصيد محفظة الادخار" else "Savings wallet reserve excluded",
                             color = EmeraldNeon,
-                            fontSize = 10.5.sp,
+                            fontSize = typo.caption,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -174,27 +178,27 @@ fun TotalBalanceVaultCard(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                         .background(flowTagColor.copy(alpha = 0.16f))
-                        .border(1.dp, flowTagColor.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                        .border(1.dp, flowTagColor.copy(alpha = 0.35f), RoundedCornerShape(dimens.cornerRadiusSm))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = flowTagLabel,
                         color = flowTagColor,
-                        fontSize = 11.sp,
+                        fontSize = typo.bodyXs,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(dimens.spacingSm))
 
             // Prominent Active Balance (Spendable Amount)
             Text(
                 text = formatDzd(spendableBalance, strings.currencyCode, isStealth),
                 color = colors.textPrimary,
-                fontSize = 32.sp,
+                fontSize = typo.hero,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 0.5.sp
             )
@@ -237,15 +241,15 @@ fun TotalBalanceVaultCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
                         .background(colors.glassSurface)
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
-                        .padding(12.dp)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusMd))
+                        .padding(dimens.cardPaddingSmall)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(dimens.iconSizeXl)
                                 .clip(CircleShape)
                                 .background(EmeraldNeon.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
@@ -254,20 +258,20 @@ fun TotalBalanceVaultCard(
                                 imageVector = Icons.Default.TrendingUp,
                                 contentDescription = null,
                                 tint = EmeraldNeon,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(dimens.iconSizeSm)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(dimens.spacingSm))
                         Column {
                             Text(
                                 text = strings.monthlyIncome,
                                 color = colors.textMuted,
-                                fontSize = 10.sp
+                                fontSize = typo.caption
                             )
                             Text(
                                 text = formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth),
                                 color = EmeraldNeon,
-                                fontSize = 13.sp,
+                                fontSize = typo.body,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -278,15 +282,15 @@ fun TotalBalanceVaultCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
                         .background(colors.glassSurface)
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
-                        .padding(12.dp)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusMd))
+                        .padding(dimens.cardPaddingSmall)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(dimens.iconSizeXl)
                                 .clip(CircleShape)
                                 .background(RoseNeon.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
@@ -295,20 +299,20 @@ fun TotalBalanceVaultCard(
                                 imageVector = Icons.Default.TrendingDown,
                                 contentDescription = null,
                                 tint = RoseNeon,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(dimens.iconSizeSm)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(dimens.spacingSm))
                         Column {
                             Text(
                                 text = strings.monthlyExpense,
                                 color = colors.textMuted,
-                                fontSize = 10.sp
+                                fontSize = typo.caption
                             )
                             Text(
                                 text = formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth),
                                 color = RoseNeon,
-                                fontSize = 13.sp,
+                                fontSize = typo.body,
                                 fontWeight = FontWeight.Bold
                             )
                         }

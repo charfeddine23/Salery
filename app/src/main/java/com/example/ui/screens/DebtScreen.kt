@@ -59,10 +59,16 @@ import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
 
 @Composable
 fun DebtScreen(
@@ -77,6 +83,9 @@ fun DebtScreen(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val isDark = colors.isDark
 
     var activeTab by remember { mutableStateOf(DebtType.OWED_BY_ME) }
@@ -103,244 +112,185 @@ fun DebtScreen(
         else -> debtsInTab
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-
-        // Comprehensive Debt Management Dashboard Card
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard,
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (activeTab == DebtType.OWED_BY_ME) strings.debtsOwedByMe else strings.debtsOwedToMe,
-                            color = colors.textSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
-                                    else DebtColors.receivableContainer(isDark)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
-                                    else DebtColors.receivableBorder(isDark),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = "${pendingDebts.size} ${strings.filterActive}",
-                                color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = formatDzd(totalPendingAmount, strings.currencyCode),
-                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Overall Tab Progress Bar
-                    LinearProgressIndicator(
-                        progress = { tabProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(7.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.settled(isDark),
-                        trackColor = colors.glassBorderSubtle
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} (${(tabProgress * 100).toInt()}%)",
-                            color = DebtColors.settled(isDark),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${strings.totalAmount}: ${formatDzd(totalOriginalAmount, strings.currencyCode)}",
-                            color = colors.textMuted,
-                            fontSize = 11.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Action Controls: Add Debt & Clear Settled Debts
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        GlassButton(
-                            text = strings.addDebt,
-                            icon = Icons.Default.Add,
-                            containerColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
-                            modifier = Modifier.weight(1f),
-                            onClick = { onAddDebtClick(activeTab) }
-                        )
-
-                        if (settledDebts.isNotEmpty()) {
-                            GlassButton(
-                                text = "${strings.deleteSettledDebts} (${settledDebts.size})",
-                                icon = Icons.Default.DeleteSweep,
-                                containerColor = DebtColors.danger(isDark),
-                                modifier = Modifier.weight(1f),
-                                onClick = { showClearSettledConfirm = true }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Tab Selector (I Owe vs Owed to Me)
-        item {
-            Row(
+    if (layoutInfo.columns >= 2) {
+        // Adaptive 2-column layout for tablets and landscape
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            // Left Column: Tab Selector & Debt Summary Overview
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.glassCard)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .weight(0.95f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
-                            else Color.Transparent
-                        )
-                        .border(
-                            1.dp,
-                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
-                            else Color.Transparent,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable { activeTab = DebtType.OWED_BY_ME }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "${strings.debtsOwedByMe} (${debts.count { it.type == DebtType.OWED_BY_ME }})",
-                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else colors.textMuted,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                item {
+                    DebtTabSelector(
+                        activeTab = activeTab,
+                        onTabSelect = { activeTab = it },
+                        debts = debts,
+                        strings = strings,
+                        colors = colors,
+                        isDark = isDark,
+                        dimens = dimens,
+                        typo = typo
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableContainer(isDark)
-                            else Color.Transparent
-                        )
-                        .border(
-                            1.dp,
-                            if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableBorder(isDark)
-                            else Color.Transparent,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable { activeTab = DebtType.OWED_TO_ME }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "${strings.debtsOwedToMe} (${debts.count { it.type == DebtType.OWED_TO_ME }})",
-                        color = if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivable(isDark) else colors.textMuted,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                item {
+                    DebtSummaryCard(
+                        activeTab = activeTab,
+                        strings = strings,
+                        colors = colors,
+                        isDark = isDark,
+                        pendingDebts = pendingDebts,
+                        settledDebts = settledDebts,
+                        totalPendingAmount = totalPendingAmount,
+                        totalPaidAmount = totalPaidAmount,
+                        totalOriginalAmount = totalOriginalAmount,
+                        tabProgress = tabProgress,
+                        dimens = dimens,
+                        typo = typo,
+                        onAddDebtClick = { onAddDebtClick(activeTab) },
+                        onClearSettledClick = { showClearSettledConfirm = true }
                     )
                 }
-            }
-        }
 
-        // Status Filter Chips (All, Active, Settled)
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+
+            // Right Column: Filter chips and Debts List
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.05f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
-                GlassPill(
-                    text = "${strings.filterAll} (${debtsInTab.size})",
-                    isSelected = statusFilter == "ALL",
-                    onClick = { statusFilter = "ALL" }
-                )
-                GlassPill(
-                    text = "${strings.filterActive} (${pendingDebts.size})",
-                    isSelected = statusFilter == "ACTIVE",
-                    onClick = { statusFilter = "ACTIVE" }
-                )
-                GlassPill(
-                    text = "${strings.filterSettled} (${settledDebts.size})",
-                    isSelected = statusFilter == "SETTLED",
-                    onClick = { statusFilter = "SETTLED" }
-                )
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                item {
+                    DebtStatusFilters(
+                        statusFilter = statusFilter,
+                        onStatusFilterChange = { statusFilter = it },
+                        debtsInTab = debtsInTab,
+                        pendingDebts = pendingDebts,
+                        settledDebts = settledDebts,
+                        strings = strings,
+                        dimens = dimens
+                    )
+                }
+
+                if (displayedDebts.isEmpty()) {
+                    item {
+                        LiquidEmptyStateCard(
+                            title = strings.emptyDebtsTitle,
+                            description = strings.emptyDebtsDesc,
+                            icon = Icons.Default.CreditCard,
+                            iconColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                            actionText = strings.addFirstDebt,
+                            onActionClick = { onAddDebtClick(activeTab) }
+                        )
+                    }
+                } else {
+                    items(displayedDebts, key = { it.id }) { debt ->
+                        DebtItemCard(
+                            debt = debt,
+                            currencyCode = strings.currencyCode,
+                            onPartialPayClick = { partialPaymentDebt = debt },
+                            onPayNow = { onPayDebtNow(debt) },
+                            onEdit = { editingDebt = debt },
+                            onDelete = { debtToDelete = debt }
+                        )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
         }
+    } else {
+        // Single-column smooth vertical flow for Phones
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-        // Debts List
-        if (displayedDebts.isEmpty()) {
             item {
-                LiquidEmptyStateCard(
-                    title = strings.emptyDebtsTitle,
-                    description = strings.emptyDebtsDesc,
-                    icon = Icons.Default.CreditCard,
-                    iconColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
-                    actionText = strings.addFirstDebt,
-                    onActionClick = { onAddDebtClick(activeTab) }
+                DebtSummaryCard(
+                    activeTab = activeTab,
+                    strings = strings,
+                    colors = colors,
+                    isDark = isDark,
+                    pendingDebts = pendingDebts,
+                    settledDebts = settledDebts,
+                    totalPendingAmount = totalPendingAmount,
+                    totalPaidAmount = totalPaidAmount,
+                    totalOriginalAmount = totalOriginalAmount,
+                    tabProgress = tabProgress,
+                    dimens = dimens,
+                    typo = typo,
+                    onAddDebtClick = { onAddDebtClick(activeTab) },
+                    onClearSettledClick = { showClearSettledConfirm = true }
                 )
             }
-        } else {
-            items(displayedDebts, key = { it.id }) { debt ->
-                DebtItemCard(
-                    debt = debt,
-                    currencyCode = strings.currencyCode,
-                    onPartialPayClick = { partialPaymentDebt = debt },
-                    onPayNow = { onPayDebtNow(debt) },
-                    onEdit = { editingDebt = debt },
-                    onDelete = { debtToDelete = debt }
-                )
-            }
-        }
 
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
+            item {
+                DebtTabSelector(
+                    activeTab = activeTab,
+                    onTabSelect = { activeTab = it },
+                    debts = debts,
+                    strings = strings,
+                    colors = colors,
+                    isDark = isDark,
+                    dimens = dimens,
+                    typo = typo
+                )
+            }
+
+            item {
+                DebtStatusFilters(
+                    statusFilter = statusFilter,
+                    onStatusFilterChange = { statusFilter = it },
+                    debtsInTab = debtsInTab,
+                    pendingDebts = pendingDebts,
+                    settledDebts = settledDebts,
+                    strings = strings,
+                    dimens = dimens
+                )
+            }
+
+            if (displayedDebts.isEmpty()) {
+                item {
+                    LiquidEmptyStateCard(
+                        title = strings.emptyDebtsTitle,
+                        description = strings.emptyDebtsDesc,
+                        icon = Icons.Default.CreditCard,
+                        iconColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                        actionText = strings.addFirstDebt,
+                        onActionClick = { onAddDebtClick(activeTab) }
+                    )
+                }
+            } else {
+                items(displayedDebts, key = { it.id }) { debt ->
+                    DebtItemCard(
+                        debt = debt,
+                        currencyCode = strings.currencyCode,
+                        onPartialPayClick = { partialPaymentDebt = debt },
+                        onPayNow = { onPayDebtNow(debt) },
+                        onEdit = { editingDebt = debt },
+                        onDelete = { debtToDelete = debt }
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
         }
     }
 
@@ -528,6 +478,239 @@ fun DebtScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DebtTabSelector(
+    activeTab: DebtType,
+    onTabSelect: (DebtType) -> Unit,
+    debts: List<DebtEntity>,
+    strings: StringsBundle,
+    colors: com.example.ui.theme.LiquidGlassColors,
+    isDark: Boolean,
+    dimens: com.example.ui.theme.AdaptiveDimens,
+    typo: com.example.ui.theme.AdaptiveTypography
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+            .background(colors.glassCard)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                .background(
+                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
+                    else Color.Transparent
+                )
+                .border(
+                    1.dp,
+                    if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
+                    else Color.Transparent,
+                    RoundedCornerShape(dimens.cornerRadiusSm)
+                )
+                .clickable { onTabSelect(DebtType.OWED_BY_ME) }
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${strings.debtsOwedByMe} (${debts.count { it.type == DebtType.OWED_BY_ME }})",
+                color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else colors.textMuted,
+                fontWeight = FontWeight.Bold,
+                fontSize = typo.bodySm
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                .background(
+                    if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableContainer(isDark)
+                    else Color.Transparent
+                )
+                .border(
+                    1.dp,
+                    if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivableBorder(isDark)
+                    else Color.Transparent,
+                    RoundedCornerShape(dimens.cornerRadiusSm)
+                )
+                .clickable { onTabSelect(DebtType.OWED_TO_ME) }
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${strings.debtsOwedToMe} (${debts.count { it.type == DebtType.OWED_TO_ME }})",
+                color = if (activeTab == DebtType.OWED_TO_ME) DebtColors.receivable(isDark) else colors.textMuted,
+                fontWeight = FontWeight.Bold,
+                fontSize = typo.bodySm
+            )
+        }
+    }
+}
+
+@Composable
+private fun DebtSummaryCard(
+    activeTab: DebtType,
+    strings: StringsBundle,
+    colors: com.example.ui.theme.LiquidGlassColors,
+    isDark: Boolean,
+    pendingDebts: List<DebtEntity>,
+    settledDebts: List<DebtEntity>,
+    totalPendingAmount: Double,
+    totalPaidAmount: Double,
+    totalOriginalAmount: Double,
+    tabProgress: Float,
+    dimens: com.example.ui.theme.AdaptiveDimens,
+    typo: com.example.ui.theme.AdaptiveTypography,
+    onAddDebtClick: () -> Unit,
+    onClearSettledClick: () -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = colors.glassCard,
+        shape = RoundedCornerShape(dimens.cornerRadiusLg)
+    ) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (activeTab == DebtType.OWED_BY_ME) strings.debtsOwedByMe else strings.debtsOwedToMe,
+                    color = colors.textSecondary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Medium
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                        .background(
+                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableContainer(isDark)
+                            else DebtColors.receivableContainer(isDark)
+                        )
+                        .border(
+                            1.dp,
+                            if (activeTab == DebtType.OWED_BY_ME) DebtColors.payableBorder(isDark)
+                            else DebtColors.receivableBorder(isDark),
+                            RoundedCornerShape(dimens.cornerRadiusSm)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "${pendingDebts.size} ${strings.filterActive}",
+                        color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(dimens.spacingXs))
+
+            Text(
+                text = formatDzd(totalPendingAmount, strings.currencyCode),
+                color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                fontSize = typo.display,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Spacer(modifier = Modifier.height(dimens.spacingSm))
+
+            // Overall Tab Progress Bar
+            LinearProgressIndicator(
+                progress = { tabProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.settled(isDark),
+                trackColor = colors.glassBorderSubtle
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} (${(tabProgress * 100).toInt()}%)",
+                    color = DebtColors.settled(isDark),
+                    fontSize = typo.caption,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "${strings.totalAmount}: ${formatDzd(totalOriginalAmount, strings.currencyCode)}",
+                    color = colors.textMuted,
+                    fontSize = typo.caption
+                )
+            }
+
+            Spacer(modifier = Modifier.height(dimens.spacingMd))
+
+            // Action Controls: Add Debt & Clear Settled Debts
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+            ) {
+                GlassButton(
+                    text = strings.addDebt,
+                    icon = Icons.Default.Add,
+                    containerColor = if (activeTab == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
+                    modifier = Modifier.weight(1f),
+                    onClick = onAddDebtClick
+                )
+
+                if (settledDebts.isNotEmpty()) {
+                    GlassButton(
+                        text = "${strings.deleteSettledDebts} (${settledDebts.size})",
+                        icon = Icons.Default.DeleteSweep,
+                        containerColor = DebtColors.danger(isDark),
+                        modifier = Modifier.weight(1f),
+                        onClick = onClearSettledClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebtStatusFilters(
+    statusFilter: String,
+    onStatusFilterChange: (String) -> Unit,
+    debtsInTab: List<DebtEntity>,
+    pendingDebts: List<DebtEntity>,
+    settledDebts: List<DebtEntity>,
+    strings: StringsBundle,
+    dimens: com.example.ui.theme.AdaptiveDimens
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+    ) {
+        GlassPill(
+            text = "${strings.filterAll} (${debtsInTab.size})",
+            isSelected = statusFilter == "ALL",
+            onClick = { onStatusFilterChange("ALL") }
+        )
+        GlassPill(
+            text = "${strings.filterActive} (${pendingDebts.size})",
+            isSelected = statusFilter == "ACTIVE",
+            onClick = { onStatusFilterChange("ACTIVE") }
+        )
+        GlassPill(
+            text = "${strings.filterSettled} (${settledDebts.size})",
+            isSelected = statusFilter == "SETTLED",
+            onClick = { onStatusFilterChange("SETTLED") }
+        )
     }
 }
 

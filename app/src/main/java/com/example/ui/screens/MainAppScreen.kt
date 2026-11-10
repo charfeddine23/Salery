@@ -41,6 +41,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.foundation.layout.widthIn
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
+import com.example.ui.theme.adaptiveContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -212,6 +217,9 @@ fun MainAppScreen(
                 ) {
                     // Main App Content adopts the chosen layoutDirection (RTL in Arabic, LTR in English)
                     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+                        val dimens = LocalAdaptiveDimens.current
+                        val typo = LocalAdaptiveTypography.current
+
                         GlassBackground {
                             Scaffold(
                         containerColor = Color.Transparent,
@@ -268,7 +276,7 @@ fun MainAppScreen(
                                 containerColor = LiquidGlassTheme.colors.primaryNeon,
                                 contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
                                 shape = CircleShape,
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(dimens.fabSize)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
@@ -282,6 +290,8 @@ fun MainAppScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(innerPadding)
+                                .adaptiveContentWidth(dimens.contentMaxWidth),
+                            contentAlignment = Alignment.TopCenter
                         ) {
                             when (currentRoute) {
                                 "dashboard" -> DashboardScreen(
@@ -442,83 +452,92 @@ fun MainTopAppBar(
     onToggleStealth: () -> Unit = {}
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .statusBarsPadding(),
+        contentAlignment = Alignment.Center
     ) {
-        // Menu Drawer Button (fixed 44dp anchored to left)
-        GlassCard(
-            modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(14.dp),
-            backgroundColor = colors.glassCard,
-            onClick = onMenuClick
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .adaptiveContentWidth(dimens.contentMaxWidth)
+                .padding(horizontal = dimens.screenPaddingH, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Menu",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(22.dp)
+            // Menu Drawer Button (min touch target 48dp)
+            GlassCard(
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                backgroundColor = colors.glassCard,
+                onClick = onMenuClick
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menu",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Fixed Icon Positioning with Double-Tap to Toggle Stealth Mode & Breathing Glow
+            Box(
+                modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { onToggleStealth() }
+                    )
+                }
+            ) {
+                BreathingSpLogo(
+                    size = 38.dp
                 )
             }
-        }
 
-        Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-        // Fixed Icon Positioning with Double-Tap to Toggle Stealth Mode & Breathing Glow
-        Box(
-            modifier = Modifier.pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = { onToggleStealth() }
-                )
-            }
-        ) {
-            BreathingSpLogo(
-                size = 36.dp
+            // Screen Title anchored directly next to the fixed icon
+            Text(
+                text = title,
+                color = colors.textPrimary,
+                fontSize = typo.title,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp,
+                maxLines = 1
             )
-        }
 
-        Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
-        // Screen Title anchored directly next to the fixed icon
-        Text(
-            text = title,
-            color = colors.textPrimary,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.3.sp,
-            maxLines = 1
-        )
+            // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon)
+            DynamicMoneyBag(
+                totalBalance = totalBalance,
+                onClick = onOpenInsights,
+                size = 44.dp
+            )
 
-        Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(8.dp))
 
-        // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon)
-        DynamicMoneyBag(
-            totalBalance = totalBalance,
-            onClick = onOpenInsights,
-            size = 40.dp
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Stealth Mode / Privacy Toggle Action Button
-        GlassCard(
-            modifier = Modifier.size(42.dp),
-            shape = RoundedCornerShape(13.dp),
-            backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
-            onClick = onToggleStealth
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = "Stealth Mode Toggle",
-                    tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
+            // Stealth Mode / Privacy Toggle Action Button (min touch target 48dp)
+            GlassCard(
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
+                onClick = onToggleStealth
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = "Stealth Mode Toggle",
+                        tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }
@@ -531,6 +550,8 @@ fun LiquidGlassBottomBar(
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     val items = listOf(
         NavigationItem("dashboard", strings.navDashboard, Icons.Default.Dashboard),
@@ -543,10 +564,13 @@ fun LiquidGlassBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = dimens.screenPaddingH, vertical = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
         GlassCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
             backgroundColor = colors.glassCard
         ) {
@@ -570,7 +594,7 @@ fun LiquidGlassBottomBar(
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .clickable { onRouteSelect(item.route) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
@@ -583,7 +607,7 @@ fun LiquidGlassBottomBar(
                         Text(
                             text = item.label,
                             color = if (isSelected) activeColor else colors.textMuted,
-                            fontSize = 11.sp,
+                            fontSize = typo.caption,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }

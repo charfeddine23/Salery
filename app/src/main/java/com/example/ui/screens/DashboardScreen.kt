@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,26 +20,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Fastfood
-import androidx.compose.material.icons.filled.LocalAtm
-import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -49,18 +39,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.DebtEntity
 import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
-import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
 import com.example.ui.components.TotalBalanceVaultCard
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
@@ -69,7 +58,11 @@ import com.example.ui.theme.DebtBtnGradient
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.ExpenseBtnGradient
 import com.example.ui.theme.IncomeBtnGradient
+import com.example.ui.theme.LiquidGlassColors
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
 import java.util.Calendar
@@ -93,239 +86,398 @@ fun DashboardScreen(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
-    val isArabic = userSettings.language == "ar"
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(4.dp))
-        }
+    if (layoutInfo.columns >= 2) {
+        // Multi-column adaptive layout for Tablets, Foldables & Large screens
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            // Left Column (Financial Health, Scheduler, Quick Actions, Debt overview)
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
-        // Main Total Balance & Money Vault Card (Dynamic Cash Flow Glow, Burn Rate & Quick Vault Pocket)
-        item {
-            TotalBalanceVaultCard(
-                summary = summary,
-                userSettings = userSettings,
-                onLockToVault = onLockToVault,
-                onUnlockFromVault = onUnlockFromVault
-            )
-        }
+                item {
+                    TotalBalanceVaultCard(
+                        summary = summary,
+                        userSettings = userSettings,
+                        onLockToVault = onLockToVault,
+                        onUnlockFromVault = onUnlockFromVault
+                    )
+                }
 
-        // Smart Salary Scheduler Card Banner
-        item {
-            val cal = Calendar.getInstance()
-            val currentDay = cal.get(Calendar.DAY_OF_MONTH)
-            val daysUntilPayday = (userSettings.salaryPayday - currentDay).let {
-                if (it < 0) it + 30 else it
+                item {
+                    SalarySchedulerCard(
+                        userSettings = userSettings,
+                        strings = strings,
+                        colors = colors,
+                        onClick = onOpenSalaryScheduler
+                    )
+                }
+
+                item {
+                    QuickActionsRow(
+                        strings = strings,
+                        onAddIncomeClick = onAddIncomeClick,
+                        onAddExpenseClick = onAddExpenseClick,
+                        onAddDebtClick = onAddDebtClick
+                    )
+                }
+
+                if (summary.pendingDebtsOwedByMe > 0 || summary.pendingDebtsOwedToMe > 0) {
+                    item {
+                        ActiveDebtsBanner(
+                            summary = summary,
+                            strings = strings,
+                            colors = colors
+                        )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
 
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard,
-                shape = RoundedCornerShape(20.dp),
-                onClick = onOpenSalaryScheduler
+            // Right Column (Activity Stream & Recent Transactions)
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(CyanNeon, colors.secondaryNeon)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = Color(0xFF0F172A),
-                            modifier = Modifier.size(24.dp)
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                item {
+                    RecentTransactionsHeader(
+                        strings = strings,
+                        colors = colors,
+                        onSeeAllClick = onSeeAllClick
+                    )
+                }
+
+                val recentList = transactions.take(10)
+                if (recentList.isEmpty()) {
+                    item {
+                        LiquidEmptyStateCard(
+                            title = strings.emptyTransactionsTitle,
+                            description = strings.emptyTransactionsDesc,
+                            icon = Icons.Default.Receipt,
+                            iconColor = CyanNeon,
+                            actionText = strings.addFirstTransaction,
+                            onActionClick = onAddTransactionClick
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = strings.salarySchedulerTitle,
-                            color = colors.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                } else {
+                    items(recentList, key = { it.id }) { item ->
+                        TransactionRowItem(
+                            transaction = item,
+                            currencyCode = strings.currencyCode,
+                            onDelete = { onDeleteTransaction(item) }
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = formatDzd(userSettings.salaryAmount, strings.currencyCode),
-                                color = EmeraldNeon,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "•",
-                                color = colors.textMuted,
-                                fontSize = 12.sp
-                            )
-                            val paydayStatus = if (currentDay == userSettings.salaryPayday) {
-                                strings.salaryDepositedToday
-                            } else {
-                                "Day ${userSettings.salaryPayday} ($daysUntilPayday d)"
-                            }
-                            Text(
-                                text = paydayStatus,
-                                color = colors.primaryNeon,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
                     }
+                }
 
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
-                        tint = colors.textSecondary,
-                        modifier = Modifier.size(18.dp)
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+        }
+    } else {
+        // Single-column smooth vertical flow for Phones (sw < 600dp portrait)
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+            item {
+                TotalBalanceVaultCard(
+                    summary = summary,
+                    userSettings = userSettings,
+                    onLockToVault = onLockToVault,
+                    onUnlockFromVault = onUnlockFromVault
+                )
+            }
+
+            item {
+                SalarySchedulerCard(
+                    userSettings = userSettings,
+                    strings = strings,
+                    colors = colors,
+                    onClick = onOpenSalaryScheduler
+                )
+            }
+
+            item {
+                QuickActionsRow(
+                    strings = strings,
+                    onAddIncomeClick = onAddIncomeClick,
+                    onAddExpenseClick = onAddExpenseClick,
+                    onAddDebtClick = onAddDebtClick
+                )
+            }
+
+            if (summary.pendingDebtsOwedByMe > 0 || summary.pendingDebtsOwedToMe > 0) {
+                item {
+                    ActiveDebtsBanner(
+                        summary = summary,
+                        strings = strings,
+                        colors = colors
                     )
                 }
             }
-        }
 
-        // Quick Actions Row (+ Income, + Expense, + Debt)
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                QuickActionButton(
-                    text = strings.addIncome,
-                    icon = Icons.Default.Add,
-                    brush = IncomeBtnGradient,
-                    borderColor = Color(0x6034D399),
-                    modifier = Modifier.weight(1f),
-                    onClick = onAddIncomeClick
-                )
-                QuickActionButton(
-                    text = strings.addExpense,
-                    icon = Icons.Default.Add,
-                    brush = ExpenseBtnGradient,
-                    borderColor = Color(0x60FB7185),
-                    modifier = Modifier.weight(1f),
-                    onClick = onAddExpenseClick
-                )
-                QuickActionButton(
-                    text = strings.addDebt,
-                    icon = Icons.Default.CreditCard,
-                    brush = DebtBtnGradient,
-                    borderColor = Color(0x6038BDF8),
-                    modifier = Modifier.weight(1f),
-                    onClick = onAddDebtClick
+            item {
+                RecentTransactionsHeader(
+                    strings = strings,
+                    colors = colors,
+                    onSeeAllClick = onSeeAllClick
                 )
             }
-        }
 
-
-        // Active Debts Mini Banner
-        item {
-            if (summary.pendingDebtsOwedByMe > 0 || summary.pendingDebtsOwedToMe > 0) {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = colors.glassCard,
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CreditCard,
-                                contentDescription = null,
-                                tint = AmberNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = strings.activeDebts,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Text(
-                            text = "I Owe: ${formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode)}",
-                            color = AmberNeon,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+            val recentList = transactions.take(6)
+            if (recentList.isEmpty()) {
+                item {
+                    LiquidEmptyStateCard(
+                        title = strings.emptyTransactionsTitle,
+                        description = strings.emptyTransactionsDesc,
+                        icon = Icons.Default.Receipt,
+                        iconColor = CyanNeon,
+                        actionText = strings.addFirstTransaction,
+                        onActionClick = onAddTransactionClick
+                    )
+                }
+            } else {
+                items(recentList, key = { it.id }) { item ->
+                    TransactionRowItem(
+                        transaction = item,
+                        currencyCode = strings.currencyCode,
+                        onDelete = { onDeleteTransaction(item) }
+                    )
                 }
             }
-        }
 
-        // Recent Transactions Section Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+        }
+    }
+}
+
+@Composable
+private fun SalarySchedulerCard(
+    userSettings: UserSettings,
+    strings: StringsBundle,
+    colors: LiquidGlassColors,
+    onClick: () -> Unit
+) {
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
+    val cal = Calendar.getInstance()
+    val currentDay = cal.get(Calendar.DAY_OF_MONTH)
+    val daysUntilPayday = (userSettings.salaryPayday - currentDay).let {
+        if (it < 0) it + 30 else it
+    }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = colors.glassCard,
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(dimens.iconSizeXl + 4.dp)
+                    .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(CyanNeon, colors.secondaryNeon)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Color(0xFF0F172A),
+                    modifier = Modifier.size(dimens.iconSizeMd)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(dimens.spacingMd))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = strings.recentTransactions,
+                    text = strings.salarySchedulerTitle,
                     color = colors.textPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontSize = typo.bodyLg
                 )
+                Spacer(modifier = Modifier.height(3.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                ) {
+                    Text(
+                        text = formatDzd(userSettings.salaryAmount, strings.currencyCode),
+                        color = EmeraldNeon,
+                        fontSize = typo.body,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "•",
+                        color = colors.textMuted,
+                        fontSize = typo.caption
+                    )
+                    val paydayStatus = if (currentDay == userSettings.salaryPayday) {
+                        strings.salaryDepositedToday
+                    } else {
+                        "Day ${userSettings.salaryPayday} ($daysUntilPayday d)"
+                    }
+                    Text(
+                        text = paydayStatus,
+                        color = colors.primaryNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = null,
+                tint = colors.textSecondary,
+                modifier = Modifier.size(dimens.iconSizeSm)
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionsRow(
+    strings: StringsBundle,
+    onAddIncomeClick: () -> Unit,
+    onAddExpenseClick: () -> Unit,
+    onAddDebtClick: () -> Unit
+) {
+    val dimens = LocalAdaptiveDimens.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+    ) {
+        QuickActionButton(
+            text = strings.addIncome,
+            icon = Icons.Default.Add,
+            brush = IncomeBtnGradient,
+            borderColor = Color(0x6034D399),
+            modifier = Modifier.weight(1f),
+            onClick = onAddIncomeClick
+        )
+        QuickActionButton(
+            text = strings.addExpense,
+            icon = Icons.Default.Add,
+            brush = ExpenseBtnGradient,
+            borderColor = Color(0x60FB7185),
+            modifier = Modifier.weight(1f),
+            onClick = onAddExpenseClick
+        )
+        QuickActionButton(
+            text = strings.addDebt,
+            icon = Icons.Default.CreditCard,
+            brush = DebtBtnGradient,
+            borderColor = Color(0x6038BDF8),
+            modifier = Modifier.weight(1f),
+            onClick = onAddDebtClick
+        )
+    }
+}
+
+@Composable
+private fun ActiveDebtsBanner(
+    summary: FinancialSummary,
+    strings: StringsBundle,
+    colors: LiquidGlassColors
+) {
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = colors.glassCard,
+        shape = RoundedCornerShape(dimens.cornerRadiusMd)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimens.cardPaddingSmall),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CreditCard,
+                    contentDescription = null,
+                    tint = AmberNeon,
+                    modifier = Modifier.size(dimens.iconSizeMd)
+                )
+                Spacer(modifier = Modifier.width(dimens.spacingSm))
                 Text(
-                    text = strings.seeAll,
-                    color = colors.primaryNeon,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onSeeAllClick() }
+                    text = strings.activeDebts,
+                    color = colors.textPrimary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-        }
 
-        // Recent Transactions List (first 6 items)
-        val recentList = transactions.take(6)
-        if (recentList.isEmpty()) {
-            item {
-                LiquidEmptyStateCard(
-                    title = strings.emptyTransactionsTitle,
-                    description = strings.emptyTransactionsDesc,
-                    icon = Icons.Default.Receipt,
-                    iconColor = CyanNeon,
-                    actionText = strings.addFirstTransaction,
-                    onActionClick = onAddTransactionClick
-                )
-            }
-        } else {
-            items(recentList, key = { it.id }) { item ->
-                TransactionRowItem(
-                    transaction = item,
-                    currencyCode = strings.currencyCode,
-                    onDelete = { onDeleteTransaction(item) }
-                )
-            }
+            Text(
+                text = "I Owe: ${formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode)}",
+                color = AmberNeon,
+                fontSize = typo.bodySm,
+                fontWeight = FontWeight.Bold
+            )
         }
+    }
+}
 
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+@Composable
+private fun RecentTransactionsHeader(
+    strings: StringsBundle,
+    colors: LiquidGlassColors,
+    onSeeAllClick: () -> Unit
+) {
+    val typo = LocalAdaptiveTypography.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = strings.recentTransactions,
+            color = colors.textPrimary,
+            fontSize = typo.title,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = strings.seeAll,
+            color = colors.primaryNeon,
+            fontSize = typo.body,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clickable { onSeeAllClick() }
+        )
     }
 }
 
@@ -337,6 +489,8 @@ fun TransactionRowItem(
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     val isIncome = transaction.type == TransactionType.INCOME
     val amountColor = if (isIncome) EmeraldNeon else RoseNeon
@@ -347,18 +501,18 @@ fun TransactionRowItem(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         backgroundColor = colors.glassCard,
-        shape = RoundedCornerShape(18.dp)
+        shape = RoundedCornerShape(dimens.cornerRadiusMd)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(dimens.cardPaddingSmall),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(dimens.iconSizeXl + 4.dp)
+                    .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                     .background(amountColor.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -366,29 +520,29 @@ fun TransactionRowItem(
                     imageVector = icon,
                     contentDescription = null,
                     tint = amountColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(dimens.iconSizeSm)
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(dimens.spacingMd))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transaction.title,
                     color = colors.textPrimary,
-                    fontSize = 14.sp,
+                    fontSize = typo.titleSm,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "${strings.categoryName(transaction.category)} • ${formatDate(transaction.dateMillis)}",
                     color = colors.textMuted,
-                    fontSize = 11.sp
+                    fontSize = typo.caption
                 )
                 if (transaction.note.isNotBlank()) {
                     Text(
                         text = transaction.note,
                         color = colors.textMuted.copy(alpha = 0.8f),
-                        fontSize = 10.sp,
+                        fontSize = typo.caption,
                         maxLines = 1
                     )
                 }
@@ -398,14 +552,14 @@ fun TransactionRowItem(
                 Text(
                     text = "$prefix ${formatDzd(transaction.amount, currencyCode)}",
                     color = amountColor,
-                    fontSize = 14.sp,
+                    fontSize = typo.body,
                     fontWeight = FontWeight.Bold
                 )
                 if (transaction.isSalaryCredit) {
                     Text(
                         text = "Salary Credit",
                         color = colors.primaryNeon,
-                        fontSize = 10.sp,
+                        fontSize = typo.caption,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -414,7 +568,7 @@ fun TransactionRowItem(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .padding(top = 2.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(dimens.cornerRadiusXs))
                             .background(AmberNeon.copy(alpha = 0.16f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
@@ -428,7 +582,7 @@ fun TransactionRowItem(
                         Text(
                             text = strings.paidFromSavingsBadge,
                             color = AmberNeon,
-                            fontSize = 9.5.sp,
+                            fontSize = typo.caption,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -437,13 +591,13 @@ fun TransactionRowItem(
 
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete",
                     tint = colors.textMuted.copy(alpha = 0.6f),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(dimens.iconSizeSm)
                 )
             }
         }
