@@ -56,7 +56,7 @@ jobs:
 
       - name: Build Release APK
         run: |
-          gradle assembleRelease --stacktrace
+          gradle assembleRelease --stacktrace -Djava.awt.headless=true
 
       - name: Prepare Release Artifacts
         id: prepare_artifacts
