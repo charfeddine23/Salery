@@ -203,7 +203,7 @@ fun SmartBudgetAlertCard(
                             letterSpacing = 0.2.sp
                         )
                         Text(
-                            text = if (isArabic) "تنبيه استباقي عند بلوغ 80% من سقف المصاريف" else "Proactive 80% threshold warning & advice",
+                            text = if (isArabic) "تنبيه استباقي عند بلوغ 80٪ من سقف المصاريف" else "Proactive 80% threshold warning & advice",
                             color = colors.textMuted,
                             fontSize = 11.sp
                         )
@@ -269,7 +269,7 @@ fun SmartBudgetAlertCard(
                         if (isCritical) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "${alert.percentage.toInt()}%",
+                                text = if (isArabic) "${alert.percentage.toInt()}٪" else "${alert.percentage.toInt()}%",
                                 color = AmberNeon,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -328,7 +328,7 @@ fun SmartBudgetAlertCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (isArabic) {
-                                    if (isWarning) "تنبيه: اقتراب من سقف الميزانية (80%)" else "الميزانية ضمن الحدود الآمنة"
+                                    if (isWarning) "تنبيه: اقتراب من سقف الميزانية (80٪)" else "الميزانية ضمن الحدود الآمنة"
                                 } else {
                                     if (isWarning) "Alert: Approaching 80% Budget Cap" else "Budget Within Safe Limits"
                                 },
@@ -405,7 +405,7 @@ fun SmartBudgetAlertCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${currentAlert.percentage.toInt()}% " + (if (isArabic) "مستهلك" else "used"),
+                            text = if (isArabic) "${currentAlert.percentage.toInt()}٪ مستهلك" else "${currentAlert.percentage.toInt()}% used",
                             color = if (isWarning) AmberNeon else colors.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -531,7 +531,7 @@ fun SmartBudgetAlertCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (isArabic) "حدد السقف الشهري بالدينار الجزائري لتلقي تنبيهات الـ 80% والنصائح" else "Set monthly limit in DZD to receive 80% threshold warnings & advice",
+                        text = if (isArabic) "حدد السقف الشهري بالدينار الجزائري لتلقي تنبيهات الـ 80٪ والنصائح" else "Set monthly limit in DZD to receive 80% threshold warnings & advice",
                         color = colors.textMuted,
                         fontSize = 12.sp
                     )

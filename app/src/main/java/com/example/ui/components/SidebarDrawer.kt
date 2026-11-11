@@ -27,13 +27,18 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,25 +57,24 @@ import com.example.data.UserSettings
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-
 @Composable
 fun SidebarDrawer(
     selectedRoute: String,
     onNavigate: (String) -> Unit,
     userSettings: UserSettings,
-    onOpenSalaryScheduler: () -> Unit,
-    onOpenBackupRestore: () -> Unit,
-    onOpenPatternLock: () -> Unit,
-    onLockAppNow: () -> Unit,
+    onOpenSalaryScheduler: () -> Unit = {},
+    onOpenBackupRestore: () -> Unit = {},
+    onOpenPatternLock: () -> Unit = {},
+    onLockAppNow: () -> Unit = {},
     onToggleStealthMode: () -> Unit = {},
+    onToggleBiometric: (Boolean) -> Unit = {},
     onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
@@ -173,50 +177,63 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Smart Salary Scheduler trigger
-            DrawerActionItem(
-                icon = Icons.Default.Schedule,
-                title = strings.salarySchedulerTitle,
-                subtitle = "${userSettings.salaryAmount.toLong()} DZD • Day ${userSettings.salaryPayday}",
-                onClick = onOpenSalaryScheduler
-            )
-
             // Backup & Restore
+            val isArabic = strings is ArabicStrings
             DrawerActionItem(
                 icon = Icons.Default.CloudDone,
                 title = strings.backupDriveTitle,
-                subtitle = "Manual Google Drive & JSON",
+                subtitle = if (isArabic) "حفظ واستعادة النسخ الاحتياطية" else "Google Drive & JSON backup",
                 onClick = onOpenBackupRestore
             )
 
-            // Pattern Lock & Biometric Security
-            DrawerActionItem(
-                icon = Icons.Default.Lock,
-                title = strings.patternLock,
-                subtitle = when {
-                    userSettings.patternLockEnabled && userSettings.biometricEnabled -> "Pattern & Biometrics Active"
-                    userSettings.patternLockEnabled -> "Pattern Lock Active"
-                    else -> "Disabled"
-                },
-                onClick = onOpenPatternLock
-            )
-
-            if (userSettings.patternLockEnabled) {
-                DrawerActionItem(
-                    icon = Icons.Default.Lock,
-                    title = "Lock SaleryPulse Now",
-                    subtitle = "Require pattern unlock immediately",
-                    onClick = onLockAppNow
+            // Fingerprint Authentication (زر تفعيل وتعطيل ال fingerprint authentication)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onToggleBiometric(!userSettings.biometricEnabled) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        tint = colors.primaryNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.biometricSettingsTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (userSettings.biometricEnabled) strings.biometricActive else strings.biometricDisabled,
+                        color = if (userSettings.biometricEnabled) EmeraldNeon else colors.textMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = userSettings.biometricEnabled,
+                    onCheckedChange = { onToggleBiometric(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.primaryNeon,
+                        checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),
+                        uncheckedThumbColor = colors.textMuted,
+                        uncheckedTrackColor = colors.glassCard
+                    )
                 )
             }
-
-            // Stealth Mode (Privacy / Shake to Hide)
-            DrawerActionItem(
-                icon = if (userSettings.stealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                title = strings.stealthModeTitle,
-                subtitle = if (userSettings.stealthMode) strings.stealthModeActive else strings.stealthDoubleTapHint,
-                onClick = onToggleStealthMode
-            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -327,7 +344,7 @@ fun SidebarDrawer(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Updated: Nov 5, 2026",
+                                text = "${strings.updatedLabel}: ${strings.buildDate}",
                                 color = colors.textMuted,
                                 fontSize = 10.sp
                             )

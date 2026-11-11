@@ -461,7 +461,7 @@ private fun DeepDiveMetricsContent(
             iconTint = EmeraldNeon,
             title = strings.salaryRunway,
             value = if (isArabic) "$daysToPayday يوماً متبقية" else "$daysToPayday Days remaining",
-            subtitle = "${userSettings.salaryEmployer} • Day ${userSettings.salaryPayday}"
+            subtitle = if (isArabic) "${userSettings.salaryEmployer} • يوم ${userSettings.salaryPayday}" else "${userSettings.salaryEmployer} • Day ${userSettings.salaryPayday}"
         )
 
         // Debt Liquidity Ratio Metric
@@ -471,7 +471,7 @@ private fun DeepDiveMetricsContent(
             iconTint = if (debtRatio > 35.0) RoseNeon else AmberNeon,
             title = strings.debtPressure,
             value = formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode, isStealth),
-            subtitle = if (isArabic) "تمثل ${debtRatio.toInt()}% من رصيدك الحالي" else "Represents ${debtRatio.toInt()}% of available balance"
+            subtitle = if (isArabic) "تمثل ${debtRatio.toInt()}٪ من رصيدك الحالي" else "Represents ${debtRatio.toInt()}% of available balance"
         )
 
         // Net Savings Cushion Metric

@@ -222,22 +222,22 @@ object SmartBudgetAlertManager {
         remaining: Double,
         monthNameAr: String
     ): String {
-        val formattedRemaining = formatDzdAmount(remaining)
+        val formattedRemaining = formatDzdAmount(remaining, "د.ج")
         return when {
             percentage >= 100.0 -> {
                 "⚠️ تحذير عجز: لقد تجاوزت سقف ميزانية $catAr لشهر $monthNameAr بالكامل. يُنصح بتجميد أي إنفاق إضافي في هذا البند فوراً وتحويل الفائض المالي من بنود أخرى لسد الفجوة."
             }
             percentage >= 80.0 -> {
                 when (key) {
-                    "shopping" -> "💡 نصيحة سريعة لتفادي العجز: لقد بلغت 80% من سقف ميزانية التسوق لشهر $monthNameAr (متبقٍ $formattedRemaining دج فقط). يُوصى بتجميد مشتريات الملابس والأجهزة الكمالية للأسبوع القادم، وحصر الصرف في الضروريات لتفادي عجز الميزانية قبل الراتب القادم."
-                    "food" -> "💡 نصيحة سريعة لتفادي العجز: بلغت مصاريف الطعام والمطاعم 80% من سقف $monthNameAr. يُنصح بالاعتماد على الطهي المنزلي وقوائم البقالة المحددة وتجنب طلبات التوصيل اليومية لإنهاء الشهر برصيد آمن."
-                    "bills" -> "💡 نصيحة سريعة لتفادي العجز: استهلكت 80% من مخصصات الفواتير لشهر $monthNameAr. تأكد من سداد الالتزامات الأساسية المتبقية فوراً وتجنب الرسوم الإضافية قبل الصرف الترفيهي."
-                    "transport" -> "💡 نصيحة سريعة لتفادي العجز: بلغت 80% من سقف النقل والوقود. يُنصح بدمج المشاوير الأسبوعية واستخدام وسائل النقل المشتركة عند الإمكان للحد من حرق الرصيد."
-                    else -> "💡 نصيحة سريعة لتفادي العجز: استهلكت 80% من سقف ميزانية $catAr لشهر $monthNameAr (متبقٍ $formattedRemaining دج). خفّض وتيرة الصرف اليومية وركّز على الأولويات لتفادي الوقوع في العجز المالي."
+                    "shopping" -> "💡 نصيحة سريعة لتفادي العجز: لقد بلغت 80٪ من سقف ميزانية التسوق لشهر $monthNameAr (متبقٍ $formattedRemaining فقط). يُوصى بتجميد مشتريات الملابس والأجهزة الكمالية للأسبوع القادم، وحصر الصرف في الضروريات لتفادي عجز الميزانية قبل الراتب القادم."
+                    "food" -> "💡 نصيحة سريعة لتفادي العجز: بلغت مصاريف الطعام والمطاعم 80٪ من سقف $monthNameAr. يُنصح بالاعتماد على الطهي المنزلي وقوائم البقالة المحددة وتجنب طلبات التوصيل اليومية لإنهاء الشهر برصيد آمن."
+                    "bills" -> "💡 نصيحة سريعة لتفادي العجز: استهلكت 80٪ من مخصصات الفواتير لشهر $monthNameAr. تأكد من سداد الالتزامات الأساسية المتبقية فوراً وتجنب الرسوم الإضافية قبل الصرف الترفيهي."
+                    "transport" -> "💡 نصيحة سريعة لتفادي العجز: بلغت 80٪ من سقف النقل والوقود. يُنصح بدمج المشاوير الأسبوعية واستخدام وسائل النقل المشتركة عند الإمكان للحد من حرق الرصيد."
+                    else -> "💡 نصيحة سريعة لتفادي العجز: استهلكت 80٪ من سقف ميزانية $catAr لشهر $monthNameAr (متبقٍ $formattedRemaining). خفّض وتيرة الصرف اليومية وركّز على الأولويات لتفادي الوقوع في العجز المالي."
                 }
             }
             else -> {
-                "وضع الميزانية آمن (متبقٍ $formattedRemaining دج). حافظ على هذا النسق المتزن لضمان تحقيق فائض ادخاري ممتاز في نهاية الشهر."
+                "وضع الميزانية آمن (متبقٍ $formattedRemaining). حافظ على هذا النسق المتزن لضمان تحقيق فائض ادخاري ممتاز في نهاية الشهر."
             }
         }
     }
@@ -284,17 +284,17 @@ object SmartBudgetAlertManager {
         }
 
         val title = if (isArabic) {
-            "⚠️ تنبيه سقف الميزانية: ${alert.categoryNameAr} (${alert.percentage.toInt()}%)"
+            "⚠️ تنبيه سقف الميزانية: ${alert.categoryNameAr} (${alert.percentage.toInt()}٪)"
         } else {
             "⚠️ Budget Alert: ${alert.categoryNameEn} (${alert.percentage.toInt()}%)"
         }
 
         val adviceText = if (isArabic) alert.adviceAr else alert.adviceEn
-        val remainingFormatted = formatDzdAmount(alert.remainingAmount)
+        val remainingFormatted = formatDzdAmount(alert.remainingAmount, if (isArabic) "د.ج" else "DZD")
         val body = if (isArabic) {
-            "بلغت ${alert.percentage.toInt()}% من ميزانية ${alert.categoryNameAr} لشهر ${alert.monthNameAr} (متبقٍ ${remainingFormatted} دج).\n${adviceText}"
+            "بلغت ${alert.percentage.toInt()}٪ من ميزانية ${alert.categoryNameAr} لشهر ${alert.monthNameAr} (متبقٍ ${remainingFormatted}).\n${adviceText}"
         } else {
-            "Reached ${alert.percentage.toInt()}% of ${alert.categoryNameEn} budget for ${alert.monthNameEn} (${remainingFormatted} DZD remaining).\n${adviceText}"
+            "Reached ${alert.percentage.toInt()}% of ${alert.categoryNameEn} budget for ${alert.monthNameEn} (${remainingFormatted} remaining).\n${adviceText}"
         }
 
         val intent = Intent(context, MainActivity::class.java).apply {

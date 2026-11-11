@@ -59,6 +59,7 @@ import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
@@ -640,8 +641,10 @@ private fun DebtSummaryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val isArabic = strings is ArabicStrings
+                val pctStr = if (isArabic) "${(tabProgress * 100).toInt()}٪" else "${(tabProgress * 100).toInt()}%"
                 Text(
-                    text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} (${(tabProgress * 100).toInt()}%)",
+                    text = "${strings.paidAmount}: ${formatDzd(totalPaidAmount, strings.currencyCode)} ($pctStr)",
                     color = DebtColors.settled(isDark),
                     fontSize = typo.caption,
                     fontWeight = FontWeight.SemiBold
@@ -726,6 +729,7 @@ fun DebtItemCard(
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
     val isDark = colors.isDark
+    val isArabic = strings is ArabicStrings
 
     val now = System.currentTimeMillis()
     val isOverdue = !debt.isPaid && debt.dueDateMillis < now
@@ -845,7 +849,7 @@ fun DebtItemCard(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "$paidPercent%",
+                    text = if (isArabic) "$paidPercent٪" else "$paidPercent%",
                     color = if (debt.isPaid) DebtColors.settled(isDark)
                     else if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
                     else DebtColors.receivable(isDark),
@@ -874,8 +878,9 @@ fun DebtItemCard(
                             .border(1.dp, statusColor.copy(alpha = if (isDark) 0.45f else 0.35f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
+                        val overdueLabel = if (isArabic) "متأخر" else "Overdue"
                         Text(
-                            text = if (debt.isPaid) strings.debtPaid else if (isOverdue) "Overdue" else strings.debtPending,
+                            text = if (debt.isPaid) strings.debtPaid else if (isOverdue) overdueLabel else strings.debtPending,
                             color = statusColor,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
@@ -899,8 +904,13 @@ fun DebtItemCard(
                                     modifier = Modifier.size(10.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
+                                val instLabel = if (isArabic) {
+                                    "${debt.monthlyInstallmentAmount.toLong()} $currencyCode / شهر • يوم ${debt.installmentDayOfMonth}"
+                                } else {
+                                    "${debt.monthlyInstallmentAmount.toLong()} $currencyCode / mo • Day ${debt.installmentDayOfMonth}"
+                                }
                                 Text(
-                                    text = "${debt.monthlyInstallmentAmount.toLong()} $currencyCode / mo • Day ${debt.installmentDayOfMonth}",
+                                    text = instLabel,
                                     color = DebtColors.autoPay(isDark),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
@@ -924,7 +934,7 @@ fun DebtItemCard(
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "Auto-Pay",
+                                    text = if (isArabic) "دفع تلقائي" else "Auto-Pay",
                                     color = DebtColors.receivable(isDark),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
@@ -935,10 +945,21 @@ fun DebtItemCard(
                 }
 
                 // Due Date Text
+                val dueText = when {
+                    debt.isPaid -> {
+                        val dStr = formatDate(debt.paidDateMillis ?: debt.dueDateMillis)
+                        if (isArabic) "تم السداد في $dStr" else "Settled on $dStr"
+                    }
+                    debt.isRecurringMonthlyInstallment -> {
+                        if (isArabic) "شهرياً في يوم ${debt.installmentDayOfMonth}" else "Monthly on Day ${debt.installmentDayOfMonth}"
+                    }
+                    else -> {
+                        val dStr = formatDate(debt.dueDateMillis)
+                        if (isArabic) "الاستحقاق: $dStr ($daysLeft يوم)" else "Due: $dStr ($daysLeft d)"
+                    }
+                }
                 Text(
-                    text = if (debt.isPaid) "Settled on ${formatDate(debt.paidDateMillis ?: debt.dueDateMillis)}"
-                    else if (debt.isRecurringMonthlyInstallment) "Monthly on Day ${debt.installmentDayOfMonth}"
-                    else "Due: ${formatDate(debt.dueDateMillis)} ($daysLeft d)",
+                    text = dueText,
                     color = colors.textMuted,
                     fontSize = 11.sp
                 )

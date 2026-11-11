@@ -46,6 +46,8 @@ object FinancialInsightsEngine {
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
         val maxDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
+        val curr = if (isArabic) "د.ج" else "DZD"
+
         // 1. Spending Velocity Analysis (Last 7 Days vs Prior 7 Days)
         val sevenDaysMillis = TimeUnit.DAYS.toMillis(7)
         val fourteenDaysMillis = TimeUnit.DAYS.toMillis(14)
@@ -74,19 +76,19 @@ object FinancialInsightsEngine {
 
             val desc = when {
                 isAccelerated -> if (isArabic) {
-                    "ارتفعت مصاريفك بنسبة ${abs(deltaPct).toInt()}% مقارنة بالأسبوع الماضي (${formatDzdAmount(recentWeekExpenses)} مقابل ${formatDzdAmount(priorWeekExpenses)}). ننصحك بالحد من المشتريات غير الضرورية."
+                    "ارتفعت مصاريفك بنسبة ${abs(deltaPct).toInt()}٪ مقارنة بالأسبوع الماضي (${formatDzdAmount(recentWeekExpenses, curr)} مقابل ${formatDzdAmount(priorWeekExpenses, curr)}). ننصحك بالحد من المشتريات غير الضرورية."
                 } else {
-                    "Weekly expenses rose by ${abs(deltaPct).toInt()}% vs prior week (${formatDzdAmount(recentWeekExpenses)} vs ${formatDzdAmount(priorWeekExpenses)}). Consider trimming discretionary shopping."
+                    "Weekly expenses rose by ${abs(deltaPct).toInt()}% vs prior week (${formatDzdAmount(recentWeekExpenses, curr)} vs ${formatDzdAmount(priorWeekExpenses, curr)}). Consider trimming discretionary shopping."
                 }
                 isFrugal -> if (isArabic) {
-                    "أحسنت! انخفضت مصاريفك هذا الأسبوع بنسبة ${abs(deltaPct).toInt()}% (${formatDzdAmount(recentWeekExpenses)}). هذا يوفر لك سيولة إضافية حتى نهاية الشهر."
+                    "أحسنت! انخفضت مصاريفك هذا الأسبوع بنسبة ${abs(deltaPct).toInt()}٪ (${formatDzdAmount(recentWeekExpenses, curr)}). هذا يوفر لك سيولة إضافية حتى نهاية الشهر."
                 } else {
-                    "Great work! Expenses fell by ${abs(deltaPct).toInt()}% this week (${formatDzdAmount(recentWeekExpenses)}). You are retaining more capital."
+                    "Great work! Expenses fell by ${abs(deltaPct).toInt()}% this week (${formatDzdAmount(recentWeekExpenses, curr)}). You are retaining more capital."
                 }
                 else -> if (isArabic) {
-                    "إنفاقك الأسبوعي مستقر بمعدل ${formatDzdAmount(recentWeekExpenses / 7.0)} يومياً وهو متوافق مع ميزانيتك الشهرية."
+                    "إنفاقك الأسبوعي مستقر بمعدل ${formatDzdAmount(recentWeekExpenses / 7.0, curr)} يومياً وهو متوافق مع ميزانيتك الشهرية."
                 } else {
-                    "Your weekly spending is stable at ~${formatDzdAmount(recentWeekExpenses / 7.0)}/day, aligned with your monthly plan."
+                    "Your weekly spending is stable at ~${formatDzdAmount(recentWeekExpenses / 7.0, curr)}/day, aligned with your monthly plan."
                 }
             }
 
@@ -96,8 +98,8 @@ object FinancialInsightsEngine {
                     category = if (isArabic) "سرعة الإنفاق" else "Spending Velocity",
                     title = title,
                     description = desc,
-                    metricValue = formatDzdAmount(recentWeekExpenses),
-                    metricDelta = if (priorWeekExpenses > 0) "${if (deltaPct > 0) "+" else ""}${deltaPct.toInt()}%" else null,
+                    metricValue = formatDzdAmount(recentWeekExpenses, curr),
+                    metricDelta = if (priorWeekExpenses > 0) "${if (deltaPct > 0) "+" else ""}${deltaPct.toInt()}${if (isArabic) "٪" else "%"}" else null,
                     isPositive = !isAccelerated,
                     iconType = InsightIconType.VELOCITY
                 )
@@ -123,15 +125,15 @@ object FinancialInsightsEngine {
 
         val runwayDesc = if (daysUntilPayday == 0) {
             if (isArabic) {
-                "سيتم تسجيل راتب ${userSettings.salaryEmployer} بقيمة ${formatDzdAmount(userSettings.salaryAmount)} اليوم تلقائياً."
+                "سيتم تسجيل راتب ${userSettings.salaryEmployer} بقيمة ${formatDzdAmount(userSettings.salaryAmount, curr)} اليوم تلقائياً."
             } else {
-                "${userSettings.salaryEmployer} salary of ${formatDzdAmount(userSettings.salaryAmount)} will credit automatically today."
+                "${userSettings.salaryEmployer} salary of ${formatDzdAmount(userSettings.salaryAmount, curr)} will credit automatically today."
             }
         } else {
             if (isArabic) {
-                "بناءً على رصيدك المتاح، يمكنك إنفاق حتى ${formatDzdAmount(dailyRunwayBudget)} يومياً بأمان تام حتى وصول الراتب في يوم $payday."
+                "بناءً على رصيدك المتاح، يمكنك إنفاق حتى ${formatDzdAmount(dailyRunwayBudget, curr)} يومياً بأمان تام حتى وصول الراتب في يوم $payday."
             } else {
-                "Based on current funds, your safe daily burn limit is ${formatDzdAmount(dailyRunwayBudget)}/day until payday on Day $payday."
+                "Based on current funds, your safe daily burn limit is ${formatDzdAmount(dailyRunwayBudget, curr)}/day until payday on Day $payday."
             }
         }
 
@@ -141,7 +143,7 @@ object FinancialInsightsEngine {
                 category = if (isArabic) "مدرج الراتب" else "Salary Runway",
                 title = runwayTitle,
                 description = runwayDesc,
-                metricValue = formatDzdAmount(dailyRunwayBudget),
+                metricValue = formatDzdAmount(dailyRunwayBudget, curr),
                 metricDelta = if (isArabic) "$daysUntilPayday يوم" else "$daysUntilPayday days",
                 isPositive = dailyRunwayBudget > 1500.0,
                 iconType = InsightIconType.RUNWAY
@@ -163,9 +165,9 @@ object FinancialInsightsEngine {
             }
 
             val debtDesc = if (isArabic) {
-                "عليك ديون مستحقة بقيمة ${formatDzdAmount(pendingOwedByMe)} تمثل ${debtRatio.toInt()}% من رصيدك الحالي. جدولتها بأقساط شهرية تجنبك الضغط المالي المفاجئ."
+                "عليك ديون مستحقة بقيمة ${formatDzdAmount(pendingOwedByMe, curr)} تمثل ${debtRatio.toInt()}٪ من رصيدك الحالي. جدولتها بأقساط شهرية تجنبك الضغط المالي المفاجئ."
             } else {
-                "You have ${formatDzdAmount(pendingOwedByMe)} in pending debts (${debtRatio.toInt()}% of available balance). Monthly auto-installments will safeguard liquidity."
+                "You have ${formatDzdAmount(pendingOwedByMe, curr)} in pending debts (${debtRatio.toInt()}% of available balance). Monthly auto-installments will safeguard liquidity."
             }
 
             insights.add(
@@ -174,8 +176,8 @@ object FinancialInsightsEngine {
                     category = if (isArabic) "إدارة الديون" else "Debt Pressure",
                     title = debtTitle,
                     description = debtDesc,
-                    metricValue = formatDzdAmount(pendingOwedByMe),
-                    metricDelta = "${debtRatio.toInt()}% balance",
+                    metricValue = formatDzdAmount(pendingOwedByMe, curr),
+                    metricDelta = if (isArabic) "${debtRatio.toInt()}٪ من الرصيد" else "${debtRatio.toInt()}% balance",
                     isPositive = !isHeavy,
                     iconType = InsightIconType.DEBT
                 )
@@ -187,11 +189,11 @@ object FinancialInsightsEngine {
                     category = if (isArabic) "مستحقات خارجية" else "Receivables",
                     title = if (isArabic) "لديك مستحقات تنتظر التحصيل" else "Pending Receivables",
                     description = if (isArabic) {
-                        "لديك ${formatDzdAmount(pendingOwedToMe)} مستحقة لدى أشخاص آخرين. تحصيلها سيعزز احتياطياتك المالية فوراً."
+                        "لديك ${formatDzdAmount(pendingOwedToMe, curr)} مستحقة لدى أشخاص آخرين. تحصيلها سيعزز احتياطياتك المالية فوراً."
                     } else {
-                        "Others owe you ${formatDzdAmount(pendingOwedToMe)}. Collecting them will boost your working capital."
+                        "Others owe you ${formatDzdAmount(pendingOwedToMe, curr)}. Collecting them will boost your working capital."
                     },
-                    metricValue = formatDzdAmount(pendingOwedToMe),
+                    metricValue = formatDzdAmount(pendingOwedToMe, curr),
                     isPositive = true,
                     iconType = InsightIconType.DEBT
                 )
@@ -204,15 +206,15 @@ object FinancialInsightsEngine {
             val savingsRate = ((netSavings / summary.monthlyIncome) * 100.0).coerceAtLeast(0.0)
 
             val savingsTitle = when {
-                savingsRate >= 30.0 -> if (isArabic) "معدل ادخار ممتاز (+30%)" else "Superb Savings Rate (+30%)"
+                savingsRate >= 30.0 -> if (isArabic) "معدل ادخار ممتاز (+30٪)" else "Superb Savings Rate (+30%)"
                 savingsRate >= 15.0 -> if (isArabic) "معدل ادخار صحي" else "Healthy Savings Cushion"
                 else -> if (isArabic) "فرصة لتحسين الادخار" else "Savings Growth Opportunity"
             }
 
             val savingsDesc = if (isArabic) {
-                "حققت فائضاً شهرياً قدره ${formatDzdAmount(netSavings.coerceAtLeast(0.0))} بمعدل ادخار ${savingsRate.toInt()}%. الاستمرار على هذا النحو يبني درع أمان مالي متين."
+                "حققت فائضاً شهرياً قدره ${formatDzdAmount(netSavings.coerceAtLeast(0.0), curr)} بمعدل ادخار ${savingsRate.toInt()}٪. الاستمرار على هذا النحو يبني درع أمان مالي متين."
             } else {
-                "Net monthly surplus is ${formatDzdAmount(netSavings.coerceAtLeast(0.0))} (${savingsRate.toInt()}% savings rate). You are consistently growing your safety buffer."
+                "Net monthly surplus is ${formatDzdAmount(netSavings.coerceAtLeast(0.0), curr)} (${savingsRate.toInt()}% savings rate). You are consistently growing your safety buffer."
             }
 
             insights.add(
@@ -221,8 +223,8 @@ object FinancialInsightsEngine {
                     category = if (isArabic) "معدل الادخار" else "Savings Milestone",
                     title = savingsTitle,
                     description = savingsDesc,
-                    metricValue = "${savingsRate.toInt()}%",
-                    metricDelta = formatDzdAmount(netSavings.coerceAtLeast(0.0)),
+                    metricValue = if (isArabic) "${savingsRate.toInt()}٪" else "${savingsRate.toInt()}%",
+                    metricDelta = formatDzdAmount(netSavings.coerceAtLeast(0.0), curr),
                     isPositive = savingsRate >= 15.0,
                     iconType = InsightIconType.SAVINGS
                 )

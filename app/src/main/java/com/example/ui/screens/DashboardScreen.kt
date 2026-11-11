@@ -49,6 +49,7 @@ import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
 import com.example.ui.components.TotalBalanceVaultCard
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
@@ -341,8 +342,11 @@ private fun SalarySchedulerCard(
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
+                    val isArabic = strings is ArabicStrings
                     val paydayStatus = if (currentDay == userSettings.salaryPayday) {
                         strings.salaryDepositedToday
+                    } else if (isArabic) {
+                        "يوم ${userSettings.salaryPayday} (متبقٍ $daysUntilPayday يوم)"
                     } else {
                         "Day ${userSettings.salaryPayday} ($daysUntilPayday d)"
                     }
@@ -442,8 +446,9 @@ private fun ActiveDebtsBanner(
                 )
             }
 
+            val isArabic = strings is ArabicStrings
             Text(
-                text = "I Owe: ${formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode)}",
+                text = (if (isArabic) "ديون عليّ: " else "I Owe: ") + formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode),
                 color = AmberNeon,
                 fontSize = typo.bodySm,
                 fontWeight = FontWeight.Bold

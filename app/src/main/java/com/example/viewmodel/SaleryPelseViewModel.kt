@@ -116,8 +116,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
     init {
-        // Initialize lock state based on preferences
-        if (settings.value.patternLockEnabled && settings.value.patternLockHash.isNotBlank()) {
+        // Initialize lock state based on biometric preference
+        if (settings.value.biometricEnabled) {
             _isAppLocked.value = true
         }
 

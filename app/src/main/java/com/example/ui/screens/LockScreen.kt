@@ -1,8 +1,14 @@
 package com.example.ui.screens
 
 import android.content.ContextWrapper
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,9 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -29,41 +35,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-import com.example.R
 import com.example.security.BiometricAuthManager
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
-import com.example.ui.components.PatternLockView
-import com.example.ui.components.PatternState
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
-import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 
 @Composable
 fun LockScreen(
-    onUnlockAttempt: (List<Int>) -> Boolean,
+    onUnlockAttempt: (List<Int>) -> Boolean = { false },
     onBiometricUnlock: () -> Unit = {},
-    isBiometricEnabled: Boolean = false,
+    isBiometricEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isArabic = strings is ArabicStrings
 
     val activity = remember(context) {
         var ctx = context
@@ -74,28 +76,38 @@ fun LockScreen(
         null
     }
 
-    val canUseBiometrics = isBiometricEnabled && activity != null && BiometricAuthManager.isBiometricAvailable(activity)
+    val canUseBiometrics = activity != null && BiometricAuthManager.isBiometricAvailable(activity)
 
-    var patternState by remember { mutableStateOf(PatternState.INPUT) }
-    var statusText by remember { mutableStateOf(strings.drawPattern) }
+    var isVerifying by remember { mutableStateOf(false) }
+    var statusText by remember {
+        mutableStateOf(if (isArabic) "المس مستشعر البصمة للمتابعة" else "Touch fingerprint sensor to continue")
+    }
+    var isError by remember { mutableStateOf(false) }
 
     fun launchBiometricPrompt() {
-        if (!canUseBiometrics || activity == null) return
+        if (activity == null) return
+        isVerifying = true
+        isError = false
         BiometricAuthManager.authenticate(
             activity = activity,
             title = strings.biometricPromptTitle,
             subtitle = strings.biometricPromptSubtitle,
-            negativeButtonText = strings.biometricUsePattern,
+            negativeButtonText = strings.cancel,
             onSuccess = {
-                patternState = PatternState.SUCCESS
-                statusText = "Verified"
+                isVerifying = false
+                isError = false
+                statusText = if (isArabic) "تم التحقق بنجاح" else "Verified"
                 onBiometricUnlock()
             },
             onError = { errString ->
+                isVerifying = false
+                isError = true
                 statusText = errString
             },
             onFailed = {
-                statusText = "Biometrics unverified. Use pattern."
+                isVerifying = false
+                isError = true
+                statusText = if (isArabic) "لم يتم التعرف على البصمة. أعد المحاولة." else "Biometrics unverified. Tap to retry."
             }
         )
     }
@@ -105,6 +117,17 @@ fun LockScreen(
             launchBiometricPrompt()
         }
     }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
 
     GlassBackground(modifier = modifier) {
         Column(
@@ -116,7 +139,7 @@ fun LockScreen(
         ) {
             // Official SaleryPulse "SP" Brand Logo in Dynamic Container
             SpLogoContainer(
-                size = 80.dp,
+                size = 76.dp,
                 cornerRadius = 22.dp,
                 padding = 8.dp
             )
@@ -127,91 +150,99 @@ fun LockScreen(
             Text(
                 text = APP_NAME,
                 color = colors.textPrimary,
-                fontSize = 25.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.5.sp
             )
 
             Text(
-                text = "SaleryPulse Security",
+                text = strings.biometricSettingsTitle,
                 color = colors.primaryNeon,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // Instruction / Error Text
+            // Large Fingerprint Visual Target with glowing ring
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(140.dp)
+                    .scale(if (isVerifying) pulseScale else 1f)
+                    .clip(CircleShape)
+                    .background(colors.primaryNeon.copy(alpha = 0.12f))
+                    .border(1.5.dp, colors.primaryNeon.copy(alpha = 0.45f), CircleShape)
+                    .clickable { launchBiometricPrompt() }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(105.dp)
+                        .clip(CircleShape)
+                        .background(colors.primaryNeon.copy(alpha = 0.20f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = "Fingerprint Sensor",
+                        tint = if (isError) RoseNeon else colors.primaryNeon,
+                        modifier = Modifier.size(60.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Instruction / Status Text
             Text(
                 text = statusText,
-                color = when (patternState) {
-                    PatternState.INPUT -> colors.textSecondary
-                    PatternState.SUCCESS -> EmeraldNeon
-                    PatternState.ERROR -> RoseNeon
-                },
+                color = if (isError) RoseNeon else colors.textSecondary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // 3x3 Pattern Gesture Lock
-            PatternLockView(
-                modifier = Modifier.size(280.dp),
-                patternState = patternState,
-                onPatternComplete = { pattern ->
-                    val success = onUnlockAttempt(pattern)
-                    if (success) {
-                        patternState = PatternState.SUCCESS
-                        statusText = "Unlocked"
-                    } else {
-                        patternState = PatternState.ERROR
-                        statusText = strings.incorrectPattern
-                    }
-                }
-            )
-
-            if (canUseBiometrics) {
-                Spacer(modifier = Modifier.height(18.dp))
-                GlassCard(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { launchBiometricPrompt() },
-                    shape = RoundedCornerShape(16.dp),
-                    backgroundColor = colors.glassSurface
+            // Primary Unlock Button
+            GlassCard(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { launchBiometricPrompt() },
+                shape = RoundedCornerShape(18.dp),
+                backgroundColor = colors.primaryNeon.copy(alpha = 0.22f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fingerprint,
-                            contentDescription = null,
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = strings.biometricUnlockAction,
-                            color = colors.primaryNeon,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        tint = colors.primaryNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = strings.biometricUnlockAction,
+                        color = colors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
-            // Developer Credit Watermark
+            // Developer Credit & Version
             Text(
-                text = "Developer: $DEVELOPER_NAME",
+                text = "${strings.developer}: $DEVELOPER_NAME",
                 color = colors.textMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Version $APP_VERSION",
+                text = "v$APP_VERSION • ${strings.updatedLabel}: ${strings.buildDate}",
                 color = colors.textMuted.copy(alpha = 0.7f),
                 fontSize = 11.sp
             )

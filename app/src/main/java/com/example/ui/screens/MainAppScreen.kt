@@ -78,7 +78,6 @@ import com.example.ui.components.DynamicMoneyBag
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
 import com.example.ui.components.BreathingSpLogo
-import com.example.ui.components.PatternLockDialog
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.SidebarDrawer
 import com.example.ui.components.SpLogoContainer
@@ -126,8 +125,8 @@ fun MainAppScreen(
     // Determine current localized strings bundle
     val isArabic = userSettings.language == "ar"
     val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
-    // Strict LTR rule: Force Left-to-Right layout direction regardless of language (never flip or mirror)
-    val layoutDirection = LayoutDirection.Ltr
+    // Responsive layout direction: Full RTL when Arabic is selected, LTR for English
+    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     // Active bottom navigation route
     var currentRoute by remember { mutableStateOf("dashboard") }
@@ -141,7 +140,6 @@ fun MainAppScreen(
 
     var showSalarySchedulerDialog by remember { mutableStateOf(false) }
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
-    var showPatternLockDialog by remember { mutableStateOf(false) }
 
     // Toast Events collector
     LaunchedEffect(viewModel) {
@@ -167,8 +165,8 @@ fun MainAppScreen(
                 isBiometricEnabled = userSettings.biometricEnabled
             )
         } else {
-            // Sidebar / Navigation Drawer is strictly locked to the Left side (LTR) in both English & Arabic
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            // Respect the active language's layout direction for the entire interface and drawer
+            CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
@@ -183,24 +181,12 @@ fun MainAppScreen(
                                     scope.launch { drawerState.close() }
                                 },
                                 userSettings = userSettings,
-                                onOpenSalaryScheduler = {
-                                    scope.launch { drawerState.close() }
-                                    showSalarySchedulerDialog = true
-                                },
                                 onOpenBackupRestore = {
                                     scope.launch { drawerState.close() }
                                     showBackupRestoreDialog = true
                                 },
-                                onOpenPatternLock = {
-                                    scope.launch { drawerState.close() }
-                                    showPatternLockDialog = true
-                                },
-                                onLockAppNow = {
-                                    scope.launch { drawerState.close() }
-                                    viewModel.lockApp()
-                                },
-                                onToggleStealthMode = {
-                                    viewModel.toggleStealthMode()
+                                onToggleBiometric = { enabled ->
+                                    viewModel.setBiometricEnabled(enabled)
                                 },
                                 onSelectDesignStyle = { style ->
                                     viewModel.setDesignStyle(style)
@@ -425,17 +411,6 @@ fun MainAppScreen(
                     onDismiss = { showBackupRestoreDialog = false },
                     onExportBackup = { viewModel.exportBackupJson() },
                     onRestoreBackup = { json -> viewModel.restoreFromJson(json) }
-                )
-            }
-
-            if (showPatternLockDialog) {
-                PatternLockDialog(
-                    isCurrentlyEnabled = userSettings.patternLockEnabled,
-                    isBiometricEnabled = userSettings.biometricEnabled,
-                    onDismiss = { showPatternLockDialog = false },
-                    onSavePattern = { pattern -> viewModel.saveNewPattern(pattern) },
-                    onDisablePattern = { viewModel.disablePatternLock() },
-                    onToggleBiometric = { enabled -> viewModel.setBiometricEnabled(enabled) }
                 )
             }
         }

@@ -54,6 +54,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.DebtColors
@@ -360,9 +361,11 @@ fun AddDebtDialog(
                         val paid = paidAmountText.toDoubleOrNull() ?: 0.0
                         val rem = (total - paid).coerceAtLeast(0.0)
                         val pct = if (total > 0) ((paid / total) * 100).toInt().coerceIn(0, 100) else 0
+                        val isArabic = strings is ArabicStrings
+                        val pctStr = if (isArabic) "$pct٪" else "$pct%"
                         if (paid > 0) {
                             Text(
-                                text = "${strings.remainingBalance}: ${formatDzd(rem, strings.currencyCode)} ($pct% ${strings.paidOutOf} ${formatDzd(total, strings.currencyCode)})",
+                                text = "${strings.remainingBalance}: ${formatDzd(rem, strings.currencyCode)} ($pctStr ${strings.paidOutOf} ${formatDzd(total, strings.currencyCode)})",
                                 color = if (rem <= 0.001) DebtColors.settled(isDark)
                                 else if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
                                 else DebtColors.receivable(isDark),

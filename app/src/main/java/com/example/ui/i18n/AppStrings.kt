@@ -12,13 +12,14 @@ import java.util.Locale
 
 // App Name, Version, and Developer Name MUST NEVER be translated or changed into Arabic script!
 const val APP_NAME = "SaleryPulse"
-const val DEVELOPER_NAME = "Kahlessenane Charfeddine"
-const val APP_VERSION = "1.0.1"
+const val DEVELOPER_NAME = "Charfeddine Ka"
+val APP_VERSION: String get() = com.example.BuildConfig.APP_VERSION_NAME
 
 interface StringsBundle {
     val appName: String get() = APP_NAME
     val developerName: String get() = DEVELOPER_NAME
-    val appVersion: String get() = APP_VERSION
+    val appVersion: String get() = com.example.BuildConfig.APP_VERSION_NAME
+    val buildDate: String get() = com.example.BuildConfig.BUILD_DATE
     val currencyCode: String
 
     val navDashboard: String
@@ -129,6 +130,10 @@ interface StringsBundle {
     val biometricUsePattern: String
     val biometricUnlockAction: String
     val biometricNotAvailable: String
+    val biometricSettingsTitle: String
+    val biometricActive: String
+    val biometricDisabled: String
+    val updatedLabel: String
 
     val backupRestore: String
     val backupDriveTitle: String
@@ -279,15 +284,15 @@ object EnglishStrings : StringsBundle {
     override val delete = "Delete"
     override val confirmDelete = "Are you sure you want to delete this record?"
 
-    override val settingsTitle = "Liquid Glass Settings"
-    override val appLanguage = "App Language"
+    override val settingsTitle = "Settings"
+    override val appLanguage = "Language"
     override val langEnglish = "English"
     override val langArabic = "العربية"
-    override val themeMode = "Theme Appearance"
+    override val themeMode = "Mode"
     override val themeDark = "Dark"
     override val themeLight = "Light"
     override val themeSystem = "System"
-    override val designStyleTitle = "Design Style"
+    override val designStyleTitle = "Themes"
     override val styleLiquidGlass = "Liquid Glass"
     override val styleNeumorphism = "Neumorphism"
 
@@ -310,9 +315,13 @@ object EnglishStrings : StringsBundle {
     override val biometricUsePattern = "Use Pattern Instead"
     override val biometricUnlockAction = "Unlock with Biometrics"
     override val biometricNotAvailable = "Biometric hardware unavailable or not enrolled"
+    override val biometricSettingsTitle = "Fingerprint Authentication"
+    override val biometricActive = "Enabled"
+    override val biometricDisabled = "Disabled"
+    override val updatedLabel = "Updated"
 
     override val backupRestore = "Backup & Restore"
-    override val backupDriveTitle = "Google Drive & Local Backup"
+    override val backupDriveTitle = "Google Drive Backups"
     override val backupToDrive = "Backup to Google Drive"
     override val restoreFromDrive = "Restore from Google Drive"
     override val exportBackup = "Export & Backup Data"
@@ -484,17 +493,17 @@ object ArabicStrings : StringsBundle {
     override val delete = "حذف"
     override val confirmDelete = "هل أنت متأكد من رغبتك في حذف هذا السجل؟"
 
-    override val settingsTitle = "إعدادات Liquid Glass"
-    override val appLanguage = "لغة التطبيق"
+    override val settingsTitle = "الإعدادات"
+    override val appLanguage = "اللغة"
     override val langEnglish = "English"
     override val langArabic = "العربية"
-    override val themeMode = "مظهر التصميم"
+    override val themeMode = "الوضع"
     override val themeDark = "داكن"
     override val themeLight = "فاتح"
     override val themeSystem = "تلقائي"
-    override val designStyleTitle = "نمط التصميم"
-    override val styleLiquidGlass = "زجاج سائل (Liquid Glass)"
-    override val styleNeumorphism = "نيومورفيزم (Neumorphism)"
+    override val designStyleTitle = "الثيمات"
+    override val styleLiquidGlass = "زجاج سائل"
+    override val styleNeumorphism = "نيومورفيزم"
 
     override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"
@@ -515,9 +524,13 @@ object ArabicStrings : StringsBundle {
     override val biometricUsePattern = "استخدام النمط بدلاً من ذلك"
     override val biometricUnlockAction = "فتح القفل بالبصمة"
     override val biometricNotAvailable = "ميزة البصمة غير متوفرة أو غير مسجلة بالجهاز"
+    override val biometricSettingsTitle = "إعدادات التحقق بالبصمة"
+    override val biometricActive = "مفعل"
+    override val biometricDisabled = "معطل"
+    override val updatedLabel = "آخر تحديث"
 
     override val backupRestore = "النسخ الاحتياطي والاستعادة"
-    override val backupDriveTitle = "Google Drive والنسخ المحلي"
+    override val backupDriveTitle = "إعدادات النسخ الإحتياطي"
     override val backupToDrive = "نسخ احتياطي إلى Google Drive"
     override val restoreFromDrive = "استعادة من Google Drive"
     override val exportBackup = "تصدير وحفظ نسخة احتياطية"
@@ -629,13 +642,36 @@ fun formatDzdAmount(amount: Double, currencyText: String = "DZD", isStealth: Boo
     return "${formatter.format(amount)} $currencyText"
 }
 
+/**
+ * Formats percentages correctly according to active language directionality.
+ * In Arabic, uses the authentic Arabic percent symbol '٪' (\u066A), ensuring
+ * bidirectional text (BiDi) does not flip parentheses or shuffle words.
+ */
+fun formatPercent(percent: Number, isArabic: Boolean): String {
+    val p = percent.toDouble().toInt()
+    return if (isArabic) "$p٪" else "$p%"
+}
+
 @Composable
-fun formatDzd(amount: Double, currencyText: String = "DZD", isStealth: Boolean = LocalStealthMode.current): String {
+fun formatPercent(percent: Number): String {
+    val isArabic = LocalStrings.current is ArabicStrings
+    return formatPercent(percent, isArabic)
+}
+
+@Composable
+fun formatDzd(
+    amount: Double, 
+    currencyText: String = LocalStrings.current.currencyCode, 
+    isStealth: Boolean = LocalStealthMode.current
+): String {
     return formatDzdAmount(amount, currencyText, isStealth)
 }
 
 @Composable
-fun formatCurrency(amount: Double, currencyText: String = "DZD"): String {
+fun formatCurrency(
+    amount: Double, 
+    currencyText: String = LocalStrings.current.currencyCode
+): String {
     val isStealth = LocalStealthMode.current
     return formatDzdAmount(amount, currencyText, isStealth)
 }

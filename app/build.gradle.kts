@@ -1,4 +1,7 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 plugins {
   alias(libs.plugins.android.application)
@@ -16,8 +19,13 @@ android {
     applicationId = "com.aistudio.salerypelse.kdczfn"
     minSdk = 24
     targetSdk = 36
-    versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 2
-    versionName = "1.0.1"
+    val buildNum = System.getenv("BUILD_NUMBER") ?: System.getenv("GITHUB_RUN_NUMBER") ?: "3"
+    versionCode = buildNum.toIntOrNull() ?: 3
+    versionName = "1.0.$buildNum"
+
+    val buildDateStr = SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date())
+    buildConfigField("String", "APP_VERSION_NAME", "\"1.0.$buildNum\"")
+    buildConfigField("String", "BUILD_DATE", "\"$buildDateStr\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

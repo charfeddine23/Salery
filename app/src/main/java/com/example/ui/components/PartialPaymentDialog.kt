@@ -48,6 +48,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
@@ -60,6 +61,7 @@ fun PartialPaymentDialog(
     onConfirmPayment: (amount: Double, recordTransaction: Boolean) -> Unit
 ) {
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
 
@@ -198,8 +200,9 @@ fun PartialPaymentDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
+                            val progPct = if (isArabic) "${(currentProgress * 100).toInt()}٪" else "${(currentProgress * 100).toInt()}%"
                             Text(
-                                text = "${(currentProgress * 100).toInt()}% ${strings.paidOutOf} ${formatDzd(totalAmount, currencyCode)}",
+                                text = "$progPct ${strings.paidOutOf} ${formatDzd(totalAmount, currencyCode)}",
                                 color = colors.textMuted,
                                 fontSize = 11.sp
                             )
@@ -226,8 +229,9 @@ fun PartialPaymentDialog(
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Column {
+                        val maxLabel = if (isArabic) "الأقصى" else "Max"
                         Text(
-                            text = "${strings.partialPaymentAmount} (Max: ${formatDzd(currentRemaining, currencyCode)})",
+                            text = "${strings.partialPaymentAmount} ($maxLabel: ${formatDzd(currentRemaining, currencyCode)})",
                             color = colors.textSecondary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium
@@ -258,7 +262,7 @@ fun PartialPaymentDialog(
                     // Quarter (25%)
                     val quarter = (currentRemaining * 0.25).toLong().coerceAtLeast(1)
                     GlassPill(
-                        text = "25%",
+                        text = if (isArabic) "25٪" else "25%",
                         isSelected = actualPay.toLong() == quarter,
                         onClick = { payAmountText = quarter.toString() }
                     )
@@ -266,7 +270,7 @@ fun PartialPaymentDialog(
                     // Half (50%)
                     val half = (currentRemaining * 0.5).toLong().coerceAtLeast(1)
                     GlassPill(
-                        text = "50%",
+                        text = if (isArabic) "50٪" else "50%",
                         isSelected = actualPay.toLong() == half,
                         onClick = { payAmountText = half.toString() }
                     )
@@ -275,7 +279,7 @@ fun PartialPaymentDialog(
                     if (debt.isRecurringMonthlyInstallment && debt.monthlyInstallmentAmount > 0) {
                         val inst = minOf(debt.monthlyInstallmentAmount, currentRemaining).toLong()
                         GlassPill(
-                            text = "1 Mo ($inst)",
+                            text = if (isArabic) "شهر ($inst)" else "1 Mo ($inst)",
                             isSelected = actualPay.toLong() == inst,
                             onClick = { payAmountText = inst.toString() }
                         )
@@ -284,7 +288,7 @@ fun PartialPaymentDialog(
                     // Full Payoff (100%)
                     val full = currentRemaining.toLong()
                     GlassPill(
-                        text = "Full (100%)",
+                        text = if (isArabic) "الكل (100٪)" else "Full (100%)",
                         isSelected = actualPay.toLong() == full,
                         onClick = { payAmountText = full.toString() }
                     )
@@ -309,14 +313,22 @@ fun PartialPaymentDialog(
                         ) {
                             Column {
                                 Text(
-                                    text = if (projectedRemaining <= 0.001) strings.fullySettled else "After payment:",
+                                    text = if (projectedRemaining <= 0.001) strings.fullySettled else if (isArabic) "بعد السداد:" else "After payment:",
                                     color = accentColor,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (projectedRemaining <= 0.001) "Debt will be fully settled!"
-                                    else "Remaining: ${formatDzd(projectedRemaining, currencyCode)} (${(projectedProgress * 100).toInt()}% paid)",
+                                    text = if (projectedRemaining <= 0.001) {
+                                        if (isArabic) "سيتم سداد الدين بالكامل!" else "Debt will be fully settled!"
+                                    } else {
+                                        val projPct = if (isArabic) "${(projectedProgress * 100).toInt()}٪" else "${(projectedProgress * 100).toInt()}%"
+                                        if (isArabic) {
+                                            "المتبقي: ${formatDzd(projectedRemaining, currencyCode)} (مسدد $projPct)"
+                                        } else {
+                                            "Remaining: ${formatDzd(projectedRemaining, currencyCode)} ($projPct paid)"
+                                        }
+                                    },
                                     color = colors.textPrimary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
