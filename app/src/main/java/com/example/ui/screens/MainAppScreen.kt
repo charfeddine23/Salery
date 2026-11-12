@@ -22,7 +22,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
@@ -129,7 +132,14 @@ fun MainAppScreen(
     val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     // Active bottom navigation route
-    var currentRoute by remember { mutableStateOf("dashboard") }
+    var currentRoute by remember { mutableStateOf("cards") }
+
+    // Intercept system back gestures on sub-screens to return to Cards Hub
+    if (currentRoute in listOf("dashboard_details", "visa_coming_soon", "insights")) {
+        BackHandler {
+            currentRoute = "cards"
+        }
+    }
 
     // Dialog States
     var showAddTransactionDialog by remember { mutableStateOf(false) }
@@ -211,15 +221,20 @@ fun MainAppScreen(
                         containerColor = Color.Transparent,
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
+                            val isSubScreen = currentRoute in listOf("dashboard_details", "visa_coming_soon", "insights")
                             MainTopAppBar(
                                 title = when (currentRoute) {
-                                    "dashboard" -> APP_NAME
+                                    "cards" -> activeStrings.cardsHubTitle
+                                    "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
+                                    "visa_coming_soon" -> activeStrings.visaCardTitle
                                     "income" -> activeStrings.navIncome
                                     "expenses" -> activeStrings.navExpenses
                                     "debts" -> activeStrings.navDebts
                                     "insights" -> if (isArabic) "الادخار" else "Savings"
                                     else -> APP_NAME
                                 },
+                                canGoBack = isSubScreen,
+                                onBackClick = { currentRoute = "cards" },
                                 onMenuClick = {
                                     scope.launch {
                                         if (drawerState.isClosed) drawerState.open() else drawerState.close()
@@ -280,7 +295,13 @@ fun MainAppScreen(
                             contentAlignment = Alignment.TopCenter
                         ) {
                             when (currentRoute) {
-                                "dashboard" -> DashboardScreen(
+                                "cards" -> CardsHubScreen(
+                                    summary = summary,
+                                    userSettings = userSettings,
+                                    onOpenDashboard = { currentRoute = "dashboard_details" },
+                                    onOpenVisaDetails = { currentRoute = "visa_coming_soon" }
+                                )
+                                "dashboard_details" -> DashboardScreen(
                                     summary = summary,
                                     transactions = transactions,
                                     debts = debts,
@@ -306,6 +327,9 @@ fun MainAppScreen(
                                     onDeleteTransaction = { viewModel.deleteTransaction(it) },
                                     onLockToVault = { viewModel.lockToVault(it) },
                                     onUnlockFromVault = { viewModel.unlockFromVault(it) }
+                                )
+                                "visa_coming_soon" -> VisaComingSoonScreen(
+                                    onBackClick = { currentRoute = "cards" }
                                 )
                                 "income" -> IncomeScreen(
                                     transactions = transactions,
@@ -342,7 +366,7 @@ fun MainAppScreen(
                                     transactions = transactions,
                                     debts = debts,
                                     userSettings = userSettings,
-                                    onBackClick = { currentRoute = "dashboard" },
+                                    onBackClick = { currentRoute = "cards" },
                                     onTransferToSavings = { viewModel.transferToSavings(it) },
                                     onWithdrawFromSavings = { viewModel.withdrawFromSavings(it) },
                                     onSpendFromSavings = { amount, title, category, note ->
@@ -424,7 +448,9 @@ fun MainTopAppBar(
     totalBalance: Double = 0.0,
     onOpenInsights: () -> Unit = {},
     isStealthMode: Boolean = false,
-    onToggleStealth: () -> Unit = {}
+    onToggleStealth: () -> Unit = {},
+    canGoBack: Boolean = false,
+    onBackClick: () -> Unit = {}
 ) {
     val colors = LiquidGlassTheme.colors
     val dimens = LocalAdaptiveDimens.current
@@ -443,17 +469,17 @@ fun MainTopAppBar(
                 .padding(horizontal = dimens.screenPaddingH, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Menu Drawer Button (min touch target 48dp)
+            // Menu / Back Button (min touch target 48dp)
             GlassCard(
                 modifier = Modifier.size(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 backgroundColor = colors.glassCard,
-                onClick = onMenuClick
+                onClick = if (canGoBack) onBackClick else onMenuClick
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "Menu",
+                        imageVector = if (canGoBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
+                        contentDescription = if (canGoBack) "Back" else "Menu",
                         tint = colors.textPrimary,
                         modifier = Modifier.size(22.dp)
                     )
@@ -529,10 +555,10 @@ fun LiquidGlassBottomBar(
     val typo = LocalAdaptiveTypography.current
 
     val items = listOf(
-        NavigationItem("dashboard", strings.navDashboard, Icons.Default.Dashboard),
+        NavigationItem("cards", strings.navDashboard, Icons.Default.CreditCard),
         NavigationItem("income", strings.navIncome, Icons.Default.TrendingUp),
         NavigationItem("expenses", strings.navExpenses, Icons.Default.TrendingDown),
-        NavigationItem("debts", strings.navDebts, Icons.Default.CreditCard)
+        NavigationItem("debts", strings.navDebts, Icons.Default.AccountBalanceWallet)
     )
 
     Box(
@@ -557,7 +583,7 @@ fun LiquidGlassBottomBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEach { item ->
-                    val isSelected = currentRoute == item.route
+                    val isSelected = currentRoute == item.route || (item.route == "cards" && currentRoute in listOf("cards", "dashboard_details", "visa_coming_soon"))
                     val activeColor = when (item.route) {
                         "income" -> EmeraldNeon
                         "expenses" -> RoseNeon

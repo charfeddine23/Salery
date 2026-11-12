@@ -28,6 +28,22 @@ interface StringsBundle {
     val navDebts: String
     val navSettings: String
 
+    val cardsHubTitle: String
+    val cardsHubSubtitle: String
+    val edahabiaCardTitle: String
+    val edahabiaCardSubtitle: String
+    val algeriePoste: String
+    val edahabiaName: String
+    val visaCardTitle: String
+    val visaCardSubtitle: String
+    val comingSoon: String
+    val visaComingSoonTitle: String
+    val visaComingSoonDesc: String
+    val tapToViewDashboard: String
+    val backToCards: String
+    val activeCardsCount: String
+    val currentAccount: String
+
     val totalBalance: String
     val monthlyIncome: String
     val monthlyExpense: String
@@ -207,11 +223,27 @@ interface StringsBundle {
 object EnglishStrings : StringsBundle {
     override val currencyCode: String = "DZD"
 
-    override val navDashboard = "Dashboard"
+    override val navDashboard = "Cards"
     override val navIncome = "Income"
     override val navExpenses = "Expenses"
     override val navDebts = "Debts"
     override val navSettings = "Settings"
+
+    override val cardsHubTitle = "Cards Hub"
+    override val cardsHubSubtitle = "Manage your payment cards & accounts"
+    override val edahabiaCardTitle = "Edahabia Card"
+    override val edahabiaCardSubtitle = "Algérie Poste • Current Account"
+    override val algeriePoste = "Algérie Poste"
+    override val edahabiaName = "EDAHABIA"
+    override val visaCardTitle = "Visa Premier"
+    override val visaCardSubtitle = "International Multi-Currency Card"
+    override val comingSoon = "Coming Soon"
+    override val visaComingSoonTitle = "Coming Soon"
+    override val visaComingSoonDesc = "International payments, online subscriptions and multi-currency balances will be available very soon in SaleryPulse."
+    override val tapToViewDashboard = "Tap card to open full financial dashboard"
+    override val backToCards = "Back to Cards"
+    override val activeCardsCount = "2 Cards Active"
+    override val currentAccount = "Current Account • CCP"
 
     override val totalBalance = "Total Balance"
     override val monthlyIncome = "Monthly Income"
@@ -417,11 +449,27 @@ object EnglishStrings : StringsBundle {
 object ArabicStrings : StringsBundle {
     override val currencyCode: String = "د.ج"
 
-    override val navDashboard = "لوحة التحكم"
+    override val navDashboard = "البطاقات"
     override val navIncome = "المداخيل"
     override val navExpenses = "المصاريف"
     override val navDebts = "الديون"
     override val navSettings = "الإعدادات"
+
+    override val cardsHubTitle = "محفظة البطاقات"
+    override val cardsHubSubtitle = "إدارة بطاقات الدفع والحسابات المالية"
+    override val edahabiaCardTitle = "البطاقة الذهبية"
+    override val edahabiaCardSubtitle = "بريد الجزائر • الحساب الجاري"
+    override val algeriePoste = "بريد الجزائر"
+    override val edahabiaName = "الذهبية"
+    override val visaCardTitle = "بطاقة فيزا بريميير"
+    override val visaCardSubtitle = "بطاقة دولية متعددة العملات"
+    override val comingSoon = "قريباً"
+    override val visaComingSoonTitle = "قريباً"
+    override val visaComingSoonDesc = "خدمات الدفع الدولي، الاشتراكات العالمية وحسابات العملات الأجنبية ستتوفر قريباً جداً في SaleryPulse."
+    override val tapToViewDashboard = "اضغط على البطاقة لفتح لوحة التحكم الكاملة"
+    override val backToCards = "العودة إلى البطاقات"
+    override val activeCardsCount = "بطاقتان نشطتان"
+    override val currentAccount = "حساب جاري • CCP"
 
     override val totalBalance = "الرصيد الإجمالي"
     override val monthlyIncome = "الدخل الشهري"

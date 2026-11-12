@@ -135,10 +135,10 @@ fun SidebarDrawer(
 
             // Navigation Items
             DrawerNavItem(
-                icon = Icons.Default.Dashboard,
+                icon = Icons.Default.CreditCard,
                 title = strings.navDashboard,
-                isSelected = selectedRoute == "dashboard",
-                onClick = { onNavigate("dashboard") }
+                isSelected = selectedRoute == "cards" || selectedRoute == "dashboard_details" || selectedRoute == "visa_coming_soon",
+                onClick = { onNavigate("cards") }
             )
             DrawerNavItem(
                 icon = Icons.Default.TrendingUp,
@@ -155,7 +155,7 @@ fun SidebarDrawer(
                 onClick = { onNavigate("expenses") }
             )
             DrawerNavItem(
-                icon = Icons.Default.CreditCard,
+                icon = Icons.Default.AccountBalanceWallet,
                 title = strings.navDebts,
                 iconTint = CyanNeon,
                 isSelected = selectedRoute == "debts",
