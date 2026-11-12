@@ -168,7 +168,7 @@ fun CardsHubScreen(
                     )
                     Text(
                         text = strings.currentAccount,
-                        color = AmberNeon,
+                        color = CyanNeon,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -290,6 +290,7 @@ private fun EdahabiaCardRealistic(
     onClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val strings = AppStrings.current
 
     // Subtle animated breathing background glow (Liquid Glass v3 breathing shaders)
     val infiniteTransition = rememberInfiniteTransition(label = "edahabia_glow")
@@ -317,12 +318,12 @@ private fun EdahabiaCardRealistic(
             .fillMaxWidth()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true, color = AmberNeon),
+                indication = ripple(bounded = true, color = CyanNeon),
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Breathing Radial Halo behind the card
+        // Breathing Radial Halo behind the card in vibrant Royal Blue
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -331,15 +332,15 @@ private fun EdahabiaCardRealistic(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFE5A93C).copy(alpha = glowAlpha),
-                            Color(0xFFC58925).copy(alpha = glowAlpha * 0.45f),
+                            Color(0xFF2563EB).copy(alpha = glowAlpha),
+                            Color(0xFF0284C7).copy(alpha = glowAlpha * 0.45f),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // The Physical Tactile Edahabia Card
+        // The Physical Tactile Classic Blue Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -347,18 +348,18 @@ private fun EdahabiaCardRealistic(
                 .shadow(
                     elevation = if (isDark) 16.dp else 12.dp,
                     shape = RoundedCornerShape(22.dp),
-                    spotColor = if (isDark) Color(0xFF020617) else Color(0x66B45309),
-                    ambientColor = if (isDark) Color(0xFFE5A93C).copy(alpha = 0.3f) else Color(0x33B45309)
+                    spotColor = if (isDark) Color(0xFF020617) else Color(0x661D4ED8),
+                    ambientColor = if (isDark) Color(0xFF2563EB).copy(alpha = 0.35f) else Color(0x331D4ED8)
                 )
                 .clip(RoundedCornerShape(22.dp))
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFFF9E8A2), // Champagne reflection highlight
-                            Color(0xFFE5B036), // Authentic rich gold
-                            Color(0xFFCA8A04), // Classic Edahabia warm amber gold
-                            Color(0xFFA16207), // Deep burnished gold
-                            Color(0xFF713F12)  // Dark brass depth
+                            Color(0xFF38BDF8), // Radiant cyan-blue gloss sheen
+                            Color(0xFF2563EB), // Vibrant Algerian royal blue
+                            Color(0xFF1D4ED8), // Deep sapphire blue
+                            Color(0xFF1E3A8A), // Classic midnight navy
+                            Color(0xFF0F172A)  // Deep obsidian navy base
                         ),
                         start = Offset(0f, 0f),
                         end = Offset(1000f, 600f)
@@ -368,10 +369,10 @@ private fun EdahabiaCardRealistic(
                     width = 1.2.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFFFFFBEB).copy(alpha = 0.8f),
-                            Color(0xFFFDE68A).copy(alpha = 0.5f),
-                            Color(0xFF854D0E).copy(alpha = 0.7f),
-                            Color(0xFFFFFBEB).copy(alpha = 0.4f)
+                            Color(0xFFBAE6FD).copy(alpha = 0.85f),
+                            Color(0xFF38BDF8).copy(alpha = 0.6f),
+                            Color(0xFF1D4ED8).copy(alpha = 0.7f),
+                            Color(0xFFBAE6FD).copy(alpha = 0.45f)
                         )
                     ),
                     shape = RoundedCornerShape(22.dp)
@@ -383,7 +384,7 @@ private fun EdahabiaCardRealistic(
                 var x = -size.height
                 while (x < size.width + size.height) {
                     drawLine(
-                        color = Color.White.copy(alpha = 0.035f),
+                        color = Color.White.copy(alpha = 0.045f),
                         start = Offset(x, 0f),
                         end = Offset(x + size.height, size.height),
                         strokeWidth = 1f
@@ -399,7 +400,7 @@ private fun EdahabiaCardRealistic(
                     .padding(horizontal = 18.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Top Row: Algérie Poste (بريد الجزائر) Emblem & "الذهبية" (EDAHABIA)
+                // Top Row: Algérie Poste (بريد الجزائر) Emblem & Classic Badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -412,7 +413,7 @@ private fun EdahabiaCardRealistic(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF1E293B).copy(alpha = 0.65f))
+                                .background(Color(0xFF0F172A).copy(alpha = 0.65f))
                                 .border(0.8.dp, Color(0xFFFDE047), RoundedCornerShape(6.dp)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -429,14 +430,14 @@ private fun EdahabiaCardRealistic(
                         Column {
                             Text(
                                 text = "بريد الجزائر",
-                                color = Color(0xFF1E293B),
+                                color = Color.White,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 letterSpacing = 0.2.sp
                             )
                             Text(
                                 text = "Algérie Poste",
-                                color = Color(0xFF334155),
+                                color = Color(0xFFBAE6FD),
                                 fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -444,26 +445,26 @@ private fun EdahabiaCardRealistic(
                         }
                     }
 
-                    // Stylized "الذهبية" (EDAHABIA) Calligraphy Crest
+                    // Stylized Classic / CIB Calligraphy Crest
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E293B).copy(alpha = 0.25f))
-                            .border(1.dp, Color(0xFFFFFBEB).copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F172A).copy(alpha = 0.45f))
+                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 10.dp, vertical = 3.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "الذهبية",
-                                color = Color(0xFF0F172A),
-                                fontSize = 14.sp,
+                                text = strings.edahabiaName,
+                                color = Color.White,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 0.5.sp
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "EDAHABIA",
-                                color = Color(0xFF1E293B),
+                                text = "CLASSIC",
+                                color = Color(0xFF7DD3FC),
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -484,21 +485,21 @@ private fun EdahabiaCardRealistic(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         // Contactless Waves Symbol
-                        ContactlessWaves(modifier = Modifier.size(20.dp), tint = Color(0xFF1E293B).copy(alpha = 0.8f))
+                        ContactlessWaves(modifier = Modifier.size(20.dp), tint = Color(0xFFBAE6FD).copy(alpha = 0.9f))
                     }
 
                     // Core Financial Highlight Pill on Card: Live Total Balance
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.35f))
-                            .border(1.dp, Color(0xFFFFFBEB).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0F172A).copy(alpha = 0.45f))
+                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
                                 text = if (isArabic) "الرصيد الإجمالي" else "Total Balance",
-                                color = Color(0xFFFDE68A),
+                                color = Color(0xFF7DD3FC),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -521,14 +522,14 @@ private fun EdahabiaCardRealistic(
                 ) {
                     Text(
                         text = "6280  26••  ••••  9842",
-                        color = Color(0xFF0F172A),
+                        color = Color.White,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 2.sp,
                         style = androidx.compose.ui.text.TextStyle(
                             shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color(0xFFFFFBEB).copy(alpha = 0.8f),
+                                color = Color(0xFF0284C7).copy(alpha = 0.85f),
                                 offset = Offset(-0.8f, -0.8f),
                                 blurRadius = 0.5f
                             )
@@ -545,14 +546,14 @@ private fun EdahabiaCardRealistic(
                     Column {
                         Text(
                             text = "CARDHOLDER / الحائز",
-                            color = Color(0xFF334155),
+                            color = Color(0xFFBAE6FD),
                             fontSize = 7.5.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.4.sp
                         )
                         Text(
                             text = "CHARFEDDINE KA",
-                            color = Color(0xFF0F172A),
+                            color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp,
@@ -564,13 +565,13 @@ private fun EdahabiaCardRealistic(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "EXPIRES END",
-                            color = Color(0xFF334155),
+                            color = Color(0xFFBAE6FD),
                             fontSize = 7.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "11/29",
-                            color = Color(0xFF0F172A),
+                            color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = FontFamily.Monospace
@@ -581,13 +582,13 @@ private fun EdahabiaCardRealistic(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.65f))
-                            .border(0.8.dp, Color(0xFFFDE68A), RoundedCornerShape(6.dp))
+                            .background(Color(0xFF0F172A).copy(alpha = 0.7f))
+                            .border(0.8.dp, Color(0xFF38BDF8), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = "CIB",
-                            color = Color(0xFFFDE68A),
+                            color = Color(0xFF38BDF8),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             fontStyle = FontStyle.Italic,
@@ -610,8 +611,8 @@ private fun EdahabiaCardRealistic(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط على البطاقة الذهبية لفتح لوحة التحكم والتفاصيل"
-            else "Tap Edahabia card to open full financial dashboard",
+            text = if (isArabic) "اضغط على البطاقة الكلاسيكية لفتح لوحة التحكم والتفاصيل"
+            else "Tap classic card to open full financial dashboard",
             color = colors.primaryNeon,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
