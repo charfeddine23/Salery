@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,13 +153,19 @@ fun MainAppScreen(
     // Responsive layout direction: Full RTL when Arabic is selected, LTR for English
     val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
-    // Active bottom navigation route
+    // Active route ("cards" = Cards Hub outside card; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
+    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "insights")
+    val isInsideCard = currentRoute in cardInnerRoutes
 
-    // Intercept system back gestures on sub-screens to return to Cards Hub
-    if (currentRoute in listOf("dashboard_details", "visa_coming_soon", "insights")) {
+    // Intercept system back gestures: exit sub-tabs back to Dashboard, or exit Card back to Cards Hub
+    if (currentRoute != "cards") {
         BackHandler {
-            currentRoute = "cards"
+            currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "insights")) {
+                "dashboard_details"
+            } else {
+                "cards"
+            }
         }
     }
 
@@ -245,7 +254,7 @@ fun MainAppScreen(
                         containerColor = Color.Transparent,
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
-                            val isSubScreen = currentRoute in listOf("dashboard_details", "visa_coming_soon", "insights")
+                            val isSubScreen = currentRoute != "cards"
                             MainTopAppBar(
                                 title = when (currentRoute) {
                                     "cards" -> activeStrings.cardsHubTitle
@@ -258,56 +267,71 @@ fun MainAppScreen(
                                     else -> APP_NAME
                                 },
                                 canGoBack = isSubScreen,
-                                onBackClick = { currentRoute = "cards" },
+                                onBackClick = {
+                                    currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "insights")) {
+                                        "dashboard_details"
+                                    } else {
+                                        "cards"
+                                    }
+                                },
                                 onMenuClick = {
                                     scope.launch {
                                         if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                     }
                                 },
                                 totalBalance = summary.totalBalance,
+                                showMoneyBag = isInsideCard,
                                 onOpenInsights = { currentRoute = "insights" },
                                 isStealthMode = userSettings.stealthMode,
                                 onToggleStealth = { viewModel.toggleStealthMode() }
                             )
                         },
                         bottomBar = {
-                            LiquidGlassBottomBar(
-                                currentRoute = currentRoute,
-                                onRouteSelect = { currentRoute = it }
-                            )
+                            AnimatedVisibility(
+                                visible = isInsideCard,
+                                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                            ) {
+                                LiquidGlassBottomBar(
+                                    currentRoute = currentRoute,
+                                    onRouteSelect = { currentRoute = it }
+                                )
+                            }
                         },
                         floatingActionButton = {
-                            FloatingActionButton(
-                                onClick = {
-                                    when (currentRoute) {
-                                        "income" -> {
-                                            addTransactionType = TransactionType.INCOME
-                                            showAddTransactionDialog = true
+                            if (isInsideCard) {
+                                FloatingActionButton(
+                                    onClick = {
+                                        when (currentRoute) {
+                                            "income" -> {
+                                                addTransactionType = TransactionType.INCOME
+                                                showAddTransactionDialog = true
+                                            }
+                                            "expenses" -> {
+                                                addTransactionType = TransactionType.EXPENSE
+                                                showAddTransactionDialog = true
+                                            }
+                                            "debts" -> {
+                                                addDebtType = DebtType.OWED_BY_ME
+                                                showAddDebtDialog = true
+                                            }
+                                            else -> {
+                                                addTransactionType = TransactionType.EXPENSE
+                                                showAddTransactionDialog = true
+                                            }
                                         }
-                                        "expenses" -> {
-                                            addTransactionType = TransactionType.EXPENSE
-                                            showAddTransactionDialog = true
-                                        }
-                                        "debts" -> {
-                                            addDebtType = DebtType.OWED_BY_ME
-                                            showAddDebtDialog = true
-                                        }
-                                        else -> {
-                                            addTransactionType = TransactionType.EXPENSE
-                                            showAddTransactionDialog = true
-                                        }
-                                    }
-                                },
-                                containerColor = LiquidGlassTheme.colors.primaryNeon,
-                                contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
-                                shape = CircleShape,
-                                modifier = Modifier.size(dimens.fabSize)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add",
-                                    modifier = Modifier.size(28.dp)
-                                )
+                                    },
+                                    containerColor = LiquidGlassTheme.colors.primaryNeon,
+                                    contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(dimens.fabSize)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add",
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             }
                         }
                     ) { innerPadding ->
@@ -504,6 +528,7 @@ fun MainTopAppBar(
     title: String,
     onMenuClick: () -> Unit,
     totalBalance: Double = 0.0,
+    showMoneyBag: Boolean = true,
     onOpenInsights: () -> Unit = {},
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {},
@@ -573,14 +598,16 @@ fun MainTopAppBar(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon)
-            DynamicMoneyBag(
-                totalBalance = totalBalance,
-                onClick = onOpenInsights,
-                size = 44.dp
-            )
+            if (showMoneyBag) {
+                // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon inside the card)
+                DynamicMoneyBag(
+                    totalBalance = totalBalance,
+                    onClick = onOpenInsights,
+                    size = 44.dp
+                )
 
-            Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+            }
 
             // Stealth Mode / Privacy Toggle Action Button (min touch target 48dp)
             GlassCard(
@@ -611,9 +638,10 @@ fun LiquidGlassBottomBar(
     val strings = AppStrings.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+    val isArabic = strings is ArabicStrings
 
     val items = listOf(
-        NavigationItem("cards", strings.navDashboard, Icons.Default.CreditCard),
+        NavigationItem("dashboard_details", if (isArabic) "لوحة التحكم" else "Dashboard", Icons.Default.Dashboard),
         NavigationItem("income", strings.navIncome, Icons.Default.TrendingUp),
         NavigationItem("expenses", strings.navExpenses, Icons.Default.TrendingDown),
         NavigationItem("debts", strings.navDebts, Icons.Default.AccountBalanceWallet)
@@ -636,12 +664,12 @@ fun LiquidGlassBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                    .padding(vertical = 8.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEach { item ->
-                    val isSelected = currentRoute == item.route || (item.route == "cards" && currentRoute in listOf("cards", "dashboard_details", "visa_coming_soon"))
+                    val isSelected = currentRoute == item.route
                     val activeColor = when (item.route) {
                         "income" -> EmeraldNeon
                         "expenses" -> RoseNeon
@@ -651,9 +679,10 @@ fun LiquidGlassBottomBar(
 
                     Column(
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .clickable { onRouteSelect(item.route) }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
@@ -667,7 +696,9 @@ fun LiquidGlassBottomBar(
                             text = item.label,
                             color = if (isSelected) activeColor else colors.textMuted,
                             fontSize = typo.caption,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

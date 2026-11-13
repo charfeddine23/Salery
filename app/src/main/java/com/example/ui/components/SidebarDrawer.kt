@@ -139,33 +139,44 @@ fun SidebarDrawer(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Navigation Items
+            val isInsideCard = selectedRoute in listOf("dashboard_details", "income", "expenses", "debts", "insights")
+
             DrawerNavItem(
                 icon = Icons.Default.CreditCard,
                 title = strings.navDashboard,
-                isSelected = selectedRoute == "cards" || selectedRoute == "dashboard_details" || selectedRoute == "visa_coming_soon",
+                isSelected = selectedRoute == "cards" || selectedRoute == "visa_coming_soon",
                 onClick = { onNavigate("cards") }
             )
-            DrawerNavItem(
-                icon = Icons.Default.TrendingUp,
-                title = strings.navIncome,
-                iconTint = EmeraldNeon,
-                isSelected = selectedRoute == "income",
-                onClick = { onNavigate("income") }
-            )
-            DrawerNavItem(
-                icon = Icons.Default.TrendingDown,
-                title = strings.navExpenses,
-                iconTint = RoseNeon,
-                isSelected = selectedRoute == "expenses",
-                onClick = { onNavigate("expenses") }
-            )
-            DrawerNavItem(
-                icon = Icons.Default.AccountBalanceWallet,
-                title = strings.navDebts,
-                iconTint = CyanNeon,
-                isSelected = selectedRoute == "debts",
-                onClick = { onNavigate("debts") }
-            )
+
+            if (isInsideCard) {
+                DrawerNavItem(
+                    icon = Icons.Default.Dashboard,
+                    title = if (strings is ArabicStrings) "لوحة التحكم" else "Dashboard",
+                    isSelected = selectedRoute == "dashboard_details",
+                    onClick = { onNavigate("dashboard_details") }
+                )
+                DrawerNavItem(
+                    icon = Icons.Default.TrendingUp,
+                    title = strings.navIncome,
+                    iconTint = EmeraldNeon,
+                    isSelected = selectedRoute == "income",
+                    onClick = { onNavigate("income") }
+                )
+                DrawerNavItem(
+                    icon = Icons.Default.TrendingDown,
+                    title = strings.navExpenses,
+                    iconTint = RoseNeon,
+                    isSelected = selectedRoute == "expenses",
+                    onClick = { onNavigate("expenses") }
+                )
+                DrawerNavItem(
+                    icon = Icons.Default.AccountBalanceWallet,
+                    title = strings.navDebts,
+                    iconTint = CyanNeon,
+                    isSelected = selectedRoute == "debts",
+                    onClick = { onNavigate("debts") }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.8.dp)
