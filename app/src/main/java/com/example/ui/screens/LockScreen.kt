@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,7 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
@@ -206,13 +210,18 @@ fun LockScreen(
             // Primary Unlock Button
             GlassCard(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable { launchBiometricPrompt() },
+                    .fillMaxWidth()
+                    .widthIn(max = 320.dp)
+                    .testTag("biometric_unlock_button"),
                 shape = RoundedCornerShape(18.dp),
-                backgroundColor = colors.primaryNeon.copy(alpha = 0.22f)
+                backgroundColor = colors.primaryNeon.copy(alpha = 0.22f),
+                onClick = { launchBiometricPrompt() }
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -226,7 +235,8 @@ fun LockScreen(
                         text = strings.biometricUnlockAction,
                         color = colors.textPrimary,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     )
                 }
             }

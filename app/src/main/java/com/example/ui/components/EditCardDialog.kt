@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.AmberNeon
@@ -101,7 +103,10 @@ fun EditCardDialog(
     val isCvcValid = cvcDigits.isEmpty() || cvcDigits.length in 3..4
     val canSave = isNameValid && isCardNumberValid && isExpiryValid && isCvcValid
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn)
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)

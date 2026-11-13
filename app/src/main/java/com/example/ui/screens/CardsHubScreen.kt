@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -40,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,9 +69,13 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -117,6 +127,44 @@ fun CardsHubScreen(
     val isDark = colors.isDark
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Strictly block screenshots, screen recording, and Recents thumbnails while viewing Cards Hub
+    DisposableEffect(context, lifecycleOwner) {
+        val activity = context.findHostActivity()
+        val applySecureFlags: () -> Unit = {
+            activity?.let { act ->
+                act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        act.setRecentsScreenshotEnabled(false)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+        applySecureFlags()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                applySecureFlags()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            activity?.let { act ->
+                act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        act.setRecentsScreenshotEnabled(true)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+    }
 
     var showEditClassicCardDialog by remember { mutableStateOf(false) }
 
@@ -300,14 +348,14 @@ fun CardsHubScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isArabic) "حماية متقدمة وتشفير مصرفي" else "Bank-Grade Encryption & Security",
+                            text = if (isArabic) "حماية قصوى • التصوير محظور تماماً" else "Strict Shield • Screenshots Blocked",
                             color = colors.textPrimary,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isArabic) "جميع الحسابات والبطاقات مؤمنة محلياً بتشفير AES-256 والمصادقة البيومترية."
-                            else "All cards and balances are protected locally with AES-256 and biometric security.",
+                            text = if (isArabic) "لقطات الشاشة وتسجيل الشاشة ممنوعان إطلاقاً في صفحة البطاقات لحماية بياناتك ومعلوماتك المصرفية."
+                            else "Screenshots and screen recording are strictly disabled on the Cards Hub to protect your card details.",
                             color = colors.textMuted,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
@@ -585,10 +633,11 @@ private fun EdahabiaCardRealistic(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(end = 22.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1444,5 +1493,11 @@ private fun DrawScope.drawClassicEdahabiaArtwork(holdProgress: Float) {
             cornerRadius = CornerRadius(4f, 4f)
         )
     }
+}
+
+private tailrec fun Context.findHostActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findHostActivity()
+    else -> null
 }
 
