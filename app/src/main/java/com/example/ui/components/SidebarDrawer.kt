@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.CloudDone
@@ -78,6 +79,7 @@ fun SidebarDrawer(
     onLockAppNow: () -> Unit = {},
     onToggleStealthMode: () -> Unit = {},
     onToggleBiometric: (Boolean) -> Unit = {},
+    onToggleBreathingGlow: (Boolean) -> Unit = {},
     onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
@@ -242,6 +244,57 @@ fun SidebarDrawer(
                 Switch(
                     checked = userSettings.biometricEnabled,
                     onCheckedChange = { onToggleBiometric(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.primaryNeon,
+                        checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),
+                        uncheckedThumbColor = colors.textMuted,
+                        uncheckedTrackColor = colors.glassCard
+                    )
+                )
+            }
+
+            // Card Breathing Glow Toggle (تأثير التوهج التنفسي للبطاقات)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onToggleBreathingGlow(!userSettings.breathingGlowEnabled) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .testTag("breathing_glow_setting_row"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = if (userSettings.breathingGlowEnabled) colors.primaryNeon else colors.textMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.breathingGlowTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (userSettings.breathingGlowEnabled) strings.breathingGlowActive else strings.breathingGlowDisabled,
+                        color = if (userSettings.breathingGlowEnabled) colors.primaryNeon else colors.textMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = userSettings.breathingGlowEnabled,
+                    onCheckedChange = { onToggleBreathingGlow(it) },
+                    modifier = Modifier.testTag("breathing_glow_switch"),
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = colors.primaryNeon,
                         checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),

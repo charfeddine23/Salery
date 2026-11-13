@@ -97,6 +97,7 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.launch
@@ -111,6 +112,7 @@ import com.example.sensor.RememberShakeDetector
 import com.example.ui.components.AppUpdateDialog
 import com.example.ui.i18n.LocalStealthMode
 import com.example.update.AppUpdateManager
+import com.example.update.AppUpdateUiState
 
 @Composable
 fun MainAppScreen(
@@ -132,13 +134,14 @@ fun MainAppScreen(
     var canInstallPackages by remember {
         mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
     }
+    var lastAutoLaunchedApkPath by remember { mutableStateOf<String?>(null) }
     val installPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         val allowed = AppUpdateManager.canRequestPackageInstalls(context)
         canInstallPackages = allowed
         if (allowed) {
-            viewModel.installReadyUpdate()
+            viewModel.installReadyUpdate(context)
         }
     }
 
@@ -190,7 +193,8 @@ fun MainAppScreen(
     CompositionLocalProvider(
         LocalStrings provides activeStrings,
         LocalLayoutDirection provides layoutDirection,
-        LocalStealthMode provides userSettings.stealthMode
+        LocalStealthMode provides userSettings.stealthMode,
+        LocalBreathingGlowEnabled provides userSettings.breathingGlowEnabled
     ) {
         if (isAppLocked) {
             LockScreen(
@@ -225,6 +229,9 @@ fun MainAppScreen(
                                 },
                                 onToggleBiometric = { enabled ->
                                     viewModel.setBiometricEnabled(enabled)
+                                },
+                                onToggleBreathingGlow = { enabled ->
+                                    viewModel.setBreathingGlowEnabled(enabled)
                                 },
                                 onSelectDesignStyle = { style ->
                                     viewModel.setDesignStyle(style)
@@ -491,27 +498,44 @@ fun MainAppScreen(
 
             if (showUpdateDialog) {
                 LaunchedEffect(updateUiState) {
-                    canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
+                    val allowed = AppUpdateManager.canRequestPackageInstalls(context)
+                    canInstallPackages = allowed
+                    val readyState = updateUiState as? AppUpdateUiState.ReadyToInstall
+                    if (readyState != null && allowed && lastAutoLaunchedApkPath != readyState.apkFile.absolutePath) {
+                        lastAutoLaunchedApkPath = readyState.apkFile.absolutePath
+                        viewModel.installReadyUpdate(context)
+                    }
                 }
                 AppUpdateDialog(
                     state = updateUiState,
                     canInstallPackages = canInstallPackages,
                     onDismiss = { viewModel.dismissUpdateDialog() },
-                    onStartDownload = { viewModel.startUpdateDownload() },
+                    onStartDownload = {
+                        lastAutoLaunchedApkPath = null
+                        viewModel.startUpdateDownload()
+                    },
                     onInstallApk = {
                         canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
                         if (canInstallPackages) {
-                            viewModel.installReadyUpdate()
+                            viewModel.installReadyUpdate(context)
                         } else {
-                            installPermissionLauncher.launch(
-                                AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
-                            )
+                            try {
+                                installPermissionLauncher.launch(
+                                    AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
+                                )
+                            } catch (_: Throwable) {
+                                AppUpdateManager.openReleaseInBrowser(context)
+                            }
                         }
                     },
                     onRequestInstallPermission = {
-                        installPermissionLauncher.launch(
-                            AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
-                        )
+                        try {
+                            installPermissionLauncher.launch(
+                                AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
+                            )
+                        } catch (_: Throwable) {
+                            AppUpdateManager.openReleaseInBrowser(context)
+                        }
                     },
                     onRetryCheck = { viewModel.checkForUpdates(manual = true) },
                     onOpenReleaseBrowser = { url ->
@@ -557,6 +581,7 @@ fun MainTopAppBar(
                 modifier = Modifier.size(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 backgroundColor = colors.glassCard,
+                breathingGlow = false,
                 onClick = if (canGoBack) onBackClick else onMenuClick
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -614,6 +639,7 @@ fun MainTopAppBar(
                 modifier = Modifier.size(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
+                breathingGlow = false,
                 onClick = onToggleStealth
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

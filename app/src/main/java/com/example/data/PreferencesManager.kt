@@ -26,7 +26,8 @@ data class UserSettings(
     val classicCardHolderName: String = "CHARFEDDINE KA",
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
-    val classicCardCvc: String = ""
+    val classicCardCvc: String = "",
+    val breathingGlowEnabled: Boolean = true
 )
 
 class PreferencesManager(context: Context) {
@@ -36,29 +37,94 @@ class PreferencesManager(context: Context) {
     private val _settingsFlow = MutableStateFlow(loadSettings())
     val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
+    private fun safeFloat(key: String, default: Float): Float {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is Float -> raw
+                is Number -> raw.toFloat()
+                is String -> raw.toFloatOrNull() ?: default
+                else -> default
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
+    private fun safeInt(key: String, default: Int): Int {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is Int -> raw
+                is Number -> raw.toInt()
+                is String -> raw.toIntOrNull() ?: default
+                else -> default
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
+    private fun safeLong(key: String, default: Long): Long {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is Long -> raw
+                is Number -> raw.toLong()
+                is String -> raw.toLongOrNull() ?: default
+                else -> default
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
+    private fun safeBoolean(key: String, default: Boolean): Boolean {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is Boolean -> raw
+                is String -> raw.toBooleanStrictOrNull() ?: default
+                else -> default
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
+    private fun safeString(key: String, default: String): String {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is String -> raw
+                null -> default
+                else -> raw.toString()
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
     private fun loadSettings(): UserSettings {
-        val savedSavings = prefs.getFloat("savings_wallet_balance", prefs.getFloat("vault_locked_amount", 0.0f)).toDouble()
+        val vaultFallback = safeFloat("vault_locked_amount", 0.0f)
+        val savedSavings = safeFloat("savings_wallet_balance", vaultFallback).toDouble()
         return UserSettings(
-            salaryAmount = prefs.getFloat("salary_amount", 85000.0f).toDouble(),
-            salaryPayday = prefs.getInt("salary_payday", 25),
-            salaryEmployer = prefs.getString("salary_employer", "Enterprise Algiers") ?: "Enterprise Algiers",
-            salaryAutoCredit = prefs.getBoolean("salary_auto_credit", true),
-            lastCreditedMonthYear = prefs.getString("last_credited_month", "") ?: "",
-            patternLockEnabled = prefs.getBoolean("pattern_lock_enabled", false),
-            patternLockHash = prefs.getString("pattern_lock_hash", "") ?: "",
-            biometricEnabled = prefs.getBoolean("biometric_enabled", false),
-            language = prefs.getString("app_language", "en") ?: "en",
-            themeMode = prefs.getString("theme_mode", "DARK") ?: "DARK",
-            designStyle = prefs.getString("design_style", "LIQUID_GLASS") ?: "LIQUID_GLASS",
-            googleDriveConnected = prefs.getBoolean("gdrive_connected", true),
-            lastBackupTimestamp = prefs.getLong("last_backup_time", 0L),
-            stealthMode = prefs.getBoolean("stealth_mode", false),
+            salaryAmount = safeFloat("salary_amount", 85000.0f).toDouble(),
+            salaryPayday = safeInt("salary_payday", 25),
+            salaryEmployer = safeString("salary_employer", "Enterprise Algiers"),
+            salaryAutoCredit = safeBoolean("salary_auto_credit", true),
+            lastCreditedMonthYear = safeString("last_credited_month", ""),
+            patternLockEnabled = safeBoolean("pattern_lock_enabled", false),
+            patternLockHash = safeString("pattern_lock_hash", ""),
+            biometricEnabled = safeBoolean("biometric_enabled", false),
+            language = safeString("app_language", "en"),
+            themeMode = safeString("theme_mode", "DARK"),
+            designStyle = safeString("design_style", "LIQUID_GLASS"),
+            googleDriveConnected = safeBoolean("gdrive_connected", true),
+            lastBackupTimestamp = safeLong("last_backup_time", 0L),
+            stealthMode = safeBoolean("stealth_mode", false),
             vaultLockedAmount = savedSavings,
             savingsWalletBalance = savedSavings,
-            classicCardHolderName = prefs.getString("classic_card_holder", "CHARFEDDINE KA") ?: "CHARFEDDINE KA",
-            classicCardNumber = prefs.getString("classic_card_number", "") ?: "",
-            classicCardExpiry = prefs.getString("classic_card_expiry", "11/29") ?: "11/29",
-            classicCardCvc = prefs.getString("classic_card_cvc", "") ?: ""
+            classicCardHolderName = safeString("classic_card_holder", "CHARFEDDINE KA"),
+            classicCardNumber = safeString("classic_card_number", ""),
+            classicCardExpiry = safeString("classic_card_expiry", "11/29"),
+            classicCardCvc = safeString("classic_card_cvc", ""),
+            breathingGlowEnabled = safeBoolean("breathing_glow_enabled", true)
         )
     }
 
@@ -90,6 +156,7 @@ class PreferencesManager(context: Context) {
             .putString("classic_card_number", finalUpdated.classicCardNumber)
             .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
             .putString("classic_card_cvc", finalUpdated.classicCardCvc)
+            .putBoolean("breathing_glow_enabled", finalUpdated.breathingGlowEnabled)
             .apply()
         _settingsFlow.value = finalUpdated
     }

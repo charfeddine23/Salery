@@ -56,6 +56,7 @@ fun Modifier.neumorphicDepth(
     darkShadowColor: Color = if (isDark) NeuDarkDarkShadow.copy(alpha = 0.95f) else NeuLightDarkShadow.copy(alpha = 0.70f),
     lightShadowColor: Color = if (isDark) NeuDarkHighlight.copy(alpha = 0.75f) else NeuLightHighlight.copy(alpha = 0.95f)
 ): Modifier = this.drawBehind {
+    if (size.width <= 0f || size.height <= 0f) return@drawBehind
     val cornerPx = cornerRadius.toPx()
     val elevPx = elevation.toPx()
 

@@ -1,11 +1,27 @@
 package com.example.ui.theme
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 @Immutable
 data class LiquidGlassColors(
@@ -122,9 +138,85 @@ val LightNeumorphicColors = LiquidGlassColors(
 )
 
 val LocalLiquidGlass = staticCompositionLocalOf { DarkLiquidGlassColors }
+val LocalBreathingGlowEnabled = compositionLocalOf { true }
 
 object LiquidGlassTheme {
     val colors: LiquidGlassColors
         @Composable
         get() = LocalLiquidGlass.current
+}
+
+/**
+ * Custom Modifier implementing the Liquid Glass v3 'breathing' glow effect for Card containers.
+ * Smoothly animates both the ambient background glow alpha and scale, plus an ultra-subtle
+ * container scale pulse, and cleanly disables itself when [LocalBreathingGlowEnabled] is false.
+ */
+fun Modifier.breathingGlow(
+    enabled: Boolean = true,
+    glowColor: Color = Color.Unspecified,
+    secondaryGlowColor: Color = Color.Unspecified,
+    cornerRadius: Dp = 20.dp,
+    minAlpha: Float = 0.06f,
+    maxAlpha: Float = 0.22f,
+    minScale: Float = 0.985f,
+    maxScale: Float = 1.035f,
+    animateContainerScale: Boolean = true,
+    durationMillis: Int = 2600
+): Modifier = composed {
+    val colors = LiquidGlassTheme.colors
+    val globalEnabled = LocalBreathingGlowEnabled.current
+    if (!enabled || !globalEnabled) return@composed this
+
+    val infiniteTransition = rememberInfiniteTransition(label = "liquid_glass_breathing")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = minAlpha,
+        targetValue = maxAlpha,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathing_alpha"
+    )
+    val glowScale by infiniteTransition.animateFloat(
+        initialValue = minScale,
+        targetValue = maxScale,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathing_scale"
+    )
+
+    val primaryCol = if (glowColor != Color.Unspecified) glowColor else colors.primaryNeon
+    val secondaryCol = if (secondaryGlowColor != Color.Unspecified) secondaryGlowColor else colors.secondaryNeon
+
+    val scaleRange = (maxScale - minScale).coerceAtLeast(0.001f)
+    val normalizedPhase = ((glowScale - minScale) / scaleRange).coerceIn(0f, 1f)
+    val containerScale = if (animateContainerScale) 0.997f + normalizedPhase * 0.006f else 1f
+
+    this
+        .graphicsLayer {
+            scaleX = containerScale
+            scaleY = containerScale
+        }
+        .drawBehind {
+            val expandPx = 10.dp.toPx() * glowScale
+            val radiusPx = (cornerRadius + 6.dp).toPx()
+            val maxDim = maxOf(size.width, size.height)
+
+            drawRoundRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        primaryCol.copy(alpha = glowAlpha),
+                        secondaryCol.copy(alpha = glowAlpha * 0.45f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.5f, size.height * 0.5f),
+                    radius = (maxDim * 0.72f * glowScale).coerceAtLeast(1f)
+                ),
+                topLeft = Offset(-expandPx * 0.45f, -expandPx * 0.45f),
+                size = Size(size.width + expandPx * 0.9f, size.height + expandPx * 0.9f),
+                cornerRadius = CornerRadius(radiusPx, radiusPx)
+            )
+        }
 }

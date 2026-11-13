@@ -30,7 +30,19 @@ class Converters {
 
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE transactions ADD COLUMN isPaidFromSavings INTEGER NOT NULL DEFAULT 0")
+        var hasColumn = false
+        db.query("PRAGMA table_info(transactions)").use { cursor ->
+            val nameIdx = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (nameIdx >= 0 && cursor.getString(nameIdx) == "isPaidFromSavings") {
+                    hasColumn = true
+                    break
+                }
+            }
+        }
+        if (!hasColumn) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN isPaidFromSavings INTEGER NOT NULL DEFAULT 0")
+        }
     }
 }
 

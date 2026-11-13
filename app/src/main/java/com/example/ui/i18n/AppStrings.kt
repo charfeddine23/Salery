@@ -158,6 +158,9 @@ interface StringsBundle {
     val biometricActive: String
     val biometricDisabled: String
     val updatedLabel: String
+    val breathingGlowTitle: String
+    val breathingGlowActive: String
+    val breathingGlowDisabled: String
 
     val backupRestore: String
     val backupDriveTitle: String
@@ -383,6 +386,9 @@ object EnglishStrings : StringsBundle {
     override val biometricActive = "Enabled"
     override val biometricDisabled = "Disabled"
     override val updatedLabel = "Updated"
+    override val breathingGlowTitle = "Card Breathing Glow"
+    override val breathingGlowActive = "Enabled • Liquid Glass v3 aura"
+    override val breathingGlowDisabled = "Disabled • Static card surfaces"
 
     override val backupRestore = "Backup & Restore"
     override val backupDriveTitle = "Google Drive Backups"
@@ -631,6 +637,9 @@ object ArabicStrings : StringsBundle {
     override val biometricActive = "مفعل"
     override val biometricDisabled = "معطل"
     override val updatedLabel = "آخر تحديث"
+    override val breathingGlowTitle = "تأثير التوهج التنفسي للبطاقات"
+    override val breathingGlowActive = "مفعل • إضاءة ديناميكية Liquid Glass v3"
+    override val breathingGlowDisabled = "معطل • بطاقات ثابتة بدون توهج"
 
     override val backupRestore = "النسخ الاحتياطي والاستعادة"
     override val backupDriveTitle = "إعدادات النسخ الإحتياطي"

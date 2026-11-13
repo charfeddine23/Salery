@@ -200,4 +200,27 @@ class ExampleUnitTest {
     assertTrue(com.example.update.compareVersionTags("v1.0.2", "1.0.3") < 0)
     assertEquals("12.0 MB", com.example.update.formatBytesToMb(12L * 1024L * 1024L))
   }
+
+  @Test
+  fun appUpdate_validation_rejectsMissingAndCorruptApkFiles() {
+    val missing = java.io.File("non_existent_salery_update.apk")
+    val emptyOrSmall = java.io.File.createTempFile("corrupt_update", ".apk")
+    val invalidLargeNonZip = java.io.File.createTempFile("invalid_non_zip", ".apk")
+    try {
+      emptyOrSmall.writeText("<html>404 Not Found</html>")
+      invalidLargeNonZip.writeBytes(ByteArray(120_000) { 0x41 })
+      org.junit.Assert.assertFalse(
+        com.example.update.AppUpdateManager.hasValidApkHeaderAndSize(missing)
+      )
+      org.junit.Assert.assertFalse(
+        com.example.update.AppUpdateManager.hasValidApkHeaderAndSize(emptyOrSmall)
+      )
+      org.junit.Assert.assertFalse(
+        com.example.update.AppUpdateManager.hasValidApkHeaderAndSize(invalidLargeNonZip)
+      )
+    } finally {
+      emptyOrSmall.delete()
+      invalidLargeNonZip.delete()
+    }
+  }
 }

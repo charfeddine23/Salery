@@ -49,6 +49,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.NeuDarkHighlight
+import com.example.ui.theme.breathingGlow
 import com.example.ui.theme.neumorphicDepth
 
 @Composable
@@ -158,6 +159,7 @@ fun GlassCard(
     borderColor: Color = LiquidGlassTheme.colors.glassBorder,
     backgroundColor: Color = LiquidGlassTheme.colors.glassCard,
     borderWidth: Dp = 1.dp,
+    breathingGlow: Boolean = true,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -172,14 +174,27 @@ fun GlassCard(
 
     val density = LocalDensity.current
     val effectiveCornerRadius = cornerRadius ?: if (shape is RoundedCornerShape) {
-        with(density) { shape.topStart.toPx(androidx.compose.ui.geometry.Size.Unspecified, this).toDp() }
+        with(density) {
+            val px = shape.topStart.toPx(androidx.compose.ui.geometry.Size(100f, 100f), this)
+            if (px.isFinite() && px >= 0f) px.toDp() else 20.dp
+        }
     } else {
         20.dp
     }
 
+    val glowModifier = Modifier.breathingGlow(
+        enabled = breathingGlow,
+        cornerRadius = effectiveCornerRadius,
+        minAlpha = if (colors.isDark) 0.05f else 0.03f,
+        maxAlpha = if (colors.isDark) 0.18f else 0.10f,
+        minScale = 0.99f,
+        maxScale = 1.03f
+    )
+
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
+                .then(glowModifier)
                 .neumorphicDepth(
                     cornerRadius = effectiveCornerRadius,
                     elevation = 4.dp,
@@ -213,6 +228,7 @@ fun GlassCard(
     } else {
         Box(
             modifier = modifier
+                .then(glowModifier)
                 .clip(shape)
                 .border(
                     border = BorderStroke(

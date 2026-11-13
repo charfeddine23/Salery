@@ -1,11 +1,17 @@
 package com.example.update
 
+import android.app.Activity
+import android.content.ClipData
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +23,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -27,6 +34,7 @@ const val GITHUB_REPO_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_
 const val GITHUB_RELEASES_WEB_URL = "$GITHUB_REPO_URL/releases"
 private const val GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val GITHUB_RELEASES_LIST_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases?per_page=1"
+private const val MIN_VALID_APK_BYTES = 100_000L
 
 data class GitHubReleaseInfo(
     val tagName: String,
@@ -76,10 +84,61 @@ object AppUpdateManager {
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(45, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
+    }
+
+    private fun getUpdatesDirectory(context: Context): File {
+        return File(context.filesDir, "updates").apply { mkdirs() }
+    }
+
+    fun cleanupObsoleteUpdates(context: Context) {
+        try {
+            val currentVersionCode = getCurrentAppVersionCode(context)
+            val dirs = listOf(
+                File(context.cacheDir, "updates"),
+                File(context.filesDir, "updates")
+            )
+            dirs.forEach { dir ->
+                if (!dir.exists()) return@forEach
+                dir.listFiles()?.forEach { file ->
+                    if (file.name.endsWith(".tmp")) {
+                        file.delete()
+                    } else if (file.name.endsWith(".apk")) {
+                        val pkgInfo = readApkPackageInfo(context, file)
+                        val apkVer = pkgInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: -1L
+                        if (pkgInfo == null ||
+                            pkgInfo.packageName != context.packageName ||
+                            apkVer <= currentVersionCode
+                        ) {
+                            file.delete()
+                        }
+                    } else {
+                        file.delete()
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun findReadyUpdateApk(context: Context, release: GitHubReleaseInfo): File? {
+        return try {
+            val updatesDir = getUpdatesDirectory(context)
+            val safeFileName = sanitizeApkFileName(release)
+            val candidate = File(updatesDir, safeFileName)
+            if (isValidUpdateApk(context, candidate, release.apkSizeBytes)) candidate else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun sanitizeApkFileName(release: GitHubReleaseInfo): String {
+        return (release.apkName ?: "SaleryPulse-${release.versionName}.apk")
+            .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .let { if (it.lowercase(Locale.US).endsWith(".apk")) it else "$it.apk" }
     }
 
     suspend fun fetchLatestRelease(): Result<GitHubReleaseInfo> = withContext(Dispatchers.IO) {
@@ -137,16 +196,20 @@ object AppUpdateManager {
             return@flow
         }
 
-        val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
-        // Clean stale APK/temp files
+        // Clear any legacy cache updates folder to avoid stale/corrupted cache files
+        try {
+            File(context.cacheDir, "updates").deleteRecursively()
+        } catch (_: Throwable) {
+        }
+
+        val updatesDir = getUpdatesDirectory(context)
         updatesDir.listFiles()?.forEach { oldFile ->
             if (oldFile.name.endsWith(".apk") || oldFile.name.endsWith(".tmp")) {
                 oldFile.delete()
             }
         }
 
-        val safeFileName = (release.apkName ?: "SaleryPulse-${release.versionName}.apk")
-            .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val safeFileName = sanitizeApkFileName(release)
         val tempFile = File(updatesDir, "$safeFileName.tmp")
         val targetFile = File(updatesDir, safeFileName)
 
@@ -167,9 +230,8 @@ object AppUpdateManager {
                     return@flow
                 }
 
-                val contentLength = body.contentLength().let {
-                    if (it > 0L) it else release.apkSizeBytes
-                }
+                val streamLength = body.contentLength()
+                val expectedLength = if (streamLength > 0L) streamLength else release.apkSizeBytes
 
                 var totalRead = 0L
                 var lastEmitTime = 0L
@@ -184,43 +246,126 @@ object AppUpdateManager {
                             totalRead += read
 
                             val now = System.currentTimeMillis()
-                            if (now - lastEmitTime >= 80L || (contentLength > 0 && totalRead >= contentLength)) {
+                            if (now - lastEmitTime >= 80L || (expectedLength > 0 && totalRead >= expectedLength)) {
                                 lastEmitTime = now
-                                emit(DownloadState.Progress(totalRead, contentLength))
+                                emit(DownloadState.Progress(totalRead, expectedLength))
                             }
                         }
                         output.flush()
                     }
                 }
 
+                // Verify download completeness before renaming
+                if (streamLength > 0L && totalRead != streamLength) {
+                    tempFile.delete()
+                    emit(DownloadState.Failed("Incomplete download ($totalRead / $streamLength bytes)"))
+                    return@flow
+                }
+
                 if (targetFile.exists()) targetFile.delete()
                 val renamed = tempFile.renameTo(targetFile)
                 val finalFile = if (renamed) targetFile else tempFile
+
+                // Verify the downloaded file is a valid APK archive for this app
+                if (!isValidUpdateApk(context, finalFile, 0L)) {
+                    finalFile.delete()
+                    emit(DownloadState.Failed("Downloaded package is corrupted or invalid"))
+                    return@flow
+                }
+
                 emit(DownloadState.Completed(finalFile))
             }
         } catch (e: CancellationException) {
             tempFile.delete()
             throw e
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             tempFile.delete()
-            emit(DownloadState.Failed(e.message ?: "Download failed"))
+            targetFile.delete()
+            emit(DownloadState.Failed(t.message ?: "Download failed"))
         }
     }.flowOn(Dispatchers.IO)
 
+    fun isValidUpdateApk(context: Context, apkFile: File, expectedMinSize: Long = 0L): Boolean {
+        if (!hasValidApkHeaderAndSize(apkFile, expectedMinSize)) return false
+        val pkgInfo = readApkPackageInfo(context, apkFile) ?: return false
+        return pkgInfo.packageName == context.packageName
+    }
+
+    fun hasValidApkHeaderAndSize(apkFile: File, expectedSizeBytes: Long = 0L): Boolean {
+        if (!apkFile.exists() || !apkFile.isFile) return false
+        val len = apkFile.length()
+        if (len < MIN_VALID_APK_BYTES) return false
+        if (expectedSizeBytes > 0L && len != expectedSizeBytes) return false
+
+        return try {
+            FileInputStream(apkFile).use { fis ->
+                val header = ByteArray(4)
+                fis.read(header) == 4 &&
+                    header[0] == 0x50.toByte() &&
+                    header[1] == 0x4B.toByte() &&
+                    header[2] == 0x03.toByte() &&
+                    header[3] == 0x04.toByte()
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun readApkPackageInfo(context: Context, apkFile: File): PackageInfo? {
+        return try {
+            val pm = context.packageManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageArchiveInfo(
+                    apkFile.absolutePath,
+                    PackageManager.PackageInfoFlags.of(0L)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(apkFile.absolutePath, 0)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun getCurrentAppVersionCode(context: Context): Long {
+        return try {
+            val pm = context.packageManager
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0L))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, 0)
+            }
+            PackageInfoCompat.getLongVersionCode(info)
+        } catch (_: Throwable) {
+            0L
+        }
+    }
+
     fun canRequestPackageInstalls(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.packageManager.canRequestPackageInstalls()
-        } else {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.packageManager.canRequestPackageInstalls()
+            } else {
+                true
+            }
+        } catch (_: Throwable) {
             true
         }
     }
 
     fun buildManageUnknownAppSourcesIntent(context: Context): Intent {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(
+            val specific = Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:${context.packageName}")
             )
+            if (specific.resolveActivity(context.packageManager) != null) {
+                specific
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+            }
         } else {
             Intent(Settings.ACTION_SECURITY_SETTINGS)
         }
@@ -228,31 +373,99 @@ object AppUpdateManager {
 
     fun installApk(context: Context, apkFile: File): Boolean {
         return try {
+            if (!isValidUpdateApk(context, apkFile, 0L)) {
+                apkFile.delete()
+                return false
+            }
+
+            val activity = context.findActivity()
+            val launchContext: Context = activity ?: context.applicationContext
+
             val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
+                launchContext,
+                "${launchContext.packageName}.fileprovider",
                 apkFile
             )
+
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
+                clipData = ClipData.newRawUri("SaleryPulse Update", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (activity == null) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
-            context.startActivity(installIntent)
-            true
-        } catch (_: Exception) {
+
+            // Explicitly grant URI read permissions to resolved package installer(s) (critical on Xiaomi MIUI/HyperOS)
+            val resolvedInstallers = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                launchContext.packageManager.queryIntentActivities(
+                    installIntent,
+                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                launchContext.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            }
+
+            resolvedInstallers.forEach { resolveInfo ->
+                val pkgName = resolveInfo.activityInfo?.packageName
+                if (!pkgName.isNullOrBlank()) {
+                    try {
+                        launchContext.grantUriPermission(
+                            pkgName,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+
+            if (resolvedInstallers.isNotEmpty()) {
+                launchContext.startActivity(installIntent)
+                return true
+            }
+
+            // Fallback to legacy ACTION_INSTALL_PACKAGE if ACTION_VIEW has no handler
+            @Suppress("DEPRECATION")
+            val fallbackIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                data = uri
+                clipData = ClipData.newRawUri("SaleryPulse Update", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                if (activity == null) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            if (fallbackIntent.resolveActivity(launchContext.packageManager) != null) {
+                launchContext.startActivity(fallbackIntent)
+                true
+            } else {
+                false
+            }
+        } catch (_: Throwable) {
             false
         }
     }
 
     fun openReleaseInBrowser(context: Context, url: String = GITHUB_RELEASES_WEB_URL) {
         try {
+            val activity = context.findActivity()
+            val launchContext: Context = activity ?: context
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (activity == null) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
-            context.startActivity(intent)
-        } catch (_: Exception) {
+            launchContext.startActivity(intent)
+        } catch (_: Throwable) {
         }
+    }
+
+    private tailrec fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 }
 

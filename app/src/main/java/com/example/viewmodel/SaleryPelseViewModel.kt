@@ -135,13 +135,20 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _isAppLocked.value = true
         }
 
-        // Check Smart Salary Scheduler and Debt Auto-Payments (Zero mock data seeded)
+        // Check Smart Salary Scheduler, Debt Auto-Payments, and clean obsolete update APKs safely
         viewModelScope.launch {
-            cleanExistingMockDataIfPresent()
-            checkAndApplySalaryScheduler()
-            checkAndExecuteAutoPayDebts()
-            val currentDebts = dao.getAllDebtsList()
-            DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
+            try {
+                AppUpdateManager.cleanupObsoleteUpdates(getApplication())
+            } catch (_: Throwable) {
+            }
+            try {
+                cleanExistingMockDataIfPresent()
+                checkAndApplySalaryScheduler()
+                checkAndExecuteAutoPayDebts()
+                val currentDebts = dao.getAllDebtsList()
+                DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
+            } catch (_: Throwable) {
+            }
         }
 
         // Silent background check for newer release on GitHub
@@ -611,6 +618,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         prefsManager.updateSettings { it.copy(designStyle = style) }
     }
 
+    fun setBreathingGlowEnabled(enabled: Boolean) {
+        prefsManager.updateSettings { it.copy(breathingGlowEnabled = enabled) }
+    }
+
     // Stealth Mode (Privacy / Shake to Hide)
     fun toggleStealthMode(): Boolean {
         val current = settings.value.stealthMode
@@ -826,7 +837,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             result.onSuccess { release ->
                 val isNewer = compareVersionTags(release.versionName, APP_VERSION) > 0
                 if (isNewer) {
-                    _updateUiState.value = AppUpdateUiState.Available(release)
+                    val alreadyDownloadedApk = AppUpdateManager.findReadyUpdateApk(getApplication(), release)
+                    _updateUiState.value = if (alreadyDownloadedApk != null) {
+                        AppUpdateUiState.ReadyToInstall(release, alreadyDownloadedApk)
+                    } else {
+                        AppUpdateUiState.Available(release)
+                    }
                     _showUpdateDialog.value = true
                 } else if (manual) {
                     _updateUiState.value = AppUpdateUiState.UpToDate(APP_VERSION)
@@ -870,9 +886,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             release = release,
                             apkFile = dlState.file
                         )
-                        if (AppUpdateManager.canRequestPackageInstalls(appCtx)) {
-                            AppUpdateManager.installApk(appCtx, dlState.file)
-                        }
                     }
                     is DownloadState.Failed -> {
                         _updateUiState.value = AppUpdateUiState.Error(
@@ -885,9 +898,19 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun installReadyUpdate(): Boolean {
+    fun installReadyUpdate(launcherContext: Context = getApplication()): Boolean {
         val current = _updateUiState.value as? AppUpdateUiState.ReadyToInstall ?: return false
-        return AppUpdateManager.installApk(getApplication(), current.apkFile)
+        val launched = AppUpdateManager.installApk(launcherContext, current.apkFile)
+        if (!launched) {
+            val isAr = settings.value.language == "ar"
+            val msg = if (isAr) {
+                "تعذر تشغيل مثبت التحديثات على جهازك. يمكنك إعادة المحاولة أو التثبيت من GitHub."
+            } else {
+                "Could not launch the package installer. Retry or download from GitHub Releases."
+            }
+            _updateUiState.value = AppUpdateUiState.Error(msg, current.release)
+        }
+        return launched
     }
 
     fun openUpdateDialog() {

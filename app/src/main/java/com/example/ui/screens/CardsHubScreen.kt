@@ -93,6 +93,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
+import com.example.ui.theme.breathingGlow
 import com.example.viewmodel.FinancialSummary
 import kotlinx.coroutines.delay
 
@@ -365,33 +366,22 @@ private fun EdahabiaCardRealistic(
         }
     }
 
-    // Subtle animated breathing background glow (Liquid Glass v3 breathing shaders)
-    val infiniteTransition = rememberInfiniteTransition(label = "classic_blue_glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = if (isDark) 0.28f else 0.18f,
-        targetValue = if (isDark) 0.58f else 0.38f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "classic_blue_alpha"
-    )
-    val glowScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "classic_blue_scale"
-    )
-
     val cardScale = 1f - (holdAnim.value * 0.025f)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
+            .breathingGlow(
+                glowColor = Color(0xFF2563EB),
+                secondaryGlowColor = Color(0xFF0284C7),
+                cornerRadius = 22.dp,
+                minAlpha = if (isDark) 0.24f else 0.14f,
+                maxAlpha = if (isDark) 0.52f else 0.34f,
+                minScale = 0.98f,
+                maxScale = 1.045f,
+                durationMillis = 2600
+            )
             .testTag("classic_blue_card")
             .clickable(
                 interactionSource = interactionSource,
@@ -406,22 +396,6 @@ private fun EdahabiaCardRealistic(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Breathing Radial Halo behind the card in vibrant Royal Blue
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .scale(glowScale)
-                .clip(RoundedCornerShape(26.dp))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF2563EB).copy(alpha = glowAlpha),
-                            Color(0xFF0284C7).copy(alpha = glowAlpha * 0.45f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
 
         // The Physical Tactile Classic Blue Card (Algérie Poste Classic Reference Design)
         Box(
@@ -739,30 +713,19 @@ private fun VisaCardRealistic(
 ) {
     val colors = LiquidGlassTheme.colors
 
-    // Subtle animated breathing background glow (cyan / sapphire aura)
-    val infiniteTransition = rememberInfiniteTransition(label = "visa_glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = if (isDark) 0.18f else 0.12f,
-        targetValue = if (isDark) 0.45f else 0.28f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "visa_alpha"
-    )
-    val glowScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.03f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "visa_scale"
-    )
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .breathingGlow(
+                glowColor = Color(0xFF0284C7),
+                secondaryGlowColor = Color(0xFF0369A1),
+                cornerRadius = 22.dp,
+                minAlpha = if (isDark) 0.16f else 0.10f,
+                maxAlpha = if (isDark) 0.42f else 0.26f,
+                minScale = 0.98f,
+                maxScale = 1.035f,
+                durationMillis = 2800
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = true, color = CyanNeon),
@@ -770,22 +733,6 @@ private fun VisaCardRealistic(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Breathing Radial Halo behind the Visa card
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .scale(glowScale)
-                .clip(RoundedCornerShape(26.dp))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF0284C7).copy(alpha = glowAlpha),
-                            Color(0xFF0369A1).copy(alpha = glowAlpha * 0.4f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
 
         // The Physical Tactile Visa Card
         Box(
