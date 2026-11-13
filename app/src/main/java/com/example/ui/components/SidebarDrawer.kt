@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Visibility
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
+import com.example.update.AppUpdateUiState
 
 @Composable
 fun SidebarDrawer(
@@ -78,6 +81,8 @@ fun SidebarDrawer(
     onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
+    updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,
+    onCheckForUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -290,7 +295,77 @@ fun SidebarDrawer(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // In-App Update Check Action Card
+            val hasPendingUpdate = updateUiState is AppUpdateUiState.Available ||
+                updateUiState is AppUpdateUiState.Downloading ||
+                updateUiState is AppUpdateUiState.ReadyToInstall
+            val updateSubtitle = when (updateUiState) {
+                is AppUpdateUiState.Available -> "${strings.updateBadgeLabel} • ${updateUiState.release.tagName}"
+                is AppUpdateUiState.Downloading -> strings.downloadingUpdate
+                is AppUpdateUiState.ReadyToInstall -> strings.installUpdateButton
+                else -> "v$APP_VERSION • GitHub Releases"
+            }
+
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("check_updates_drawer_button"),
+                backgroundColor = if (hasPendingUpdate) RoseNeon.copy(alpha = 0.14f) else colors.glassCard,
+                borderColor = if (hasPendingUpdate) RoseNeon.copy(alpha = 0.55f) else colors.glassBorderSubtle,
+                shape = RoundedCornerShape(18.dp),
+                onClick = onCheckForUpdates
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(
+                                if (hasPendingUpdate) RoseNeon.copy(alpha = 0.22f)
+                                else colors.primaryNeon.copy(alpha = 0.14f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = if (hasPendingUpdate) RoseNeon else colors.primaryNeon,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = strings.checkForUpdates,
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = updateSubtitle,
+                            color = if (hasPendingUpdate) RoseNeon else colors.textMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (hasPendingUpdate) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(RoseNeon)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Dynamic Developer Footer & App Info Card
             GlassCard(

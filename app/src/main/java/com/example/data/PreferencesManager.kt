@@ -22,7 +22,11 @@ data class UserSettings(
     val lastBackupTimestamp: Long = 0L,
     val stealthMode: Boolean = false,
     val vaultLockedAmount: Double = 0.0,
-    val savingsWalletBalance: Double = 0.0
+    val savingsWalletBalance: Double = 0.0,
+    val classicCardHolderName: String = "CHARFEDDINE KA",
+    val classicCardNumber: String = "",
+    val classicCardExpiry: String = "11/29",
+    val classicCardCvc: String = ""
 )
 
 class PreferencesManager(context: Context) {
@@ -50,7 +54,11 @@ class PreferencesManager(context: Context) {
             lastBackupTimestamp = prefs.getLong("last_backup_time", 0L),
             stealthMode = prefs.getBoolean("stealth_mode", false),
             vaultLockedAmount = savedSavings,
-            savingsWalletBalance = savedSavings
+            savingsWalletBalance = savedSavings,
+            classicCardHolderName = prefs.getString("classic_card_holder", "CHARFEDDINE KA") ?: "CHARFEDDINE KA",
+            classicCardNumber = prefs.getString("classic_card_number", "") ?: "",
+            classicCardExpiry = prefs.getString("classic_card_expiry", "11/29") ?: "11/29",
+            classicCardCvc = prefs.getString("classic_card_cvc", "") ?: ""
         )
     }
 
@@ -78,6 +86,10 @@ class PreferencesManager(context: Context) {
             .putBoolean("stealth_mode", finalUpdated.stealthMode)
             .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
             .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
+            .putString("classic_card_holder", finalUpdated.classicCardHolderName)
+            .putString("classic_card_number", finalUpdated.classicCardNumber)
+            .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
+            .putString("classic_card_cvc", finalUpdated.classicCardCvc)
             .apply()
         _settingsFlow.value = finalUpdated
     }

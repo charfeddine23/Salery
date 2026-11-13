@@ -98,12 +98,16 @@ import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.launch
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.sensor.RememberShakeDetector
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.i18n.LocalStealthMode
+import com.example.update.AppUpdateManager
 
 @Composable
 fun MainAppScreen(
@@ -119,6 +123,21 @@ fun MainAppScreen(
     val transactions by viewModel.allTransactions.collectAsState()
     val debts by viewModel.allDebts.collectAsState()
     val summary by viewModel.financialSummary.collectAsState()
+    val updateUiState by viewModel.updateUiState.collectAsState()
+    val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+
+    var canInstallPackages by remember {
+        mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
+    }
+    val installPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        val allowed = AppUpdateManager.canRequestPackageInstalls(context)
+        canInstallPackages = allowed
+        if (allowed) {
+            viewModel.installReadyUpdate()
+        }
+    }
 
     // Shake to Hide / Stealth Mode Sensor Listener
     RememberShakeDetector(enabled = !isAppLocked) {
@@ -206,6 +225,11 @@ fun MainAppScreen(
                                 },
                                 onSelectLanguage = { lang ->
                                     viewModel.setLanguage(lang)
+                                },
+                                updateUiState = updateUiState,
+                                onCheckForUpdates = {
+                                    scope.launch { drawerState.close() }
+                                    viewModel.checkForUpdates(manual = true)
                                 }
                             )
                         }
@@ -299,7 +323,10 @@ fun MainAppScreen(
                                     summary = summary,
                                     userSettings = userSettings,
                                     onOpenDashboard = { currentRoute = "dashboard_details" },
-                                    onOpenVisaDetails = { currentRoute = "visa_coming_soon" }
+                                    onOpenVisaDetails = { currentRoute = "visa_coming_soon" },
+                                    onUpdateClassicCard = { name, number, expiry, cvc ->
+                                        viewModel.updateClassicCardDetails(name, number, expiry, cvc)
+                                    }
                                 )
                                 "dashboard_details" -> DashboardScreen(
                                     summary = summary,
@@ -435,6 +462,37 @@ fun MainAppScreen(
                     onDismiss = { showBackupRestoreDialog = false },
                     onExportBackup = { viewModel.exportBackupJson() },
                     onRestoreBackup = { json -> viewModel.restoreFromJson(json) }
+                )
+            }
+
+            if (showUpdateDialog) {
+                LaunchedEffect(updateUiState) {
+                    canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
+                }
+                AppUpdateDialog(
+                    state = updateUiState,
+                    canInstallPackages = canInstallPackages,
+                    onDismiss = { viewModel.dismissUpdateDialog() },
+                    onStartDownload = { viewModel.startUpdateDownload() },
+                    onInstallApk = {
+                        canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
+                        if (canInstallPackages) {
+                            viewModel.installReadyUpdate()
+                        } else {
+                            installPermissionLauncher.launch(
+                                AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
+                            )
+                        }
+                    },
+                    onRequestInstallPermission = {
+                        installPermissionLauncher.launch(
+                            AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
+                        )
+                    },
+                    onRetryCheck = { viewModel.checkForUpdates(manual = true) },
+                    onOpenReleaseBrowser = { url ->
+                        AppUpdateManager.openReleaseInBrowser(context, url)
+                    }
                 )
             }
         }

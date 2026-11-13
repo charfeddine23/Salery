@@ -11,7 +11,11 @@ data class BackupPayload(
     val debts: List<DebtEntity>,
     val salaryAmount: Double,
     val salaryPayday: Int,
-    val salaryEmployer: String
+    val salaryEmployer: String,
+    val classicCardHolderName: String = "CHARFEDDINE KA",
+    val classicCardNumber: String = "",
+    val classicCardExpiry: String = "11/29",
+    val classicCardCvc: String = ""
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
@@ -26,6 +30,14 @@ data class BackupPayload(
         salaryObj.put("payday", salaryPayday)
         salaryObj.put("employer", salaryEmployer)
         root.put("salarySettings", salaryObj)
+
+        // Classic Card Details
+        val cardObj = JSONObject()
+        cardObj.put("holderName", classicCardHolderName)
+        cardObj.put("cardNumber", classicCardNumber)
+        cardObj.put("expiryDate", classicCardExpiry)
+        cardObj.put("cvc", classicCardCvc)
+        root.put("classicCardSettings", cardObj)
 
         // Transactions
         val transArray = JSONArray()
@@ -82,6 +94,12 @@ data class BackupPayload(
                 val salaryPayday = salaryObj?.optInt("payday", 25) ?: 25
                 val salaryEmployer = salaryObj?.optString("employer", "Enterprise Algiers") ?: "Enterprise Algiers"
 
+                val cardObj = root.optJSONObject("classicCardSettings")
+                val classicCardHolderName = cardObj?.optString("holderName", "CHARFEDDINE KA") ?: "CHARFEDDINE KA"
+                val classicCardNumber = cardObj?.optString("cardNumber", "") ?: ""
+                val classicCardExpiry = cardObj?.optString("expiryDate", "11/29") ?: "11/29"
+                val classicCardCvc = cardObj?.optString("cvc", "") ?: ""
+
                 val transList = mutableListOf<TransactionEntity>()
                 val transArray = root.optJSONArray("transactions")
                 if (transArray != null) {
@@ -137,7 +155,11 @@ data class BackupPayload(
                     debts = debtsList,
                     salaryAmount = salaryAmount,
                     salaryPayday = salaryPayday,
-                    salaryEmployer = salaryEmployer
+                    salaryEmployer = salaryEmployer,
+                    classicCardHolderName = classicCardHolderName,
+                    classicCardNumber = classicCardNumber,
+                    classicCardExpiry = classicCardExpiry,
+                    classicCardCvc = classicCardCvc
                 )
             }.getOrNull()
         }

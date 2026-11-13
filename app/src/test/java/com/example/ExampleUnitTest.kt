@@ -183,4 +183,21 @@ class ExampleUnitTest {
     assertEquals("نقل ومواصلات", ArabicStrings.categoryName("transport"))
     assertEquals("فواتير وخدمات", ArabicStrings.categoryName("utilities"))
   }
+
+  @Test
+  fun classicCardFormatting_handlesDefaultCustomAndStealth() {
+    assertEquals("6280  26••  ••••  9842", com.example.ui.components.formatCardDigitsDisplay("", isStealth = false))
+    assertEquals("••••  ••••  ••••  ••••", com.example.ui.components.formatCardDigitsDisplay("", isStealth = true))
+    assertEquals("6280  2612  3456  9842", com.example.ui.components.formatCardDigitsDisplay("6280261234569842", isStealth = false))
+    assertEquals("••••  ••••  ••••  9842", com.example.ui.components.formatCardDigitsDisplay("6280261234569842", isStealth = true))
+  }
+
+  @Test
+  fun appUpdate_versionComparison_andSizeFormatting_areAccurate() {
+    assertTrue(com.example.update.compareVersionTags("v1.0.14", "1.0.3") > 0)
+    assertTrue(com.example.update.compareVersionTags("v2.0.0", "1.9.99") > 0)
+    assertEquals(0, com.example.update.compareVersionTags("v1.0.3", "1.0.3"))
+    assertTrue(com.example.update.compareVersionTags("v1.0.2", "1.0.3") < 0)
+    assertEquals("12.0 MB", com.example.update.formatBytesToMb(12L * 1024L * 1024L))
+  }
 }

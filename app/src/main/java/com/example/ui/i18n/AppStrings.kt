@@ -43,6 +43,14 @@ interface StringsBundle {
     val backToCards: String
     val activeCardsCount: String
     val currentAccount: String
+    val editCardTitle: String
+    val editCardSubtitle: String
+    val cardHolderNameLabel: String
+    val cardNumberLabel: String
+    val cardExpiryLabel: String
+    val cardCvcLabel: String
+    val holdToEditCardHint: String
+    val holdingToEditLabel: String
 
     val totalBalance: String
     val monthlyIncome: String
@@ -217,6 +225,22 @@ interface StringsBundle {
     val spendFromSavings: String
     val paidFromSavingsBadge: String
 
+    // In-App Update Strings
+    val checkForUpdates: String
+    val updateAvailableTitle: String
+    val updateBadgeLabel: String
+    val updateAvailableDesc: String
+    val updateActionButton: String
+    val downloadingUpdate: String
+    val installUpdateButton: String
+    val grantInstallPermButton: String
+    val retryUpdateButton: String
+    val checkingForUpdates: String
+    val alreadyUpToDate: String
+    val updateCheckFailed: String
+    val updateInstallPermNote: String
+    val openGithubRelease: String
+
     fun categoryName(cat: String): String
 }
 
@@ -244,6 +268,14 @@ object EnglishStrings : StringsBundle {
     override val backToCards = "Back to Cards"
     override val activeCardsCount = "2 Cards Active"
     override val currentAccount = "Current Account • CCP"
+    override val editCardTitle = "Edit Classic Card"
+    override val editCardSubtitle = "Customize your personal Algérie Poste card details"
+    override val cardHolderNameLabel = "Full Name (Cardholder)"
+    override val cardNumberLabel = "Card Number (16 digits)"
+    override val cardExpiryLabel = "Expiry Date (MM/YY)"
+    override val cardCvcLabel = "CVC"
+    override val holdToEditCardHint = "Tap to open dashboard • Hold 1s to edit details"
+    override val holdingToEditLabel = "Hold 1s to edit..."
 
     override val totalBalance = "Total Balance"
     override val monthlyIncome = "Monthly Income"
@@ -418,6 +450,21 @@ object EnglishStrings : StringsBundle {
     override val spendFromSavings = "Spend from Savings"
     override val paidFromSavingsBadge = "Savings Wallet"
 
+    override val checkForUpdates = "Check for Updates"
+    override val updateAvailableTitle = "New Update Available"
+    override val updateBadgeLabel = "New Update"
+    override val updateAvailableDesc = "A new release is ready with performance boosts and visual upgrades."
+    override val updateActionButton = "Update"
+    override val downloadingUpdate = "Downloading update..."
+    override val installUpdateButton = "Install Update"
+    override val grantInstallPermButton = "Allow & Install"
+    override val retryUpdateButton = "Retry"
+    override val checkingForUpdates = "Checking for updates..."
+    override val alreadyUpToDate = "You are on the latest version"
+    override val updateCheckFailed = "Could not connect to check for updates"
+    override val updateInstallPermNote = "Allow installing apps from SaleryPulse to complete the update."
+    override val openGithubRelease = "Open GitHub Releases"
+
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
             "food", "food & dining" -> "Food & Dining"
@@ -470,6 +517,14 @@ object ArabicStrings : StringsBundle {
     override val backToCards = "العودة إلى البطاقات"
     override val activeCardsCount = "بطاقتان نشطتان"
     override val currentAccount = "حساب جاري • CCP"
+    override val editCardTitle = "تعديل معلومات البطاقة"
+    override val editCardSubtitle = "تخصيص بيانات بطاقة بريد الجزائر الكلاسيكية"
+    override val cardHolderNameLabel = "الاسم واللقب"
+    override val cardNumberLabel = "رقم البطاقة (16 رقماً)"
+    override val cardExpiryLabel = "تاريخ نهاية الصلاحية (MM/YY)"
+    override val cardCvcLabel = "رمز الأمان CVC"
+    override val holdToEditCardHint = "اضغط لفتح لوحة التحكم • اضغط ثانية واحدة للتعديل"
+    override val holdingToEditLabel = "استمر بالضغط للتعديل..."
 
     override val totalBalance = "الرصيد الإجمالي"
     override val monthlyIncome = "الدخل الشهري"
@@ -642,6 +697,21 @@ object ArabicStrings : StringsBundle {
     override val withdrawFromSavings = "سحب للمتاح"
     override val spendFromSavings = "صرف من الادخار"
     override val paidFromSavingsBadge = "محفظة الادخار"
+
+    override val checkForUpdates = "التحقق من التحديثات"
+    override val updateAvailableTitle = "تحديث جديد متاح"
+    override val updateBadgeLabel = "تحديث جديد"
+    override val updateAvailableDesc = "تحديث جديد متاح بتحسينات جديدة وأداء أسرع"
+    override val updateActionButton = "تحديث"
+    override val downloadingUpdate = "جاري تحميل التحديث..."
+    override val installUpdateButton = "تثبيت التحديث"
+    override val grantInstallPermButton = "السماح بالتثبيت"
+    override val retryUpdateButton = "إعادة المحاولة"
+    override val checkingForUpdates = "جاري البحث عن تحديثات..."
+    override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
+    override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
+    override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
+    override val openGithubRelease = "فتح صفحة التحميل على GitHub"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

@@ -25,9 +25,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import com.example.notification.DebtReminderScheduler
+import com.example.update.AppUpdateManager
+import com.example.update.AppUpdateUiState
+import com.example.update.DownloadState
+import com.example.update.compareVersionTags
 
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
@@ -111,6 +116,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     private val _isAppLocked = MutableStateFlow(false)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
 
+    // In-App GitHub Update state
+    private val _updateUiState = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
+    val updateUiState: StateFlow<AppUpdateUiState> = _updateUiState.asStateFlow()
+
+    private val _showUpdateDialog = MutableStateFlow(false)
+    val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
+    private var downloadJob: Job? = null
+
     // Notification events for UI banners
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -129,6 +143,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val currentDebts = dao.getAllDebtsList()
             DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
         }
+
+        // Silent background check for newer release on GitHub
+        checkForUpdates(manual = false)
     }
 
     private suspend fun cleanExistingMockDataIfPresent() {
@@ -502,6 +519,40 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // Classic Card Info Update
+    fun updateClassicCardDetails(
+        holderName: String,
+        cardNumber: String,
+        expiryDate: String,
+        cvc: String
+    ) {
+        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }
+        val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
+        val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
+        val formattedExpiry = if (cleanExpiryDigits.length == 4) {
+            "${cleanExpiryDigits.substring(0, 2)}/${cleanExpiryDigits.substring(2, 4)}"
+        } else {
+            expiryDate.trim().ifBlank { "11/29" }
+        }
+        val cleanCvc = cvc.filter { it.isDigit() }.take(4)
+
+        prefsManager.updateSettings {
+            it.copy(
+                classicCardHolderName = cleanName,
+                classicCardNumber = cleanDigits,
+                classicCardExpiry = formattedExpiry,
+                classicCardCvc = cleanCvc
+            )
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تم تحديث معلومات البطاقة بنجاح 💳"
+                else "Card details updated successfully 💳"
+            )
+        }
+    }
+
     // Pattern Lock Security
     fun unlockApp(pattern: List<Int>): Boolean {
         val hash = pattern.toPatternHash()
@@ -704,7 +755,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             debts = debts,
             salaryAmount = userConfig.salaryAmount,
             salaryPayday = userConfig.salaryPayday,
-            salaryEmployer = userConfig.salaryEmployer
+            salaryEmployer = userConfig.salaryEmployer,
+            classicCardHolderName = userConfig.classicCardHolderName,
+            classicCardNumber = userConfig.classicCardNumber,
+            classicCardExpiry = userConfig.classicCardExpiry,
+            classicCardCvc = userConfig.classicCardCvc
         )
 
         prefsManager.updateSettings {
@@ -726,6 +781,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 salaryAmount = payload.salaryAmount,
                 salaryPayday = payload.salaryPayday,
                 salaryEmployer = payload.salaryEmployer,
+                classicCardHolderName = payload.classicCardHolderName,
+                classicCardNumber = payload.classicCardNumber,
+                classicCardExpiry = payload.classicCardExpiry,
+                classicCardCvc = payload.classicCardCvc,
                 lastBackupTimestamp = System.currentTimeMillis()
             )
         }
@@ -742,6 +801,106 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 )
             }
             _toastEvent.emit("Synced successfully with Google Drive")
+        }
+    }
+
+    // In-App GitHub Releases Update & Download Actions
+    fun checkForUpdates(manual: Boolean = true) {
+        val activeState = _updateUiState.value
+        if (activeState is AppUpdateUiState.Downloading) {
+            if (manual) _showUpdateDialog.value = true
+            return
+        }
+        if (manual && activeState is AppUpdateUiState.ReadyToInstall) {
+            _showUpdateDialog.value = true
+            return
+        }
+
+        viewModelScope.launch {
+            if (manual) {
+                _updateUiState.value = AppUpdateUiState.Checking
+                _showUpdateDialog.value = true
+            }
+
+            val result = AppUpdateManager.fetchLatestRelease()
+            result.onSuccess { release ->
+                val isNewer = compareVersionTags(release.versionName, APP_VERSION) > 0
+                if (isNewer) {
+                    _updateUiState.value = AppUpdateUiState.Available(release)
+                    _showUpdateDialog.value = true
+                } else if (manual) {
+                    _updateUiState.value = AppUpdateUiState.UpToDate(APP_VERSION)
+                    _showUpdateDialog.value = true
+                }
+            }.onFailure { err ->
+                if (manual) {
+                    val isAr = settings.value.language == "ar"
+                    val msg = err.localizedMessage?.takeIf { it.isNotBlank() }
+                        ?: if (isAr) "تعذر الاتصال بـ GitHub" else "Unable to reach GitHub"
+                    _updateUiState.value = AppUpdateUiState.Error(msg)
+                    _showUpdateDialog.value = true
+                }
+            }
+        }
+    }
+
+    fun startUpdateDownload() {
+        val release = when (val current = _updateUiState.value) {
+            is AppUpdateUiState.Available -> current.release
+            is AppUpdateUiState.Error -> current.release
+            else -> null
+        } ?: return
+
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
+            val appCtx = getApplication<Application>()
+            _updateUiState.value = AppUpdateUiState.Downloading(release, 0L, release.apkSizeBytes)
+
+            AppUpdateManager.downloadApk(appCtx, release).collect { dlState ->
+                when (dlState) {
+                    is DownloadState.Progress -> {
+                        _updateUiState.value = AppUpdateUiState.Downloading(
+                            release = release,
+                            bytesDownloaded = dlState.bytesDownloaded,
+                            totalBytes = dlState.totalBytes
+                        )
+                    }
+                    is DownloadState.Completed -> {
+                        _updateUiState.value = AppUpdateUiState.ReadyToInstall(
+                            release = release,
+                            apkFile = dlState.file
+                        )
+                        if (AppUpdateManager.canRequestPackageInstalls(appCtx)) {
+                            AppUpdateManager.installApk(appCtx, dlState.file)
+                        }
+                    }
+                    is DownloadState.Failed -> {
+                        _updateUiState.value = AppUpdateUiState.Error(
+                            message = dlState.errorMessage,
+                            release = release
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun installReadyUpdate(): Boolean {
+        val current = _updateUiState.value as? AppUpdateUiState.ReadyToInstall ?: return false
+        return AppUpdateManager.installApk(getApplication(), current.apkFile)
+    }
+
+    fun openUpdateDialog() {
+        if (_updateUiState.value is AppUpdateUiState.Idle) {
+            checkForUpdates(manual = true)
+        } else {
+            _showUpdateDialog.value = true
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        if (_updateUiState.value !is AppUpdateUiState.Downloading) {
+            _showUpdateDialog.value = false
         }
     }
 }

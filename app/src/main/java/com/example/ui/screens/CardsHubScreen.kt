@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,41 +31,60 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import com.example.data.UserSettings
+import com.example.ui.components.EditCardDialog
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SpLogoContainer
+import com.example.ui.components.formatCardDigitsDisplay
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
@@ -72,6 +94,7 @@ import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
+import kotlinx.coroutines.delay
 
 /**
  * Cards Hub Screen ("البطاقات").
@@ -84,6 +107,7 @@ fun CardsHubScreen(
     userSettings: UserSettings,
     onOpenDashboard: () -> Unit,
     onOpenVisaDetails: () -> Unit,
+    onUpdateClassicCard: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -92,6 +116,21 @@ fun CardsHubScreen(
     val isDark = colors.isDark
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+
+    var showEditClassicCardDialog by remember { mutableStateOf(false) }
+
+    if (showEditClassicCardDialog) {
+        EditCardDialog(
+            currentHolderName = userSettings.classicCardHolderName,
+            currentCardNumber = userSettings.classicCardNumber,
+            currentExpiry = userSettings.classicCardExpiry,
+            currentCvc = userSettings.classicCardCvc,
+            onDismiss = { showEditClassicCardDialog = false },
+            onSave = { name, number, expiry, cvc ->
+                onUpdateClassicCard(name, number, expiry, cvc)
+            }
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -181,7 +220,8 @@ fun CardsHubScreen(
                     userSettings = userSettings,
                     isArabic = isArabic,
                     isDark = isDark,
-                    onClick = onOpenDashboard
+                    onClick = onOpenDashboard,
+                    onLongPressEdit = { showEditClassicCardDialog = true }
                 )
             }
         }
@@ -279,7 +319,10 @@ fun CardsHubScreen(
 }
 
 /**
- * Ultra-high-definition, realistic and tactile Neumorphic Algérie Poste Edahabia Card.
+ * Ultra-high-definition, realistic and tactile Classic Blue Algérie Poste Card.
+ * Supports:
+ * - Short Tap: Opens the full financial Dashboard.
+ * - 1-Second Press-and-Hold (1000ms): Opens EditCardDialog to customize name, card number, expiry, and CVC.
  */
 @Composable
 private fun EdahabiaCardRealistic(
@@ -287,13 +330,43 @@ private fun EdahabiaCardRealistic(
     userSettings: UserSettings,
     isArabic: Boolean,
     isDark: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongPressEdit: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
+    val isStealth = LocalStealthMode.current
+    val haptic = LocalHapticFeedback.current
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val holdAnim = remember { Animatable(0f) }
+    var didTriggerLongPress by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didTriggerLongPress = false
+            holdAnim.snapTo(0f)
+            // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
+            // so 900ms animation equals 1.0 full second of holding.
+            holdAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 900, easing = LinearEasing)
+            )
+            didTriggerLongPress = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onLongPressEdit()
+        } else {
+            holdAnim.snapTo(0f)
+            if (didTriggerLongPress) {
+                delay(150)
+                didTriggerLongPress = false
+            }
+        }
+    }
 
     // Subtle animated breathing background glow (Liquid Glass v3 breathing shaders)
-    val infiniteTransition = rememberInfiniteTransition(label = "edahabia_glow")
+    val infiniteTransition = rememberInfiniteTransition(label = "classic_blue_glow")
     val glowAlpha by infiniteTransition.animateFloat(
         initialValue = if (isDark) 0.28f else 0.18f,
         targetValue = if (isDark) 0.58f else 0.38f,
@@ -301,7 +374,7 @@ private fun EdahabiaCardRealistic(
             animation = tween(2600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "edahabia_alpha"
+        label = "classic_blue_alpha"
     )
     val glowScale by infiniteTransition.animateFloat(
         initialValue = 0.98f,
@@ -310,16 +383,26 @@ private fun EdahabiaCardRealistic(
             animation = tween(2600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "edahabia_scale"
+        label = "classic_blue_scale"
     )
+
+    val cardScale = 1f - (holdAnim.value * 0.025f)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(cardScale)
+            .testTag("classic_blue_card")
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = ripple(bounded = true, color = CyanNeon),
-                onClick = onClick
+                onClick = {
+                    if (didTriggerLongPress) {
+                        didTriggerLongPress = false
+                    } else {
+                        onClick()
+                    }
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -340,11 +423,11 @@ private fun EdahabiaCardRealistic(
                 )
         )
 
-        // The Physical Tactile Classic Blue Card
+        // The Physical Tactile Classic Blue Card (Algérie Poste Classic Reference Design)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(216.dp)
+                .height(222.dp)
                 .shadow(
                     elevation = if (isDark) 16.dp else 12.dp,
                     shape = RoundedCornerShape(22.dp),
@@ -355,244 +438,262 @@ private fun EdahabiaCardRealistic(
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF38BDF8), // Radiant cyan-blue gloss sheen
-                            Color(0xFF2563EB), // Vibrant Algerian royal blue
-                            Color(0xFF1D4ED8), // Deep sapphire blue
-                            Color(0xFF1E3A8A), // Classic midnight navy
-                            Color(0xFF0F172A)  // Deep obsidian navy base
+                            Color(0xFF2563EB), // Vibrant royal cobalt upper-left
+                            Color(0xFF1D4ED8), // Classic Algérie Poste blue
+                            Color(0xFF1A42A8), // Rich sapphire midtone
+                            Color(0xFF15348A), // Deep blue lower-right
+                            Color(0xFF0F2566)  // Deep navy shadow edge
                         ),
                         start = Offset(0f, 0f),
-                        end = Offset(1000f, 600f)
+                        end = Offset(1000f, 650f)
                     )
                 )
                 .border(
-                    width = 1.2.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFFBAE6FD).copy(alpha = 0.85f),
-                            Color(0xFF38BDF8).copy(alpha = 0.6f),
-                            Color(0xFF1D4ED8).copy(alpha = 0.7f),
-                            Color(0xFFBAE6FD).copy(alpha = 0.45f)
+                    width = if (holdAnim.value > 0.05f) 2.2.dp else 1.2.dp,
+                    brush = if (holdAnim.value > 0.05f) {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                CyanNeon,
+                                EmeraldNeon,
+                                Color.White
+                            )
                         )
-                    ),
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFFBAE6FD).copy(alpha = 0.85f),
+                                Color(0xFF38BDF8).copy(alpha = 0.55f),
+                                Color(0xFF1D4ED8).copy(alpha = 0.65f),
+                                Color(0xFFBAE6FD).copy(alpha = 0.45f)
+                            )
+                        )
+                    },
                     shape = RoundedCornerShape(22.dp)
                 )
         ) {
-            // Subtle brushed metallic texture lines
+            // Classic Algérie Poste Artwork: Landmarks Skyline, Diagonal Gloss & Right Zellige Mosaic
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val step = 14f
-                var x = -size.height
-                while (x < size.width + size.height) {
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.045f),
-                        start = Offset(x, 0f),
-                        end = Offset(x + size.height, size.height),
-                        strokeWidth = 1f
-                    )
-                    x += step
-                }
+                drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
             }
 
-            // Card Inner Content
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Top Row: Algérie Poste (بريد الجزائر) Emblem & Classic Badge
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // Card Inner Content (Always LTR to match physical bank card typography, kept clear of right mosaic)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 18.dp, end = 52.dp, top = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Algérie Poste Logo & Typography
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Official Algerian Postal Envelope & Crescent Emblem
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0F172A).copy(alpha = 0.65f))
-                                .border(0.8.dp, Color(0xFFFDE047), RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalance,
-                                contentDescription = "Algérie Poste",
-                                tint = Color(0xFFFDE047),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Column {
-                            Text(
-                                text = "بريد الجزائر",
-                                color = Color.White,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.2.sp
-                            )
-                            Text(
-                                text = "Algérie Poste",
-                                color = Color(0xFFBAE6FD),
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    // Stylized Classic / CIB Calligraphy Crest
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.45f))
-                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = strings.edahabiaName,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "CLASSIC",
-                                color = Color(0xFF7DD3FC),
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                // Middle Row: EMV Chip + Contactless Symbol + Live Balance Highlight Pill
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Ultra-realistic EMV Gold Microchip
-                        EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 32.dp))
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // Contactless Waves Symbol
-                        ContactlessWaves(modifier = Modifier.size(20.dp), tint = Color(0xFFBAE6FD).copy(alpha = 0.9f))
-                    }
-
-                    // Core Financial Highlight Pill on Card: Live Total Balance
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.45f))
-                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    // Top Row: "الذهبية / CLASSIC" on Left & White Algérie Poste Crest on Right
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = if (isArabic) "الرصيد الإجمالي" else "Total Balance",
-                                color = Color(0xFF7DD3FC),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold
+                                text = "الذهبية",
+                                color = Color(0xFFE0F2FE),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 12.sp
                             )
                             Text(
-                                text = formatDzd(summary.totalBalance),
+                                text = "CLASSIC",
                                 color = Color.White,
-                                fontSize = 14.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.3.sp
+                                letterSpacing = 1.6.sp,
+                                lineHeight = 21.sp,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color(0xFF0F172A).copy(alpha = 0.45f),
+                                        offset = Offset(0f, 1.5f),
+                                        blurRadius = 3f
+                                    )
+                                )
                             )
+                        }
+
+                        AlgeriePosteWhiteLogo()
+                    }
+
+                    // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            ContactlessWaves(
+                                modifier = Modifier.size(18.dp),
+                                tint = Color(0xFFBAE6FD).copy(alpha = 0.88f)
+                            )
+                        }
+
+                        // Live Total Balance Glass Pill
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(Color(0xFF0B1F56).copy(alpha = 0.56f))
+                                .border(0.9.dp, Color(0xFF7DD3FC).copy(alpha = 0.5f), RoundedCornerShape(11.dp))
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = if (isArabic) "الرصيد الإجمالي" else "Total Balance",
+                                    color = Color(0xFF93C5FD),
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 10.sp
+                                )
+                                Text(
+                                    text = formatDzd(summary.totalBalance),
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.3.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Card Number: Embossed Pure White Monospace Digits
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatCardDigitsDisplay(userSettings.classicCardNumber, isStealth),
+                            color = Color.White,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.1.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(
+                                shadow = Shadow(
+                                    color = Color(0xFF0A1B4D).copy(alpha = 0.85f),
+                                    offset = Offset(1f, 1.5f),
+                                    blurRadius = 2f
+                                )
+                            )
+                        )
+                    }
+
+                    // Bottom Row: Cardholder Name (Bottom Left) + EXP DATE & CVC (Center-Right)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                color = Color.White,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.9.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color(0xFF0A1B4D).copy(alpha = 0.7f),
+                                        offset = Offset(0.5f, 1f),
+                                        blurRadius = 1.5f
+                                    )
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "EXP DATE",
+                                    color = Color(0xFFBAE6FD),
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                val expFormatted = userSettings.classicCardExpiry
+                                    .ifBlank { "11/29" }
+                                    .replace("/", " / ")
+                                Text(
+                                    text = expFormatted,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "CVC",
+                                    color = Color(0xFFBAE6FD),
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = if (isStealth || userSettings.classicCardCvc.isBlank()) "•••" else userSettings.classicCardCvc,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
                         }
                     }
                 }
+            }
 
-                // Card Number: Embossed Monospace Credit Card Typeface with 3D stamping effect
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
+            // Floating Hold-to-Edit Progress Badge while user is holding for 1 second
+            if (holdAnim.value > 0.12f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF0F172A).copy(alpha = 0.88f))
+                        .border(1.dp, CyanNeon, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text(
-                        text = "6280  26••  ••••  9842",
-                        color = Color.White,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 2.sp,
-                        style = androidx.compose.ui.text.TextStyle(
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color(0xFF0284C7).copy(alpha = 0.85f),
-                                offset = Offset(-0.8f, -0.8f),
-                                blurRadius = 0.5f
-                            )
-                        )
-                    )
-                }
-
-                // Bottom Row: Cardholder Name, Expiry, and CIB / SATIM Seal
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Column {
-                        Text(
-                            text = "CARDHOLDER / الحائز",
-                            color = Color(0xFFBAE6FD),
-                            fontSize = 7.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp
-                        )
-                        Text(
-                            text = "CHARFEDDINE KA",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "EXPIRES END",
-                            color = Color(0xFFBAE6FD),
-                            fontSize = 7.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "11/29",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    // Official Algerian CIB / SATIM Interbank Seal
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.7f))
-                            .border(0.8.dp, Color(0xFF38BDF8), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = "CIB",
-                            color = Color(0xFF38BDF8),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            fontStyle = FontStyle.Italic,
-                            letterSpacing = 1.sp
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = CyanNeon,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = strings.holdingToEditLabel,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { holdAnim.value },
+                            modifier = Modifier
+                                .width(130.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = CyanNeon,
+                            trackColor = Color.White.copy(alpha = 0.2f)
                         )
                     }
                 }
@@ -600,7 +701,7 @@ private fun EdahabiaCardRealistic(
         }
     }
 
-    // Interactive Tap Guidance Pill
+    // Interactive Tap & Hold Guidance Pill
     Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier
@@ -611,8 +712,7 @@ private fun EdahabiaCardRealistic(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط على البطاقة الكلاسيكية لفتح لوحة التحكم والتفاصيل"
-            else "Tap classic card to open full financial dashboard",
+            text = strings.holdToEditCardHint,
             color = colors.primaryNeon,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
@@ -1054,8 +1154,348 @@ private fun ContactlessWaves(modifier: Modifier = Modifier, tint: Color = Color.
             sweepAngle = 90f,
             useCenter = false,
             topLeft = Offset(-size.width * 0.2f, cy - size.height * 0.45f),
-            size = androidx.compose.ui.geometry.Size(size.width * 0.9f, size.height * 0.9f),
+            size = Size(size.width * 0.9f, size.height * 0.9f),
             style = stroke
         )
     }
 }
+
+/**
+ * Stylized white Algérie Poste crescent-wing emblem matching the Classic Blue card.
+ */
+@Composable
+private fun AlgeriePosteWhiteLogo(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Canvas(modifier = Modifier.size(width = 40.dp, height = 26.dp)) {
+            val w = size.width
+            val h = size.height
+
+            // Outer sweeping crescent / wing arc
+            val crescentPath = Path().apply {
+                moveTo(w * 0.08f, h * 0.30f)
+                cubicTo(
+                    w * 0.36f, h * 0.02f,
+                    w * 0.92f, h * 0.06f,
+                    w * 0.90f, h * 0.46f
+                )
+                cubicTo(
+                    w * 0.88f, h * 0.84f,
+                    w * 0.40f, h * 0.92f,
+                    w * 0.16f, h * 0.68f
+                )
+                cubicTo(
+                    w * 0.34f, h * 0.66f,
+                    w * 0.64f, h * 0.56f,
+                    w * 0.64f, h * 0.36f
+                )
+                cubicTo(
+                    w * 0.64f, h * 0.22f,
+                    w * 0.36f, h * 0.24f,
+                    w * 0.08f, h * 0.30f
+                )
+                close()
+            }
+            drawPath(path = crescentPath, color = Color.White)
+
+            // Slanted postal bar beneath crest
+            drawLine(
+                color = Color.White,
+                start = Offset(w * 0.18f, h * 0.88f),
+                end = Offset(w * 0.82f, h * 0.72f),
+                strokeWidth = 3.2f,
+                cap = StrokeCap.Round
+            )
+        }
+        Spacer(modifier = Modifier.height(1.dp))
+        Text(
+            text = "بريد الجزائر",
+            color = Color.White,
+            fontSize = 8.5.sp,
+            fontWeight = FontWeight.ExtraBold,
+            lineHeight = 9.sp
+        )
+        Text(
+            text = "ALGÉRIE POSTE",
+            color = Color(0xFFBAE6FD),
+            fontSize = 5.8.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.4.sp,
+            lineHeight = 7.sp
+        )
+    }
+}
+
+/**
+ * Draws the Algerian Classic Blue Edahabia surface artwork:
+ * 1) Subtle satin surface lines + upper-left diagonal sapphire sheen
+ * 2) Faint landmark line-art silhouettes (Maqam Echahid, Djamaa el Djazaïr minaret, curved dome)
+ * 3) Iconic right-hand curved Islamic geometric zellige mosaic strip in Gold, White, Sky Blue & Navy
+ * 4) 1-second press-and-hold bottom progress accent
+ */
+private fun DrawScope.drawClassicEdahabiaArtwork(holdProgress: Float) {
+    // 1. Subtle diagonal sheen across upper-left (just above the EMV chip area)
+    val glossPath = Path().apply {
+        moveTo(0f, size.height * 0.56f)
+        quadraticTo(
+            size.width * 0.30f, size.height * 0.32f,
+            size.width * 0.78f, size.height * 0.24f
+        )
+        lineTo(size.width * 0.84f, 0f)
+        lineTo(0f, 0f)
+        close()
+    }
+    drawPath(
+        path = glossPath,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF60A5FA).copy(alpha = 0.20f),
+                Color(0xFF93C5FD).copy(alpha = 0.04f)
+            )
+        )
+    )
+
+    // Subtle brushed diagonal lines
+    val step = 16f
+    var diagX = -size.height
+    while (diagX < size.width + size.height) {
+        drawLine(
+            color = Color.White.copy(alpha = 0.025f),
+            start = Offset(diagX, 0f),
+            end = Offset(diagX + size.height, size.height),
+            strokeWidth = 1f
+        )
+        diagX += step
+    }
+
+    // 2. Faint Algerian Landmarks Wireframe Silhouettes along bottom
+    val watermarkStroke = Stroke(
+        width = 1.6f,
+        cap = StrokeCap.Round,
+        join = StrokeJoin.Round
+    )
+    val landmarkTint = Color(0xFF93C5FD).copy(alpha = 0.22f)
+    val landmarkFaint = Color(0xFFBAE6FD).copy(alpha = 0.14f)
+
+    // Maqam Echahid (Martyrs' Memorial) bottom-left
+    val maqamBaseY = size.height * 0.97f
+    val maqamCenterX = size.width * 0.13f
+    val maqamTopY = size.height * 0.56f
+    // Left curved palm-rib
+    drawPath(
+        path = Path().apply {
+            moveTo(maqamCenterX - size.width * 0.055f, maqamBaseY)
+            quadraticTo(
+                maqamCenterX - size.width * 0.015f, size.height * 0.72f,
+                maqamCenterX - size.width * 0.008f, maqamTopY
+            )
+            lineTo(maqamCenterX + size.width * 0.008f, maqamTopY)
+            quadraticTo(
+                maqamCenterX + size.width * 0.015f, size.height * 0.72f,
+                maqamCenterX + size.width * 0.055f, maqamBaseY
+            )
+        },
+        color = landmarkTint,
+        style = watermarkStroke
+    )
+    // Inner spire line
+    drawLine(
+        color = landmarkFaint,
+        start = Offset(maqamCenterX, maqamTopY + 4f),
+        end = Offset(maqamCenterX, maqamBaseY),
+        strokeWidth = 1.4f
+    )
+
+    // Arched Colonnade & Djamaa el Djazaïr Minaret in center
+    val minaretX = size.width * 0.42f
+    val minaretW = size.width * 0.042f
+    val minaretTopY = size.height * 0.28f
+    drawRect(
+        color = landmarkTint,
+        topLeft = Offset(minaretX, minaretTopY),
+        size = Size(minaretW, size.height - minaretTopY),
+        style = watermarkStroke
+    )
+    // Minaret spire cap & inner geometric ribs
+    drawPath(
+        path = Path().apply {
+            moveTo(minaretX, minaretTopY)
+            lineTo(minaretX + minaretW / 2f, minaretTopY - size.height * 0.06f)
+            lineTo(minaretX + minaretW, minaretTopY)
+        },
+        color = landmarkTint,
+        style = watermarkStroke
+    )
+    for (tier in 1..4) {
+        val ty = minaretTopY + (size.height - minaretTopY) * (tier * 0.2f)
+        drawLine(
+            color = landmarkFaint,
+            start = Offset(minaretX, ty),
+            end = Offset(minaretX + minaretW, ty),
+            strokeWidth = 1.2f
+        )
+    }
+
+    // Colonnade arches between Maqam and Minaret
+    val archStartX = size.width * 0.22f
+    val archWidth = size.width * 0.032f
+    for (i in 0..4) {
+        val ax = archStartX + i * (archWidth + 4f)
+        val ay = size.height * 0.78f
+        drawPath(
+            path = Path().apply {
+                moveTo(ax, size.height)
+                lineTo(ax, ay + 10f)
+                quadraticTo(ax + archWidth / 2f, ay, ax + archWidth, ay + 10f)
+                lineTo(ax + archWidth, size.height)
+            },
+            color = landmarkFaint,
+            style = watermarkStroke
+        )
+    }
+
+    // Wide Mosque Dome silhouette on bottom-right (before mosaic)
+    val domeLeftX = size.width * 0.56f
+    val domeRightX = size.width * 0.80f
+    drawPath(
+        path = Path().apply {
+            moveTo(domeLeftX, size.height * 0.94f)
+            quadraticTo(
+                (domeLeftX + domeRightX) / 2f, size.height * 0.70f,
+                domeRightX, size.height * 0.94f
+            )
+        },
+        color = landmarkTint,
+        style = watermarkStroke
+    )
+    drawPath(
+        path = Path().apply {
+            moveTo(domeLeftX + 18f, size.height * 0.94f)
+            quadraticTo(
+                (domeLeftX + domeRightX) / 2f, size.height * 0.76f,
+                domeRightX - 18f, size.height * 0.94f
+            )
+        },
+        color = landmarkFaint,
+        style = watermarkStroke
+    )
+
+    // 3. Curved Right-Edge Islamic Geometric Zellige Mosaic Strip
+    val mosaicBoundaryPath = Path().apply {
+        moveTo(size.width * 0.835f, 0f)
+        quadraticTo(
+            size.width * 0.895f, size.height * 0.45f,
+            size.width * 0.845f, size.height
+        )
+    }
+    val mosaicClipPath = Path().apply {
+        addPath(mosaicBoundaryPath)
+        lineTo(size.width, size.height)
+        lineTo(size.width, 0f)
+        close()
+    }
+
+    // Soft curve shadow behind the mosaic seam
+    drawPath(
+        path = mosaicBoundaryPath,
+        color = Color(0xFF09163A).copy(alpha = 0.55f),
+        style = Stroke(width = 7f)
+    )
+
+    clipPath(mosaicClipPath) {
+        // Deep royal navy grout background
+        drawRect(
+            color = Color(0xFF1E3A8A),
+            topLeft = Offset(size.width * 0.81f, 0f),
+            size = Size(size.width * 0.22f, size.height)
+        )
+
+        val tilePalette = listOf(
+            Color(0xFFFACC15), // Classic Algerian Gold Yellow
+            Color(0xFFFFFFFF), // Pure Ceramic White
+            Color(0xFF38BDF8), // Vibrant Sky Blue
+            Color(0xFF1D4ED8), // Cobalt Blue
+            Color(0xFFFDE047), // Warm Bright Gold
+            Color(0xFFE0F2FE), // Ice White-Blue
+            Color(0xFF0284C7), // Azure Blue
+            Color(0xFF1E3A8A)  // Deep Zellige Navy
+        )
+
+        val cellW = size.width * 0.068f
+        val cellH = size.height / 5.4f
+        val startX = size.width * 0.81f
+        val cols = 4
+        val rows = 7
+
+        for (r in -1..rows) {
+            for (c in 0..cols) {
+                val cx = startX + c * cellW + (if (r % 2 == 0) 0f else cellW * 0.5f)
+                val cy = r * cellH
+                val baseIdx = (r * 3 + c * 5 + 10).let { if (it < 0) -it else it }
+
+                // Primary diamond/kite zellige tile
+                val diamond = Path().apply {
+                    moveTo(cx, cy - cellH * 0.5f)
+                    lineTo(cx + cellW * 0.5f, cy)
+                    lineTo(cx, cy + cellH * 0.5f)
+                    lineTo(cx - cellW * 0.5f, cy)
+                    close()
+                }
+                val diamondColor = tilePalette[baseIdx % tilePalette.size]
+                drawPath(path = diamond, color = diamondColor)
+                drawPath(
+                    path = diamond,
+                    color = Color(0xFF0F2566).copy(alpha = 0.45f),
+                    style = Stroke(width = 1.2f)
+                )
+
+                // Interlocking 8-pointed star / rosette accents on selected intersections
+                if ((r + c) % 2 == 0) {
+                    val starColor = when ((r + c * 2) % 3) {
+                        0 -> Color(0xFFFACC15) // Gold star
+                        1 -> Color.White       // White star
+                        else -> Color(0xFF38BDF8) // Sky star
+                    }
+                    val outerR = cellW * 0.36f
+                    val innerR = cellW * 0.18f
+                    val starPath = Path()
+                    val points = 16
+                    for (p in 0 until points) {
+                        val angle = (p * PI / 8.0).toFloat()
+                        val rad = if (p % 2 == 0) outerR else innerR
+                        val sx = cx + cos(angle) * rad
+                        val sy = cy + sin(angle) * rad
+                        if (p == 0) starPath.moveTo(sx, sy) else starPath.lineTo(sx, sy)
+                    }
+                    starPath.close()
+                    drawPath(path = starPath, color = starColor)
+                    drawPath(
+                        path = starPath,
+                        color = Color(0xFF1E3A8A).copy(alpha = 0.55f),
+                        style = Stroke(width = 1.0f)
+                    )
+                }
+            }
+        }
+    }
+
+    // Crisp luminous border highlight along the left edge of the mosaic band
+    drawPath(
+        path = mosaicBoundaryPath,
+        color = Color(0xFF93C5FD).copy(alpha = 0.45f),
+        style = Stroke(width = 1.4f)
+    )
+
+    // 4. 1-second Hold Progress Rim Accent at bottom of card
+    if (holdProgress > 0.02f) {
+        drawRoundRect(
+            color = CyanNeon.copy(alpha = 0.9f),
+            topLeft = Offset(0f, size.height - 6f),
+            size = Size(size.width * holdProgress, 6f),
+            cornerRadius = CornerRadius(4f, 4f)
+        )
+    }
+}
+
