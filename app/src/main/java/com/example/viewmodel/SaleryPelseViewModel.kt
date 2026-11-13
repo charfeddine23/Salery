@@ -904,9 +904,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         if (!launched) {
             val isAr = settings.value.language == "ar"
             val msg = if (isAr) {
-                "تعذر تشغيل مثبت التحديثات على جهازك. يمكنك إعادة المحاولة أو التثبيت من GitHub."
+                "تعذر تشغيل مثبت التحديثات على جهازك. يرجى إعادة المحاولة."
             } else {
-                "Could not launch the package installer. Retry or download from GitHub Releases."
+                "Could not launch the package installer. Please try again."
             }
             _updateUiState.value = AppUpdateUiState.Error(msg, current.release)
         }

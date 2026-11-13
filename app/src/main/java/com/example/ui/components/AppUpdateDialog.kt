@@ -37,7 +37,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.CircularProgressIndicator
@@ -339,8 +338,8 @@ fun AppUpdateDialog(
                                 else "Connecting to GitHub Releases..."
                             }
                             is AppUpdateUiState.Error -> {
-                                if (isArabic) "تأكد من اتصالك بالإنترنت أو افتح صفحة GitHub مباشرة."
-                                else "Check your internet connection or open GitHub Releases."
+                                if (isArabic) "تأكد من اتصالك بالإنترنت وحاول مرة أخرى."
+                                else "Check your internet connection and try again."
                             }
                             else -> {
                                 val cleanedNotes = release?.releaseNotes
@@ -519,34 +518,6 @@ fun AppUpdateDialog(
                                         }
                                     },
                                     testTag = "start_update_button"
-                                )
-                            }
-                        }
-
-                        // Subtle GitHub Release fallback link
-                        if (state is AppUpdateUiState.Available || state is AppUpdateUiState.Error) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        onOpenReleaseBrowser(release?.htmlUrl ?: GITHUB_RELEASES_WEB_URL)
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.OpenInNew,
-                                    contentDescription = null,
-                                    tint = colors.textMuted,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = strings.openGithubRelease,
-                                    color = colors.textMuted,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
