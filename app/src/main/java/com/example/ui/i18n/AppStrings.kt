@@ -242,7 +242,6 @@ interface StringsBundle {
     val alreadyUpToDate: String
     val updateCheckFailed: String
     val updateInstallPermNote: String
-    val openGithubRelease: String
 
     fun categoryName(cat: String): String
 }
@@ -469,7 +468,6 @@ object EnglishStrings : StringsBundle {
     override val alreadyUpToDate = "You are on the latest version"
     override val updateCheckFailed = "Could not connect to check for updates"
     override val updateInstallPermNote = "Allow installing apps from SaleryPulse to complete the update."
-    override val openGithubRelease = "Open GitHub Releases"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
@@ -720,7 +718,6 @@ object ArabicStrings : StringsBundle {
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
     override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
     override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
-    override val openGithubRelease = "فتح صفحة التحميل على GitHub"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

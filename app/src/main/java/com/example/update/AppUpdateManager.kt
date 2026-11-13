@@ -31,9 +31,8 @@ import java.util.concurrent.TimeUnit
 const val GITHUB_REPO_OWNER = "charfeddine23"
 const val GITHUB_REPO_NAME = "Salery"
 const val GITHUB_REPO_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME"
-const val GITHUB_RELEASES_WEB_URL = "$GITHUB_REPO_URL/releases"
 private const val GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
-private const val GITHUB_RELEASES_LIST_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases?per_page=1"
+private const val GITHUB_RELEASES_LIST_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases?per_page=10"
 private const val MIN_VALID_APK_BYTES = 100_000L
 
 data class GitHubReleaseInfo(
@@ -146,6 +145,7 @@ object AppUpdateManager {
             val latestRequest = Request.Builder()
                 .url(GITHUB_LATEST_RELEASE_API)
                 .header("Accept", "application/vnd.github+json")
+                .header("Cache-Control", "no-cache")
                 .header("User-Agent", "SaleryPulse-Android")
                 .build()
 
@@ -153,14 +153,17 @@ object AppUpdateManager {
                 if (response.isSuccessful) {
                     val body = response.body?.string().orEmpty()
                     val parsed = parseGitHubReleaseJson(body)
-                    if (parsed != null) return@withContext Result.success(parsed)
+                    if (parsed != null && !parsed.apkDownloadUrl.isNullOrBlank()) {
+                        return@withContext Result.success(parsed)
+                    }
                 }
             }
 
-            // Fallback to /releases?per_page=1 if latest endpoint returns 404 (e.g. prerelease/tag list)
+            // Fallback to /releases?per_page=10 to locate the newest published release with an APK asset
             val listRequest = Request.Builder()
                 .url(GITHUB_RELEASES_LIST_API)
                 .header("Accept", "application/vnd.github+json")
+                .header("Cache-Control", "no-cache")
                 .header("User-Agent", "SaleryPulse-Android")
                 .build()
 
@@ -175,9 +178,15 @@ object AppUpdateManager {
                 if (arr.length() == 0) {
                     return@withContext Result.failure(IllegalStateException("No releases published yet"))
                 }
-                val parsed = parseGitHubReleaseJson(arr.getJSONObject(0).toString())
-                    ?: return@withContext Result.failure(IllegalStateException("Invalid release metadata"))
-                Result.success(parsed)
+                for (i in 0 until arr.length()) {
+                    val releaseObj = arr.optJSONObject(i) ?: continue
+                    if (releaseObj.optBoolean("draft", false)) continue
+                    val parsed = parseGitHubReleaseJson(releaseObj.toString())
+                    if (parsed != null && !parsed.apkDownloadUrl.isNullOrBlank()) {
+                        return@withContext Result.success(parsed)
+                    }
+                }
+                Result.failure(IllegalStateException("No downloadable APK package attached to release"))
             }
         } catch (e: CancellationException) {
             throw e
@@ -232,6 +241,7 @@ object AppUpdateManager {
 
                 val streamLength = body.contentLength()
                 val expectedLength = if (streamLength > 0L) streamLength else release.apkSizeBytes
+                emit(DownloadState.Progress(0L, expectedLength))
 
                 var totalRead = 0L
                 var lastEmitTime = 0L
@@ -448,20 +458,6 @@ object AppUpdateManager {
         }
     }
 
-    fun openReleaseInBrowser(context: Context, url: String = GITHUB_RELEASES_WEB_URL) {
-        try {
-            val activity = context.findActivity()
-            val launchContext: Context = activity ?: context
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                if (activity == null) {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            }
-            launchContext.startActivity(intent)
-        } catch (_: Throwable) {
-        }
-    }
-
     private tailrec fun Context.findActivity(): Activity? = when (this) {
         is Activity -> this
         is ContextWrapper -> baseContext.findActivity()
@@ -479,7 +475,7 @@ fun parseGitHubReleaseJson(jsonStr: String): GitHubReleaseInfo? {
         val title = obj.optString("name", "").ifBlank { "SaleryPulse $tagName" }
         val notes = obj.optString("body", "").trim()
         val publishedAt = obj.optString("published_at", "").trim()
-        val htmlUrl = obj.optString("html_url", GITHUB_RELEASES_WEB_URL).ifBlank { GITHUB_RELEASES_WEB_URL }
+        val htmlUrl = obj.optString("html_url", GITHUB_REPO_URL).ifBlank { GITHUB_REPO_URL }
 
         var apkName: String? = null
         var apkDownloadUrl: String? = null

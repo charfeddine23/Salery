@@ -89,7 +89,6 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import com.example.update.AppUpdateUiState
-import com.example.update.GITHUB_RELEASES_WEB_URL
 import com.example.update.formatBytesToMb
 import kotlin.math.PI
 import kotlin.math.cos
@@ -106,8 +105,7 @@ fun AppUpdateDialog(
     onStartDownload: () -> Unit,
     onInstallApk: () -> Unit,
     onRequestInstallPermission: () -> Unit,
-    onRetryCheck: () -> Unit,
-    onOpenReleaseBrowser: (String) -> Unit
+    onRetryCheck: () -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
@@ -499,24 +497,21 @@ fun AppUpdateDialog(
                                     gradientColors = listOf(UpdateCrimsonStart, UpdateCrimsonEnd),
                                     sheenProgress = sheenProgress,
                                     onClick = {
-                                        if (state.release != null) onStartDownload() else onRetryCheck()
+                                        if (!state.release?.apkDownloadUrl.isNullOrBlank()) {
+                                            onStartDownload()
+                                        } else {
+                                            onRetryCheck()
+                                        }
                                     },
                                     testTag = "retry_update_button"
                                 )
                             }
                             else -> {
-                                val hasDirectApk = !release?.apkDownloadUrl.isNullOrBlank()
                                 CapsuleShimmerButton(
                                     text = strings.updateActionButton,
                                     gradientColors = listOf(UpdateCrimsonStart, UpdateCrimsonEnd),
                                     sheenProgress = sheenProgress,
-                                    onClick = {
-                                        if (hasDirectApk) {
-                                            onStartDownload()
-                                        } else {
-                                            onOpenReleaseBrowser(release?.htmlUrl ?: GITHUB_RELEASES_WEB_URL)
-                                        }
-                                    },
+                                    onClick = onStartDownload,
                                     testTag = "start_update_button"
                                 )
                             }

@@ -865,7 +865,21 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             is AppUpdateUiState.Available -> current.release
             is AppUpdateUiState.Error -> current.release
             else -> null
-        } ?: return
+        } ?: run {
+            checkForUpdates(manual = true)
+            return
+        }
+
+        if (release.apkDownloadUrl.isNullOrBlank()) {
+            val isAr = settings.value.language == "ar"
+            val msg = if (isAr) {
+                "ملف التحديث غير مرفق بعد في هذا الإصدار. أعد المحاولة بعد قليل."
+            } else {
+                "No downloadable APK asset is available for this release yet."
+            }
+            _updateUiState.value = AppUpdateUiState.Error(msg, release)
+            return
+        }
 
         downloadJob?.cancel()
         downloadJob = viewModelScope.launch {
@@ -896,6 +910,21 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
         }
+    }
+
+    fun reportInstallPermissionUnavailable() {
+        val currentRelease = when (val current = _updateUiState.value) {
+            is AppUpdateUiState.ReadyToInstall -> current.release
+            is AppUpdateUiState.Error -> current.release
+            else -> null
+        }
+        val isAr = settings.value.language == "ar"
+        val msg = if (isAr) {
+            "يرجى تفعيل إذن تثبيت التطبيقات من مصادر غير معروفة من إعدادات الجهاز."
+        } else {
+            "Please enable 'Install unknown apps' permission in device settings."
+        }
+        _updateUiState.value = AppUpdateUiState.Error(msg, currentRelease)
     }
 
     fun installReadyUpdate(launcherContext: Context = getApplication()): Boolean {

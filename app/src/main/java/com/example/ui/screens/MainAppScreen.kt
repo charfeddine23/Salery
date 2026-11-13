@@ -524,7 +524,7 @@ fun MainAppScreen(
                                     AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
                                 )
                             } catch (_: Throwable) {
-                                AppUpdateManager.openReleaseInBrowser(context)
+                                viewModel.reportInstallPermissionUnavailable()
                             }
                         }
                     },
@@ -534,13 +534,10 @@ fun MainAppScreen(
                                 AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
                             )
                         } catch (_: Throwable) {
-                            AppUpdateManager.openReleaseInBrowser(context)
+                            viewModel.reportInstallPermissionUnavailable()
                         }
                     },
-                    onRetryCheck = { viewModel.checkForUpdates(manual = true) },
-                    onOpenReleaseBrowser = { url ->
-                        AppUpdateManager.openReleaseInBrowser(context, url)
-                    }
+                    onRetryCheck = { viewModel.checkForUpdates(manual = true) }
                 )
             }
         }
