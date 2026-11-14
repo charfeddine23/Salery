@@ -402,4 +402,65 @@ class ExampleUnitTest {
       com.example.data.VaultAppPresets.resolveForEntry(decoded[0]).motif
     )
   }
+
+  @Test
+  fun themeEngineCatalog_containsClassicAndAll30NewThemes_andResolvesDarkAndLight() {
+    val themes = com.example.ui.theme.ThemeEngineCatalog.allThemes
+    assertEquals(32, themes.size)
+    assertEquals(32, themes.map { it.id }.toSet().size)
+
+    val expectedNames = listOf(
+      "Liquid Glass",
+      "Neumorphism",
+      "Dark Luxury",
+      "Neo-Glassmorphism",
+      "Cyberpunk Neon",
+      "Minimalist Monochrome",
+      "Emerald Opulence",
+      "Champagne Gold",
+      "OLED Midnight",
+      "Royal Velvet",
+      "Titanium Metal",
+      "Rose Quartz & Slate",
+      "Cyber Organic",
+      "Sunset Gradient",
+      "Deep Amethyst",
+      "Neo-Brutalist Luxury",
+      "Liquid Metal",
+      "Frosted Glass",
+      "Platinum Minimal",
+      "Cosmic Nebula",
+      "Retro Noir",
+      "Warm Earthy Tones",
+      "Cyber Metallic",
+      "Deep Burgundy",
+      "Neon Blueprint",
+      "Soft Pastels",
+      "Industrial Steel",
+      "Holographic Hologram",
+      "Obsidian Black",
+      "Dual-Tone Contrast",
+      "Bio-Luminescent",
+      "Modern Swiss"
+    )
+    val actualNames = themes.map { it.nameEn }.toSet()
+    expectedNames.forEach { expected ->
+      assertTrue("Missing theme: $expected", actualNames.contains(expected))
+    }
+
+    themes.forEach { spec ->
+      assertTrue(spec.nameEn.isNotBlank())
+      assertTrue(spec.nameAr.isNotBlank())
+      val dark = com.example.ui.theme.ThemeEngineCatalog.resolveColors(spec.id, isDark = true)
+      val light = com.example.ui.theme.ThemeEngineCatalog.resolveColors(spec.id, isDark = false)
+      assertTrue(dark.isDark)
+      org.junit.Assert.assertFalse(light.isDark)
+      assertEquals(spec.id, dark.designStyle)
+      assertEquals(spec.id, light.designStyle)
+    }
+
+    val fallback = com.example.ui.theme.ThemeEngineCatalog.findById("UNKNOWN_THEME_ID")
+    assertEquals("LIQUID_GLASS", fallback.id)
+    assertTrue(com.example.ui.theme.ThemeEngineCatalog.resolveColors("NEUMORPHISM", isDark = true).isNeumorphic)
+  }
 }

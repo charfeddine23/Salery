@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -49,6 +50,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.NeuDarkHighlight
+import com.example.ui.theme.ThemeSurfaceEffect
 import com.example.ui.theme.breathingGlow
 import com.example.ui.theme.neumorphicDepth
 
@@ -59,95 +61,228 @@ fun GlassBackground(
 ) {
     val colors = LiquidGlassTheme.colors
 
-    if (colors.isNeumorphic) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(colors.bgStart),
-            content = content
-        )
-    } else {
-        // Subtle breathing pulse for liquid orbs
-        val transition = rememberInfiniteTransition(label = "liquid_glass_bg")
-        val pulse by transition.animateFloat(
-            initialValue = 0.85f,
-            targetValue = 1.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(4000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulse"
-        )
-
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
-                    )
-                )
-                .drawBehind {
-                    // Resolution-independent glowing diffuse aurora orbs
-                    val minDim = minOf(size.width, size.height)
-                    val orb1Radius = minDim * 0.52f * pulse
-                    val orb2Radius = minDim * 0.46f * (2f - pulse)
-                    val orb3Radius = minDim * 0.42f * pulse
-
-                    // Aurora Orb 1: Primary Cyan Neon (top-start)
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.20f else 0.14f),
-                                colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.05f),
-                                Color.Transparent
-                            ),
-                            center = Offset(size.width * 0.18f, size.height * 0.16f),
-                            radius = orb1Radius
+    when {
+        colors.isNeumorphic -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(colors.bgStart),
+                content = content
+            )
+        }
+        colors.surfaceEffect == ThemeSurfaceEffect.MINIMAL_FLAT -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
+                        )
+                    ),
+                content = content
+            )
+        }
+        colors.surfaceEffect == ThemeSurfaceEffect.BLUEPRINT_GRID -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
                         )
                     )
-
-                    // Aurora Orb 2: Secondary Violet/Blue Neon (mid-end)
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.16f else 0.10f),
-                                colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.06f else 0.03f),
-                                Color.Transparent
-                            ),
-                            center = Offset(size.width * 0.84f, size.height * 0.42f),
-                            radius = orb2Radius
+                    .drawBehind {
+                        val stepPx = 28.dp.toPx()
+                        val majorStep = stepPx * 4f
+                        val minorCol = colors.primaryNeon.copy(alpha = if (colors.isDark) 0.065f else 0.08f)
+                        val majorCol = colors.primaryNeon.copy(alpha = if (colors.isDark) 0.14f else 0.15f)
+                        var x = 0f
+                        while (x <= size.width) {
+                            val isMajor = kotlin.math.abs(x % majorStep) < 1f
+                            drawLine(
+                                color = if (isMajor) majorCol else minorCol,
+                                start = Offset(x, 0f),
+                                end = Offset(x, size.height),
+                                strokeWidth = if (isMajor) 1.2f else 0.7f
+                            )
+                            x += stepPx
+                        }
+                        var y = 0f
+                        while (y <= size.height) {
+                            val isMajor = kotlin.math.abs(y % majorStep) < 1f
+                            drawLine(
+                                color = if (isMajor) majorCol else minorCol,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = if (isMajor) 1.2f else 0.7f
+                            )
+                            y += stepPx
+                        }
+                    },
+                content = content
+            )
+        }
+        colors.surfaceEffect == ThemeSurfaceEffect.BRUTALIST_LUXURY -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
                         )
                     )
-
-                    // Aurora Orb 3: Emerald Success Neon (bottom-start)
-                    drawCircle(
-                        brush = Brush.radialGradient(
+                    .drawBehind {
+                        drawLine(
+                            color = colors.primaryNeon.copy(alpha = 0.22f),
+                            start = Offset(0f, size.height * 0.14f),
+                            end = Offset(size.width, size.height * 0.14f),
+                            strokeWidth = 1.5f
+                        )
+                        drawLine(
+                            color = colors.secondaryNeon.copy(alpha = 0.14f),
+                            start = Offset(size.width * 0.88f, 0f),
+                            end = Offset(size.width * 0.88f, size.height),
+                            strokeWidth = 1.2f
+                        )
+                    },
+                content = content
+            )
+        }
+        colors.surfaceEffect == ThemeSurfaceEffect.METALLIC_SHEEN -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.linearGradient(
                             colors = listOf(
-                                colors.successColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
-                                Color.Transparent
+                                colors.bgStart,
+                                colors.bgCenter,
+                                colors.bgStart,
+                                colors.bgEnd
                             ),
-                            center = Offset(size.width * 0.30f, size.height * 0.82f),
-                            radius = orb3Radius
+                            start = Offset.Zero,
+                            end = Offset(1200f, 1800f)
                         )
                     )
-
-                    // Aurora Orb 4: Ambient subtle glow on large displays / landscape (bottom-end)
-                    if (size.width >= 600f) {
+                    .drawBehind {
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    colors.primaryNeon.copy(alpha = if (colors.isDark) 0.10f else 0.05f),
+                                    Color.White.copy(alpha = if (colors.isDark) 0.07f else 0.28f),
+                                    colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.06f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.78f, size.height * 0.88f),
-                                radius = minDim * 0.38f
+                                center = Offset(size.width * 0.25f, size.height * 0.18f),
+                                radius = minOf(size.width, size.height) * 0.65f
                             )
                         )
-                    }
-                },
-            content = content
-        )
+                    },
+                content = content
+            )
+        }
+        colors.surfaceEffect == ThemeSurfaceEffect.RETRO_NOIR -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
+                        )
+                    )
+                    .drawBehind {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.primaryNeon.copy(alpha = if (colors.isDark) 0.12f else 0.09f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.5f, size.height * 0.22f),
+                                radius = minOf(size.width, size.height) * 0.62f
+                            )
+                        )
+                    },
+                content = content
+            )
+        }
+        else -> {
+            // AURORA_GLASS & HOLOGRAPHIC_PRISM: Subtle breathing pulse for liquid orbs
+            val transition = rememberInfiniteTransition(label = "liquid_glass_bg")
+            val pulse by transition.animateFloat(
+                initialValue = 0.85f,
+                targetValue = 1.15f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(4000, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "pulse"
+            )
+            val isHolo = colors.surfaceEffect == ThemeSurfaceEffect.HOLOGRAPHIC_PRISM
+
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(colors.bgStart, colors.bgCenter, colors.bgEnd)
+                        )
+                    )
+                    .drawBehind {
+                        val minDim = minOf(size.width, size.height)
+                        val orb1Radius = minDim * 0.52f * pulse
+                        val orb2Radius = minDim * 0.46f * (2f - pulse)
+                        val orb3Radius = minDim * 0.42f * pulse
+
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.primaryNeon.copy(alpha = if (colors.isDark) (if (isHolo) 0.25f else 0.20f) else 0.14f),
+                                    colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.05f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.18f, size.height * 0.16f),
+                                radius = orb1Radius
+                            )
+                        )
+
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.secondaryNeon.copy(alpha = if (colors.isDark) (if (isHolo) 0.22f else 0.16f) else 0.11f),
+                                    colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.06f else 0.03f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.84f, size.height * 0.42f),
+                                radius = orb2Radius
+                            )
+                        )
+
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    colors.successColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.30f, size.height * 0.82f),
+                                radius = orb3Radius
+                            )
+                        )
+
+                        if (size.width >= 600f) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        colors.primaryNeon.copy(alpha = if (colors.isDark) 0.10f else 0.05f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.78f, size.height * 0.88f),
+                                    radius = minDim * 0.38f
+                                )
+                            )
+                        }
+                    },
+                content = content
+            )
+        }
     }
 }
 
@@ -225,6 +360,22 @@ fun GlassCard(
                 content()
             }
         }
+    } else if (colors.surfaceEffect == ThemeSurfaceEffect.BRUTALIST_LUXURY) {
+        val brutalShape = RoundedCornerShape(8.dp)
+        Box(
+            modifier = modifier
+                .clip(brutalShape)
+                .border(
+                    border = BorderStroke(
+                        width = if (borderWidth < 1.5.dp) 1.5.dp else borderWidth,
+                        color = borderColor
+                    ),
+                    shape = brutalShape
+                )
+                .background(backgroundColor, brutalShape)
+                .then(clickModifier),
+            content = content
+        )
     } else {
         Box(
             modifier = modifier
@@ -236,9 +387,13 @@ fun GlassCard(
                         brush = Brush.linearGradient(
                             colors = listOf(
                                 borderColor,
-                                borderColor.copy(alpha = 0.2f),
-                                Color.Transparent,
-                                borderColor.copy(alpha = 0.4f)
+                                borderColor.copy(alpha = 0.25f),
+                                if (colors.surfaceEffect == ThemeSurfaceEffect.HOLOGRAPHIC_PRISM) {
+                                    colors.secondaryNeon.copy(alpha = 0.45f)
+                                } else {
+                                    Color.Transparent
+                                },
+                                borderColor.copy(alpha = 0.45f)
                             )
                         )
                     ),
@@ -258,7 +413,7 @@ fun GlassButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     containerColor: Color = LiquidGlassTheme.colors.primaryNeon,
-    contentColor: Color = if (LiquidGlassTheme.colors.isDark) Color(0xFF021B27) else Color.White,
+    contentColor: Color = if (containerColor.luminance() > 0.42f) Color(0xFF0A1220) else Color.White,
     shape: Shape = RoundedCornerShape(16.dp),
     enabled: Boolean = true
 ) {

@@ -23,6 +23,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+enum class ThemeSurfaceEffect {
+    AURORA_GLASS,
+    NEUMORPHIC,
+    BRUTALIST_LUXURY,
+    BLUEPRINT_GRID,
+    HOLOGRAPHIC_PRISM,
+    RETRO_NOIR,
+    MINIMAL_FLAT,
+    METALLIC_SHEEN
+}
+
 @Immutable
 data class LiquidGlassColors(
     val isDark: Boolean,
@@ -43,10 +54,11 @@ data class LiquidGlassColors(
     val successColor: Color,
     val warningColor: Color,
     val errorColor: Color,
-    val glassHighlightBrush: Brush
+    val glassHighlightBrush: Brush,
+    val surfaceEffect: ThemeSurfaceEffect = ThemeSurfaceEffect.AURORA_GLASS
 ) {
     val isNeumorphic: Boolean
-        get() = designStyle == "NEUMORPHISM"
+        get() = designStyle == "NEUMORPHISM" || surfaceEffect == ThemeSurfaceEffect.NEUMORPHIC
 }
 
 val DarkLiquidGlassColors = LiquidGlassColors(
@@ -112,7 +124,8 @@ val DarkNeumorphicColors = LiquidGlassColors(
     successColor = NeuVibrantGreenDark,
     warningColor = Color(0xFFF59E0B),
     errorColor = NeuBurntCoralDark,
-    glassHighlightBrush = GlassHighlightGradient
+    glassHighlightBrush = GlassHighlightGradient,
+    surfaceEffect = ThemeSurfaceEffect.NEUMORPHIC
 )
 
 val LightNeumorphicColors = LiquidGlassColors(
@@ -134,7 +147,8 @@ val LightNeumorphicColors = LiquidGlassColors(
     successColor = NeuVibrantGreen,
     warningColor = Color(0xFFD97706),
     errorColor = NeuBurntCoral,
-    glassHighlightBrush = GlassHighlightGradient
+    glassHighlightBrush = GlassHighlightGradient,
+    surfaceEffect = ThemeSurfaceEffect.NEUMORPHIC
 )
 
 val LocalLiquidGlass = staticCompositionLocalOf { DarkLiquidGlassColors }

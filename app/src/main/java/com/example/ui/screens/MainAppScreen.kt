@@ -339,6 +339,10 @@ fun MainAppScreen(
                                     currentRoute = "access_permissions"
                                     scope.launch { drawerState.close() }
                                 },
+                                onOpenThemeEngine = {
+                                    currentRoute = "theme_engine"
+                                    scope.launch { drawerState.close() }
+                                },
                                 onToggleBiometric = { enabled ->
                                     viewModel.setBiometricEnabled(enabled)
                                 },
@@ -385,6 +389,7 @@ fun MainAppScreen(
                                     "hub_soon" -> "Soon"
                                     "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
                                     "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
+                                    "theme_engine" -> "Theme Engine"
                                     "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
                                     "visa_coming_soon" -> activeStrings.visaCardTitle
                                     "income" -> activeStrings.navIncome
@@ -564,6 +569,16 @@ fun MainAppScreen(
                                     },
                                     onReplayOnboardingWizard = {
                                         forceShowPermissionsOnboarding = true
+                                    }
+                                )
+                                "theme_engine" -> ThemeEngineScreen(
+                                    currentDesignStyle = userSettings.designStyle,
+                                    currentThemeMode = userSettings.themeMode,
+                                    onSelectDesignStyle = { style ->
+                                        viewModel.setDesignStyle(style)
+                                    },
+                                    onSelectThemeMode = { mode ->
+                                        viewModel.setThemeMode(mode)
                                     }
                                 )
                                 "dashboard_details" -> DashboardScreen(

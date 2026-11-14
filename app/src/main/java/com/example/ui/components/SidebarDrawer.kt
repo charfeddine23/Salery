@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
@@ -72,6 +75,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
+import com.example.ui.theme.ThemeEngineCatalog
 import com.example.update.AppUpdateUiState
 
 @Composable
@@ -83,6 +87,7 @@ fun SidebarDrawer(
     onOpenSalaryScheduler: () -> Unit = {},
     onOpenBackupRestore: () -> Unit = {},
     onOpenAccessPermissions: () -> Unit = {},
+    onOpenThemeEngine: () -> Unit = {},
     onOpenPatternLock: () -> Unit = {},
     onLockAppNow: () -> Unit = {},
     onToggleStealthMode: () -> Unit = {},
@@ -427,29 +432,101 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Dynamic Design Style, Theme & Language Switchers Card
+            // Theme Engine Button (32 Themes: 2 classic + 30 signature themes)
+            val activeThemeSpec = ThemeEngineCatalog.findById(userSettings.designStyle)
+            val activeThemeName = if (isArabic) activeThemeSpec.nameAr else activeThemeSpec.nameEn
+
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("open_theme_engine_button"),
+                backgroundColor = colors.glassCard,
+                borderColor = colors.primaryNeon.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(18.dp),
+                onClick = onOpenThemeEngine
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        colors.primaryNeon.copy(alpha = 0.28f),
+                                        colors.secondaryNeon.copy(alpha = 0.24f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "Theme Engine",
+                            tint = colors.primaryNeon,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Theme Engine",
+                            color = colors.textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isArabic) {
+                                "$activeThemeName • ${ThemeEngineCatalog.allThemes.size} ثيماً"
+                            } else {
+                                "$activeThemeName • ${ThemeEngineCatalog.allThemes.size} themes"
+                            },
+                            color = colors.primaryNeon,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(colors.primaryNeon)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(colors.secondaryNeon)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Theme Mode & Language Switchers Card
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = strings.designStyleTitle,
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LiquidDesignStyleSegmentedControl(
-                        currentDesignStyle = userSettings.designStyle,
-                        onSelectDesignStyle = onSelectDesignStyle
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.6.dp)
-                    Spacer(modifier = Modifier.height(14.dp))
-
                     Text(
                         text = strings.themeMode,
                         color = colors.textSecondary,

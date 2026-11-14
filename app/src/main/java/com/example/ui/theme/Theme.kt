@@ -7,36 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-
-private val DarkColorScheme = darkColorScheme(
-    primary = CyanNeon,
-    onPrimary = Color(0xFF001F29),
-    primaryContainer = Color(0xFF004D61),
-    onPrimaryContainer = Color(0xFFBBE9FF),
-    secondary = BlueNeon,
-    onSecondary = Color.White,
-    background = DarkBgStart,
-    onBackground = TextDarkPrimary,
-    surface = GlassDarkSurface,
-    onSurface = TextDarkPrimary,
-    error = RoseNeon,
-    onError = Color.White
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF0284C7),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0F2FE),
-    onPrimaryContainer = Color(0xFF0369A1),
-    secondary = Color(0xFF2563EB),
-    onSecondary = Color.White,
-    background = LightBgStart,
-    onBackground = TextLightPrimary,
-    surface = GlassLightSurface,
-    onSurface = TextLightPrimary,
-    error = Color(0xFFDC2626),
-    onError = Color.White
-)
+import androidx.compose.ui.graphics.luminance
 
 @Composable
 fun SaleryPulseTheme(
@@ -44,13 +15,59 @@ fun SaleryPulseTheme(
     designStyle: String = "LIQUID_GLASS",
     content: @Composable () -> Unit
 ) {
-    val glassColors = if (designStyle == "NEUMORPHISM") {
-        if (darkTheme) DarkNeumorphicColors else LightNeumorphicColors
+    val glassColors = ThemeEngineCatalog.resolveColors(
+        designStyle = designStyle,
+        isDark = darkTheme
+    )
+
+    val onPrimaryColor = if (glassColors.primaryNeon.luminance() > 0.42f) {
+        Color(0xFF0A1220)
     } else {
-        if (darkTheme) DarkLiquidGlassColors else LightLiquidGlassColors
+        Color.White
+    }
+    val onSecondaryColor = if (glassColors.secondaryNeon.luminance() > 0.42f) {
+        Color(0xFF0A1220)
+    } else {
+        Color.White
     }
 
-    val materialColors = if (darkTheme) DarkColorScheme else LightColorScheme
+    val materialColors = if (darkTheme) {
+        darkColorScheme(
+            primary = glassColors.primaryNeon,
+            onPrimary = onPrimaryColor,
+            primaryContainer = glassColors.primaryNeon.copy(alpha = 0.24f),
+            onPrimaryContainer = glassColors.textPrimary,
+            secondary = glassColors.secondaryNeon,
+            onSecondary = onSecondaryColor,
+            background = glassColors.bgStart,
+            onBackground = glassColors.textPrimary,
+            surface = glassColors.glassSurface,
+            onSurface = glassColors.textPrimary,
+            surfaceVariant = glassColors.glassCard,
+            onSurfaceVariant = glassColors.textSecondary,
+            outline = glassColors.glassBorderSubtle,
+            error = glassColors.errorColor,
+            onError = Color.White
+        )
+    } else {
+        lightColorScheme(
+            primary = glassColors.primaryNeon,
+            onPrimary = onPrimaryColor,
+            primaryContainer = glassColors.primaryNeon.copy(alpha = 0.16f),
+            onPrimaryContainer = glassColors.textPrimary,
+            secondary = glassColors.secondaryNeon,
+            onSecondary = onSecondaryColor,
+            background = glassColors.bgStart,
+            onBackground = glassColors.textPrimary,
+            surface = glassColors.glassSurface,
+            onSurface = glassColors.textPrimary,
+            surfaceVariant = glassColors.glassCard,
+            onSurfaceVariant = glassColors.textSecondary,
+            outline = glassColors.glassBorderSubtle,
+            error = glassColors.errorColor,
+            onError = Color.White
+        )
+    }
 
     ProvideAdaptiveDesign {
         CompositionLocalProvider(
