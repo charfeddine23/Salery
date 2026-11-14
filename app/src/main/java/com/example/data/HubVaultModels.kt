@@ -4,7 +4,6 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import java.math.BigInteger
 import java.security.SecureRandom
 import java.util.UUID
 
@@ -31,8 +30,341 @@ data class VaultKeyEntry(
     val secretValue: String = "",
     val category: String = "APP", // "APP", "BANK", "EMAIL", "PIN"
     val note: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val appPresetId: String = "custom"
 )
+
+enum class VaultAppMotif {
+    LIQUID_AURORA,
+    POSTAL_ARCS,
+    CRYSTAL_FACETS,
+    CRYPTO_HEX_GRID,
+    CRYPTO_DIAMONDS,
+    AURORA_ORBS,
+    CAMERA_LENS_RINGS,
+    SOCIAL_WAVES,
+    SOUND_WAVES,
+    CHAT_BUBBLES,
+    PAPER_PLANES,
+    SPARK_STARS,
+    DIAGONAL_SLASHES,
+    CINEMA_STRIPES,
+    SOUND_RINGS,
+    ORBIT_NODES,
+    CODE_NODES,
+    CARD_RIBBONS
+}
+
+data class VaultAppPreset(
+    val id: String,
+    val nameEn: String,
+    val nameAr: String,
+    val monogram: String,
+    val defaultCategory: String,
+    val primaryColorHex: Long,
+    val secondaryColorHex: Long,
+    val accentColorHex: Long,
+    val surfaceTintDarkHex: Long,
+    val surfaceTintLightHex: Long,
+    val motif: VaultAppMotif,
+    val keywords: List<String> = emptyList()
+)
+
+object VaultAppPresets {
+    val all: List<VaultAppPreset> = listOf(
+        VaultAppPreset(
+            id = "baridimob",
+            nameEn = "BaridiMob",
+            nameAr = "بريدي موب",
+            monogram = "BM",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFFF59E0B,
+            secondaryColorHex = 0xFF1D4ED8,
+            accentColorHex = 0xFF34D399,
+            surfaceTintDarkHex = 0xFF0E1A33,
+            surfaceTintLightHex = 0xFFFFFBEB,
+            motif = VaultAppMotif.POSTAL_ARCS,
+            keywords = listOf("baridi", "baridimob", "بريدي")
+        ),
+        VaultAppPreset(
+            id = "algerie_poste",
+            nameEn = "Algérie Poste / ECCP",
+            nameAr = "بريد الجزائر / ECCP",
+            monogram = "CCP",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFFEAB308,
+            secondaryColorHex = 0xFF2563EB,
+            accentColorHex = 0xFFFDE047,
+            surfaceTintDarkHex = 0xFF0C1930,
+            surfaceTintLightHex = 0xFFFEFCE8,
+            motif = VaultAppMotif.POSTAL_ARCS,
+            keywords = listOf("eccp", "ccp", "poste", "edahabia", "بريد", "الذهبية")
+        ),
+        VaultAppPreset(
+            id = "redotpay",
+            nameEn = "RedotPay",
+            nameAr = "RedotPay",
+            monogram = "RP",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFFEF4444,
+            secondaryColorHex = 0xFF991B1B,
+            accentColorHex = 0xFFFCA5A5,
+            surfaceTintDarkHex = 0xFF210B10,
+            surfaceTintLightHex = 0xFFFEF2F2,
+            motif = VaultAppMotif.CRYSTAL_FACETS,
+            keywords = listOf("redot", "redotpay")
+        ),
+        VaultAppPreset(
+            id = "bybit",
+            nameEn = "Bybit",
+            nameAr = "Bybit",
+            monogram = "BY",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFFF59E0B,
+            secondaryColorHex = 0xFF334155,
+            accentColorHex = 0xFFFBBF24,
+            surfaceTintDarkHex = 0xFF17140B,
+            surfaceTintLightHex = 0xFFFFFBEB,
+            motif = VaultAppMotif.CRYPTO_HEX_GRID,
+            keywords = listOf("bybit")
+        ),
+        VaultAppPreset(
+            id = "binance",
+            nameEn = "Binance",
+            nameAr = "Binance",
+            monogram = "BNB",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFFFACC15,
+            secondaryColorHex = 0xFFCA8A04,
+            accentColorHex = 0xFFFEF08A,
+            surfaceTintDarkHex = 0xFF1A1708,
+            surfaceTintLightHex = 0xFFFEFCE8,
+            motif = VaultAppMotif.CRYPTO_DIAMONDS,
+            keywords = listOf("binance", "bnb")
+        ),
+        VaultAppPreset(
+            id = "google",
+            nameEn = "Google / Gmail",
+            nameAr = "جوجل / Gmail",
+            monogram = "G",
+            defaultCategory = "EMAIL",
+            primaryColorHex = 0xFF4285F4,
+            secondaryColorHex = 0xFF34A853,
+            accentColorHex = 0xFFEA4335,
+            surfaceTintDarkHex = 0xFF0E172A,
+            surfaceTintLightHex = 0xFFEFF6FF,
+            motif = VaultAppMotif.AURORA_ORBS,
+            keywords = listOf("google", "gmail", "youtube", "جوجل", "جيميل")
+        ),
+        VaultAppPreset(
+            id = "instagram",
+            nameEn = "Instagram",
+            nameAr = "إنستغرام",
+            monogram = "IG",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFFE1306C,
+            secondaryColorHex = 0xFF833AB4,
+            accentColorHex = 0xFFF77737,
+            surfaceTintDarkHex = 0xFF210D22,
+            surfaceTintLightHex = 0xFFFDF2F8,
+            motif = VaultAppMotif.CAMERA_LENS_RINGS,
+            keywords = listOf("instagram", "insta", "انستا", "انستغرام", "إنستغرام")
+        ),
+        VaultAppPreset(
+            id = "facebook",
+            nameEn = "Facebook",
+            nameAr = "فيسبوك",
+            monogram = "f",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF1877F2,
+            secondaryColorHex = 0xFF0EA5E9,
+            accentColorHex = 0xFF93C5FD,
+            surfaceTintDarkHex = 0xFF0B1830,
+            surfaceTintLightHex = 0xFFEFF6FF,
+            motif = VaultAppMotif.SOCIAL_WAVES,
+            keywords = listOf("facebook", "fb", "meta", "فيسبوك")
+        ),
+        VaultAppPreset(
+            id = "tiktok",
+            nameEn = "TikTok",
+            nameAr = "تيك توك",
+            monogram = "TT",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF22D3EE,
+            secondaryColorHex = 0xFFFE2C55,
+            accentColorHex = 0xFF67E8F9,
+            surfaceTintDarkHex = 0xFF0F131E,
+            surfaceTintLightHex = 0xFFECFEFF,
+            motif = VaultAppMotif.SOUND_WAVES,
+            keywords = listOf("tiktok", "تيك توك", "تيكتوك")
+        ),
+        VaultAppPreset(
+            id = "whatsapp",
+            nameEn = "WhatsApp",
+            nameAr = "واتساب",
+            monogram = "WA",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF25D366,
+            secondaryColorHex = 0xFF075E54,
+            accentColorHex = 0xFF86EFAC,
+            surfaceTintDarkHex = 0xFF091E18,
+            surfaceTintLightHex = 0xFFF0FDF4,
+            motif = VaultAppMotif.CHAT_BUBBLES,
+            keywords = listOf("whatsapp", "واتساب")
+        ),
+        VaultAppPreset(
+            id = "telegram",
+            nameEn = "Telegram",
+            nameAr = "تيليجرام",
+            monogram = "TG",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF2AABEE,
+            secondaryColorHex = 0xFF0284C7,
+            accentColorHex = 0xFFBAE6FD,
+            surfaceTintDarkHex = 0xFF081B2C,
+            surfaceTintLightHex = 0xFFF0F9FF,
+            motif = VaultAppMotif.PAPER_PLANES,
+            keywords = listOf("telegram", "تلغرام", "تيليجرام")
+        ),
+        VaultAppPreset(
+            id = "snapchat",
+            nameEn = "Snapchat",
+            nameAr = "سناب شات",
+            monogram = "SC",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFFFACC15,
+            secondaryColorHex = 0xFFF59E0B,
+            accentColorHex = 0xFFFEF08A,
+            surfaceTintDarkHex = 0xFF1F1B06,
+            surfaceTintLightHex = 0xFFFEFCE8,
+            motif = VaultAppMotif.SPARK_STARS,
+            keywords = listOf("snapchat", "snap", "سناب")
+        ),
+        VaultAppPreset(
+            id = "x_twitter",
+            nameEn = "X (Twitter)",
+            nameAr = "إكس (تويتر)",
+            monogram = "X",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFFE2E8F0,
+            secondaryColorHex = 0xFF475569,
+            accentColorHex = 0xFF38BDF8,
+            surfaceTintDarkHex = 0xFF0D1117,
+            surfaceTintLightHex = 0xFFF8FAFC,
+            motif = VaultAppMotif.DIAGONAL_SLASHES,
+            keywords = listOf("twitter", "x.com", "تويتر")
+        ),
+        VaultAppPreset(
+            id = "netflix",
+            nameEn = "Netflix",
+            nameAr = "نتفليكس",
+            monogram = "N",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFFE50914,
+            secondaryColorHex = 0xFF7F1D1D,
+            accentColorHex = 0xFFFCA5A5,
+            surfaceTintDarkHex = 0xFF1E080A,
+            surfaceTintLightHex = 0xFFFEF2F2,
+            motif = VaultAppMotif.CINEMA_STRIPES,
+            keywords = listOf("netflix", "نتفليكس")
+        ),
+        VaultAppPreset(
+            id = "spotify",
+            nameEn = "Spotify",
+            nameAr = "سبوتيفاي",
+            monogram = "SP",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF1DB954,
+            secondaryColorHex = 0xFF15803D,
+            accentColorHex = 0xFF86EFAC,
+            surfaceTintDarkHex = 0xFF091B10,
+            surfaceTintLightHex = 0xFFF0FDF4,
+            motif = VaultAppMotif.SOUND_RINGS,
+            keywords = listOf("spotify", "سبوتيفاي")
+        ),
+        VaultAppPreset(
+            id = "discord",
+            nameEn = "Discord",
+            nameAr = "ديسكورد",
+            monogram = "DC",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF5865F2,
+            secondaryColorHex = 0xFF4338CA,
+            accentColorHex = 0xFFA5B4FC,
+            surfaceTintDarkHex = 0xFF12142B,
+            surfaceTintLightHex = 0xFFEEF2FF,
+            motif = VaultAppMotif.ORBIT_NODES,
+            keywords = listOf("discord", "ديسكورد")
+        ),
+        VaultAppPreset(
+            id = "github",
+            nameEn = "GitHub",
+            nameAr = "GitHub",
+            monogram = "GH",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF8B5CF6,
+            secondaryColorHex = 0xFF0EA5E9,
+            accentColorHex = 0xFFC4B5FD,
+            surfaceTintDarkHex = 0xFF121024,
+            surfaceTintLightHex = 0xFFF5F3FF,
+            motif = VaultAppMotif.CODE_NODES,
+            keywords = listOf("github", "git")
+        ),
+        VaultAppPreset(
+            id = "paypal",
+            nameEn = "PayPal",
+            nameAr = "باي بال",
+            monogram = "PP",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFF0070BA,
+            secondaryColorHex = 0xFF003087,
+            accentColorHex = 0xFF38BDF8,
+            surfaceTintDarkHex = 0xFF09162D,
+            surfaceTintLightHex = 0xFFEFF6FF,
+            motif = VaultAppMotif.CARD_RIBBONS,
+            keywords = listOf("paypal", "بايبال", "باي بال")
+        ),
+        VaultAppPreset(
+            id = "custom",
+            nameEn = "Custom App / Other",
+            nameAr = "تطبيق مخصص / آخر",
+            monogram = "★",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF38BDF8,
+            secondaryColorHex = 0xFF6366F1,
+            accentColorHex = 0xFF34D399,
+            surfaceTintDarkHex = 0xFF0F172A,
+            surfaceTintLightHex = 0xFFF8FAFC,
+            motif = VaultAppMotif.LIQUID_AURORA,
+            keywords = emptyList()
+        )
+    )
+
+    fun findById(id: String?): VaultAppPreset {
+        val clean = id?.trim()?.lowercase().orEmpty()
+        return all.firstOrNull { it.id == clean } ?: all.last()
+    }
+
+    fun resolveForEntry(entry: VaultKeyEntry): VaultAppPreset {
+        val explicit = entry.appPresetId.trim().lowercase()
+        if (explicit.isNotEmpty() && explicit != "custom") {
+            all.firstOrNull { it.id == explicit }?.let { return it }
+        }
+        return detectFromLabel(entry.label) ?: findById("custom")
+    }
+
+    fun detectFromLabel(label: String): VaultAppPreset? {
+        val norm = label.trim().lowercase()
+        if (norm.isEmpty()) return null
+        return all.firstOrNull { preset ->
+            preset.id != "custom" && (
+                norm.contains(preset.id) ||
+                    norm.contains(preset.nameEn.lowercase()) ||
+                    preset.keywords.any { kw -> norm.contains(kw) }
+                )
+        }
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class CcpAccountEntry(
@@ -293,7 +625,8 @@ object HubVaultCodec {
                     .joinToString(" ")
                     .ifBlank { cleanHolder }
 
-                if (resolvedHolder.isEmpty() || cleanCcp.isEmpty()) {
+                val cleanRip = entry.ripFull.filter { it.isDigit() }.take(20)
+                if (resolvedHolder.isEmpty() || (cleanCcp.isEmpty() && cleanRip.isEmpty())) {
                     null
                 } else {
                     entry.copy(
@@ -302,7 +635,7 @@ object HubVaultCodec {
                         holderName = resolvedHolder,
                         ccpNumber = cleanCcp,
                         ccpKey = entry.ccpKey.filter { it.isDigit() }.take(2),
-                        ripFull = entry.ripFull.ifBlank { computeAlgeriePosteRip(cleanCcp) },
+                        ripFull = cleanRip,
                         agencyNote = entry.agencyNote.trim(),
                         contactName = entry.contactName.trim(),
                         contactUri = entry.contactUri.trim(),
@@ -338,27 +671,6 @@ object HubVaultCodec {
             parts.isEmpty() -> "" to ""
             parts.size == 1 -> parts[0] to ""
             else -> parts.first() to parts.drop(1).joinToString(" ")
-        }
-    }
-
-    /**
-     * Computes the official 20-digit Algérie Poste RIP using Modulo 97:
-     * Base18 = "00799999" + ccpDigits.padStart(10, '0')
-     * RIP Key = 97 - ((BigInteger(Base18) * 100) % 97)
-     */
-    fun computeAlgeriePosteRip(rawCcpDigits: String): String {
-        val digits = rawCcpDigits.filter { it.isDigit() }
-        if (digits.isEmpty()) return ""
-        val paddedCcp = digits.takeLast(10).padStart(10, '0')
-        val base18 = "00799999$paddedCcp"
-        return try {
-            val nTimes100 = BigInteger(base18).multiply(BigInteger.valueOf(100L))
-            val rem = nTimes100.mod(BigInteger.valueOf(97L)).toInt()
-            val ripKey = 97 - rem
-            val keyStr = ripKey.toString().padStart(2, '0')
-            "$base18$keyStr"
-        } catch (_: Throwable) {
-            ""
         }
     }
 

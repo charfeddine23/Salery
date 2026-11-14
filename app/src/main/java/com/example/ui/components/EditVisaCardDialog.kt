@@ -252,7 +252,8 @@ fun EditVisaCardDialog(
                     provider = selectedProvider,
                     holderName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase(),
                     cardDigits = cardNumberDigits,
-                    expiryDigits = expiryDigits
+                    expiryDigits = expiryDigits,
+                    cvcDigits = cvcDigits
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -424,7 +425,8 @@ private fun VisaProviderMiniPreview(
     provider: String,
     holderName: String,
     cardDigits: String,
-    expiryDigits: String
+    expiryDigits: String,
+    cvcDigits: String
 ) {
     val bgBrush = when (provider) {
         "REDOTPAY" -> Brush.linearGradient(
@@ -589,18 +591,30 @@ private fun VisaProviderMiniPreview(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    val expDisplay = when {
-                        expiryDigits.length >= 3 -> "${expiryDigits.take(2)}/${expiryDigits.drop(2)}"
-                        expiryDigits.isNotEmpty() -> expiryDigits
-                        else -> "08/28"
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        val expDisplay = when {
+                            expiryDigits.length >= 3 -> "${expiryDigits.take(2)}/${expiryDigits.drop(2)}"
+                            expiryDigits.isNotEmpty() -> expiryDigits
+                            else -> "08/28"
+                        }
+                        Text(
+                            text = expDisplay,
+                            color = if (provider == "BYBIT") Color(0xFFF7A600) else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "CVC ${cvcDigits.ifBlank { "•••" }}",
+                            color = if (provider == "BYBIT") Color(0xFFF7A600).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.9f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
                     }
-                    Text(
-                        text = expDisplay,
-                        color = if (provider == "BYBIT") Color(0xFFF7A600) else Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
                 }
             }
         }

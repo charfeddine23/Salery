@@ -1,10 +1,14 @@
 package com.example.ui.components
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,6 +84,7 @@ fun AddDebtDialog(
     ) -> Unit
 ) {
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
     val context = LocalContext.current
@@ -128,27 +133,57 @@ fun AddDebtDialog(
     ) { contactUri: Uri? ->
         contactUri?.let { uri ->
             try {
-                val cursor = context.contentResolver.query(
-                    uri,
-                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
+                val resolvedUri = try {
+                    ContactsContract.Contacts.lookupContact(context.contentResolver, uri) ?: uri
+                } catch (_: Throwable) {
+                    uri
+                }
+                context.contentResolver.query(
+                    resolvedUri,
+                    null,
                     null,
                     null,
                     null
-                )
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val nameIndex = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                        if (nameIndex != -1) {
-                            val contactName = it.getString(nameIndex)
-                            if (!contactName.isNullOrBlank()) {
-                                personNameText = contactName.trim()
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameCols = listOf(
+                            ContactsContract.Contacts.DISPLAY_NAME,
+                            ContactsContract.Contacts.DISPLAY_NAME_PRIMARY,
+                            ContactsContract.Contacts.DISPLAY_NAME_ALTERNATIVE
+                        )
+                        for (col in nameCols) {
+                            val nameIndex = cursor.getColumnIndex(col)
+                            if (nameIndex != -1) {
+                                val contactName = cursor.getString(nameIndex)?.trim()
+                                if (!contactName.isNullOrBlank()) {
+                                    personNameText = contactName
+                                    break
+                                }
                             }
                         }
                     }
                 }
-            } catch (e: Exception) {
-                // Graceful fallback
+            } catch (_: Throwable) {
+                Toast.makeText(
+                    context,
+                    if (isArabic) "تعذّر قراءة جهة الاتصال" else "Unable to read contact",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+        }
+    }
+
+    val readContactsPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        try {
+            contactPickerLauncher.launch(null)
+        } catch (_: Throwable) {
+            Toast.makeText(
+                context,
+                if (isArabic) "تطبيق جهات الاتصال غير متوفر" else "Contacts app unavailable",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -300,10 +335,22 @@ fun AddDebtDialog(
                     trailingIcon = {
                         IconButton(
                             onClick = {
-                                try {
-                                    contactPickerLauncher.launch(null)
-                                } catch (e: Exception) {
-                                    // Fallback if contacts app is not available
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.READ_CONTACTS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPerm) {
+                                    try {
+                                        contactPickerLauncher.launch(null)
+                                    } catch (_: Throwable) {
+                                        Toast.makeText(
+                                            context,
+                                            if (isArabic) "تطبيق جهات الاتصال غير متوفر" else "Contacts app unavailable",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                } else {
+                                    readContactsPermLauncher.launch(Manifest.permission.READ_CONTACTS)
                                 }
                             }
                         ) {

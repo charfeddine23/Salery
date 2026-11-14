@@ -14,6 +14,7 @@ import com.example.data.PreferencesManager
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.data.VaultAppPresets
 import com.example.data.VaultKeyEntry
 import com.example.ui.components.toPatternHash
 import com.example.ui.i18n.APP_VERSION
@@ -28,10 +29,17 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import com.example.notification.DebtReminderScheduler
+import com.example.sms.AlgPosteSmsAnalyzer
+import com.example.sms.AlgPosteSmsCodec
+import com.example.sms.AlgPosteSmsInboxScanner
+import com.example.sms.SmsSuggestionEntry
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
@@ -128,6 +136,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     private var downloadJob: Job? = null
 
+    // Pending BaridiMob / ALG Poste SMS transaction suggestions
+    val pendingSmsSuggestions: StateFlow<List<SmsSuggestionEntry>> = settings
+        .map { AlgPosteSmsCodec.parseSuggestions(it.pendingSmsSuggestionsJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Notification events for UI banners
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -138,7 +151,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _isAppLocked.value = true
         }
 
-        // Check Smart Salary Scheduler, Debt Auto-Payments, and clean obsolete update APKs safely
+        // Check Smart Salary Scheduler, Debt Auto-Payments, clean obsolete update APKs, and scan ALG Poste SMS
         viewModelScope.launch {
             try {
                 AppUpdateManager.cleanupObsoleteUpdates(getApplication())
@@ -151,6 +164,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 val currentDebts = dao.getAllDebtsList()
                 DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
             } catch (_: Throwable) {
+            }
+            if (settings.value.baridiMobSmsSyncEnabled &&
+                AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())
+            ) {
+                scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
             }
         }
 
@@ -679,11 +697,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         username: String,
         secretValue: String,
         category: String,
-        note: String
+        note: String,
+        appPresetId: String = "custom"
     ) {
         val cleanLabel = label.trim()
         val cleanSecret = secretValue.trim()
         if (cleanLabel.isEmpty() || cleanSecret.isEmpty()) return
+        val resolvedPreset = appPresetId.trim().ifBlank {
+            VaultAppPresets.detectFromLabel(cleanLabel)?.id ?: "custom"
+        }
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson) + VaultKeyEntry(
                 label = cleanLabel,
@@ -691,7 +713,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 secretValue = cleanSecret,
                 category = category.ifBlank { "APP" },
                 note = note.trim(),
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                appPresetId = resolvedPreset
             )
             current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
         }
@@ -703,11 +726,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         username: String,
         secretValue: String,
         category: String,
-        note: String
+        note: String,
+        appPresetId: String = "custom"
     ) {
         val cleanLabel = label.trim()
         val cleanSecret = secretValue.trim()
         if (cleanLabel.isEmpty() || cleanSecret.isEmpty()) return
+        val resolvedPreset = appPresetId.trim().ifBlank {
+            VaultAppPresets.detectFromLabel(cleanLabel)?.id ?: "custom"
+        }
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).map { item ->
                 if (item.id == keyId) {
@@ -716,7 +743,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         username = username.trim(),
                         secretValue = cleanSecret,
                         category = category.ifBlank { "APP" },
-                        note = note.trim()
+                        note = note.trim(),
+                        appPresetId = resolvedPreset
                     )
                 } else {
                     item
@@ -738,6 +766,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         lastName: String,
         ccpNumber: String,
         ccpKey: String,
+        ripNumber: String,
         agencyNote: String,
         contactName: String = "",
         contactUri: String = "",
@@ -748,7 +777,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val cleanLast = lastName.trim()
         val fullName = listOf(cleanFirst, cleanLast).filter { it.isNotEmpty() }.joinToString(" ")
         val cleanCcp = ccpNumber.filter { it.isDigit() }
-        if (fullName.isEmpty() || cleanCcp.isEmpty()) return
+        val cleanRip = ripNumber.filter { it.isDigit() }.take(20)
+        if (fullName.isEmpty() || (cleanCcp.isEmpty() && cleanRip.isEmpty())) return
 
         val existing = HubVaultCodec.parseCcpAccounts(settings.value.ccpAccountsJson)
         if (existing.size >= HubVaultCodec.MAX_CCP_PROFILES) {
@@ -762,7 +792,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
-        val computedRip = HubVaultCodec.computeAlgeriePosteRip(cleanCcp)
         val now = System.currentTimeMillis()
         prefsManager.updateSettings { current ->
             val currentList = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson)
@@ -773,7 +802,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 holderName = fullName,
                 ccpNumber = cleanCcp,
                 ccpKey = ccpKey.filter { it.isDigit() }.take(2),
-                ripFull = computedRip,
+                ripFull = cleanRip,
                 agencyNote = agencyNote.trim(),
                 contactName = contactName.trim(),
                 contactUri = contactUri.trim(),
@@ -792,6 +821,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         lastName: String,
         ccpNumber: String,
         ccpKey: String,
+        ripNumber: String,
         agencyNote: String,
         contactName: String = "",
         contactUri: String = "",
@@ -802,8 +832,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val cleanLast = lastName.trim()
         val fullName = listOf(cleanFirst, cleanLast).filter { it.isNotEmpty() }.joinToString(" ")
         val cleanCcp = ccpNumber.filter { it.isDigit() }
-        if (fullName.isEmpty() || cleanCcp.isEmpty()) return
-        val computedRip = HubVaultCodec.computeAlgeriePosteRip(cleanCcp)
+        val cleanRip = ripNumber.filter { it.isDigit() }.take(20)
+        if (fullName.isEmpty() || (cleanCcp.isEmpty() && cleanRip.isEmpty())) return
         val now = System.currentTimeMillis()
 
         prefsManager.updateSettings { current ->
@@ -815,7 +845,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         holderName = fullName,
                         ccpNumber = cleanCcp,
                         ccpKey = ccpKey.filter { it.isDigit() }.take(2),
-                        ripFull = computedRip,
+                        ripFull = cleanRip,
                         agencyNote = agencyNote.trim(),
                         contactName = contactName.trim(),
                         contactUri = contactUri.trim(),
@@ -1191,6 +1221,205 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun dismissUpdateDialog() {
         if (_updateUiState.value !is AppUpdateUiState.Downloading) {
             _showUpdateDialog.value = false
+        }
+    }
+
+    // First-Launch Luxury Permissions Onboarding
+    fun completePermissionsOnboarding(enableSmsSyncIfGranted: Boolean = true) {
+        val smsGranted = AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())
+        prefsManager.updateSettings {
+            it.copy(
+                hasCompletedPermissionsOnboarding = true,
+                baridiMobSmsSyncEnabled = if (enableSmsSyncIfGranted && smsGranted) true else it.baridiMobSmsSyncEnabled
+            )
+        }
+        if (enableSmsSyncIfGranted && smsGranted) {
+            scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+        }
+    }
+
+    // BaridiMob / ALG Poste SMS & Alert Sync Actions
+    fun setBaridiMobSmsSyncEnabled(enabled: Boolean) {
+        prefsManager.updateSettings { it.copy(baridiMobSmsSyncEnabled = enabled) }
+        if (enabled && AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
+            scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+        }
+    }
+
+    fun scanAlgPosteSmsInbox(context: Context = getApplication(), showFeedback: Boolean = true) {
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
+                        else "Please grant SMS read permission first"
+                    )
+                }
+                return@launch
+            }
+
+            val scanned = withContext(Dispatchers.IO) {
+                AlgPosteSmsInboxScanner.scanInbox(context)
+            }
+
+            var addedCount = 0
+            prefsManager.updateSettings { current ->
+                val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
+                val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                val existingIds = existing.map { it.id }.toSet()
+                val newOnes = scanned.filter { it.id !in processed && it.id !in existingIds }
+                addedCount = newOnes.size
+                if (newOnes.isEmpty()) {
+                    current
+                } else {
+                    current.copy(
+                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(newOnes + existing)
+                    )
+                }
+            }
+
+            if (showFeedback) {
+                val msg = when {
+                    addedCount > 0 -> if (isAr) {
+                        "تم اكتشاف $addedCount معاملة جديدة من رسائل ALG Poste"
+                    } else {
+                        "Found $addedCount new ALG Poste transaction suggestions"
+                    }
+                    scanned.isEmpty() -> if (isAr) {
+                        "لم يتم العثور على رسائل معاملات من ALG Poste في صندوق الوارد"
+                    } else {
+                        "No ALG Poste transaction messages found in SMS inbox"
+                    }
+                    else -> if (isAr) {
+                        "جميع رسائل ALG Poste محدثة بالفعل"
+                    } else {
+                        "All ALG Poste SMS transactions are already synced"
+                    }
+                }
+                _toastEvent.emit(msg)
+            }
+        }
+    }
+
+    fun analyzeManualSmsSample(sender: String, body: String) {
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val parsed = AlgPosteSmsAnalyzer.parseSms(
+                sender = sender.ifBlank { "ALG Poste" },
+                body = body,
+                timestampMillis = System.currentTimeMillis(),
+                allowAnySenderForManualTest = true
+            )
+            if (parsed == null) {
+                _toastEvent.emit(
+                    if (isAr) "تعذر استخراج مبلغ أو نوع العملية (سحب - / دخل +) من هذه الرسالة"
+                    else "Could not detect a valid transaction amount or type from this SMS"
+                )
+                return@launch
+            }
+
+            prefsManager.updateSettings { current ->
+                val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                val merged = (listOf(parsed) + existing.filterNot { it.id == parsed.id })
+                current.copy(
+                    pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(merged)
+                )
+            }
+
+            val kindLabel = if (parsed.isExpense) {
+                if (isAr) "مصروف (Expense)" else "Expense"
+            } else {
+                if (isAr) "دخل (Income)" else "Income"
+            }
+            val amtLabel = formatDzdAmount(parsed.amount, if (isAr) "دج" else "DA")
+            _toastEvent.emit(
+                if (isAr) "تم تحليل الرسالة: $kindLabel بقيمة $amtLabel"
+                else "Analyzed SMS: $kindLabel of $amtLabel"
+            )
+        }
+    }
+
+    fun acceptSmsSuggestion(suggestionId: String, overrideType: TransactionType? = null) {
+        viewModelScope.launch {
+            val currentSettings = settings.value
+            val isAr = currentSettings.language == "ar"
+            val pending = AlgPosteSmsCodec.parseSuggestions(currentSettings.pendingSmsSuggestionsJson)
+            val target = pending.firstOrNull { it.id == suggestionId } ?: return@launch
+
+            val finalType = overrideType ?: target.transactionType
+            val resolvedCategory = when {
+                overrideType != null && overrideType != target.transactionType -> {
+                    if (finalType == TransactionType.EXPENSE) "other" else "transfer"
+                }
+                else -> target.suggestedCategory
+            }
+            val title = if (isAr) {
+                if (finalType == TransactionType.EXPENSE) {
+                    target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (ALG Poste)" }
+                } else {
+                    target.suggestedTitleAr.ifBlank { "دخل بريدي موب (ALG Poste)" }
+                }
+            } else {
+                if (finalType == TransactionType.EXPENSE) {
+                    target.suggestedTitleEn.ifBlank { "BaridiMob Expense (ALG Poste)" }
+                } else {
+                    target.suggestedTitleEn.ifBlank { "BaridiMob Income (ALG Poste)" }
+                }
+            }
+
+            dao.insertTransaction(
+                TransactionEntity(
+                    type = finalType,
+                    amount = target.amount,
+                    category = resolvedCategory,
+                    title = title,
+                    note = "${target.sender}: ${target.rawBody}".take(240),
+                    dateMillis = target.receivedAtMillis
+                )
+            )
+
+            prefsManager.updateSettings { current ->
+                val remaining = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                    .filterNot { it.id == suggestionId }
+                val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + suggestionId
+                current.copy(
+                    pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(remaining),
+                    processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
+                )
+            }
+
+            val formattedAmt = formatDzdAmount(target.amount, if (isAr) "دج" else "DA")
+            _toastEvent.emit(
+                if (finalType == TransactionType.EXPENSE) {
+                    if (isAr) "تمت إضافة $formattedAmt إلى المصاريف" else "Added $formattedAmt to Expenses"
+                } else {
+                    if (isAr) "تمت إضافة $formattedAmt إلى الدخل" else "Added $formattedAmt to Income"
+                }
+            )
+        }
+    }
+
+    fun dismissSmsSuggestion(suggestionId: String) {
+        prefsManager.updateSettings { current ->
+            val remaining = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                .filterNot { it.id == suggestionId }
+            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + suggestionId
+            current.copy(
+                pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(remaining),
+                processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
+            )
+        }
+    }
+
+    fun clearAllSmsSuggestions() {
+        prefsManager.updateSettings { current ->
+            val pendingIds = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson).map { it.id }
+            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + pendingIds
+            current.copy(
+                pendingSmsSuggestionsJson = "[]",
+                processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
+            )
         }
     }
 }

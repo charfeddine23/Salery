@@ -35,7 +35,11 @@ data class UserSettings(
     val visaCardHolderName: String = "CHARFEDDINE KA",
     val visaCardNumber: String = "",
     val visaCardExpiry: String = "08/28",
-    val visaCardCvc: String = ""
+    val visaCardCvc: String = "",
+    val baridiMobSmsSyncEnabled: Boolean = false,
+    val pendingSmsSuggestionsJson: String = "[]",
+    val processedSmsKeysJson: String = "[]",
+    val hasCompletedPermissionsOnboarding: Boolean = false
 )
 
 class PreferencesManager(context: Context) {
@@ -140,7 +144,11 @@ class PreferencesManager(context: Context) {
             visaCardHolderName = safeString("visa_card_holder", "CHARFEDDINE KA"),
             visaCardNumber = safeString("visa_card_number", ""),
             visaCardExpiry = safeString("visa_card_expiry", "08/28"),
-            visaCardCvc = safeString("visa_card_cvc", "")
+            visaCardCvc = safeString("visa_card_cvc", ""),
+            baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", false),
+            pendingSmsSuggestionsJson = safeString("pending_sms_suggestions_json", "[]"),
+            processedSmsKeysJson = safeString("processed_sms_keys_json", "[]"),
+            hasCompletedPermissionsOnboarding = safeBoolean("has_completed_permissions_onboarding", false)
         )
     }
 
@@ -181,6 +189,10 @@ class PreferencesManager(context: Context) {
             .putString("visa_card_number", finalUpdated.visaCardNumber)
             .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
             .putString("visa_card_cvc", finalUpdated.visaCardCvc)
+            .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
+            .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
+            .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)
+            .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
             .apply()
         _settingsFlow.value = finalUpdated
     }

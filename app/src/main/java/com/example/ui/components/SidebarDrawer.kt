@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -52,6 +54,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +67,7 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.screens.readAppPermissionsSummary
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -75,8 +79,10 @@ fun SidebarDrawer(
     selectedRoute: String,
     onNavigate: (String) -> Unit,
     userSettings: UserSettings,
+    pendingSmsCount: Int = 0,
     onOpenSalaryScheduler: () -> Unit = {},
     onOpenBackupRestore: () -> Unit = {},
+    onOpenAccessPermissions: () -> Unit = {},
     onOpenPatternLock: () -> Unit = {},
     onLockAppNow: () -> Unit = {},
     onToggleStealthMode: () -> Unit = {},
@@ -92,6 +98,8 @@ fun SidebarDrawer(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val context = LocalContext.current
+    val permSummary = readAppPermissionsSummary(context)
 
     Box(
         modifier = modifier
@@ -169,6 +177,14 @@ fun SidebarDrawer(
                     onClick = { onNavigate("ccps") }
                 )
                 DrawerNavItem(
+                    icon = Icons.Default.Sms,
+                    title = if (strings is ArabicStrings) "مزامنة بريدي موب" else "BaridiMob SMS Sync",
+                    iconTint = Color(0xFF818CF8),
+                    isSelected = selectedRoute == "baridimob_sync",
+                    badgeCount = pendingSmsCount,
+                    onClick = { onNavigate("baridimob_sync") }
+                )
+                DrawerNavItem(
                     icon = Icons.Default.AutoAwesome,
                     title = "Soon",
                     iconTint = Color(0xFF818CF8),
@@ -203,6 +219,14 @@ fun SidebarDrawer(
                     isSelected = selectedRoute == "debts",
                     onClick = { onNavigate("debts") }
                 )
+                DrawerNavItem(
+                    icon = Icons.Default.Sms,
+                    title = if (strings is ArabicStrings) "مزامنة بريدي موب" else "BaridiMob SMS Sync",
+                    iconTint = Color(0xFF818CF8),
+                    isSelected = selectedRoute == "baridimob_sync",
+                    badgeCount = pendingSmsCount,
+                    onClick = { onNavigate("baridimob_sync") }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -220,8 +244,25 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Backup & Restore
+            // Access Permissions (صلاحيات الوصول)
             val isArabic = strings is ArabicStrings
+            DrawerActionItem(
+                icon = Icons.Default.AdminPanelSettings,
+                title = if (isArabic) "صلاحيات الوصول" else "Access Permissions",
+                subtitle = if (permSummary.allEssentialGranted) {
+                    if (isArabic) "${permSummary.grantedCount}/${permSummary.totalCount} صلاحيات مفعّلة ✓"
+                    else "${permSummary.grantedCount}/${permSummary.totalCount} permissions active ✓"
+                } else {
+                    val missing = permSummary.totalCount - permSummary.grantedCount
+                    if (isArabic) "${permSummary.grantedCount}/${permSummary.totalCount} • يتطلب تفعيل $missing"
+                    else "${permSummary.grantedCount}/${permSummary.totalCount} • $missing needed"
+                },
+                iconTint = if (permSummary.allEssentialGranted) EmeraldNeon else com.example.ui.theme.AmberNeon,
+                modifier = Modifier.testTag("access_permissions_setting_row"),
+                onClick = onOpenAccessPermissions
+            )
+
+            // Backup & Restore
             DrawerActionItem(
                 icon = Icons.Default.CloudDone,
                 title = strings.backupDriveTitle,
@@ -581,11 +622,11 @@ private fun DrawerNavItem(
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    iconTint: Color = LiquidGlassTheme.colors.primaryNeon
+    iconTint: Color = LiquidGlassTheme.colors.primaryNeon,
+    badgeCount: Int = 0
 ) {
     val colors = LiquidGlassTheme.colors
     val bg = if (isSelected) colors.primaryNeon.copy(alpha = 0.18f) else Color.Transparent
-    val borderCol = if (isSelected) colors.primaryNeon.copy(alpha = 0.6f) else Color.Transparent
 
     Row(
         modifier = Modifier
@@ -607,8 +648,25 @@ private fun DrawerNavItem(
             text = title,
             color = if (isSelected) colors.primaryNeon else colors.textPrimary,
             fontSize = 14.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            modifier = Modifier.weight(1f)
         )
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(RoseNeon)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = badgeCount.toString(),
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
     }
 }
 
@@ -617,12 +675,14 @@ private fun DrawerActionItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    iconTint: Color = LiquidGlassTheme.colors.primaryNeon,
+    modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
@@ -639,7 +699,7 @@ private fun DrawerActionItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = colors.primaryNeon,
+                tint = iconTint,
                 modifier = Modifier.size(18.dp)
             )
         }

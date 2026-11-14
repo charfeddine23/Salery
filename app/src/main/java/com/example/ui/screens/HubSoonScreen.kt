@@ -58,12 +58,14 @@ private data class RoadmapFeature(
     val progress: Float,
     val badgeEn: String,
     val badgeAr: String,
-    val opensVisaPreview: Boolean = false
+    val onClickAction: (() -> Unit)? = null
 )
 
 @Composable
 fun HubSoonScreen(
     onOpenVisaPreview: () -> Unit,
+    pendingSmsCount: Int = 0,
+    onOpenBaridiMobSync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -74,6 +76,18 @@ fun HubSoonScreen(
 
     val roadmapItems = listOf(
         RoadmapFeature(
+            icon = Icons.Default.Sync,
+            accent = Color(0xFF818CF8),
+            titleEn = "BaridiMob SMS & Alert Sync",
+            titleAr = "مزامنة رسائل بريدي موب",
+            descEn = "Automatically analyze ALG Poste SMS alerts and categorize (- / +) into Expenses or Income. Tap to open.",
+            descAr = "قراءة وتحليل رسائل ALG Poste تلقائياً لاقتراح إضافتها في المصاريف (-) أو الدخل (+). اضغط للفتح.",
+            progress = 1.0f,
+            badgeEn = if (pendingSmsCount > 0) "LIVE • $pendingSmsCount NEW" else "LIVE • READY",
+            badgeAr = if (pendingSmsCount > 0) "مفعّل • $pendingSmsCount جديد" else "مفعّل • اضغط للفتح",
+            onClickAction = onOpenBaridiMobSync
+        ),
+        RoadmapFeature(
             icon = Icons.Default.CreditCard,
             accent = CyanNeon,
             titleEn = "Visa International Card",
@@ -83,7 +97,7 @@ fun HubSoonScreen(
             progress = 0.85f,
             badgeEn = "IN PROGRESS • 85%",
             badgeAr = "قيد التطوير • 85%",
-            opensVisaPreview = true
+            onClickAction = onOpenVisaPreview
         ),
         RoadmapFeature(
             icon = Icons.Default.Nfc,
@@ -95,17 +109,6 @@ fun HubSoonScreen(
             progress = 0.65f,
             badgeEn = "BETA • 65%",
             badgeAr = "تجريبي • 65%"
-        ),
-        RoadmapFeature(
-            icon = Icons.Default.Sync,
-            accent = Color(0xFF818CF8),
-            titleEn = "BaridiMob SMS & Alert Sync",
-            titleAr = "مزامنة إشعارات بريدي موب",
-            descEn = "Automatically categorize incoming transfers and card payments into your ledger.",
-            descAr = "تصنيف تلقائي للتحويلات ومصاريف البطاقة عند استلام إشعارات الدفع.",
-            progress = 0.55f,
-            badgeEn = "NEXT • 55%",
-            badgeAr = "القادم • 55%"
         ),
         RoadmapFeature(
             icon = Icons.Default.DocumentScanner,
@@ -194,7 +197,7 @@ fun HubSoonScreen(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
                 borderColor = item.accent.copy(alpha = 0.35f),
-                onClick = if (item.opensVisaPreview) onOpenVisaPreview else null
+                onClick = item.onClickAction
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -229,7 +232,7 @@ fun HubSoonScreen(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.weight(1f)
                                 )
-                                if (item.opensVisaPreview) {
+                                if (item.onClickAction != null) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                         contentDescription = null,

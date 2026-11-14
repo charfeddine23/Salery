@@ -22,11 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -38,12 +40,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.DebtEntity
 import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.sms.SmsSuggestionEntry
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
@@ -74,6 +79,7 @@ fun DashboardScreen(
     transactions: List<TransactionEntity>,
     debts: List<DebtEntity> = emptyList(),
     userSettings: UserSettings,
+    pendingSmsSuggestions: List<SmsSuggestionEntry> = emptyList(),
     onAddIncomeClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onAddDebtClick: () -> Unit,
@@ -83,6 +89,9 @@ fun DashboardScreen(
     onDeleteTransaction: (TransactionEntity) -> Unit,
     onLockToVault: (Double) -> Unit = {},
     onUnlockFromVault: (Double) -> Unit = {},
+    onAcceptSmsSuggestion: (String, TransactionType?) -> Unit = { _, _ -> },
+    onDismissSmsSuggestion: (String) -> Unit = {},
+    onOpenBaridiMobSync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -107,6 +116,19 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+                if (pendingSmsSuggestions.isNotEmpty()) {
+                    item {
+                        BaridiMobSmsSuggestionBanner(
+                            suggestions = pendingSmsSuggestions,
+                            strings = strings,
+                            colors = colors,
+                            onAccept = { id, type -> onAcceptSmsSuggestion(id, type) },
+                            onDismiss = onDismissSmsSuggestion,
+                            onOpenSync = onOpenBaridiMobSync
+                        )
+                    }
+                }
 
                 item {
                     TotalBalanceVaultCard(
@@ -199,6 +221,19 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+
+            if (pendingSmsSuggestions.isNotEmpty()) {
+                item {
+                    BaridiMobSmsSuggestionBanner(
+                        suggestions = pendingSmsSuggestions,
+                        strings = strings,
+                        colors = colors,
+                        onAccept = { id, type -> onAcceptSmsSuggestion(id, type) },
+                        onDismiss = onDismissSmsSuggestion,
+                        onOpenSync = onOpenBaridiMobSync
+                    )
+                }
+            }
 
             item {
                 TotalBalanceVaultCard(
@@ -604,6 +639,162 @@ fun TransactionRowItem(
                     tint = colors.textMuted.copy(alpha = 0.6f),
                     modifier = Modifier.size(dimens.iconSizeSm)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BaridiMobSmsSuggestionBanner(
+    suggestions: List<SmsSuggestionEntry>,
+    strings: StringsBundle,
+    colors: LiquidGlassColors,
+    onAccept: (id: String, type: TransactionType) -> Unit,
+    onDismiss: (id: String) -> Unit,
+    onOpenSync: () -> Unit
+) {
+    val latest = suggestions.firstOrNull() ?: return
+    val isArabic = strings is ArabicStrings
+    val isExpense = latest.isExpense
+    val accent = if (isExpense) RoseNeon else EmeraldNeon
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = colors.glassCard,
+        borderColor = Color(0xFF818CF8).copy(alpha = 0.45f)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF818CF8).copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sms,
+                            contentDescription = null,
+                            tint = Color(0xFF818CF8),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) {
+                                "رسالة جديدة من ${latest.sender} (${suggestions.size})"
+                            } else {
+                                "New ${latest.sender} SMS (${suggestions.size})"
+                            },
+                            color = colors.textPrimary,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isArabic) latest.suggestedTitleAr else latest.suggestedTitleEn,
+                            color = colors.textMuted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { onDismiss(latest.id) },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = if (isArabic) "تجاهل" else "Dismiss",
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.glassSurface)
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = latest.rawBody,
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = (if (isExpense) "-" else "+") + formatDzd(latest.amount, strings.currencyCode),
+                    color = accent,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accent.copy(alpha = 0.18f))
+                        .clickable { onAccept(latest.id, latest.transactionType) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isExpense) {
+                            if (isArabic) "إضافة في المصاريف" else "Add to Expense"
+                        } else {
+                            if (isArabic) "إضافة في الدخل" else "Add to Income"
+                        },
+                        color = accent,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassSurface)
+                        .clickable(onClick = onOpenSync)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isArabic) "عرض الكل" else "View All",
+                        color = Color(0xFF818CF8),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

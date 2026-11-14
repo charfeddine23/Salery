@@ -367,14 +367,22 @@ object AppUpdateManager {
 
     fun buildManageUnknownAppSourcesIntent(context: Context): Intent {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val specific = Intent(
+            val packageSpecific = Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:${context.packageName}")
             )
-            if (specific.resolveActivity(context.packageManager) != null) {
-                specific
+            if (packageSpecific.resolveActivity(context.packageManager) != null) {
+                packageSpecific
             } else {
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                val genericUnknownSources = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                if (genericUnknownSources.resolveActivity(context.packageManager) != null) {
+                    genericUnknownSources
+                } else {
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                }
             }
         } else {
             Intent(Settings.ACTION_SECURITY_SETTINGS)

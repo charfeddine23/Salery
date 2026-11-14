@@ -1274,7 +1274,7 @@ private fun VisaCardRealistic(
                         }
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                             verticalAlignment = Alignment.Bottom
                         ) {
                             Column(horizontalAlignment = Alignment.End) {
@@ -1293,22 +1293,21 @@ private fun VisaCardRealistic(
                                 )
                             }
 
-                            if (userSettings.visaCardCvc.isNotBlank()) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "CVC",
-                                        color = secondaryTextColor,
-                                        fontSize = 7.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = if (isStealth) "•••" else userSettings.visaCardCvc,
-                                        color = primaryTextColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "CVC",
+                                    color = secondaryTextColor,
+                                    fontSize = 7.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = if (isStealth || userSettings.visaCardCvc.isBlank()) "•••" else userSettings.visaCardCvc,
+                                    color = primaryTextColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             }
                         }
                     }

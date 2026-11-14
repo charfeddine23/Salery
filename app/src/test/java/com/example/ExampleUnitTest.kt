@@ -225,15 +225,10 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun hubVaultCodec_computesAlgeriePosteRip_sortsPinned_andRoundTripsJson() {
-    val rip = com.example.data.HubVaultCodec.computeAlgeriePosteRip("12345678")
-    assertEquals(20, rip.length)
-    assertTrue(rip.startsWith("007999990012345678"))
-    val key = rip.takeLast(2).toInt()
-    assertTrue(key in 1..97)
-
+  fun hubVaultCodec_formatsManualRip_sortsPinned_andRoundTripsJson() {
+    val rip = "00799999001234567897"
     val grouped = com.example.data.HubVaultCodec.formatRipGrouped(rip)
-    assertEquals(23, grouped.length)
+    assertEquals("007 99999 0012345678 97", grouped)
 
     val keys = listOf(
       com.example.data.VaultKeyEntry(
@@ -260,7 +255,7 @@ class ExampleUnitTest {
       holderName = "Amine Benali",
       ccpNumber = "12345678",
       ccpKey = "42",
-      ripFull = rip,
+      ripFull = "",
       agencyNote = "Algiers",
       isPinned = false,
       createdAt = 2000L
@@ -272,7 +267,7 @@ class ExampleUnitTest {
       holderName = "Charfeddine Ka",
       ccpNumber = "87654321",
       ccpKey = "11",
-      ripFull = com.example.data.HubVaultCodec.computeAlgeriePosteRip("87654321"),
+      ripFull = rip,
       contactName = "Charfeddine",
       contactPhone = "0550112233",
       isPinned = true,
@@ -287,6 +282,7 @@ class ExampleUnitTest {
     assertTrue(parsedCcps[0].isPinned)
     assertEquals("Charfeddine Ka", parsedCcps[0].displayFullName)
     assertEquals("0550112233", parsedCcps[0].contactPhone)
+    assertEquals("", parsedCcps[1].ripFull)
   }
 
   @Test
@@ -319,6 +315,91 @@ class ExampleUnitTest {
     assertEquals(
       com.example.data.PasswordStrengthLevel.STRONG,
       com.example.data.PasswordStrengthAnalyzer.analyze(generated).level
+    )
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_parsesExpenseIncomeAndIgnoresBalanceOrOtp() {
+    // 1. Negative withdrawal amount "-300.00 DA" with trailing Solde -> EXPENSE 300.0
+    val debitSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Retrait GAB -300.00 DA le 14/11/2026. Solde: 24500.00 DA",
+      timestampMillis = 1_763_120_000_000L
+    )
+    assertNotNull(debitSms)
+    assertEquals(true, debitSms!!.isExpense)
+    assertEquals(TransactionType.EXPENSE, debitSms.transactionType)
+    assertEquals(300.0, debitSms.amount, 0.01)
+
+    // 2. Positive credit / incoming transfer -> INCOME 15000.0
+    val creditSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "BaridiMob",
+      body = "Virement reçu +15 000,00 DA. Nouveau solde: 39500.00 DA",
+      timestampMillis = 1_763_120_120_000L
+    )
+    assertNotNull(creditSms)
+    assertEquals(false, creditSms!!.isExpense)
+    assertEquals(TransactionType.INCOME, creditSms.transactionType)
+    assertEquals(15000.0, creditSms.amount, 0.01)
+
+    // 3. Arabic numerals & minus sign -> EXPENSE 300.0
+    val arabicDebitSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "تم سحب -٣٠٠.٠٠ دج من حسابك",
+      timestampMillis = 1_763_120_240_000L
+    )
+    assertNotNull(arabicDebitSms)
+    assertTrue(arabicDebitSms!!.isExpense)
+    assertEquals(300.0, arabicDebitSms.amount, 0.01)
+
+    // 4. OTP message must be ignored
+    val otpSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Votre code OTP de confirmation est 482910.",
+      timestampMillis = 1_763_120_360_000L
+    )
+    org.junit.Assert.assertNull(otpSms)
+
+    // 5. Unrelated sender ignored when allowAnySenderForManualTest = false
+    val nonPosteSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "Mobilis",
+      body = "Promo -300.00 DA",
+      timestampMillis = 1_763_120_480_000L,
+      allowAnySenderForManualTest = false
+    )
+    org.junit.Assert.assertNull(nonPosteSms)
+
+    // 6. Moshi Codec round-trip
+    val encoded = com.example.sms.AlgPosteSmsCodec.encodeSuggestions(listOf(debitSms, creditSms))
+    val decoded = com.example.sms.AlgPosteSmsCodec.parseSuggestions(encoded)
+    assertEquals(2, decoded.size)
+  }
+
+  @Test
+  fun vaultAppPresets_detectsAndResolvesAppThemesAndRoundTripsPresetId() {
+    val insta = com.example.data.VaultAppPresets.detectFromLabel("My Instagram Account")
+    assertNotNull(insta)
+    assertEquals("instagram", insta!!.id)
+    assertEquals(com.example.data.VaultAppMotif.CAMERA_LENS_RINGS, insta.motif)
+
+    val bybit = com.example.data.VaultAppPresets.findById("bybit")
+    assertEquals(com.example.data.VaultAppMotif.CRYPTO_HEX_GRID, bybit.motif)
+
+    val entry = com.example.data.VaultKeyEntry(
+      id = "v_app_1",
+      label = "TikTok Creator",
+      username = "@charfeddine",
+      secretValue = "Strong#Pass2026!",
+      category = "APP",
+      appPresetId = "tiktok"
+    )
+    val encoded = com.example.data.HubVaultCodec.encodeVaultKeys(listOf(entry))
+    val decoded = com.example.data.HubVaultCodec.parseVaultKeys(encoded)
+    assertEquals(1, decoded.size)
+    assertEquals("tiktok", decoded[0].appPresetId)
+    assertEquals(
+      com.example.data.VaultAppMotif.SOUND_WAVES,
+      com.example.data.VaultAppPresets.resolveForEntry(decoded[0]).motif
     )
   }
 }

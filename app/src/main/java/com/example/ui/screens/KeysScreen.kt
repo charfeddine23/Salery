@@ -4,6 +4,24 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,18 +41,22 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
@@ -47,6 +69,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -56,6 +79,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -76,11 +101,18 @@ import com.example.data.PasswordAnalysis
 import com.example.data.PasswordStrengthAnalyzer
 import com.example.data.PasswordStrengthLevel
 import com.example.data.UserSettings
+import com.example.data.VaultAppPresets
 import com.example.data.VaultKeyEntry
+import com.example.ui.components.AppPresetPickerDialog
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
+import com.example.ui.components.VaultAppBrandBackdrop
+import com.example.ui.components.VaultAppEmblemBadge
+import com.example.ui.components.accentColor
+import com.example.ui.components.primaryColor
+import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
@@ -91,6 +123,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
+import kotlinx.coroutines.delay
 
 private enum class KeysFilter {
     ALL,
@@ -101,8 +134,8 @@ private enum class KeysFilter {
 @Composable
 fun KeysScreen(
     userSettings: UserSettings,
-    onAddKey: (label: String, username: String, secretValue: String, category: String, note: String) -> Unit,
-    onUpdateKey: (keyId: String, label: String, username: String, secretValue: String, category: String, note: String) -> Unit,
+    onAddKey: (label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
+    onUpdateKey: (keyId: String, label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
     onDeleteKey: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -118,7 +151,6 @@ fun KeysScreen(
         HubVaultCodec.parseVaultKeys(userSettings.vaultKeysJson)
     }
 
-    // Count duplicate passwords across the entire vault for smart reuse detection
     val analyzedItems = remember(keys) {
         val counts = keys.groupingBy { it.secretValue }.eachCount()
         keys.map { entry ->
@@ -133,10 +165,14 @@ fun KeysScreen(
     }
 
     val strongCount = remember(analyzedItems) {
-        analyzedItems.count { it.second.level == PasswordStrengthLevel.STRONG || it.second.level == PasswordStrengthLevel.GOOD }
+        analyzedItems.count {
+            it.second.level == PasswordStrengthLevel.STRONG || it.second.level == PasswordStrengthLevel.GOOD
+        }
     }
     val weakCount = remember(analyzedItems) {
-        analyzedItems.count { it.second.level == PasswordStrengthLevel.WEAK || it.second.level == PasswordStrengthLevel.FAIR }
+        analyzedItems.count {
+            it.second.level == PasswordStrengthLevel.WEAK || it.second.level == PasswordStrengthLevel.FAIR
+        }
     }
     val reusedCount = remember(analyzedItems) {
         analyzedItems.count { it.second.isReused }
@@ -156,7 +192,8 @@ fun KeysScreen(
                     entry.label.lowercase().contains(q) ||
                     entry.username.lowercase().contains(q) ||
                     entry.category.lowercase().contains(q) ||
-                    entry.note.lowercase().contains(q)
+                    entry.note.lowercase().contains(q) ||
+                    entry.appPresetId.lowercase().contains(q)
                 val matchesFilter = when (activeFilter) {
                     KeysFilter.ALL -> true
                     KeysFilter.WEAK_OR_REUSED ->
@@ -173,23 +210,47 @@ fun KeysScreen(
     }
 
     val revealedMap = remember { mutableStateMapOf<String, Boolean>() }
+    val expandedMap = remember { mutableStateMapOf<String, Boolean>() }
     var showAddOrEditDialog by remember { mutableStateOf(false) }
     var editingKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
+
+    // Shared infinite animations for silky-smooth 90fps luxury vault containers
+    val vaultTransition = rememberInfiniteTransition(label = "keys_vault_shimmer")
+    val shimmerPhase by vaultTransition.animateFloat(
+        initialValue = -0.25f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_phase"
+    )
+    val pulsePhase by vaultTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_phase"
+    )
 
     if (showAddOrEditDialog) {
         AddOrEditVaultKeyDialog(
             existing = editingKey,
             secureScreenshots = userSettings.screenshotProtectionEnabled,
+            shimmerPhase = shimmerPhase,
+            pulsePhase = pulsePhase,
             onDismiss = {
                 showAddOrEditDialog = false
                 editingKey = null
             },
-            onSave = { label, username, secret, category, note ->
+            onSave = { label, username, secret, category, note, appPresetId ->
                 val target = editingKey
                 if (target == null) {
-                    onAddKey(label, username, secret, category, note)
+                    onAddKey(label, username, secret, category, note, appPresetId)
                 } else {
-                    onUpdateKey(target.id, label, username, secret, category, note)
+                    onUpdateKey(target.id, label, username, secret, category, note, appPresetId)
                 }
                 showAddOrEditDialog = false
                 editingKey = null
@@ -225,8 +286,8 @@ fun KeysScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isArabic) "خزنة كلمات السر وأسماء المستخدمين مع التقييم الذكي"
-                        else "Password & username vault with smart strength analyzer",
+                        text = if (isArabic) "خزنة كلمات السر بتصاميم تفاعلية ذكية لكل تطبيق"
+                        else "Smart password vault with app-themed animated cards",
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
@@ -291,8 +352,8 @@ fun KeysScreen(
                             )
                             Text(
                                 text = if (keys.isEmpty()) {
-                                    if (isArabic) "أضف حساباتك لتقييم قوة كلمات السر واكتشاف التكرار"
-                                    else "Add credentials to evaluate strength & detect reuse"
+                                    if (isArabic) "أضف حساباتك واختر التطبيق لتتحول البطاقة بألوانه وشعاره"
+                                    else "Pick an app from the list to transform each vault card"
                                 } else {
                                     if (isArabic) "${keys.size} حساب محفوظ • معدل الأمان العام $averageScore%"
                                     else "${keys.size} saved accounts • Overall security score $averageScore%"
@@ -381,8 +442,8 @@ fun KeysScreen(
                             Box(modifier = Modifier.weight(1f)) {
                                 if (searchQuery.isEmpty()) {
                                     Text(
-                                        text = if (isArabic) "ابحث باسم الخدمة، اسم المستخدم أو الملاحظة..."
-                                        else "Search service, username, or note...",
+                                        text = if (isArabic) "ابحث باسم التطبيق، اسم المستخدم أو الملاحظة..."
+                                        else "Search app, username, or note...",
                                         color = colors.textMuted,
                                         fontSize = 13.sp,
                                         maxLines = 1,
@@ -453,8 +514,8 @@ fun KeysScreen(
                         if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
                     },
                     description = if (keys.isEmpty()) {
-                        if (isArabic) "احفظ أسماء المستخدمين وكلمات السر لحساباتك (BaridiMob، ECCP، البريد، التطبيقات) مع تحليل ذكي فوري لقوة كل كلمة سر."
-                        else "Store usernames & passwords locally with instant smart strength analysis, reuse detection, and strong password generation."
+                        if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
+                        else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
                     } else {
                         if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
                         else "Adjust your search or filter to see more entries."
@@ -466,12 +527,19 @@ fun KeysScreen(
         } else {
             items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
                 val isVisible = !isStealth && (revealedMap[entry.id] == true)
+                val isExpanded = expandedMap[entry.id] ?: true
                 VaultKeyRowCard(
                     entry = entry,
                     analysis = analysis,
                     isVisible = isVisible,
+                    isExpanded = isExpanded,
                     isStealth = isStealth,
                     isArabic = isArabic,
+                    shimmerPhase = shimmerPhase,
+                    pulsePhase = pulsePhase,
+                    onToggleExpand = {
+                        expandedMap[entry.id] = !(expandedMap[entry.id] ?: true)
+                    },
                     onToggleReveal = {
                         revealedMap[entry.id] = !(revealedMap[entry.id] ?: false)
                     },
@@ -536,8 +604,12 @@ private fun VaultKeyRowCard(
     entry: VaultKeyEntry,
     analysis: PasswordAnalysis,
     isVisible: Boolean,
+    isExpanded: Boolean,
     isStealth: Boolean,
     isArabic: Boolean,
+    shimmerPhase: Float,
+    pulsePhase: Float,
+    onToggleExpand: () -> Unit,
     onToggleReveal: () -> Unit,
     onCopyUsername: () -> Unit,
     onCopySecret: () -> Unit,
@@ -545,24 +617,75 @@ private fun VaultKeyRowCard(
     onDelete: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
-    val badgeColor = when (entry.category.uppercase()) {
-        "BANK", "BARIDIMOB", "ECCP" -> CyanNeon
-        "EMAIL" -> EmeraldNeon
-        "PIN" -> AmberNeon
-        else -> Color(0xFF818CF8)
+    val preset = remember(entry.appPresetId, entry.label) {
+        VaultAppPresets.resolveForEntry(entry)
     }
-
+    val brandPrimary by animateColorAsState(preset.primaryColor(), tween(400), label = "card_bp")
+    val brandSecondary by animateColorAsState(preset.secondaryColor(), tween(400), label = "card_bs")
     val (strengthColor, strengthLabel) = strengthMeta(analysis.level, isArabic)
 
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        backgroundColor = colors.glassCard,
-        borderColor = strengthColor.copy(alpha = 0.38f)
+    var copiedUsernameRecently by remember { mutableStateOf(false) }
+    var copiedSecretRecently by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copiedUsernameRecently) {
+        if (copiedUsernameRecently) {
+            delay(1400)
+            copiedUsernameRecently = false
+        }
+    }
+    LaunchedEffect(copiedSecretRecently) {
+        if (copiedSecretRecently) {
+            delay(1400)
+            copiedSecretRecently = false
+        }
+    }
+
+    val cardShape = RoundedCornerShape(24.dp)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = if (colors.isDark) 14.dp else 8.dp,
+                shape = cardShape,
+                spotColor = brandPrimary.copy(alpha = 0.40f),
+                ambientColor = brandSecondary.copy(alpha = 0.25f)
+            )
+            .clip(cardShape)
+            .border(
+                width = 1.25.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        brandPrimary.copy(alpha = 0.72f),
+                        brandSecondary.copy(alpha = 0.45f),
+                        brandPrimary.copy(alpha = 0.25f + 0.35f * pulsePhase)
+                    )
+                ),
+                shape = cardShape
+            )
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+            .testTag("vault_key_card_${preset.id}")
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Header: Service Name + Strength Badge + Category + Edit/Delete
+        // Animated App-Specific Vector Shapes & Gradient Backdrop
+        Box(modifier = Modifier.matchParentSize()) {
+            VaultAppBrandBackdrop(
+                preset = preset,
+                shimmerPhase = shimmerPhase,
+                pulsePhase = pulsePhase
+            )
+        }
+
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header Row: App Emblem + Label + App Tag + Strength Pill + Controls
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -570,54 +693,50 @@ private fun VaultKeyRowCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(badgeColor.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Key,
-                            contentDescription = null,
-                            tint = badgeColor,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    VaultAppEmblemBadge(preset = preset, size = 46.dp)
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = entry.label,
                             color = colors.textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // App / Category Pill
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(badgeColor.copy(alpha = 0.14f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(brandPrimary.copy(alpha = 0.20f))
+                                    .border(0.6.dp, brandPrimary.copy(alpha = 0.45f), RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = entry.category,
-                                    color = badgeColor,
+                                    text = if (preset.id == "custom") entry.category else {
+                                        if (isArabic) preset.nameAr else preset.nameEn
+                                    },
+                                    color = brandPrimary,
                                     fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
+                            // Strength Pill
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(strengthColor.copy(alpha = 0.16f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(strengthColor.copy(alpha = 0.18f))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "$strengthLabel ${analysis.score}%",
@@ -630,8 +749,8 @@ private fun VaultKeyRowCard(
                             if (analysis.isReused) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(RoseNeon.copy(alpha = 0.16f))
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(RoseNeon.copy(alpha = 0.18f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
@@ -647,15 +766,15 @@ private fun VaultKeyRowCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = if (isArabic) "تعديل" else "Edit",
-                            tint = CyanNeon,
+                            tint = brandPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = if (isArabic) "حذف" else "Delete",
@@ -663,140 +782,222 @@ private fun VaultKeyRowCard(
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                }
-            }
-
-            // Username Row (if present) with one-tap copy
-            if (entry.username.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.glassSurface)
-                        .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
-                        .clickable { onCopyUsername() }
-                        .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    IconButton(onClick = onToggleExpand, modifier = Modifier.size(36.dp)) {
                         Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = CyanNeon,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isStealth) "••••••••" else entry.username,
-                            color = colors.textPrimary,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = onCopyUsername, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = if (isArabic) "نسخ اسم المستخدم" else "Copy username",
-                            tint = CyanNeon,
-                            modifier = Modifier.size(17.dp)
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
+                            tint = colors.textSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
 
-            // Password / Secret Row with Reveal & Copy
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.glassSurface)
-                    .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
-                    .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn(tween(220)) + expandVertically(tween(260)),
+                exit = fadeOut(tween(180)) + shrinkVertically(tween(220))
             ) {
-                Text(
-                    text = if (isVisible) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
-                    color = colors.textPrimary,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onToggleReveal, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (isArabic) "إظهار/إخفاء" else "Reveal/Hide",
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // Username Pill with Instant Tactile Copy Feedback
+                    if (entry.username.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.62f)
+                                    else Color.White.copy(alpha = 0.78f)
+                                )
+                                .border(
+                                    width = 0.9.dp,
+                                    color = if (copiedUsernameRecently) EmeraldNeon.copy(alpha = 0.75f)
+                                    else brandPrimary.copy(alpha = 0.30f),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clickable {
+                                    copiedUsernameRecently = true
+                                    onCopyUsername()
+                                }
+                                .padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = brandPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isStealth) "••••••••" else entry.username,
+                                    color = colors.textPrimary,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    copiedUsernameRecently = true
+                                    onCopyUsername()
+                                },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (copiedUsernameRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    contentDescription = if (isArabic) "نسخ اسم المستخدم" else "Copy username",
+                                    tint = if (copiedUsernameRecently) EmeraldNeon else brandPrimary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
-                    IconButton(onClick = onCopySecret, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = if (isArabic) "نسخ كلمة السر" else "Copy password",
-                            tint = EmeraldNeon,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
 
-            // Smart Evaluation Insight Tip (shown clearly when weak/fair/reused or note exists)
-            val showAuditWarning = analysis.level == PasswordStrengthLevel.WEAK ||
-                analysis.level == PasswordStrengthLevel.FAIR ||
-                analysis.isReused
-            if (showAuditWarning) {
-                val primaryTip = if (isArabic) analysis.tipsAr.firstOrNull() else analysis.tipsEn.firstOrNull()
-                if (!primaryTip.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // Password Secret Pill with Smooth AnimatedContent Reveal + Copy Feedback
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(strengthColor.copy(alpha = 0.10f))
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.70f)
+                                else Color.White.copy(alpha = 0.84f)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = when {
+                                    copiedSecretRecently -> EmeraldNeon.copy(alpha = 0.85f)
+                                    isVisible -> brandPrimary.copy(alpha = 0.65f)
+                                    else -> brandPrimary.copy(alpha = 0.28f)
+                                },
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = strengthColor,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (isVisible) EmeraldNeon else brandPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            AnimatedContent(
+                                targetState = isVisible,
+                                transitionSpec = {
+                                    fadeIn(tween(220)) togetherWith fadeOut(tween(180))
+                                },
+                                label = "secret_reveal_anim"
+                            ) { revealed ->
+                                Text(
+                                    text = if (revealed) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
+                                    color = colors.textPrimary,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 1.2.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onToggleReveal, modifier = Modifier.size(44.dp)) {
+                                Icon(
+                                    imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isArabic) "إظهار/إخفاء" else "Reveal/Hide",
+                                    tint = brandPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    copiedSecretRecently = true
+                                    onCopySecret()
+                                },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (copiedSecretRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    contentDescription = if (isArabic) "نسخ كلمة السر" else "Copy password",
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Smooth Animated Strength Bar inside container
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { (analysis.score / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(50)),
+                        color = strengthColor,
+                        trackColor = colors.glassSurface.copy(alpha = 0.55f)
+                    )
+
+                    // Smart Audit Tip (when weak/fair/reused)
+                    val showAuditWarning = analysis.level == PasswordStrengthLevel.WEAK ||
+                        analysis.level == PasswordStrengthLevel.FAIR ||
+                        analysis.isReused
+                    if (showAuditWarning) {
+                        val primaryTip = if (isArabic) analysis.tipsAr.firstOrNull() else analysis.tipsEn.firstOrNull()
+                        if (!primaryTip.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(strengthColor.copy(alpha = 0.14f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = strengthColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = primaryTip,
+                                    color = strengthColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    if (entry.note.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = primaryTip,
-                            color = strengthColor,
+                            text = entry.note,
+                            color = colors.textSecondary,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-            }
-
-            if (entry.note.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = entry.note,
-                    color = colors.textMuted,
-                    fontSize = 11.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
@@ -806,12 +1007,21 @@ private fun VaultKeyRowCard(
 private fun AddOrEditVaultKeyDialog(
     existing: VaultKeyEntry?,
     secureScreenshots: Boolean,
+    shimmerPhase: Float,
+    pulsePhase: Float,
     onDismiss: () -> Unit,
-    onSave: (label: String, username: String, secret: String, category: String, note: String) -> Unit
+    onSave: (label: String, username: String, secret: String, category: String, note: String, appPresetId: String) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
+
+    val initialPreset = remember(existing) {
+        if (existing != null) VaultAppPresets.resolveForEntry(existing).id else "custom"
+    }
+    var selectedPresetId by remember(existing) { mutableStateOf(initialPreset) }
+    var userExplicitlyPickedPreset by remember(existing) { mutableStateOf(existing != null && initialPreset != "custom") }
+    var showAppPickerModal by remember { mutableStateOf(false) }
 
     var label by remember(existing) { mutableStateOf(existing?.label ?: "") }
     var username by remember(existing) { mutableStateOf(existing?.username ?: "") }
@@ -819,6 +1029,9 @@ private fun AddOrEditVaultKeyDialog(
     var category by remember(existing) { mutableStateOf(existing?.category ?: "APP") }
     var note by remember(existing) { mutableStateOf(existing?.note ?: "") }
     var showPasswordInDialog by remember { mutableStateOf(true) }
+
+    val activePreset = remember(selectedPresetId) { VaultAppPresets.findById(selectedPresetId) }
+    val presetAccent = activePreset.primaryColor()
 
     val liveAnalysis = remember(secret, username, label) {
         PasswordStrengthAnalyzer.analyze(
@@ -830,6 +1043,30 @@ private fun AddOrEditVaultKeyDialog(
     }
     val (strengthColor, strengthLabel) = strengthMeta(liveAnalysis.level, isArabic)
 
+    if (showAppPickerModal) {
+        AppPresetPickerDialog(
+            selectedPresetId = selectedPresetId,
+            isArabic = isArabic,
+            onSelect = { chosen ->
+                val prevPreset = VaultAppPresets.findById(selectedPresetId)
+                selectedPresetId = chosen.id
+                userExplicitlyPickedPreset = (chosen.id != "custom")
+                if (chosen.id != "custom") {
+                    val chosenName = if (isArabic) chosen.nameAr else chosen.nameEn
+                    if (label.isBlank() ||
+                        label == prevPreset.nameEn ||
+                        label == prevPreset.nameAr
+                    ) {
+                        label = chosenName
+                    }
+                    category = chosen.defaultCategory
+                }
+                showAppPickerModal = false
+            },
+            onDismiss = { showAppPickerModal = false }
+        )
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -840,26 +1077,184 @@ private fun AddOrEditVaultKeyDialog(
             modifier = Modifier
                 .widthIn(max = 480.dp)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            backgroundColor = colors.dialogBackground
+            shape = RoundedCornerShape(26.dp),
+            backgroundColor = colors.dialogBackground,
+            borderColor = presetAccent.copy(alpha = 0.50f)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(20.dp)
+                    .padding(18.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = if (existing == null) {
-                        if (isArabic) "إضافة حساب وكلمة سر" else "Add Account & Password"
-                    } else {
-                        if (isArabic) "تعديل الحساب" else "Edit Account"
-                    },
-                    color = colors.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                // Live Brand Transformation Preview Banner inside the Dialog
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .border(1.dp, presetAccent.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                ) {
+                    Box(modifier = Modifier.matchParentSize()) {
+                        VaultAppBrandBackdrop(
+                            preset = activePreset,
+                            shimmerPhase = shimmerPhase,
+                            pulsePhase = pulsePhase
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        VaultAppEmblemBadge(preset = activePreset, size = 44.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (existing == null) {
+                                    if (isArabic) "إضافة حساب وكلمة سر" else "Add Account & Password"
+                                } else {
+                                    if (isArabic) "تعديل الحساب" else "Edit Account"
+                                },
+                                color = colors.textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = if (activePreset.id == "custom") {
+                                    if (isArabic) "اختر تطبيقاً لتلوين وتخصيص البطاقة تلقائياً"
+                                    else "Pick an app to transform card colors & shapes"
+                                } else {
+                                    if (isArabic) "نمط التطبيق: ${activePreset.nameAr}"
+                                    else "Theme active: ${activePreset.nameEn}"
+                                },
+                                color = presetAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Prominent App List Selector Button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(presetAccent.copy(alpha = 0.14f))
+                        .border(1.dp, presetAccent.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                        .clickable { showAppPickerModal = true }
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .testTag("select_app_preset_button"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Apps,
+                            contentDescription = null,
+                            tint = presetAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "اختيار التطبيق من القائمة" else "Select App from List",
+                                color = colors.textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isArabic) activePreset.nameAr else activePreset.nameEn,
+                                color = presetAccent,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (isArabic) "تغيير" else "Choose",
+                        color = presetAccent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Quick Popular App Chips Strip
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val quickIds = listOf("baridimob", "instagram", "google", "facebook", "tiktok", "redotpay", "bybit")
+                    quickIds.forEach { qId ->
+                        val p = VaultAppPresets.findById(qId)
+                        val pColor = p.primaryColor()
+                        val selected = selectedPresetId == p.id
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (selected) pColor.copy(alpha = 0.24f) else colors.glassCard
+                                )
+                                .border(
+                                    width = if (selected) 1.2.dp else 0.8.dp,
+                                    color = if (selected) pColor else colors.glassBorderSubtle,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable {
+                                    val prevPreset = VaultAppPresets.findById(selectedPresetId)
+                                    selectedPresetId = p.id
+                                    userExplicitlyPickedPreset = true
+                                    val chosenName = if (isArabic) p.nameAr else p.nameEn
+                                    if (label.isBlank() ||
+                                        label == prevPreset.nameEn ||
+                                        label == prevPreset.nameAr
+                                    ) {
+                                        label = chosenName
+                                    }
+                                    category = p.defaultCategory
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(
+                                        Brush.linearGradient(listOf(pColor, p.secondaryColor()))
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = p.monogram.take(2),
+                                    color = Color.White,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = p.nameEn.substringBefore(" /"),
+                                color = if (selected) pColor else colors.textSecondary,
+                                fontSize = 11.5.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier
@@ -876,12 +1271,21 @@ private fun AddOrEditVaultKeyDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 KeyFieldBox(
                     label = if (isArabic) "اسم التطبيق / الخدمة (مثال: BaridiMob)" else "Account / Service Name",
                     value = label,
-                    onValueChange = { label = it }
+                    onValueChange = { newText ->
+                        label = newText
+                        if (!userExplicitlyPickedPreset) {
+                            val detected = VaultAppPresets.detectFromLabel(newText)
+                            selectedPresetId = detected?.id ?: "custom"
+                            if (detected != null) {
+                                category = detected.defaultCategory
+                            }
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -900,7 +1304,11 @@ private fun AddOrEditVaultKeyDialog(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(colors.glassCard)
-                        .border(1.dp, strengthColor.copy(alpha = if (secret.isEmpty()) 0.25f else 0.55f), RoundedCornerShape(14.dp))
+                        .border(
+                            1.dp,
+                            strengthColor.copy(alpha = if (secret.isEmpty()) 0.25f else 0.55f),
+                            RoundedCornerShape(14.dp)
+                        )
                         .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     Row(
@@ -1063,10 +1471,10 @@ private fun AddOrEditVaultKeyDialog(
                     GlassButton(
                         text = strings.save,
                         enabled = label.isNotBlank() && secret.isNotBlank(),
-                        containerColor = AmberNeon,
+                        containerColor = presetAccent,
                         contentColor = Color(0xFF0F172A),
                         modifier = Modifier.weight(1.2f),
-                        onClick = { onSave(label, username, secret, category, note) }
+                        onClick = { onSave(label, username, secret, category, note, selectedPresetId) }
                     )
                 }
             }

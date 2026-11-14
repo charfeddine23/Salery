@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,7 +45,6 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VpnKey
@@ -67,6 +67,7 @@ import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.adaptiveContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,15 +80,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -129,7 +142,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.sensor.RememberShakeDetector
+import com.example.sms.AlgPosteSmsInboxScanner
 import com.example.ui.components.AppUpdateDialog
+import com.example.ui.components.PermissionsOnboardingDialog
 import com.example.ui.i18n.LocalStealthMode
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
@@ -150,18 +165,87 @@ fun MainAppScreen(
     val summary by viewModel.financialSummary.collectAsState()
     val updateUiState by viewModel.updateUiState.collectAsState()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+    val pendingSmsSuggestions by viewModel.pendingSmsSuggestions.collectAsState()
 
     var canInstallPackages by remember {
         mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
     }
     var lastAutoLaunchedApkPath by remember { mutableStateOf<String?>(null) }
+    var lastAutoRequestedInstallPermApkPath by remember { mutableStateOf<String?>(null) }
+    var pendingActionAfterInstallPerm by remember { mutableStateOf<String?>(null) }
+    var forceShowPermissionsOnboarding by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context, userSettings.baridiMobSmsSyncEnabled) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val allowed = AppUpdateManager.canRequestPackageInstalls(context)
+                canInstallPackages = allowed
+                if (allowed) {
+                    when (pendingActionAfterInstallPerm) {
+                        "download" -> {
+                            pendingActionAfterInstallPerm = null
+                            viewModel.startUpdateDownload()
+                        }
+                        "install" -> {
+                            pendingActionAfterInstallPerm = null
+                            viewModel.installReadyUpdate(context)
+                        }
+                        "onboarding", "permissions_settings" -> {
+                            pendingActionAfterInstallPerm = null
+                        }
+                    }
+                }
+                if (userSettings.baridiMobSmsSyncEnabled &&
+                    AlgPosteSmsInboxScanner.hasSmsPermissions(context)
+                ) {
+                    viewModel.scanAlgPosteSmsInbox(context, showFeedback = false)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val installPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         val allowed = AppUpdateManager.canRequestPackageInstalls(context)
         canInstallPackages = allowed
+        val pending = pendingActionAfterInstallPerm
+        pendingActionAfterInstallPerm = null
         if (allowed) {
-            viewModel.installReadyUpdate(context)
+            when (pending) {
+                "download" -> viewModel.startUpdateDownload()
+                "install" -> if (updateUiState is AppUpdateUiState.ReadyToInstall) {
+                    viewModel.installReadyUpdate(context)
+                }
+                else -> Unit
+            }
+        } else if (pending == "download" || pending == "install") {
+            val isArMsg = userSettings.language == "ar"
+            Toast.makeText(
+                context,
+                if (isArMsg) "يرجى تفعيل السماح بتثبيت التطبيقات غير المعروفة للمتابعة"
+                else "Please enable 'Install unknown apps' permission to continue",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    fun openInstallUnknownAppsSettings(pendingAction: String) {
+        pendingActionAfterInstallPerm = pendingAction
+        try {
+            installPermissionLauncher.launch(
+                AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
+            )
+        } catch (_: Throwable) {
+            pendingActionAfterInstallPerm = null
+            if (pendingAction == "download" || pendingAction == "install") {
+                viewModel.reportInstallPermissionUnavailable()
+            }
         }
     }
 
@@ -246,9 +330,14 @@ fun MainAppScreen(
                                     scope.launch { drawerState.close() }
                                 },
                                 userSettings = userSettings,
+                                pendingSmsCount = pendingSmsSuggestions.size,
                                 onOpenBackupRestore = {
                                     scope.launch { drawerState.close() }
                                     showBackupRestoreDialog = true
+                                },
+                                onOpenAccessPermissions = {
+                                    currentRoute = "access_permissions"
+                                    scope.launch { drawerState.close() }
                                 },
                                 onToggleBiometric = { enabled ->
                                     viewModel.setBiometricEnabled(enabled)
@@ -294,6 +383,8 @@ fun MainAppScreen(
                                     "keys" -> "Keys"
                                     "ccps" -> "CCP's"
                                     "hub_soon" -> "Soon"
+                                    "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
+                                    "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
                                     "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
                                     "visa_coming_soon" -> activeStrings.visaCardTitle
                                     "income" -> activeStrings.navIncome
@@ -408,11 +499,11 @@ fun MainAppScreen(
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
-                                    onAddKey = { label, username, secret, category, note ->
-                                        viewModel.addVaultKey(label, username, secret, category, note)
+                                    onAddKey = { label, username, secret, category, note, appPresetId ->
+                                        viewModel.addVaultKey(label, username, secret, category, note, appPresetId)
                                     },
-                                    onUpdateKey = { id, label, username, secret, category, note ->
-                                        viewModel.updateVaultKey(id, label, username, secret, category, note)
+                                    onUpdateKey = { id, label, username, secret, category, note, appPresetId ->
+                                        viewModel.updateVaultKey(id, label, username, secret, category, note, appPresetId)
                                     },
                                     onDeleteKey = { id ->
                                         viewModel.deleteVaultKey(id)
@@ -420,11 +511,11 @@ fun MainAppScreen(
                                 )
                                 "ccps" -> CcpsScreen(
                                     userSettings = userSettings,
-                                    onAddCcpAccount = { first, last, ccp, key, note, cName, cUri, cPhone, pinned ->
-                                        viewModel.addCcpAccount(first, last, ccp, key, note, cName, cUri, cPhone, pinned)
+                                    onAddCcpAccount = { first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned ->
+                                        viewModel.addCcpAccount(first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned)
                                     },
-                                    onUpdateCcpAccount = { id, first, last, ccp, key, note, cName, cUri, cPhone, pinned ->
-                                        viewModel.updateCcpAccount(id, first, last, ccp, key, note, cName, cUri, cPhone, pinned)
+                                    onUpdateCcpAccount = { id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned ->
+                                        viewModel.updateCcpAccount(id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned)
                                     },
                                     onTogglePinCcpAccount = { id ->
                                         viewModel.togglePinCcpAccount(id)
@@ -434,13 +525,53 @@ fun MainAppScreen(
                                     }
                                 )
                                 "hub_soon" -> HubSoonScreen(
-                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" }
+                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" },
+                                    pendingSmsCount = pendingSmsSuggestions.size,
+                                    onOpenBaridiMobSync = { currentRoute = "baridimob_sync" }
+                                )
+                                "baridimob_sync" -> BaridiMobSmsSyncScreen(
+                                    userSettings = userSettings,
+                                    pendingSuggestions = pendingSmsSuggestions,
+                                    onToggleSyncEnabled = { enabled ->
+                                        viewModel.setBaridiMobSmsSyncEnabled(enabled)
+                                    },
+                                    onScanInboxNow = {
+                                        viewModel.scanAlgPosteSmsInbox(context, showFeedback = true)
+                                    },
+                                    onAnalyzeManualSms = { sender, body ->
+                                        viewModel.analyzeManualSmsSample(sender, body)
+                                    },
+                                    onAcceptSuggestion = { id, overrideType ->
+                                        viewModel.acceptSmsSuggestion(id, overrideType)
+                                    },
+                                    onDismissSuggestion = { id ->
+                                        viewModel.dismissSmsSuggestion(id)
+                                    },
+                                    onClearAllSuggestions = {
+                                        viewModel.clearAllSmsSuggestions()
+                                    }
+                                )
+                                "access_permissions" -> AccessPermissionsScreen(
+                                    userSettings = userSettings,
+                                    onRequestInstallSourcesSettings = {
+                                        openInstallUnknownAppsSettings("permissions_settings")
+                                    },
+                                    onToggleBaridiMobSmsSync = { enabled ->
+                                        viewModel.setBaridiMobSmsSyncEnabled(enabled)
+                                    },
+                                    onToggleBiometric = { enabled ->
+                                        viewModel.setBiometricEnabled(enabled)
+                                    },
+                                    onReplayOnboardingWizard = {
+                                        forceShowPermissionsOnboarding = true
+                                    }
                                 )
                                 "dashboard_details" -> DashboardScreen(
                                     summary = summary,
                                     transactions = transactions,
                                     debts = debts,
                                     userSettings = userSettings,
+                                    pendingSmsSuggestions = pendingSmsSuggestions,
                                     onAddIncomeClick = {
                                         addTransactionType = TransactionType.INCOME
                                         showAddTransactionDialog = true
@@ -461,7 +592,14 @@ fun MainAppScreen(
                                     onOpenSalaryScheduler = { showSalarySchedulerDialog = true },
                                     onDeleteTransaction = { viewModel.deleteTransaction(it) },
                                     onLockToVault = { viewModel.lockToVault(it) },
-                                    onUnlockFromVault = { viewModel.unlockFromVault(it) }
+                                    onUnlockFromVault = { viewModel.unlockFromVault(it) },
+                                    onAcceptSmsSuggestion = { id, overrideType ->
+                                        viewModel.acceptSmsSuggestion(id, overrideType)
+                                    },
+                                    onDismissSmsSuggestion = { id ->
+                                        viewModel.dismissSmsSuggestion(id)
+                                    },
+                                    onOpenBaridiMobSync = { currentRoute = "baridimob_sync" }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
                                     onBackClick = { currentRoute = "cards" }
@@ -578,9 +716,15 @@ fun MainAppScreen(
                     val allowed = AppUpdateManager.canRequestPackageInstalls(context)
                     canInstallPackages = allowed
                     val readyState = updateUiState as? AppUpdateUiState.ReadyToInstall
-                    if (readyState != null && allowed && lastAutoLaunchedApkPath != readyState.apkFile.absolutePath) {
-                        lastAutoLaunchedApkPath = readyState.apkFile.absolutePath
-                        viewModel.installReadyUpdate(context)
+                    if (readyState != null) {
+                        val apkPath = readyState.apkFile.absolutePath
+                        if (allowed && lastAutoLaunchedApkPath != apkPath) {
+                            lastAutoLaunchedApkPath = apkPath
+                            viewModel.installReadyUpdate(context)
+                        } else if (!allowed && lastAutoRequestedInstallPermApkPath != apkPath) {
+                            lastAutoRequestedInstallPermApkPath = apkPath
+                            openInstallUnknownAppsSettings("install")
+                        }
                     }
                 }
                 AppUpdateDialog(
@@ -589,30 +733,26 @@ fun MainAppScreen(
                     onDismiss = { viewModel.dismissUpdateDialog() },
                     onStartDownload = {
                         lastAutoLaunchedApkPath = null
-                        viewModel.startUpdateDownload()
+                        lastAutoRequestedInstallPermApkPath = null
+                        val allowed = AppUpdateManager.canRequestPackageInstalls(context)
+                        canInstallPackages = allowed
+                        if (!allowed) {
+                            openInstallUnknownAppsSettings("download")
+                        } else {
+                            viewModel.startUpdateDownload()
+                        }
                     },
                     onInstallApk = {
-                        canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
-                        if (canInstallPackages) {
+                        val allowed = AppUpdateManager.canRequestPackageInstalls(context)
+                        canInstallPackages = allowed
+                        if (allowed) {
                             viewModel.installReadyUpdate(context)
                         } else {
-                            try {
-                                installPermissionLauncher.launch(
-                                    AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
-                                )
-                            } catch (_: Throwable) {
-                                viewModel.reportInstallPermissionUnavailable()
-                            }
+                            openInstallUnknownAppsSettings("install")
                         }
                     },
                     onRequestInstallPermission = {
-                        try {
-                            installPermissionLauncher.launch(
-                                AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
-                            )
-                        } catch (_: Throwable) {
-                            viewModel.reportInstallPermissionUnavailable()
-                        }
+                        openInstallUnknownAppsSettings("install")
                     },
                     onRetryCheck = { viewModel.checkForUpdates(manual = true) }
                 )
@@ -625,6 +765,25 @@ fun MainAppScreen(
                         viewModel.setScreenshotProtectionEnabled(enabled)
                     },
                     onDismiss = { showScreenshotShieldDialog = false }
+                )
+            }
+
+            if (!isAppLocked &&
+                !showUpdateDialog &&
+                (!userSettings.hasCompletedPermissionsOnboarding || forceShowPermissionsOnboarding)
+            ) {
+                PermissionsOnboardingDialog(
+                    onRequestInstallSourcesSettings = {
+                        openInstallUnknownAppsSettings("onboarding")
+                    },
+                    onCompleted = { enableSms ->
+                        forceShowPermissionsOnboarding = false
+                        viewModel.completePermissionsOnboarding(enableSms)
+                    },
+                    onSkip = {
+                        forceShowPermissionsOnboarding = false
+                        viewModel.completePermissionsOnboarding(false)
+                    }
                 )
             }
         }
@@ -757,106 +916,200 @@ private fun ScreenshotShieldTopButton(
     onClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
-    val shape = RoundedCornerShape(14.dp)
+    val infinite = rememberInfiniteTransition(label = "top_shield_glow")
+    val pulse by infinite.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shield_glow_pulse"
+    )
+    val orbitAngle by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(7200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shield_light_orbit"
+    )
 
-    if (isProtected) {
-        val infinite = rememberInfiniteTransition(label = "top_shield_glow")
-        val pulse by infinite.animateFloat(
-            initialValue = 0.65f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1600, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "shield_glow_pulse"
-        )
-        val colorPhase by infinite.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3200, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "shield_color_phase"
-        )
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .semantics {
+                contentDescription = if (isProtected) {
+                    "No-Screenshot Protection Active"
+                } else {
+                    "No-Screenshot Protection Disabled"
+                }
+            }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = false, radius = 24.dp, color = CyanNeon),
+                onClick = onClick
+            )
+            .testTag("cards_hub_shield_top_button"),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(32.dp)) {
+            val w = size.width
+            val h = size.height
+            val cx = w / 2f
+            val cy = h / 2f
 
-        val borderBrush = Brush.linearGradient(
-            colors = listOf(
-                EmeraldNeon.copy(alpha = 0.85f * pulse),
-                CyanNeon.copy(alpha = 0.95f),
-                Color(0xFF818CF8).copy(alpha = 0.85f * pulse)
-            ),
-            start = Offset(0f, 100f * colorPhase),
-            end = Offset(120f, 120f * (1f - colorPhase))
-        )
+            // 1. Multi-layered glowing lights behind the shield (NO outer box or container)
+            if (isProtected) {
+                val glowAlpha = if (colors.isDark) 1f else 0.78f
+                // Wide soft cosmic halo radiating behind the shield
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            CyanNeon.copy(alpha = 0.58f * pulse * glowAlpha),
+                            EmeraldNeon.copy(alpha = 0.34f * pulse * glowAlpha),
+                            Color(0xFF6366F1).copy(alpha = 0.22f * pulse * glowAlpha),
+                            Color.Transparent
+                        ),
+                        center = Offset(cx, cy),
+                        radius = w * (1.25f + 0.14f * pulse)
+                    ),
+                    radius = w * (1.25f + 0.14f * pulse),
+                    center = Offset(cx, cy)
+                )
 
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .drawBehind {
-                    val center = Offset(size.width / 2f, size.height / 2f)
+                // Orbiting twin aurora light lobes behind the shield edges
+                rotate(degrees = orbitAngle, pivot = Offset(cx, cy)) {
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                CyanNeon.copy(alpha = (if (colors.isDark) 0.42f else 0.28f) * pulse),
-                                EmeraldNeon.copy(alpha = (if (colors.isDark) 0.24f else 0.14f) * pulse),
-                                Color(0xFF6366F1).copy(alpha = 0.10f * pulse),
+                                EmeraldNeon.copy(alpha = 0.62f * pulse * glowAlpha),
                                 Color.Transparent
                             ),
-                            center = center,
-                            radius = size.maxDimension * (0.82f + 0.12f * pulse)
-                        )
+                            center = Offset(cx - w * 0.24f, cy - h * 0.14f),
+                            radius = w * 0.72f
+                        ),
+                        radius = w * 0.72f,
+                        center = Offset(cx - w * 0.24f, cy - h * 0.14f)
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF818CF8).copy(alpha = 0.56f * pulse * glowAlpha),
+                                Color.Transparent
+                            ),
+                            center = Offset(cx + w * 0.24f, cy + h * 0.16f),
+                            radius = w * 0.72f
+                        ),
+                        radius = w * 0.72f,
+                        center = Offset(cx + w * 0.24f, cy + h * 0.16f)
                     )
                 }
-                .shadow(
-                    elevation = 10.dp,
-                    shape = shape,
-                    spotColor = CyanNeon.copy(alpha = 0.65f),
-                    ambientColor = EmeraldNeon.copy(alpha = 0.50f)
+            }
+
+            // 2. Sculpted Heraldic Shield Silhouette
+            val shieldPath = Path().apply {
+                moveTo(cx, h * 0.08f)
+                lineTo(w * 0.87f, h * 0.22f)
+                cubicTo(
+                    w * 0.87f, h * 0.54f,
+                    w * 0.74f, h * 0.77f,
+                    cx, h * 0.93f
                 )
-                .clip(shape)
-                .background(
+                cubicTo(
+                    w * 0.26f, h * 0.77f,
+                    w * 0.13f, h * 0.54f,
+                    w * 0.13f, h * 0.22f
+                )
+                close()
+            }
+
+            val innerFacetPath = Path().apply {
+                moveTo(cx, h * 0.14f)
+                lineTo(w * 0.80f, h * 0.26f)
+                cubicTo(
+                    w * 0.79f, h * 0.52f,
+                    w * 0.68f, h * 0.71f,
+                    cx, h * 0.85f
+                )
+                lineTo(cx, h * 0.14f)
+                close()
+            }
+
+            if (isProtected) {
+                // Luminous metallic neon body fill
+                drawPath(
+                    path = shieldPath,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            EmeraldNeon.copy(alpha = if (colors.isDark) 0.26f else 0.20f),
-                            CyanNeon.copy(alpha = if (colors.isDark) 0.22f else 0.16f),
-                            Color(0xFF6366F1).copy(alpha = if (colors.isDark) 0.18f else 0.12f)
+                            Color(0xFF34D399),
+                            CyanNeon,
+                            Color(0xFF6366F1)
+                        ),
+                        start = Offset(w * 0.15f, h * 0.10f),
+                        end = Offset(w * 0.85f, h * 0.92f)
+                    )
+                )
+
+                // Right-half glossy faceted specular highlight
+                drawPath(
+                    path = innerFacetPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.06f)
+                        )
+                    )
+                )
+
+                // Crisp luminous shield rim stroke
+                drawPath(
+                    path = shieldPath,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.95f),
+                            CyanNeon,
+                            EmeraldNeon
                         )
                     ),
-                    shape = shape
+                    style = Stroke(width = 1.6.dp.toPx(), join = StrokeJoin.Round)
                 )
-                .border(width = 1.4.dp, brush = borderBrush, shape = shape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = CyanNeon),
-                    onClick = onClick
+
+                // Center crisp security lock / check emblem inside shield
+                val checkPath = Path().apply {
+                    moveTo(cx - w * 0.16f, cy + h * 0.02f)
+                    lineTo(cx - w * 0.04f, cy + h * 0.14f)
+                    lineTo(cx + w * 0.18f, cy - h * 0.10f)
+                }
+                drawPath(
+                    path = checkPath,
+                    color = Color(0xFF04202C),
+                    style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
-                .testTag("cards_hub_shield_top_button"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Shield,
-                contentDescription = "No-Screenshot Protection Active",
-                tint = if (colorPhase < 0.5f) CyanNeon else EmeraldNeon,
-                modifier = Modifier.size(21.dp)
-            )
-        }
-    } else {
-        GlassCard(
-            modifier = Modifier
-                .size(48.dp)
-                .testTag("cards_hub_shield_top_button"),
-            shape = shape,
-            backgroundColor = colors.glassCard,
-            breathingGlow = false,
-            onClick = onClick
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = "No-Screenshot Protection Disabled",
-                    tint = colors.textSecondary,
-                    modifier = Modifier.size(20.dp)
+                drawPath(
+                    path = checkPath,
+                    color = Color.White,
+                    style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+            } else {
+                // Calm, sleek disabled shield without glow or outer container
+                drawPath(
+                    path = shieldPath,
+                    color = colors.textSecondary.copy(alpha = if (colors.isDark) 0.16f else 0.12f)
+                )
+                drawPath(
+                    path = shieldPath,
+                    color = colors.textSecondary.copy(alpha = 0.82f),
+                    style = Stroke(width = 1.7.dp.toPx(), join = StrokeJoin.Round)
+                )
+                // Subtle diagonal slash indicating protection is off
+                drawLine(
+                    color = colors.textSecondary.copy(alpha = 0.85f),
+                    start = Offset(w * 0.25f, h * 0.72f),
+                    end = Offset(w * 0.75f, h * 0.24f),
+                    strokeWidth = 1.7.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
             }
         }
