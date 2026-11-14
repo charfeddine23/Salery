@@ -3,14 +3,16 @@ name: Android Release Build & Publish
 on:
   push:
     branches:
-      - main
-      - master
-    tags:
-      - 'v*'
+      - '**'
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: android-release-pipeline
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -33,37 +35,80 @@ jobs:
       - name: Grant Execute Permission for Gradle
         run: chmod +x gradlew || true
 
-      - name: Prepare Signing Keystore
+      - name: Compute Auto-Incremented Version & App Name
+        id: version_info
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          # Read app_name from strings.xml (fallback to SaleryPulse)
+          APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1 | tr -d '[:space:]')
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="SaleryPulse"
+          fi
+
+          # Find the highest existing release patch/build number so updates ALWAYS increment monotonically
+          MAX_PREV=3
+          EXISTING_TAGS=$(gh release list --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null || true)
+          for t in $EXISTING_TAGS; do
+            NUM=$(echo "$t" | sed -E 's/^[vV]?([0-9]+\.)*([0-9]+).*$/\2/')
+            if [[ "$NUM" =~ ^[0-9]+$ ]] && [ "$NUM" -gt "$MAX_PREV" ]; then
+              MAX_PREV=$NUM
+            fi
+          done
+
+          RUN_NUM=${GITHUB_RUN_NUMBER:-1}
+          NEXT_FROM_PREV=$((MAX_PREV + 1))
+          if [ "$RUN_NUM" -ge "$NEXT_FROM_PREV" ]; then
+            NEXT_BUILD=$RUN_NUM
+          else
+            NEXT_BUILD=$NEXT_FROM_PREV
+          fi
+
+          # Ensure strictly higher than local default versionCode (3)
+          if [ "$NEXT_BUILD" -lt 4 ]; then
+            NEXT_BUILD=4
+          fi
+
+          VERSION_NAME="1.0.${NEXT_BUILD}"
+          TAG_NAME="v${VERSION_NAME}"
+          APK_FILENAME="${APP_NAME}.${TAG_NAME}.apk"
+
+          echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=${NEXT_BUILD}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "APK_FILENAME=${APK_FILENAME}" >> $GITHUB_ENV
+
+          echo "Computed Next Version: ${VERSION_NAME} (versionCode=${NEXT_BUILD}, APK=${APK_FILENAME})"
+
+      - name: Prepare Signing Keystore (Consistent Over-The-Air Upgrades)
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ] && [ -n "${{ secrets.STORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
             echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
             echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
             echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+            echo "Using repository secret keystore."
           elif [ -f "my-upload-key.jks" ]; then
-            echo "Using repository permanent release keystore for upgrade consistency..."
+            echo "Using committed my-upload-key.jks for seamless upgrade compatibility without uninstalling..."
             echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
             echo "STORE_PASSWORD=android" >> $GITHUB_ENV
             echo "KEY_PASSWORD=android" >> $GITHUB_ENV
           else
-            echo "Creating consistent release keystore..."
-            keytool -genkeypair -v -keystore my-upload-key.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android -dname "CN=SaleryPulse, OU=Finance, O=SaleryPulse, L=Algiers, C=DZ"
-            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
-            echo "STORE_PASSWORD=android" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+            echo "Error: Release keystore my-upload-key.jks is missing! Cannot guarantee in-place upgrades."
+            exit 1
           fi
 
-      - name: Build Release APK
+      - name: Build & Sign Release APK
         env:
-          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
         run: |
           gradle assembleRelease --stacktrace \
             -Djava.awt.headless=true \
             -Dkotlin.compiler.execution.strategy=daemon \
             -Dkotlin.daemon.jvm.options="-Djava.awt.headless=true -Xmx2g"
 
-      - name: Prepare Release Artifacts
+      - name: Rename & Verify Signed Release APK
         id: prepare_artifacts
         run: |
           RELEASE_DIR="app/build/outputs/apk/release"
@@ -72,42 +117,64 @@ jobs:
             echo "Error: Release APK not found!"
             exit 1
           fi
-          NEW_APK_NAME="SaleryPulse-v${{ github.run_number }}.apk"
-          cp "$APK_FILE" "$NEW_APK_NAME"
-          echo "apk_path=$NEW_APK_NAME" >> $GITHUB_OUTPUT
-          
-          # Compute Release Tag & Title
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-          else
-            TAG_NAME="v1.0.${{ github.run_number }}"
-          fi
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
-      - name: Clean Up Previous GitHub Releases and Assets
+          cp "$APK_FILE" "${{ env.APK_FILENAME }}"
+
+          # Verify APK signature to ensure direct over-the-top upgrade compatibility
+          APKSIGNER=$(find "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/build-tools" -name "apksigner" 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "${{ env.APK_FILENAME }}"
+          else
+            jarsigner -verify -verbose -certs "${{ env.APK_FILENAME }}" >/dev/null
+          fi
+
+          echo "apk_path=${{ env.APK_FILENAME }}" >> $GITHUB_OUTPUT
+
+      - name: Publish Latest Release to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Wiping obsolete releases to keep only the latest version active..."
+          gh release create "${{ env.TAG_NAME }}" \
+            "${{ steps.prepare_artifacts.outputs.apk_path }}" \
+            --title "${{ env.APP_NAME }} ${{ env.TAG_NAME }}" \
+            --notes "### ${{ env.APP_NAME }} Android Release (${{ env.TAG_NAME }})
+            - **Developer:** Charfeddine Ka
+            - **Version:** ${{ env.VERSION_NAME }} (Build ${{ env.BUILD_NUMBER }})
+            - **Package:** ${{ env.APK_FILENAME }}
+            - **Direct Upgrade:** Signed with consistent release key for seamless update over existing installation.
+            - Automatically built & published on push via GitHub Actions."
+
+      - name: Delete All Older Releases & Tags (Keep Only Latest)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Removing all obsolete releases so only ${{ env.TAG_NAME }} remains..."
           PREVIOUS_RELEASES=$(gh release list --limit 100 --json tagName --jq '.[].tagName' || true)
           for tag in $PREVIOUS_RELEASES; do
-            if [ "$tag" != "${{ steps.prepare_artifacts.outputs.tag_name }}" ]; then
+            if [ "$tag" != "${{ env.TAG_NAME }}" ]; then
               echo "Deleting obsolete release and tag: $tag"
-              gh release delete "$tag" --yes --cleanup-tag || echo "Failed to delete $tag, continuing..."
+              gh release delete "$tag" --yes --cleanup-tag || echo "Warning: could not delete release $tag"
             fi
           done
 
-      - name: Publish New Release to GitHub Releases
+          # Sweep any stray old v* tags left without releases
+          OLD_TAGS=$(gh api --paginate "repos/${{ github.repository }}/tags?per_page=100" --jq '.[].name' 2>/dev/null || true)
+          for t in $OLD_TAGS; do
+            if [ "$t" != "${{ env.TAG_NAME }}" ] && [[ "$t" == v* ]]; then
+              echo "Deleting stray tag: $t"
+              gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/$t" || true
+            fi
+          done
+
+      - name: Clean Up GitHub Actions Run History (Keep Only Current Run)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ steps.prepare_artifacts.outputs.tag_name }}" \
-            "${{ steps.prepare_artifacts.outputs.apk_path }}" \
-            --title "SaleryPulse Release ${{ steps.prepare_artifacts.outputs.tag_name }}" \
-            --notes "### SaleryPulse Android Release
-            - **Developer:** Charfeddine Ka
-            - **Build:** ${{ steps.prepare_artifacts.outputs.tag_name }}
-            - **UI:** Liquid Glass v3 (Light & Dark Mode)
-            - **Currency:** Algerian Dinar (DZD)
-            - **Features:** Cards Hub (Edahabia & Visa), Smart Salary Scheduler, Debt Auto-Payments, Fingerprint Authentication, Local & Drive Backup.
-            - Automatically generated by GitHub Actions CI/CD."
+          echo "Cleaning up old completed GitHub Actions workflow runs..."
+          gh api --paginate "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq ".workflow_runs[] | select(.id != ${{ github.run_id }} and .status == \"completed\") | .id" | while read -r run_id; do
+              if [ -n "$run_id" ]; then
+                echo "Deleting old workflow run: $run_id"
+                gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" || true
+              fi
+            done

@@ -38,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -76,11 +75,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,6 +91,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import com.example.data.UserSettings
 import com.example.ui.components.EditCardDialog
+import com.example.ui.components.EditVisaCardDialog
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.components.formatCardDigitsDisplay
@@ -119,6 +122,7 @@ fun CardsHubScreen(
     onOpenDashboard: () -> Unit,
     onOpenVisaDetails: () -> Unit,
     onUpdateClassicCard: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _ -> },
+    onUpdateVisaCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -130,25 +134,30 @@ fun CardsHubScreen(
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val isScreenshotBlocked = userSettings.screenshotProtectionEnabled
 
-    // Strictly block screenshots, screen recording, and Recents thumbnails while viewing Cards Hub
-    DisposableEffect(context, lifecycleOwner) {
+    // Strictly block (or allow when disabled) screenshots, screen recording, and Recents thumbnails while viewing Cards Hub
+    DisposableEffect(context, lifecycleOwner, isScreenshotBlocked) {
         val activity = context.findHostActivity()
-        val applySecureFlags: () -> Unit = {
+        val syncSecureFlags: () -> Unit = {
             activity?.let { act ->
-                act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                if (isScreenshotBlocked) {
+                    act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
-                        act.setRecentsScreenshotEnabled(false)
+                        act.setRecentsScreenshotEnabled(!isScreenshotBlocked)
                     } catch (_: Throwable) {
                     }
                 }
             }
         }
-        applySecureFlags()
+        syncSecureFlags()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
-                applySecureFlags()
+                syncSecureFlags()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -167,6 +176,7 @@ fun CardsHubScreen(
     }
 
     var showEditClassicCardDialog by remember { mutableStateOf(false) }
+    var showEditVisaCardDialog by remember { mutableStateOf(false) }
 
     if (showEditClassicCardDialog) {
         EditCardDialog(
@@ -174,9 +184,26 @@ fun CardsHubScreen(
             currentCardNumber = userSettings.classicCardNumber,
             currentExpiry = userSettings.classicCardExpiry,
             currentCvc = userSettings.classicCardCvc,
+            secureScreenshots = isScreenshotBlocked,
             onDismiss = { showEditClassicCardDialog = false },
             onSave = { name, number, expiry, cvc ->
                 onUpdateClassicCard(name, number, expiry, cvc)
+            }
+        )
+    }
+
+    if (showEditVisaCardDialog) {
+        EditVisaCardDialog(
+            currentProvider = userSettings.visaCardProvider,
+            currentHolderName = userSettings.visaCardHolderName,
+            currentCardNumber = userSettings.visaCardNumber,
+            currentExpiry = userSettings.visaCardExpiry,
+            currentCvc = userSettings.visaCardCvc,
+            secureScreenshots = isScreenshotBlocked,
+            onDismiss = { showEditVisaCardDialog = false },
+            onSave = { provider, name, number, expiry, cvc ->
+                onUpdateVisaCard(provider, name, number, expiry, cvc)
+                showEditVisaCardDialog = false
             }
         )
     }
@@ -275,8 +302,24 @@ fun CardsHubScreen(
             }
         }
 
-        // 2. Secondary Card: Visa Card (بطاقة فيزا)
+        // 2. Secondary Card: Visa / RedotPay / Bybit Card
         item {
+            val visaProvider = userSettings.visaCardProvider.uppercase()
+            val visaSectionTitle = when (visaProvider) {
+                "REDOTPAY" -> if (isArabic) "بطاقة RedotPay الدولية" else "RedotPay Visa Card"
+                "BYBIT" -> if (isArabic) "بطاقة Bybit الدولية" else "Bybit Card"
+                else -> strings.visaCardTitle
+            }
+            val visaBadgeColor = when (visaProvider) {
+                "REDOTPAY" -> Color(0xFFFB7185)
+                "BYBIT" -> Color(0xFFF7A600)
+                else -> CyanNeon
+            }
+            val visaBadgeText = when (visaProvider) {
+                "REDOTPAY", "BYBIT" -> if (isArabic) "مفعّلة" else "ACTIVE"
+                else -> strings.comingSoon
+            }
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
@@ -286,7 +329,7 @@ fun CardsHubScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = strings.visaCardTitle,
+                        text = visaSectionTitle,
                         color = colors.textPrimary,
                         fontSize = typo.body,
                         fontWeight = FontWeight.Bold
@@ -294,13 +337,13 @@ fun CardsHubScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(CyanNeon.copy(alpha = 0.15f))
-                            .border(1.dp, CyanNeon.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .background(visaBadgeColor.copy(alpha = 0.15f))
+                            .border(1.dp, visaBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = strings.comingSoon,
-                            color = CyanNeon,
+                            text = visaBadgeText,
+                            color = visaBadgeColor,
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -313,56 +356,14 @@ fun CardsHubScreen(
                     userSettings = userSettings,
                     isArabic = isArabic,
                     isDark = isDark,
-                    onClick = onOpenVisaDetails
+                    onClick = onOpenVisaDetails,
+                    onLongPressEdit = { showEditVisaCardDialog = true }
                 )
             }
         }
 
-        // Bottom Info Card: Security & Connectivity
         item {
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = dimens.spacingLg),
-                shape = RoundedCornerShape(18.dp),
-                backgroundColor = colors.glassCard
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(colors.primaryNeon.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isArabic) "حماية قصوى • التصوير محظور تماماً" else "Strict Shield • Screenshots Blocked",
-                            color = colors.textPrimary,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isArabic) "لقطات الشاشة وتسجيل الشاشة ممنوعان إطلاقاً في صفحة البطاقات لحماية بياناتك ومعلوماتك المصرفية."
-                            else "Screenshots and screen recording are strictly disabled on the Cards Hub to protect your card details.",
-                            color = colors.textMuted,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(dimens.spacingLg))
         }
     }
 }
@@ -751,277 +752,589 @@ private fun EdahabiaCardRealistic(
 }
 
 /**
- * Premium Neumorphic Visa Card container with a luxury metallic/glass finish.
+ * Premium Visa / RedotPay / Bybit Bank Card container.
+ * Supports:
+ * - Short Tap: Opens Visa preview details.
+ * - 1-Second Press-and-Hold: Opens EditVisaCardDialog to select RedotPay, Bybit, or default Visa and customize card details.
  */
 @Composable
 private fun VisaCardRealistic(
     userSettings: UserSettings,
     isArabic: Boolean,
     isDark: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongPressEdit: () -> Unit
 ) {
-    val colors = LiquidGlassTheme.colors
+    val isStealth = LocalStealthMode.current
+    val haptic = LocalHapticFeedback.current
+    val provider = userSettings.visaCardProvider.uppercase()
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val holdAnim = remember { Animatable(0f) }
+    var didTriggerLongPress by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didTriggerLongPress = false
+            holdAnim.snapTo(0f)
+            holdAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 900, easing = LinearEasing)
+            )
+            didTriggerLongPress = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onLongPressEdit()
+        } else {
+            holdAnim.snapTo(0f)
+            if (didTriggerLongPress) {
+                delay(150)
+                didTriggerLongPress = false
+            }
+        }
+    }
+
+    val cardScale = 1f - (holdAnim.value * 0.025f)
+    val glowPrimary = when (provider) {
+        "REDOTPAY" -> Color(0xFFE11D48)
+        "BYBIT" -> Color(0xFFF7A600)
+        else -> Color(0xFF0284C7)
+    }
+    val glowSecondary = when (provider) {
+        "REDOTPAY" -> Color(0xFF9F1239)
+        "BYBIT" -> Color(0xFFD97706)
+        else -> Color(0xFF0369A1)
+    }
+
+    val isDefaultLight = provider == "DEFAULT" && !isDark
+    val primaryTextColor = if (isDefaultLight) Color(0xFF0F172A) else Color.White
+    val secondaryTextColor = when {
+        provider == "REDOTPAY" -> Color(0xFFFECDD3)
+        provider == "BYBIT" -> Color(0xFF9CA3AF)
+        isDark -> Color(0xFF94A3B8)
+        else -> Color(0xFF64748B)
+    }
+
+    val cardBgBrush = when (provider) {
+        "REDOTPAY" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFE11D48), // Iconic RedotPay vibrant crimson
+                Color(0xFFBE123C), // Deep ruby red
+                Color(0xFF881337), // Rich burgundy
+                Color(0xFF2B0613)  // Obsidian crimson corner
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(900f, 600f)
+        )
+        "BYBIT" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF0B0E14), // Official Bybit matte obsidian
+                Color(0xFF151B26), // Carbon slate
+                Color(0xFF1E2533), // Graphite sheen
+                Color(0xFF10141D)  // Deep black corner
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(900f, 600f)
+        )
+        else -> if (isDark) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF0F172A),
+                    Color(0xFF1E293B),
+                    Color(0xFF0F2B48),
+                    Color(0xFF075985)
+                ),
+                start = Offset(0f, 0f),
+                end = Offset(900f, 600f)
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFFFFFF),
+                    Color(0xFFF1F5F9),
+                    Color(0xFFE2E8F0),
+                    Color(0xFFBAE6FD)
+                ),
+                start = Offset(0f, 0f),
+                end = Offset(900f, 600f)
+            )
+        }
+    }
+
+    val cardBorderBrush = when (provider) {
+        "REDOTPAY" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFDA4AF).copy(alpha = 0.72f),
+                Color(0xFF881337).copy(alpha = 0.45f),
+                Color(0xFFFB7185).copy(alpha = 0.70f)
+            )
+        )
+        "BYBIT" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFF7A600).copy(alpha = 0.78f),
+                Color(0xFF1E293B).copy(alpha = 0.55f),
+                Color(0xFFFBBF24).copy(alpha = 0.65f)
+            )
+        )
+        else -> Brush.linearGradient(
+            colors = if (isDark) {
+                listOf(
+                    Color(0xFF38BDF8).copy(alpha = 0.65f),
+                    Color(0xFF0F172A).copy(alpha = 0.4f),
+                    Color(0xFF0284C7).copy(alpha = 0.6f)
+                )
+            } else {
+                listOf(
+                    Color.White,
+                    Color(0xFF93C5FD).copy(alpha = 0.5f),
+                    Color(0xFFCBD5E1)
+                )
+            }
+        )
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(cardScale)
             .breathingGlow(
-                glowColor = Color(0xFF0284C7),
-                secondaryGlowColor = Color(0xFF0369A1),
+                glowColor = glowPrimary,
+                secondaryGlowColor = glowSecondary,
                 cornerRadius = 22.dp,
-                minAlpha = if (isDark) 0.16f else 0.10f,
-                maxAlpha = if (isDark) 0.42f else 0.26f,
+                minAlpha = if (isDark) 0.18f else 0.12f,
+                maxAlpha = if (isDark) 0.46f else 0.28f,
                 minScale = 0.98f,
-                maxScale = 1.035f,
+                maxScale = 1.04f,
                 durationMillis = 2800
             )
+            .testTag("visa_hub_card")
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true, color = CyanNeon),
-                onClick = onClick
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = glowPrimary),
+                onClick = {
+                    if (didTriggerLongPress) {
+                        didTriggerLongPress = false
+                    } else {
+                        onClick()
+                    }
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
-
-        // The Physical Tactile Visa Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(205.dp)
+                .height(210.dp)
                 .shadow(
                     elevation = if (isDark) 14.dp else 10.dp,
                     shape = RoundedCornerShape(22.dp),
-                    spotColor = if (isDark) Color(0xFF020617) else Color(0x400284C7),
-                    ambientColor = if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0x200284C7)
+                    spotColor = if (isDark) Color(0xFF020617) else glowPrimary.copy(alpha = 0.35f),
+                    ambientColor = glowPrimary.copy(alpha = 0.25f)
                 )
                 .clip(RoundedCornerShape(22.dp))
-                .background(
-                    if (isDark) {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF0F172A), // Midnight obsidian
-                                Color(0xFF1E293B), // Dark slate metallic
-                                Color(0xFF0F2B48), // Deep sapphire
-                                Color(0xFF075985)  // Electric blue accent
-                            ),
-                            start = Offset(0f, 0f),
-                            end = Offset(900f, 600f)
+                .background(cardBgBrush)
+                .border(width = 1.2.dp, brush = cardBorderBrush, shape = RoundedCornerShape(22.dp))
+        ) {
+            // Official circulating surface artwork for RedotPay / Bybit / Default Visa
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                when (provider) {
+                    "REDOTPAY" -> {
+                        // Concentric RedotPay signature rings & silky diagonal wave on right side
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.08f),
+                            radius = size.height * 0.58f,
+                            center = Offset(size.width * 0.90f, size.height * 0.44f),
+                            style = Stroke(width = 24f)
                         )
-                    } else {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFFFFFFFF), // Pure frosted crystal
-                                Color(0xFFF1F5F9), // Ice platinum
-                                Color(0xFFE2E8F0), // Titanium sheen
-                                Color(0xFFBAE6FD)  // Light sapphire shimmer
-                            ),
-                            start = Offset(0f, 0f),
-                            end = Offset(900f, 600f)
+                        drawCircle(
+                            color = Color(0xFFFDA4AF).copy(alpha = 0.12f),
+                            radius = size.height * 0.36f,
+                            center = Offset(size.width * 0.90f, size.height * 0.44f),
+                            style = Stroke(width = 14f)
+                        )
+                        val wave = Path().apply {
+                            moveTo(0f, size.height * 0.65f)
+                            quadraticTo(
+                                size.width * 0.40f, size.height * 0.30f,
+                                size.width, size.height * 0.18f
+                            )
+                            lineTo(size.width, 0f)
+                            lineTo(0f, 0f)
+                            close()
+                        }
+                        drawPath(
+                            path = wave,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.10f),
+                                    Color.Transparent
+                                )
+                            )
                         )
                     }
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.linearGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF38BDF8).copy(alpha = 0.65f),
-                                Color(0xFF0F172A).copy(alpha = 0.4f),
-                                Color(0xFF0284C7).copy(alpha = 0.6f)
-                            )
-                        } else {
-                            listOf(
-                                Color.White,
-                                Color(0xFF93C5FD).copy(alpha = 0.5f),
-                                Color(0xFFCBD5E1)
-                            )
+                    "BYBIT" -> {
+                        // Sleek Bybit carbon grid lines & diagonal Amber-Gold light rays
+                        val ray1 = Path().apply {
+                            moveTo(size.width * 0.56f, 0f)
+                            lineTo(size.width * 0.74f, 0f)
+                            lineTo(size.width * 0.46f, size.height)
+                            lineTo(size.width * 0.28f, size.height)
+                            close()
                         }
-                    ),
-                    shape = RoundedCornerShape(22.dp)
-                )
-        ) {
-            // Subtle diagonal metallic reflection
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val path = Path().apply {
-                    moveTo(size.width * 0.45f, 0f)
-                    lineTo(size.width * 0.85f, 0f)
-                    lineTo(size.width * 0.55f, size.height)
-                    lineTo(size.width * 0.15f, size.height)
-                    close()
-                }
-                drawPath(
-                    path = path,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = if (isDark) 0.05f else 0.15f),
-                            Color.Transparent
+                        drawPath(
+                            path = ray1,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFF7A600).copy(alpha = 0.15f),
+                                    Color(0xFFF7A600).copy(alpha = 0.02f)
+                                )
+                            )
                         )
+                        val ray2 = Path().apply {
+                            moveTo(size.width * 0.78f, 0f)
+                            lineTo(size.width * 0.85f, 0f)
+                            lineTo(size.width * 0.57f, size.height)
+                            lineTo(size.width * 0.50f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            path = ray2,
+                            color = Color(0xFFF7A600).copy(alpha = 0.22f)
+                        )
+                    }
+                    else -> {
+                        val path = Path().apply {
+                            moveTo(size.width * 0.45f, 0f)
+                            lineTo(size.width * 0.85f, 0f)
+                            lineTo(size.width * 0.55f, size.height)
+                            lineTo(size.width * 0.15f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            path = path,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = if (isDark) 0.05f else 0.15f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                    }
+                }
+
+                // 1-second hold progress rim accent at bottom
+                if (holdAnim.value > 0.02f) {
+                    drawRoundRect(
+                        color = glowPrimary.copy(alpha = 0.95f),
+                        topLeft = Offset(0f, size.height - 6f),
+                        size = Size(size.width * holdAnim.value, 6f),
+                        cornerRadius = CornerRadius(4f, 4f)
                     )
-                )
+                }
             }
 
-            // Card Inner Content
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Top Row: Brand & Official VISA Logo
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // Card Inner Content (Always LTR like physical international cards)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
-                            Spacer(modifier = Modifier.width(6.dp))
+                    // Top Row: Provider Brand + Network Logo
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        when (provider) {
+                            "REDOTPAY" -> {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(9.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFE11D48))
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(7.dp))
+                                        Text(
+                                            text = "RedotPay",
+                                            color = Color.White,
+                                            fontSize = 15.5.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 0.3.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "CRYPTO VISA CARD",
+                                        color = secondaryTextColor,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp
+                                    )
+                                }
+                            }
+                            "BYBIT" -> {
+                                Column {
+                                    Text(
+                                        text = buildAnnotatedString {
+                                            withStyle(SpanStyle(color = Color.White)) { append("BYB") }
+                                            withStyle(SpanStyle(color = Color(0xFFF7A600))) { append("I") }
+                                            withStyle(SpanStyle(color = Color.White)) { append("T") }
+                                        },
+                                        fontSize = 17.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.6.sp
+                                    )
+                                    Text(
+                                        text = "BYBIT CARD • CRYPTO DEBIT",
+                                        color = Color(0xFFF7A600).copy(alpha = 0.88f),
+                                        fontSize = 7.8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.7.sp
+                                    )
+                                }
+                            }
+                            else -> {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "SaleryPulse",
+                                            color = primaryTextColor,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.4.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "PREMIER DEBIT",
+                                        color = secondaryTextColor,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        if (provider == "BYBIT") {
+                            // Official Bybit Dual-Circle Network Mark + VISA/MC tag
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.width(34.dp).height(20.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFEB001B))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(start = 13.dp)
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFF79E1B).copy(alpha = 0.90f))
+                                    )
+                                }
+                            }
+                        } else {
                             Text(
-                                text = "SaleryPulse",
-                                color = if (isDark) Color.White else Color(0xFF0F172A),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.4.sp
+                                text = "VISA",
+                                color = if (isDefaultLight) Color(0xFF1E3A8A) else Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                fontStyle = FontStyle.Italic,
+                                letterSpacing = 1.sp
                             )
                         }
-                        Text(
-                            text = "PREMIER DEBIT",
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
                     }
 
-                    // Official VISA Typography Emblem
-                    Text(
-                        text = "VISA",
-                        color = if (isDark) Color.White else Color(0xFF1E3A8A),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
-                        fontStyle = FontStyle.Italic,
-                        letterSpacing = 1.sp
-                    )
-                }
-
-                // Middle Row: Silver/Platinum Chip + Contactless waves + Coming Soon status
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SilverEmvChip(modifier = Modifier.size(width = 40.dp, height = 30.dp), isDark = isDark)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        ContactlessWaves(
-                            modifier = Modifier.size(18.dp),
-                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
-                        )
-                    }
-
-                    // Coming Soon Glass Hologram Tag
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f)
-                                else Color(0xFF0284C7).copy(alpha = 0.12f)
-                            )
-                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    // Middle Row: EMV Chip + Contactless waves + Status Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency",
-                                color = if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                            if (provider == "BYBIT") {
+                                EmvChipRealistic(modifier = Modifier.size(width = 40.dp, height = 30.dp))
+                            } else {
+                                SilverEmvChip(modifier = Modifier.size(width = 40.dp, height = 30.dp), isDark = isDark)
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            ContactlessWaves(
+                                modifier = Modifier.size(18.dp),
+                                tint = when (provider) {
+                                    "REDOTPAY" -> Color.White.copy(alpha = 0.85f)
+                                    "BYBIT" -> Color(0xFFF7A600)
+                                    else -> if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                                }
                             )
                         }
-                    }
-                }
 
-                // Card Number: Masked
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    when (provider) {
+                                        "REDOTPAY" -> Color.White.copy(alpha = 0.16f)
+                                        "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.16f)
+                                        else -> if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFF0284C7).copy(alpha = 0.12f)
+                                    }
+                                )
+                                .border(
+                                    1.dp,
+                                    when (provider) {
+                                        "REDOTPAY" -> Color.White.copy(alpha = 0.45f)
+                                        "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.55f)
+                                        else -> Color(0xFF38BDF8).copy(alpha = 0.5f)
+                                    },
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (provider == "DEFAULT") {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                }
+                                Text(
+                                    text = when (provider) {
+                                        "REDOTPAY" -> if (isArabic) "RedotPay • USD" else "RedotPay • USD Virtual"
+                                        "BYBIT" -> if (isArabic) "Bybit • USDT / EUR" else "Bybit • Crypto Debit"
+                                        else -> if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency"
+                                    },
+                                    color = when (provider) {
+                                        "REDOTPAY" -> Color.White
+                                        "BYBIT" -> Color(0xFFF7A600)
+                                        else -> if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    // Card Number
+                    val displayNumber = formatVisaNumberDisplay(
+                        rawDigits = userSettings.visaCardNumber,
+                        provider = provider,
+                        isStealth = isStealth
+                    )
                     Text(
-                        text = "4152  ••••  ••••  3120",
-                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                        text = displayNumber,
+                        color = primaryTextColor,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 2.sp
+                        letterSpacing = 2.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                }
 
-                // Bottom Row: Cardholder & Expiry
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Column {
-                        Text(
-                            text = "CARDHOLDER",
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                            fontSize = 7.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp
-                        )
-                        Text(
-                            text = "CHARFEDDINE KA",
-                            color = if (isDark) Color.White else Color(0xFF0F172A),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp
-                        )
-                    }
+                    // Bottom Row: Cardholder, Valid Thru, CVC
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "CARDHOLDER",
+                                color = secondaryTextColor,
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.4.sp
+                            )
+                            Text(
+                                text = userSettings.visaCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                color = primaryTextColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "VALID THRU",
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                            fontSize = 7.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "08/28",
-                            color = if (isDark) Color.White else Color(0xFF0F172A),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "VALID THRU",
+                                    color = secondaryTextColor,
+                                    fontSize = 7.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (isStealth) "••/••" else userSettings.visaCardExpiry.ifBlank { "08/28" },
+                                    color = primaryTextColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            if (userSettings.visaCardCvc.isNotBlank()) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "CVC",
+                                        color = secondaryTextColor,
+                                        fontSize = 7.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isStealth) "•••" else userSettings.visaCardCvc,
+                                        color = primaryTextColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // Interactive Tap Guidance Pill
+    // Hold-to-customize RedotPay / Bybit hint below card
     Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onLongPressEdit)
             .padding(horizontal = 8.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط على بطاقة فيزا لعرض تفاصيل الإطلاق القادم"
-            else "Tap Visa card to view upcoming release details",
-            color = CyanNeon,
+            text = if (isArabic) "اضغط مطولاً على البطاقة لإضافة RedotPay أو Bybit"
+            else "Hold card 1s to add RedotPay or Bybit",
+            color = when (provider) {
+                "REDOTPAY" -> Color(0xFFFB7185)
+                "BYBIT" -> Color(0xFFF7A600)
+                else -> CyanNeon
+            },
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -1029,10 +1342,34 @@ private fun VisaCardRealistic(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
             contentDescription = null,
-            tint = CyanNeon,
+            tint = when (provider) {
+                "REDOTPAY" -> Color(0xFFFB7185)
+                "BYBIT" -> Color(0xFFF7A600)
+                else -> CyanNeon
+            },
             modifier = Modifier.size(13.dp)
         )
     }
+}
+
+private fun formatVisaNumberDisplay(
+    rawDigits: String,
+    provider: String,
+    isStealth: Boolean
+): String {
+    val digits = rawDigits.filter { it.isDigit() }
+    if (digits.isEmpty()) {
+        return when {
+            isStealth -> "••••  ••••  ••••  ••••"
+            provider == "BYBIT" -> "5316  ••••  ••••  8890"
+            else -> "4152  ••••  ••••  3120"
+        }
+    }
+    if (isStealth) {
+        val last4 = if (digits.length >= 4) digits.takeLast(4) else digits.padStart(4, '•')
+        return "••••  ••••  ••••  $last4"
+    }
+    return digits.chunked(4).joinToString("  ")
 }
 
 /**

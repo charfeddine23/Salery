@@ -78,6 +78,7 @@ fun EditCardDialog(
     currentCardNumber: String,
     currentExpiry: String,
     currentCvc: String,
+    secureScreenshots: Boolean = true,
     onDismiss: () -> Unit,
     onSave: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit
 ) {
@@ -105,7 +106,9 @@ fun EditCardDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn)
+        properties = DialogProperties(
+            securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
     ) {
         GlassCard(
             modifier = Modifier

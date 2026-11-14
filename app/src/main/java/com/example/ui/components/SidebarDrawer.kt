@@ -32,11 +32,13 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -80,6 +82,7 @@ fun SidebarDrawer(
     onToggleStealthMode: () -> Unit = {},
     onToggleBiometric: (Boolean) -> Unit = {},
     onToggleBreathingGlow: (Boolean) -> Unit = {},
+    onToggleScreenshotProtection: (Boolean) -> Unit = {},
     onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
@@ -145,12 +148,34 @@ fun SidebarDrawer(
 
             DrawerNavItem(
                 icon = Icons.Default.CreditCard,
-                title = strings.navDashboard,
+                title = if (isInsideCard) strings.navDashboard else "Card Hub",
                 isSelected = selectedRoute == "cards" || selectedRoute == "visa_coming_soon",
                 onClick = { onNavigate("cards") }
             )
 
-            if (isInsideCard) {
+            if (!isInsideCard) {
+                DrawerNavItem(
+                    icon = Icons.Default.VpnKey,
+                    title = "Keys",
+                    iconTint = com.example.ui.theme.AmberNeon,
+                    isSelected = selectedRoute == "keys",
+                    onClick = { onNavigate("keys") }
+                )
+                DrawerNavItem(
+                    icon = Icons.Default.AccountBalance,
+                    title = "CCP's",
+                    iconTint = EmeraldNeon,
+                    isSelected = selectedRoute == "ccps",
+                    onClick = { onNavigate("ccps") }
+                )
+                DrawerNavItem(
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Soon",
+                    iconTint = Color(0xFF818CF8),
+                    isSelected = selectedRoute == "hub_soon",
+                    onClick = { onNavigate("hub_soon") }
+                )
+            } else {
                 DrawerNavItem(
                     icon = Icons.Default.Dashboard,
                     title = if (strings is ArabicStrings) "لوحة التحكم" else "Dashboard",
@@ -298,6 +323,61 @@ fun SidebarDrawer(
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = colors.primaryNeon,
                         checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),
+                        uncheckedThumbColor = colors.textMuted,
+                        uncheckedTrackColor = colors.glassCard
+                    )
+                )
+            }
+
+            // No-Screenshot Protection Toggle (زر تفعيل وتعطيل منع التصوير)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onToggleScreenshotProtection(!userSettings.screenshotProtectionEnabled) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .testTag("screenshot_protection_setting_row"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = if (userSettings.screenshotProtectionEnabled) EmeraldNeon else colors.textMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.screenshotProtectionTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (userSettings.screenshotProtectionEnabled) {
+                            strings.screenshotProtectionActive
+                        } else {
+                            strings.screenshotProtectionDisabled
+                        },
+                        color = if (userSettings.screenshotProtectionEnabled) EmeraldNeon else colors.textMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = userSettings.screenshotProtectionEnabled,
+                    onCheckedChange = { onToggleScreenshotProtection(it) },
+                    modifier = Modifier.testTag("screenshot_protection_switch"),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = EmeraldNeon,
+                        checkedTrackColor = EmeraldNeon.copy(alpha = 0.35f),
                         uncheckedThumbColor = colors.textMuted,
                         uncheckedTrackColor = colors.glassCard
                     )

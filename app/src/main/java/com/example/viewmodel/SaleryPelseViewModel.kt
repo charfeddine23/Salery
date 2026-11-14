@@ -6,12 +6,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
 import com.example.data.BackupPayload
+import com.example.data.CcpAccountEntry
 import com.example.data.DebtEntity
 import com.example.data.DebtType
+import com.example.data.HubVaultCodec
 import com.example.data.PreferencesManager
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.data.VaultKeyEntry
 import com.example.ui.components.toPatternHash
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.DEVELOPER_NAME
@@ -560,6 +563,51 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun updateVisaCardDetails(
+        provider: String,
+        holderName: String,
+        cardNumber: String,
+        expiryDate: String,
+        cvc: String
+    ) {
+        val cleanProvider = when (provider.uppercase()) {
+            "REDOTPAY" -> "REDOTPAY"
+            "BYBIT" -> "BYBIT"
+            else -> "DEFAULT"
+        }
+        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase()
+        val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
+        val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
+        val formattedExpiry = if (cleanExpiryDigits.length == 4) {
+            "${cleanExpiryDigits.substring(0, 2)}/${cleanExpiryDigits.substring(2, 4)}"
+        } else {
+            expiryDate.trim().ifBlank { "08/28" }
+        }
+        val cleanCvc = cvc.filter { it.isDigit() }.take(4)
+
+        prefsManager.updateSettings {
+            it.copy(
+                visaCardProvider = cleanProvider,
+                visaCardHolderName = cleanName,
+                visaCardNumber = cleanDigits,
+                visaCardExpiry = formattedExpiry,
+                visaCardCvc = cleanCvc
+            )
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val label = when (cleanProvider) {
+                "REDOTPAY" -> "RedotPay"
+                "BYBIT" -> "Bybit"
+                else -> "Visa"
+            }
+            _toastEvent.emit(
+                if (isAr) "تم حفظ بطاقة $label بنجاح 💳"
+                else "$label card saved successfully 💳"
+            )
+        }
+    }
+
     // Pattern Lock Security
     fun unlockApp(pattern: List<Int>): Boolean {
         val hash = pattern.toPatternHash()
@@ -620,6 +668,196 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setBreathingGlowEnabled(enabled: Boolean) {
         prefsManager.updateSettings { it.copy(breathingGlowEnabled = enabled) }
+    }
+
+    fun setScreenshotProtectionEnabled(enabled: Boolean) {
+        prefsManager.updateSettings { it.copy(screenshotProtectionEnabled = enabled) }
+    }
+
+    fun addVaultKey(
+        label: String,
+        username: String,
+        secretValue: String,
+        category: String,
+        note: String
+    ) {
+        val cleanLabel = label.trim()
+        val cleanSecret = secretValue.trim()
+        if (cleanLabel.isEmpty() || cleanSecret.isEmpty()) return
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson) + VaultKeyEntry(
+                label = cleanLabel,
+                username = username.trim(),
+                secretValue = cleanSecret,
+                category = category.ifBlank { "APP" },
+                note = note.trim(),
+                createdAt = System.currentTimeMillis()
+            )
+            current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
+        }
+    }
+
+    fun updateVaultKey(
+        keyId: String,
+        label: String,
+        username: String,
+        secretValue: String,
+        category: String,
+        note: String
+    ) {
+        val cleanLabel = label.trim()
+        val cleanSecret = secretValue.trim()
+        if (cleanLabel.isEmpty() || cleanSecret.isEmpty()) return
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).map { item ->
+                if (item.id == keyId) {
+                    item.copy(
+                        label = cleanLabel,
+                        username = username.trim(),
+                        secretValue = cleanSecret,
+                        category = category.ifBlank { "APP" },
+                        note = note.trim()
+                    )
+                } else {
+                    item
+                }
+            }
+            current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
+        }
+    }
+
+    fun deleteVaultKey(keyId: String) {
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).filterNot { it.id == keyId }
+            current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
+        }
+    }
+
+    fun addCcpAccount(
+        firstName: String,
+        lastName: String,
+        ccpNumber: String,
+        ccpKey: String,
+        agencyNote: String,
+        contactName: String = "",
+        contactUri: String = "",
+        contactPhone: String = "",
+        isPinned: Boolean = false
+    ) {
+        val cleanFirst = firstName.trim()
+        val cleanLast = lastName.trim()
+        val fullName = listOf(cleanFirst, cleanLast).filter { it.isNotEmpty() }.joinToString(" ")
+        val cleanCcp = ccpNumber.filter { it.isDigit() }
+        if (fullName.isEmpty() || cleanCcp.isEmpty()) return
+
+        val existing = HubVaultCodec.parseCcpAccounts(settings.value.ccpAccountsJson)
+        if (existing.size >= HubVaultCodec.MAX_CCP_PROFILES) {
+            viewModelScope.launch {
+                val isAr = settings.value.language == "ar"
+                _toastEvent.emit(
+                    if (isAr) "تم بلوغ الحد الأقصى (${HubVaultCodec.MAX_CCP_PROFILES} ملف)"
+                    else "Maximum limit reached (${HubVaultCodec.MAX_CCP_PROFILES} profiles)"
+                )
+            }
+            return
+        }
+
+        val computedRip = HubVaultCodec.computeAlgeriePosteRip(cleanCcp)
+        val now = System.currentTimeMillis()
+        prefsManager.updateSettings { current ->
+            val currentList = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson)
+            if (currentList.size >= HubVaultCodec.MAX_CCP_PROFILES) return@updateSettings current
+            val updated = currentList + CcpAccountEntry(
+                firstName = cleanFirst,
+                lastName = cleanLast,
+                holderName = fullName,
+                ccpNumber = cleanCcp,
+                ccpKey = ccpKey.filter { it.isDigit() }.take(2),
+                ripFull = computedRip,
+                agencyNote = agencyNote.trim(),
+                contactName = contactName.trim(),
+                contactUri = contactUri.trim(),
+                contactPhone = contactPhone.trim(),
+                isPinned = isPinned,
+                pinnedAt = if (isPinned) now else 0L,
+                createdAt = now
+            )
+            current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
+        }
+    }
+
+    fun updateCcpAccount(
+        accountId: String,
+        firstName: String,
+        lastName: String,
+        ccpNumber: String,
+        ccpKey: String,
+        agencyNote: String,
+        contactName: String = "",
+        contactUri: String = "",
+        contactPhone: String = "",
+        isPinned: Boolean = false
+    ) {
+        val cleanFirst = firstName.trim()
+        val cleanLast = lastName.trim()
+        val fullName = listOf(cleanFirst, cleanLast).filter { it.isNotEmpty() }.joinToString(" ")
+        val cleanCcp = ccpNumber.filter { it.isDigit() }
+        if (fullName.isEmpty() || cleanCcp.isEmpty()) return
+        val computedRip = HubVaultCodec.computeAlgeriePosteRip(cleanCcp)
+        val now = System.currentTimeMillis()
+
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson).map { item ->
+                if (item.id == accountId) {
+                    item.copy(
+                        firstName = cleanFirst,
+                        lastName = cleanLast,
+                        holderName = fullName,
+                        ccpNumber = cleanCcp,
+                        ccpKey = ccpKey.filter { it.isDigit() }.take(2),
+                        ripFull = computedRip,
+                        agencyNote = agencyNote.trim(),
+                        contactName = contactName.trim(),
+                        contactUri = contactUri.trim(),
+                        contactPhone = contactPhone.trim(),
+                        isPinned = isPinned,
+                        pinnedAt = when {
+                            isPinned && !item.isPinned -> now
+                            isPinned -> item.pinnedAt.takeIf { it > 0L } ?: now
+                            else -> 0L
+                        }
+                    )
+                } else {
+                    item
+                }
+            }
+            current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
+        }
+    }
+
+    fun togglePinCcpAccount(accountId: String) {
+        val now = System.currentTimeMillis()
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson).map { item ->
+                if (item.id == accountId) {
+                    val nextPinned = !item.isPinned
+                    item.copy(
+                        isPinned = nextPinned,
+                        pinnedAt = if (nextPinned) now else 0L
+                    )
+                } else {
+                    item
+                }
+            }
+            current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
+        }
+    }
+
+    fun deleteCcpAccount(accountId: String) {
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson).filterNot { it.id == accountId }
+            current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
+        }
     }
 
     // Stealth Mode (Privacy / Shake to Hide)

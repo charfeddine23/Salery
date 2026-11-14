@@ -2,13 +2,22 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,14 +36,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -46,6 +59,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.layout.widthIn
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
@@ -63,11 +77,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +104,7 @@ import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
 import com.example.ui.components.BreathingSpLogo
 import com.example.ui.components.SalarySchedulerDialog
+import com.example.ui.components.ScreenshotProtectionDialog
 import com.example.ui.components.SidebarDrawer
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.i18n.APP_NAME
@@ -156,8 +176,10 @@ fun MainAppScreen(
     // Responsive layout direction: Full RTL when Arabic is selected, LTR for English
     val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
-    // Active route ("cards" = Cards Hub outside card; cardInnerRoutes = inside Classic Blue card)
+    // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
+    val hubRoutes = listOf("cards", "keys", "ccps", "hub_soon")
+    val isOnHubTabs = currentRoute in hubRoutes
     val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "insights")
     val isInsideCard = currentRoute in cardInnerRoutes
 
@@ -181,6 +203,7 @@ fun MainAppScreen(
 
     var showSalarySchedulerDialog by remember { mutableStateOf(false) }
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
+    var showScreenshotShieldDialog by remember { mutableStateOf(false) }
 
     // Toast Events collector
     LaunchedEffect(viewModel) {
@@ -233,6 +256,9 @@ fun MainAppScreen(
                                 onToggleBreathingGlow = { enabled ->
                                     viewModel.setBreathingGlowEnabled(enabled)
                                 },
+                                onToggleScreenshotProtection = { enabled ->
+                                    viewModel.setScreenshotProtectionEnabled(enabled)
+                                },
                                 onSelectDesignStyle = { style ->
                                     viewModel.setDesignStyle(style)
                                 },
@@ -261,10 +287,13 @@ fun MainAppScreen(
                         containerColor = Color.Transparent,
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
-                            val isSubScreen = currentRoute != "cards"
+                            val isSubScreen = !isOnHubTabs
                             MainTopAppBar(
                                 title = when (currentRoute) {
                                     "cards" -> activeStrings.cardsHubTitle
+                                    "keys" -> "Keys"
+                                    "ccps" -> "CCP's"
+                                    "hub_soon" -> "Soon"
                                     "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
                                     "visa_coming_soon" -> activeStrings.visaCardTitle
                                     "income" -> activeStrings.navIncome
@@ -289,20 +318,35 @@ fun MainAppScreen(
                                 totalBalance = summary.totalBalance,
                                 showMoneyBag = isInsideCard,
                                 onOpenInsights = { currentRoute = "insights" },
+                                showScreenshotShield = currentRoute == "cards",
+                                isScreenshotProtected = userSettings.screenshotProtectionEnabled,
+                                onShieldClick = { showScreenshotShieldDialog = true },
                                 isStealthMode = userSettings.stealthMode,
                                 onToggleStealth = { viewModel.toggleStealthMode() }
                             )
                         },
                         bottomBar = {
-                            AnimatedVisibility(
-                                visible = isInsideCard,
-                                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
-                            ) {
-                                LiquidGlassBottomBar(
-                                    currentRoute = currentRoute,
-                                    onRouteSelect = { currentRoute = it }
-                                )
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                AnimatedVisibility(
+                                    visible = isOnHubTabs,
+                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                                ) {
+                                    HubBottomBar(
+                                        currentRoute = currentRoute,
+                                        onRouteSelect = { currentRoute = it }
+                                    )
+                                }
+                                AnimatedVisibility(
+                                    visible = isInsideCard,
+                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                                ) {
+                                    LiquidGlassBottomBar(
+                                        currentRoute = currentRoute,
+                                        onRouteSelect = { currentRoute = it }
+                                    )
+                                }
                             }
                         },
                         floatingActionButton = {
@@ -357,7 +401,40 @@ fun MainAppScreen(
                                     onOpenVisaDetails = { currentRoute = "visa_coming_soon" },
                                     onUpdateClassicCard = { name, number, expiry, cvc ->
                                         viewModel.updateClassicCardDetails(name, number, expiry, cvc)
+                                    },
+                                    onUpdateVisaCard = { provider, name, number, expiry, cvc ->
+                                        viewModel.updateVisaCardDetails(provider, name, number, expiry, cvc)
                                     }
+                                )
+                                "keys" -> KeysScreen(
+                                    userSettings = userSettings,
+                                    onAddKey = { label, username, secret, category, note ->
+                                        viewModel.addVaultKey(label, username, secret, category, note)
+                                    },
+                                    onUpdateKey = { id, label, username, secret, category, note ->
+                                        viewModel.updateVaultKey(id, label, username, secret, category, note)
+                                    },
+                                    onDeleteKey = { id ->
+                                        viewModel.deleteVaultKey(id)
+                                    }
+                                )
+                                "ccps" -> CcpsScreen(
+                                    userSettings = userSettings,
+                                    onAddCcpAccount = { first, last, ccp, key, note, cName, cUri, cPhone, pinned ->
+                                        viewModel.addCcpAccount(first, last, ccp, key, note, cName, cUri, cPhone, pinned)
+                                    },
+                                    onUpdateCcpAccount = { id, first, last, ccp, key, note, cName, cUri, cPhone, pinned ->
+                                        viewModel.updateCcpAccount(id, first, last, ccp, key, note, cName, cUri, cPhone, pinned)
+                                    },
+                                    onTogglePinCcpAccount = { id ->
+                                        viewModel.togglePinCcpAccount(id)
+                                    },
+                                    onDeleteCcpAccount = { id ->
+                                        viewModel.deleteCcpAccount(id)
+                                    }
+                                )
+                                "hub_soon" -> HubSoonScreen(
+                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" }
                                 )
                                 "dashboard_details" -> DashboardScreen(
                                     summary = summary,
@@ -540,6 +617,16 @@ fun MainAppScreen(
                     onRetryCheck = { viewModel.checkForUpdates(manual = true) }
                 )
             }
+
+            if (showScreenshotShieldDialog) {
+                ScreenshotProtectionDialog(
+                    isProtected = userSettings.screenshotProtectionEnabled,
+                    onToggleProtection = { enabled ->
+                        viewModel.setScreenshotProtectionEnabled(enabled)
+                    },
+                    onDismiss = { showScreenshotShieldDialog = false }
+                )
+            }
         }
     }
 }
@@ -551,6 +638,9 @@ fun MainTopAppBar(
     totalBalance: Double = 0.0,
     showMoneyBag: Boolean = true,
     onOpenInsights: () -> Unit = {},
+    showScreenshotShield: Boolean = false,
+    isScreenshotProtected: Boolean = true,
+    onShieldClick: () -> Unit = {},
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {},
     canGoBack: Boolean = false,
@@ -631,6 +721,15 @@ fun MainTopAppBar(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
+            if (showScreenshotShield) {
+                ScreenshotShieldTopButton(
+                    isProtected = isScreenshotProtected,
+                    onClick = onShieldClick
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
             // Stealth Mode / Privacy Toggle Action Button (min touch target 48dp)
             GlassCard(
                 modifier = Modifier.size(48.dp),
@@ -647,6 +746,118 @@ fun MainTopAppBar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScreenshotShieldTopButton(
+    isProtected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val shape = RoundedCornerShape(14.dp)
+
+    if (isProtected) {
+        val infinite = rememberInfiniteTransition(label = "top_shield_glow")
+        val pulse by infinite.animateFloat(
+            initialValue = 0.65f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "shield_glow_pulse"
+        )
+        val colorPhase by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3200, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "shield_color_phase"
+        )
+
+        val borderBrush = Brush.linearGradient(
+            colors = listOf(
+                EmeraldNeon.copy(alpha = 0.85f * pulse),
+                CyanNeon.copy(alpha = 0.95f),
+                Color(0xFF818CF8).copy(alpha = 0.85f * pulse)
+            ),
+            start = Offset(0f, 100f * colorPhase),
+            end = Offset(120f, 120f * (1f - colorPhase))
+        )
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .drawBehind {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                CyanNeon.copy(alpha = (if (colors.isDark) 0.42f else 0.28f) * pulse),
+                                EmeraldNeon.copy(alpha = (if (colors.isDark) 0.24f else 0.14f) * pulse),
+                                Color(0xFF6366F1).copy(alpha = 0.10f * pulse),
+                                Color.Transparent
+                            ),
+                            center = center,
+                            radius = size.maxDimension * (0.82f + 0.12f * pulse)
+                        )
+                    )
+                }
+                .shadow(
+                    elevation = 10.dp,
+                    shape = shape,
+                    spotColor = CyanNeon.copy(alpha = 0.65f),
+                    ambientColor = EmeraldNeon.copy(alpha = 0.50f)
+                )
+                .clip(shape)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            EmeraldNeon.copy(alpha = if (colors.isDark) 0.26f else 0.20f),
+                            CyanNeon.copy(alpha = if (colors.isDark) 0.22f else 0.16f),
+                            Color(0xFF6366F1).copy(alpha = if (colors.isDark) 0.18f else 0.12f)
+                        )
+                    ),
+                    shape = shape
+                )
+                .border(width = 1.4.dp, brush = borderBrush, shape = shape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = CyanNeon),
+                    onClick = onClick
+                )
+                .testTag("cards_hub_shield_top_button"),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = "No-Screenshot Protection Active",
+                tint = if (colorPhase < 0.5f) CyanNeon else EmeraldNeon,
+                modifier = Modifier.size(21.dp)
+            )
+        }
+    } else {
+        GlassCard(
+            modifier = Modifier
+                .size(48.dp)
+                .testTag("cards_hub_shield_top_button"),
+            shape = shape,
+            backgroundColor = colors.glassCard,
+            breathingGlow = false,
+            onClick = onClick
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = "No-Screenshot Protection Disabled",
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -706,6 +917,87 @@ fun LiquidGlassBottomBar(
                             .clip(RoundedCornerShape(16.dp))
                             .clickable { onRouteSelect(item.route) }
                             .padding(horizontal = 4.dp, vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                            tint = if (isSelected) activeColor else colors.textMuted,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = item.label,
+                            color = if (isSelected) activeColor else colors.textMuted,
+                            fontSize = typo.caption,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HubBottomBar(
+    currentRoute: String,
+    onRouteSelect: (String) -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
+    val items = listOf(
+        NavigationItem("cards", "Card Hub", Icons.Default.CreditCard),
+        NavigationItem("keys", "Keys", Icons.Default.VpnKey),
+        NavigationItem("ccps", "CCP's", Icons.Default.AccountBalance),
+        NavigationItem("hub_soon", "Soon", Icons.Default.AutoAwesome)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = dimens.screenPaddingH, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        GlassCard(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth()
+                .testTag("hub_bottom_banner"),
+            shape = RoundedCornerShape(26.dp),
+            backgroundColor = colors.glassCard
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEach { item ->
+                    val isSelected = currentRoute == item.route
+                    val activeColor = when (item.route) {
+                        "keys" -> AmberNeon
+                        "ccps" -> EmeraldNeon
+                        "hub_soon" -> Color(0xFF818CF8)
+                        else -> CyanNeon
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (isSelected) activeColor.copy(alpha = 0.14f) else Color.Transparent
+                            )
+                            .clickable { onRouteSelect(item.route) }
+                            .padding(horizontal = 4.dp, vertical = 8.dp)
+                            .testTag("hub_tab_${item.route}"),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(

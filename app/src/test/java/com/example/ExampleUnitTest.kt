@@ -223,4 +223,102 @@ class ExampleUnitTest {
       invalidLargeNonZip.delete()
     }
   }
+
+  @Test
+  fun hubVaultCodec_computesAlgeriePosteRip_sortsPinned_andRoundTripsJson() {
+    val rip = com.example.data.HubVaultCodec.computeAlgeriePosteRip("12345678")
+    assertEquals(20, rip.length)
+    assertTrue(rip.startsWith("007999990012345678"))
+    val key = rip.takeLast(2).toInt()
+    assertTrue(key in 1..97)
+
+    val grouped = com.example.data.HubVaultCodec.formatRipGrouped(rip)
+    assertEquals(23, grouped.length)
+
+    val keys = listOf(
+      com.example.data.VaultKeyEntry(
+        id = "k1",
+        label = "Edahabia",
+        username = "charfeddine@mail.com",
+        secretValue = "S@lery#2026!Dz",
+        category = "BANK",
+        note = "Main card"
+      )
+    )
+    val parsedKeys = com.example.data.HubVaultCodec.parseVaultKeys(
+      com.example.data.HubVaultCodec.encodeVaultKeys(keys)
+    )
+    assertEquals(1, parsedKeys.size)
+    assertEquals("Edahabia", parsedKeys[0].label)
+    assertEquals("charfeddine@mail.com", parsedKeys[0].username)
+    assertEquals("S@lery#2026!Dz", parsedKeys[0].secretValue)
+
+    val unpinned = com.example.data.CcpAccountEntry(
+      id = "c1",
+      firstName = "Amine",
+      lastName = "Benali",
+      holderName = "Amine Benali",
+      ccpNumber = "12345678",
+      ccpKey = "42",
+      ripFull = rip,
+      agencyNote = "Algiers",
+      isPinned = false,
+      createdAt = 2000L
+    )
+    val pinned = com.example.data.CcpAccountEntry(
+      id = "c2",
+      firstName = "Charfeddine",
+      lastName = "Ka",
+      holderName = "Charfeddine Ka",
+      ccpNumber = "87654321",
+      ccpKey = "11",
+      ripFull = com.example.data.HubVaultCodec.computeAlgeriePosteRip("87654321"),
+      contactName = "Charfeddine",
+      contactPhone = "0550112233",
+      isPinned = true,
+      pinnedAt = 1000L,
+      createdAt = 1000L
+    )
+    val parsedCcps = com.example.data.HubVaultCodec.parseCcpAccounts(
+      com.example.data.HubVaultCodec.encodeCcpAccounts(listOf(unpinned, pinned))
+    )
+    assertEquals(2, parsedCcps.size)
+    assertEquals("c2", parsedCcps[0].id)
+    assertTrue(parsedCcps[0].isPinned)
+    assertEquals("Charfeddine Ka", parsedCcps[0].displayFullName)
+    assertEquals("0550112233", parsedCcps[0].contactPhone)
+  }
+
+  @Test
+  fun passwordStrengthAnalyzer_evaluatesWeakStrongAndReusedPasswords() {
+    val weak = com.example.data.PasswordStrengthAnalyzer.analyze(
+      password = "123456",
+      username = "amine",
+      label = "BaridiMob"
+    )
+    assertEquals(com.example.data.PasswordStrengthLevel.WEAK, weak.level)
+    assertTrue(weak.score < 40)
+
+    val strong = com.example.data.PasswordStrengthAnalyzer.analyze(
+      password = "K9!vX2@mPq#84Lw",
+      username = "amine",
+      label = "BaridiMob"
+    )
+    assertEquals(com.example.data.PasswordStrengthLevel.STRONG, strong.level)
+    assertTrue(strong.score >= 82)
+
+    val reused = com.example.data.PasswordStrengthAnalyzer.analyze(
+      password = "K9!vX2@mPq#84Lw",
+      duplicateCount = 3
+    )
+    assertTrue(reused.isReused)
+    assertTrue(reused.score < strong.score)
+
+    val generated = com.example.data.PasswordStrengthAnalyzer.generateStrongPassword(14)
+    assertEquals(14, generated.length)
+    assertEquals(
+      com.example.data.PasswordStrengthLevel.STRONG,
+      com.example.data.PasswordStrengthAnalyzer.analyze(generated).level
+    )
+  }
 }

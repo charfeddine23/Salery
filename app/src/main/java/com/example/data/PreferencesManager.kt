@@ -27,7 +27,15 @@ data class UserSettings(
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
     val classicCardCvc: String = "",
-    val breathingGlowEnabled: Boolean = true
+    val breathingGlowEnabled: Boolean = true,
+    val screenshotProtectionEnabled: Boolean = true,
+    val vaultKeysJson: String = "[]",
+    val ccpAccountsJson: String = "[]",
+    val visaCardProvider: String = "DEFAULT", // "DEFAULT", "REDOTPAY", "BYBIT"
+    val visaCardHolderName: String = "CHARFEDDINE KA",
+    val visaCardNumber: String = "",
+    val visaCardExpiry: String = "08/28",
+    val visaCardCvc: String = ""
 )
 
 class PreferencesManager(context: Context) {
@@ -124,7 +132,15 @@ class PreferencesManager(context: Context) {
             classicCardNumber = safeString("classic_card_number", ""),
             classicCardExpiry = safeString("classic_card_expiry", "11/29"),
             classicCardCvc = safeString("classic_card_cvc", ""),
-            breathingGlowEnabled = safeBoolean("breathing_glow_enabled", true)
+            breathingGlowEnabled = safeBoolean("breathing_glow_enabled", true),
+            screenshotProtectionEnabled = safeBoolean("screenshot_protection_enabled", true),
+            vaultKeysJson = safeString("vault_keys_json", "[]"),
+            ccpAccountsJson = safeString("ccp_accounts_json", "[]"),
+            visaCardProvider = safeString("visa_card_provider", "DEFAULT"),
+            visaCardHolderName = safeString("visa_card_holder", "CHARFEDDINE KA"),
+            visaCardNumber = safeString("visa_card_number", ""),
+            visaCardExpiry = safeString("visa_card_expiry", "08/28"),
+            visaCardCvc = safeString("visa_card_cvc", "")
         )
     }
 
@@ -157,6 +173,14 @@ class PreferencesManager(context: Context) {
             .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
             .putString("classic_card_cvc", finalUpdated.classicCardCvc)
             .putBoolean("breathing_glow_enabled", finalUpdated.breathingGlowEnabled)
+            .putBoolean("screenshot_protection_enabled", finalUpdated.screenshotProtectionEnabled)
+            .putString("vault_keys_json", finalUpdated.vaultKeysJson)
+            .putString("ccp_accounts_json", finalUpdated.ccpAccountsJson)
+            .putString("visa_card_provider", finalUpdated.visaCardProvider)
+            .putString("visa_card_holder", finalUpdated.visaCardHolderName)
+            .putString("visa_card_number", finalUpdated.visaCardNumber)
+            .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
+            .putString("visa_card_cvc", finalUpdated.visaCardCvc)
             .apply()
         _settingsFlow.value = finalUpdated
     }
