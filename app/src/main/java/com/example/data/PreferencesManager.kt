@@ -23,6 +23,7 @@ data class UserSettings(
     val stealthMode: Boolean = false,
     val vaultLockedAmount: Double = 0.0,
     val savingsWalletBalance: Double = 0.0,
+    val classicCardBankStyle: String = "EDAHABIA",
     val classicCardHolderName: String = "CHARFEDDINE KA",
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
@@ -36,6 +37,15 @@ data class UserSettings(
     val visaCardNumber: String = "",
     val visaCardExpiry: String = "08/28",
     val visaCardCvc: String = "",
+    val thirdCardEnabled: Boolean = false,
+    val thirdCardProvider: String = "BINANCE", // "DEFAULT", "REDOTPAY", "BYBIT", "BINANCE"
+    val thirdCardHolderName: String = "CHARFEDDINE KA",
+    val thirdCardNumber: String = "",
+    val thirdCardExpiry: String = "08/28",
+    val thirdCardCvc: String = "",
+    val binanceHoldingsJson: String = "[]",
+    val binancePricesJson: String = "[]",
+    val binanceLastPriceSyncMillis: Long = 0L,
     val baridiMobSmsSyncEnabled: Boolean = false,
     val pendingSmsSuggestionsJson: String = "[]",
     val processedSmsKeysJson: String = "[]",
@@ -151,6 +161,7 @@ class PreferencesManager(context: Context) {
             stealthMode = safeBoolean("stealth_mode", false),
             vaultLockedAmount = savedSavings,
             savingsWalletBalance = savedSavings,
+            classicCardBankStyle = safeString("classic_card_bank_style", "EDAHABIA"),
             classicCardHolderName = safeString("classic_card_holder", "CHARFEDDINE KA"),
             classicCardNumber = safeString("classic_card_number", ""),
             classicCardExpiry = safeString("classic_card_expiry", "11/29"),
@@ -164,6 +175,15 @@ class PreferencesManager(context: Context) {
             visaCardNumber = safeString("visa_card_number", ""),
             visaCardExpiry = safeString("visa_card_expiry", "08/28"),
             visaCardCvc = safeString("visa_card_cvc", ""),
+            thirdCardEnabled = safeBoolean("third_card_enabled", false),
+            thirdCardProvider = safeString("third_card_provider", "BINANCE"),
+            thirdCardHolderName = safeString("third_card_holder", "CHARFEDDINE KA"),
+            thirdCardNumber = safeString("third_card_number", ""),
+            thirdCardExpiry = safeString("third_card_expiry", "08/28"),
+            thirdCardCvc = safeString("third_card_cvc", ""),
+            binanceHoldingsJson = safeString("binance_holdings_json", "[]"),
+            binancePricesJson = safeString("binance_prices_json", "[]"),
+            binanceLastPriceSyncMillis = safeLong("binance_last_price_sync_millis", 0L),
             baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", false),
             pendingSmsSuggestionsJson = safeString("pending_sms_suggestions_json", "[]"),
             processedSmsKeysJson = safeString("processed_sms_keys_json", "[]"),
@@ -201,6 +221,7 @@ class PreferencesManager(context: Context) {
             .putBoolean("stealth_mode", finalUpdated.stealthMode)
             .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
             .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
+            .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
             .putString("classic_card_holder", finalUpdated.classicCardHolderName)
             .putString("classic_card_number", finalUpdated.classicCardNumber)
             .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
@@ -214,6 +235,15 @@ class PreferencesManager(context: Context) {
             .putString("visa_card_number", finalUpdated.visaCardNumber)
             .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
             .putString("visa_card_cvc", finalUpdated.visaCardCvc)
+            .putBoolean("third_card_enabled", finalUpdated.thirdCardEnabled)
+            .putString("third_card_provider", finalUpdated.thirdCardProvider)
+            .putString("third_card_holder", finalUpdated.thirdCardHolderName)
+            .putString("third_card_number", finalUpdated.thirdCardNumber)
+            .putString("third_card_expiry", finalUpdated.thirdCardExpiry)
+            .putString("third_card_cvc", finalUpdated.thirdCardCvc)
+            .putString("binance_holdings_json", finalUpdated.binanceHoldingsJson)
+            .putString("binance_prices_json", finalUpdated.binancePricesJson)
+            .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
             .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
             .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
             .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)

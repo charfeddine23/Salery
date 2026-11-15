@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
@@ -42,7 +41,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.UserSettings
@@ -57,7 +55,6 @@ import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
-import java.util.Calendar
 
 /**
  * Clean & Harmonized Total Balance Card for Dashboard.
@@ -88,17 +85,6 @@ fun TotalBalanceVaultCard(
     val lockedAmount = summary.savingsBalance
     val grossBalance = summary.grossBalance
     val spendableBalance = summary.totalBalance
-
-    val cal = Calendar.getInstance()
-    val currentDay = cal.get(Calendar.DAY_OF_MONTH)
-    val daysUntilPayday = (userSettings.salaryPayday - currentDay).let {
-        if (it < 0) it + 30 else it
-    }
-    val paydayStatus = when {
-        currentDay == userSettings.salaryPayday -> strings.salaryDepositedToday
-        isArabic -> "يوم ${userSettings.salaryPayday} (متبقٍ $daysUntilPayday يوم)"
-        else -> "Day ${userSettings.salaryPayday} (${daysUntilPayday}d left)"
-    }
 
     // Cash flow ratio calculations for ambient dynamic glow
     val isSurplus = summary.monthlyIncome > summary.monthlyExpenses * 1.20
@@ -350,75 +336,6 @@ fun TotalBalanceVaultCard(
                             )
                         }
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Smart Salary Scheduler embedded status bar (Hold anywhere on Total Balance to edit)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                    .background(colors.glassSurface.copy(alpha = 0.78f))
-                    .border(0.8.dp, CyanNeon.copy(alpha = 0.25f), RoundedCornerShape(dimens.cornerRadiusMd))
-                    .padding(horizontal = 12.dp, vertical = 9.dp)
-                    .testTag("total_balance_salary_scheduler_strip"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(CyanNeon.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = CyanNeon,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "${strings.salarySchedulerTitle} • ${formatDzd(userSettings.salaryAmount, strings.currencyCode, isStealth)}",
-                            color = colors.textPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = paydayStatus,
-                            color = colors.primaryNeon,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(CyanNeon.copy(alpha = 0.12f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = if (isArabic) "اضغط مطولاً للتعديل" else "Hold to edit",
-                        color = CyanNeon,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
         }

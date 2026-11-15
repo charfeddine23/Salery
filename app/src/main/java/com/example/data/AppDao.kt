@@ -75,4 +75,17 @@ interface AppDao {
 
     @Query("SELECT * FROM debts")
     suspend fun getAllDebtsList(): List<DebtEntity>
+
+    // Permanent Non-Deletable ALG Poste SMS Archive (Append-Only & Study Re-Evaluation)
+    @Query("SELECT * FROM archived_alg_post_sms ORDER BY receivedAtMillis DESC")
+    fun getAllArchivedAlgPosteSms(): Flow<List<ArchivedAlgPosteSmsEntity>>
+
+    @Query("SELECT * FROM archived_alg_post_sms ORDER BY receivedAtMillis ASC")
+    suspend fun getAllArchivedAlgPosteSmsList(): List<ArchivedAlgPosteSmsEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertArchivedSmsIfMissing(items: List<ArchivedAlgPosteSmsEntity>)
+
+    @Update
+    suspend fun updateArchivedSmsAnalysis(items: List<ArchivedAlgPosteSmsEntity>)
 }

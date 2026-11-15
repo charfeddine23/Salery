@@ -11,8 +11,14 @@ import android.provider.Telephony
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.data.AppDatabase
+import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.PreferencesManager
 import com.example.ui.i18n.formatDzdAmount
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AlgPosteSmsReceiver : BroadcastReceiver() {
 
@@ -39,7 +45,8 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             groupedBySender.getOrPut(addr) { StringBuilder() }.append(body)
         }
 
-        val prefsManager = PreferencesManager(context.applicationContext)
+        val appContext = context.applicationContext
+        val prefsManager = PreferencesManager(appContext)
         val currentSettings = prefsManager.settingsFlow.value
         val baselineMillis = currentSettings.smsSyncBaselineTimestampMillis
         val allowSuggestionForTimestamp = baselineMillis <= 0L || latestTimestamp > baselineMillis
@@ -52,10 +59,20 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
 
         val newlyDetected = mutableListOf<SmsSuggestionEntry>()
         val newlyExtractedSnapshots = mutableListOf<SmsBalanceSnapshot>()
+        val newlyArchivedEntities = mutableListOf<ArchivedAlgPosteSmsEntity>()
 
         for ((sender, bodyBuilder) in groupedBySender) {
             val rawText = bodyBuilder.toString()
             if (!AlgPosteSmsAnalyzer.isAlgPosteMessage(sender, rawText)) continue
+
+            // Always archive every incoming ALG Poste SMS permanently (even OTPs or unrecognized formats)
+            AlgPosteSmsAnalyzer.toArchivedEntity(
+                sender = sender,
+                body = rawText,
+                timestampMillis = latestTimestamp,
+                captureSource = "RECEIVER",
+                allowAnySenderForManualTest = false
+            )?.let { newlyArchivedEntities.add(it) }
 
             AlgPosteSmsAnalyzer.parseBalanceSnapshot(
                 sender = sender,
@@ -79,57 +96,119 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             }
         }
 
-        if (newlyDetected.isEmpty() && newlyExtractedSnapshots.isEmpty()) return
+        if (newlyDetected.isEmpty() && newlyExtractedSnapshots.isEmpty() && newlyArchivedEntities.isEmpty()) return
 
-        val mergedHistory = (existingHistory + newlyExtractedSnapshots)
-            .distinctBy { it.id }
-            .sortedBy { it.timestampMillis }
-        val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
-        val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-            snapshots = mergedHistory,
-            existingAnomalies = existingTaxes
-        )
+        val pendingResult = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                val dao = AppDatabase.getDatabase(appContext).appDao()
+                if (newlyArchivedEntities.isNotEmpty()) {
+                    dao.insertArchivedSmsIfMissing(newlyArchivedEntities)
+                }
+                val archivedEntities = runCatching { dao.getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                val archivedSnapshots = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(archivedEntities)
 
-        val updatedList = (newlyDetected + existingPending).distinctBy { it.id }
-        prefsManager.updateSettings {
-            it.copy(
-                pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
-                smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
-                latestSmsBalanceAmount = latestSnap?.balance ?: it.latestSmsBalanceAmount,
-                latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: it.latestSmsBalanceUpdatedAt,
-                latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: it.latestSmsBalanceRawSnippet
-            )
+                val inboxBaselineSnapshots = try {
+                    if (AlgPosteSmsInboxScanner.hasSmsPermissions(appContext)) {
+                        val rawInbox = AlgPosteSmsInboxScanner.scanAllRawAlgPosteSms(
+                            context = appContext,
+                            maxRowsToInspect = 120
+                        )
+                        val inboxArchived = rawInbox.mapNotNull { raw ->
+                            AlgPosteSmsAnalyzer.toArchivedEntity(
+                                sender = raw.sender,
+                                body = raw.body,
+                                timestampMillis = raw.dateMillis,
+                                captureSource = "INBOX",
+                                allowAnySenderForManualTest = false
+                            )
+                        }
+                        if (inboxArchived.isNotEmpty()) {
+                            dao.insertArchivedSmsIfMissing(inboxArchived)
+                        }
+                        AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(
+                            context = appContext,
+                            maxRowsToInspect = 80
+                        )
+                    } else {
+                        emptyList()
+                    }
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+
+                val mergedHistory = (archivedSnapshots + existingHistory + inboxBaselineSnapshots + newlyExtractedSnapshots)
+                    .distinctBy { it.id }
+                    .sortedBy { it.timestampMillis }
+                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                val existingTaxIds = existingTaxes.map { it.id }.toSet()
+                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                    snapshots = mergedHistory,
+                    existingAnomalies = existingTaxes
+                )
+                val newSnapIds = newlyExtractedSnapshots.map { it.id }.toSet()
+                val newlyCaughtTax = updatedTaxes.firstOrNull {
+                    it.smsId in newSnapIds && it.id !in existingTaxIds
+                }
+
+                val updatedList = (newlyDetected + existingPending).distinctBy { it.id }
+                prefsManager.updateSettings {
+                    it.copy(
+                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
+                        smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        latestSmsBalanceAmount = latestSnap?.balance ?: it.latestSmsBalanceAmount,
+                        latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: it.latestSmsBalanceUpdatedAt,
+                        latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: it.latestSmsBalanceRawSnippet
+                    )
+                }
+
+                val isAr = currentSettings.language == "ar"
+                val primarySuggestion = newlyDetected.firstOrNull()
+                if (primarySuggestion != null) {
+                    postSuggestionNotification(
+                        context = appContext,
+                        suggestion = primarySuggestion,
+                        caughtTax = newlyCaughtTax,
+                        isArabic = isAr
+                    )
+                } else if (newlyCaughtTax != null) {
+                    postTaxDetectedNotification(
+                        context = appContext,
+                        caughtTax = newlyCaughtTax,
+                        isArabic = isAr
+                    )
+                }
+            } catch (_: Throwable) {
+            } finally {
+                pendingResult.finish()
+            }
         }
+    }
 
-        val primarySuggestion = newlyDetected.firstOrNull()
-        if (primarySuggestion != null) {
-            postSuggestionNotification(
-                context = context.applicationContext,
-                suggestion = primarySuggestion,
-                isArabic = currentSettings.language == "ar"
+    private fun ensureSmsChannel(nm: NotificationManager, isArabic: Boolean): String {
+        val channelId = "baridimob_sms_sync_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                if (isArabic) "مزامنة رسائل ALG Poste" else "BaridiMob SMS Sync",
+                NotificationManager.IMPORTANCE_DEFAULT
             )
+            nm.createNotificationChannel(channel)
         }
+        return channelId
     }
 
     private fun postSuggestionNotification(
         context: Context,
         suggestion: SmsSuggestionEntry,
+        caughtTax: SmsTaxAnomalyEntry?,
         isArabic: Boolean
     ) {
         try {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                 ?: return
-
-            val channelId = "baridimob_sms_sync_channel"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    channelId,
-                    if (isArabic) "مزامنة رسائل ALG Poste" else "BaridiMob SMS Sync",
-                    NotificationManager.IMPORTANCE_DEFAULT
-                )
-                nm.createNotificationChannel(channel)
-            }
+            val channelId = ensureSmsChannel(nm, isArabic)
 
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -147,11 +226,16 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             } else {
                 if (isArabic) "ALG Poste: اقتراح دخل (+$formattedAmt)" else "ALG Poste: Income Suggested (+$formattedAmt)"
             }
-            val bodyText = if (suggestion.isExpense) {
+            val taxNote = caughtTax?.let {
+                val formattedTax = formatDzdAmount(it.taxAmount, if (isArabic) "دج" else "DA")
+                if (isArabic) "\n⚠ تم تصيّد ضريبة/فارق: $formattedTax"
+                else "\n⚠ Hidden fee/tax caught: $formattedTax"
+            } ?: ""
+            val bodyText = (if (suggestion.isExpense) {
                 if (isArabic) "اضغط لمراجعة الرسالة وإضافتها إلى المصاريف" else "Tap to review and add to Expense"
             } else {
                 if (isArabic) "اضغط لمراجعة الرسالة وإضافتها إلى الدخل" else "Tap to review and add to Income"
-            }
+            }) + taxNote
 
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.mipmap.ic_launcher)
@@ -163,6 +247,45 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 .build()
 
             nm.notify(suggestion.id.hashCode(), notification)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun postTaxDetectedNotification(
+        context: Context,
+        caughtTax: SmsTaxAnomalyEntry,
+        isArabic: Boolean
+    ) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return
+            val channelId = ensureSmsChannel(nm, isArabic)
+
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                caughtTax.id.hashCode(),
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val formattedTax = formatDzdAmount(caughtTax.taxAmount, if (isArabic) "دج" else "DA")
+            val title = if (isArabic) "كاشف الضرائب: فارق -$formattedTax"
+            else "Tax Radar: Difference -$formattedTax"
+            val summary = if (isArabic) caughtTax.explanationAr else caughtTax.explanationEn
+
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(summary)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            nm.notify(caughtTax.id.hashCode(), notification)
         } catch (_: Throwable) {
         }
     }

@@ -32,14 +32,17 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HistoryToggleOff
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
@@ -73,8 +76,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
@@ -104,10 +109,13 @@ fun BaridiMobSmsSyncScreen(
     pendingSuggestions: List<SmsSuggestionEntry>,
     detectedTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
     balanceHistory: List<SmsBalanceSnapshot> = emptyList(),
+    archivedSmsList: List<ArchivedAlgPosteSmsEntity> = emptyList(),
+    archiveStudyReport: ArchivedSmsStudyReport = ArchivedSmsStudyReport(),
     onToggleSyncEnabled: (Boolean) -> Unit,
     onScanInboxNow: () -> Unit,
     onRefreshCurrentBalanceOnly: (showFeedback: Boolean) -> Unit = {},
     onClearBalanceHistory: () -> Unit = {},
+    onReanalyzePermanentArchive: () -> Unit = {},
     onSkipOldSmsAndStartFresh: () -> Unit = {},
     onResetBaselineAndRescan: () -> Unit = {},
     onAnalyzeManualSms: (sender: String, body: String) -> Unit,
@@ -174,6 +182,7 @@ fun BaridiMobSmsSyncScreen(
 
     var manualSmsText by remember { mutableStateOf("") }
     var showAllBalanceHistory by remember { mutableStateOf(false) }
+    var showAllPermanentArchive by remember { mutableStateOf(false) }
     val hasFreshBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
     val totalCaughtTaxes = remember(detectedTaxes) {
         detectedTaxes.sumOf { it.taxAmount }
@@ -677,9 +686,9 @@ fun BaridiMobSmsSyncScreen(
                                 )
                                 Text(
                                     text = if (isArabic) {
-                                        "مقارنة الرصيد السابق ± العملية مع الرصيد الفعلي لاقتناص الضرائب والرسوم الخفية"
+                                        "مقارنة الرصيد السابق ± العملية مع الرصيد الفعلي لاقتناص الضرائب والرسوم (يتجاهل الفوارق > 1,000 دج)"
                                     } else {
-                                        "Compares previous vs actual Solde to catch hidden taxes & commissions"
+                                        "Compares previous vs actual Solde to catch fees & taxes (ignores differences > 1,000 DA)"
                                     },
                                     color = colors.textMuted,
                                     fontSize = 10.5.sp,
@@ -767,6 +776,20 @@ fun BaridiMobSmsSyncScreen(
                     }
                 }
             }
+        }
+
+        // 3B. Permanent Non-Deletable ALG Poste Archive & Algorithm Self-Study Vault
+        item {
+            PermanentAlgPosteArchiveCard(
+                archivedSmsList = archivedSmsList,
+                studyReport = archiveStudyReport,
+                showAll = showAllPermanentArchive,
+                isArabic = isArabic,
+                isStealth = isStealth,
+                currency = strings.currencyCode,
+                onToggleShowAll = { showAllPermanentArchive = !showAllPermanentArchive },
+                onReanalyzePermanentArchive = onReanalyzePermanentArchive
+            )
         }
 
         // 4. Pending Suggestions Header
@@ -1073,16 +1096,103 @@ private fun TaxAnomalyItemCard(
             }
         }
 
+        // Structured SMS-to-SMS Balance Comparison Breakdown
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.glassCard.copy(alpha = 0.72f))
+                .border(0.7.dp, colors.glassBorderSubtle, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isArabic) "الرصيد السابق" else "Prev New Bal",
+                    color = colors.textMuted,
+                    fontSize = 9.5.sp
+                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = formatDzdAmount(anomaly.previousBalance, currency, isStealth),
+                        color = colors.textPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = when {
+                        anomaly.transactionAmount <= 0.0 -> if (isArabic) "العملية" else "Tx Amt"
+                        anomaly.isExpense -> if (isArabic) "المبلغ المسحوب" else "Withdrawn"
+                        else -> if (isArabic) "المبلغ المضاف" else "Credited"
+                    },
+                    color = colors.textMuted,
+                    fontSize = 9.5.sp
+                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    val txPrefix = when {
+                        anomaly.transactionAmount <= 0.0 -> ""
+                        anomaly.isExpense -> "-"
+                        else -> "+"
+                    }
+                    Text(
+                        text = if (anomaly.transactionAmount <= 0.0) {
+                            if (isArabic) "غير محدد" else "—"
+                        } else if (isStealth) {
+                            "••••••"
+                        } else {
+                            "$txPrefix${formatDzdAmount(anomaly.transactionAmount, currency)}"
+                        },
+                        color = if (anomaly.isExpense) RoseNeon else EmeraldNeon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isArabic) "الرصيد الحالي" else "Curr New Bal",
+                    color = colors.textMuted,
+                    fontSize = 9.5.sp
+                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = formatDzdAmount(anomaly.actualBalance, currency, isStealth),
+                        color = EmeraldNeon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
         Text(
-            text = if (isArabic) anomaly.explanationAr else anomaly.explanationEn,
+            text = if (isStealth) {
+                if (isArabic) "التفاصيل مخفية في الوضع الخفي" else "Breakdown hidden in Stealth Mode"
+            } else if (isArabic) {
+                anomaly.explanationAr
+            } else {
+                anomaly.explanationEn
+            },
             color = colors.textPrimary,
-            fontSize = 11.5.sp,
+            fontSize = 11.sp,
             lineHeight = 16.sp
         )
 
         if (anomaly.rawBody.isNotBlank()) {
             Text(
-                text = anomaly.rawBody,
+                text = if (isStealth) "•••••• ••••••" else anomaly.rawBody,
                 color = colors.textMuted,
                 fontSize = 10.sp,
                 maxLines = 2,
@@ -1691,6 +1801,425 @@ private fun SmsBalanceHistoryLogCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PermanentAlgPosteArchiveCard(
+    archivedSmsList: List<ArchivedAlgPosteSmsEntity>,
+    studyReport: ArchivedSmsStudyReport,
+    showAll: Boolean,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    currency: String,
+    onToggleShowAll: () -> Unit,
+    onReanalyzePermanentArchive: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val vaultAccent = Color(0xFF38BDF8)
+    val visibleItems = remember(archivedSmsList, showAll) {
+        if (showAll) archivedSmsList else archivedSmsList.take(5)
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("permanent_alg_poste_archive_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = vaultAccent.copy(alpha = 0.45f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(vaultAccent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = vaultAccent,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isArabic) "السجل الدائم لرسائل ALG Poste"
+                                else "Permanent ALG Poste Archive",
+                                color = colors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(EmeraldNeon.copy(alpha = 0.16f))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (isArabic) "لا يُحذف" else "Locked",
+                                    color = EmeraldNeon,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (isArabic) {
+                                "يُحفظ نهائياً حتى لو حُذفت الرسالة من الهاتف — لدراسة الخوارزمية وتحسين النتائج"
+                            } else {
+                                "Kept forever even if SMS is deleted from phone — trains & calibrates accuracy"
+                            },
+                            color = colors.textMuted,
+                            fontSize = 10.5.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Algorithm Study Stats Strip
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.glassSurface)
+                    .border(0.8.dp, vaultAccent.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ArchiveMetricTile(
+                    label = if (isArabic) "محفوظة للأبد" else "Archived",
+                    value = "${studyReport.totalArchived}",
+                    valueColor = vaultAccent,
+                    modifier = Modifier.weight(1f)
+                )
+                ArchiveMetricTile(
+                    label = if (isArabic) "دقة الخوارزمية" else "Accuracy",
+                    value = "${studyReport.recognitionAccuracyPercent}%",
+                    valueColor = EmeraldNeon,
+                    modifier = Modifier.weight(1f)
+                )
+                ArchiveMetricTile(
+                    label = if (isArabic) "أرصدة مستخرجة" else "Balances",
+                    value = "${studyReport.balanceExtractedCount}",
+                    valueColor = CyanNeon,
+                    modifier = Modifier.weight(1f)
+                )
+                ArchiveMetricTile(
+                    label = if (isArabic) "للدراسة" else "To Study",
+                    value = "${studyReport.needsStudyCount}",
+                    valueColor = if (studyReport.needsStudyCount > 0) AmberNeon else colors.textMuted,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (studyReport.learnedFeePatterns.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AmberNeon.copy(alpha = 0.10f))
+                        .border(0.7.dp, AmberNeon.copy(alpha = 0.30f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (isArabic) "أنماط الضرائب المتكررة المكتشفة (≤ 1,000 دج):"
+                        else "Learned Recurring Fee Patterns (≤ 1,000 DA):",
+                        color = AmberNeon,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        studyReport.learnedFeePatterns.take(3).forEach { stat ->
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(AmberNeon.copy(alpha = 0.16f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isStealth) "••••"
+                                        else "${formatDzdAmount(stat.amountDzd, currency)} ×${stat.occurrences}",
+                                        color = AmberNeon,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Re-study Button (no delete button anywhere!)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(vaultAccent.copy(alpha = 0.18f))
+                    .border(0.9.dp, vaultAccent.copy(alpha = 0.50f), RoundedCornerShape(11.dp))
+                    .clickable(onClick = onReanalyzePermanentArchive)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .testTag("reanalyze_permanent_archive_btn"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = vaultAccent,
+                    modifier = Modifier.size(17.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isArabic) "إعادة دراسة السجل الدائم وتحسين النتائج"
+                    else "Re-Study Archive & Improve Results",
+                    color = vaultAccent,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            if (archivedSmsList.isEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (isArabic) {
+                        "بمجرد وصول أي رسالة من ALG Poste أو فحص الوارد، يتم تدوينها هنا للأبد ولن تُحذف نهائياً حتى لو حذفتها من تطبيق الرسائل."
+                    } else {
+                        "Every detected ALG Poste SMS is permanently archived here as soon as it arrives or is scanned, even if deleted from your phone."
+                    },
+                    color = colors.textMuted,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibleItems.forEach { item ->
+                        val statusColor = when (item.studyStatus) {
+                            "FULL_MATCH" -> EmeraldNeon
+                            "BALANCE_ONLY", "AMOUNT_ONLY" -> CyanNeon
+                            "OTP_IGNORED" -> colors.textMuted
+                            else -> AmberNeon
+                        }
+                        val statusLabel = when (item.studyStatus) {
+                            "FULL_MATCH" -> if (isArabic) "فهم كامل ✓" else "Full Match ✓"
+                            "BALANCE_ONLY" -> if (isArabic) "رصيد فقط" else "Balance Only"
+                            "AMOUNT_ONLY" -> if (isArabic) "مبلغ فقط" else "Amount Only"
+                            "OTP_IGNORED" -> if (isArabic) "رمز OTP" else "OTP Auth"
+                            else -> if (isArabic) "للدراسة" else "Needs Study"
+                        }
+                        val sourceLabel = when (item.captureSource) {
+                            "RECEIVER" -> if (isArabic) "استقبال فوري" else "Live SMS"
+                            "MANUAL" -> if (isArabic) "تجربة يدوية" else "Manual"
+                            "BACKUP" -> if (isArabic) "نسخة احتياطية" else "Backup"
+                            else -> if (isArabic) "صندوق الوارد" else "Inbox"
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.glassSurface)
+                                .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = item.sender.ifBlank { "ALG Poste" },
+                                        color = vaultAccent,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(statusColor.copy(alpha = 0.14f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = statusLabel,
+                                            color = statusColor,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(colors.glassCard)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = sourceLabel,
+                                            color = colors.textMuted,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = formatDate(item.receivedAtMillis),
+                                    color = colors.textMuted,
+                                    fontSize = 9.5.sp
+                                )
+                            }
+
+                            Text(
+                                text = if (isStealth) "•••••• ••••••" else item.rawBody,
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+
+                            if (item.extractedBalance != null || item.extractedTxAmount != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    item.extractedTxAmount?.let { amt ->
+                                        val isExp = item.extractedIsExpense ?: true
+                                        val c = if (isExp) RoseNeon else EmeraldNeon
+                                        val prefix = if (isExp) "-" else "+"
+                                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                            Text(
+                                                text = if (isStealth) "••••"
+                                                else "$prefix${formatDzdAmount(amt, currency)}",
+                                                color = c,
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+                                    item.extractedBalance?.let { bal ->
+                                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                            Text(
+                                                text = if (isStealth) "••••"
+                                                else "Solde: ${formatDzdAmount(bal, currency)}",
+                                                color = EmeraldNeon,
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text(
+                                        text = item.matchedRule,
+                                        color = colors.textMuted,
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (archivedSmsList.size > 5) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.glassSurface)
+                            .border(0.8.dp, vaultAccent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .clickable(onClick = onToggleShowAll)
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (showAll) {
+                                if (isArabic) "عرض أحدث 5 رسائل دائمة" else "Show Latest 5 Archived"
+                            } else {
+                                if (isArabic) "عرض كل السجل الدائم (${archivedSmsList.size})"
+                                else "Show All Permanent Archive (${archivedSmsList.size})"
+                            },
+                            color = vaultAccent,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveMetricTile(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val colors = LiquidGlassTheme.colors
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = FontFamily.Monospace
+        )
+        Text(
+            text = label,
+            color = colors.textMuted,
+            fontSize = 9.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

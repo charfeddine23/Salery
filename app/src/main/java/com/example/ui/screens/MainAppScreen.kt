@@ -173,10 +173,19 @@ fun MainAppScreen(
     val pendingSmsSuggestions by viewModel.pendingSmsSuggestions.collectAsState()
     val detectedSmsTaxes by viewModel.detectedSmsTaxes.collectAsState()
     val smsBalanceHistory by viewModel.smsBalanceHistory.collectAsState()
+    val archivedAlgPosteSms by viewModel.archivedAlgPosteSms.collectAsState()
+    val archiveStudyReport by viewModel.archiveStudyReport.collectAsState()
     val expandedKeyIds by viewModel.expandedKeyIds.collectAsState()
     val revealedKeyIds by viewModel.revealedKeyIds.collectAsState()
     val expandedCcpIds by viewModel.expandedCcpIds.collectAsState()
     val hiddenCcpIds by viewModel.hiddenCcpIds.collectAsState()
+    val binanceHoldings by viewModel.binanceHoldings.collectAsState()
+    val binancePrices by viewModel.binancePrices.collectAsState()
+    val isRefreshingCryptoPrices by viewModel.isRefreshingCryptoPrices.collectAsState()
+    val cryptoPriceError by viewModel.cryptoPriceError.collectAsState()
+    val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
+        com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(binanceHoldings, binancePrices)
+    }
 
     var canInstallPackages by remember {
         mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
@@ -219,6 +228,7 @@ fun MainAppScreen(
                     }
                 }
                 viewModel.checkForUpdatesIfDueOnResume()
+                viewModel.refreshCryptoMarketPrices(force = false, showFeedback = false)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -410,6 +420,7 @@ fun MainAppScreen(
                                     "theme_engine" -> "Theme Engine"
                                     "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
                                     "visa_coming_soon" -> activeStrings.visaCardTitle
+                                    "binance_wallet" -> if (isArabic) "محفظة Binance" else "Binance Wallet"
                                     "income" -> activeStrings.navIncome
                                     "expenses" -> activeStrings.navExpenses
                                     "debts" -> activeStrings.navDebts
@@ -512,13 +523,22 @@ fun MainAppScreen(
                                 "cards" -> CardsHubScreen(
                                     summary = summary,
                                     userSettings = userSettings,
+                                    binancePortfolioTotalUsd = binancePortfolioTotalUsd,
+                                    binanceHoldingsCount = binanceHoldings.size,
                                     onOpenDashboard = { currentRoute = "dashboard_details" },
                                     onOpenVisaDetails = { currentRoute = "visa_coming_soon" },
-                                    onUpdateClassicCard = { name, number, expiry, cvc ->
-                                        viewModel.updateClassicCardDetails(name, number, expiry, cvc)
+                                    onOpenBinanceWallet = { currentRoute = "binance_wallet" },
+                                    onUpdateClassicCard = { name, number, expiry, cvc, bankStyle ->
+                                        viewModel.updateClassicCardDetails(name, number, expiry, cvc, bankStyle)
                                     },
                                     onUpdateVisaCard = { provider, name, number, expiry, cvc ->
                                         viewModel.updateVisaCardDetails(provider, name, number, expiry, cvc)
+                                    },
+                                    onUpdateThirdCard = { provider, name, number, expiry, cvc ->
+                                        viewModel.updateThirdCardDetails(provider, name, number, expiry, cvc)
+                                    },
+                                    onRemoveThirdCard = {
+                                        viewModel.removeThirdCard()
                                     }
                                 )
                                 "keys" -> KeysScreen(
@@ -566,6 +586,8 @@ fun MainAppScreen(
                                     pendingSuggestions = pendingSmsSuggestions,
                                     detectedTaxes = detectedSmsTaxes,
                                     balanceHistory = smsBalanceHistory,
+                                    archivedSmsList = archivedAlgPosteSms,
+                                    archiveStudyReport = archiveStudyReport,
                                     onToggleSyncEnabled = { enabled ->
                                         viewModel.setBaridiMobSmsSyncEnabled(enabled)
                                     },
@@ -577,6 +599,9 @@ fun MainAppScreen(
                                     },
                                     onClearBalanceHistory = {
                                         viewModel.clearSmsBalanceHistory()
+                                    },
+                                    onReanalyzePermanentArchive = {
+                                        viewModel.reanalyzePermanentSmsArchive(showFeedback = true)
                                     },
                                     onSkipOldSmsAndStartFresh = {
                                         viewModel.skipOldSmsAndStartFresh()
@@ -675,6 +700,23 @@ fun MainAppScreen(
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
                                     onBackClick = { currentRoute = "cards" }
+                                )
+                                "binance_wallet" -> BinanceWalletScreen(
+                                    userSettings = userSettings,
+                                    holdings = binanceHoldings,
+                                    prices = binancePrices,
+                                    isRefreshingPrices = isRefreshingCryptoPrices,
+                                    priceError = cryptoPriceError,
+                                    onBackClick = { currentRoute = "cards" },
+                                    onRefreshPrices = { force ->
+                                        viewModel.refreshCryptoMarketPrices(force = force, showFeedback = force)
+                                    },
+                                    onUpsertHolding = { symbol, qty ->
+                                        viewModel.upsertCryptoHolding(symbol, qty)
+                                    },
+                                    onRemoveHolding = { symbol ->
+                                        viewModel.removeCryptoHolding(symbol)
+                                    }
                                 )
                                 "income" -> IncomeScreen(
                                     transactions = transactions,

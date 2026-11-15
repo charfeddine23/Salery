@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -84,6 +85,8 @@ fun EditVisaCardDialog(
     currentExpiry: String,
     currentCvc: String,
     secureScreenshots: Boolean = true,
+    isThirdCard: Boolean = false,
+    onDeleteThirdCard: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (
         provider: String,
@@ -183,7 +186,10 @@ fun EditVisaCardDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = if (isArabic) "إعداد البطاقة الدولية (Visa)" else "Configure Virtual / Bank Card",
+                                text = when {
+                                    isThirdCard -> if (isArabic) "إعداد البطاقة الثالثة" else "Configure Third Card"
+                                    else -> if (isArabic) "إعداد البطاقة الدولية (Visa)" else "Configure Virtual / Bank Card"
+                                },
                                 color = colors.textPrimary,
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold
@@ -194,6 +200,24 @@ fun EditVisaCardDialog(
                                 fontSize = 11.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (isThirdCard && onDeleteThirdCard != null) {
+                        IconButton(
+                            onClick = {
+                                onDeleteThirdCard()
+                                onDismiss()
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("remove_third_card_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = if (isArabic) "حذف البطاقة الثالثة" else "Remove third card",
+                                tint = RoseNeon
                             )
                         }
                     }

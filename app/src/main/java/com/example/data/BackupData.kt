@@ -15,7 +15,8 @@ data class BackupPayload(
     val classicCardHolderName: String = "CHARFEDDINE KA",
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
-    val classicCardCvc: String = ""
+    val classicCardCvc: String = "",
+    val archivedAlgPosteSms: List<ArchivedAlgPosteSmsEntity> = emptyList()
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
@@ -77,6 +78,26 @@ data class BackupPayload(
             debtsArray.put(obj)
         }
         root.put("debts", debtsArray)
+
+        // Permanent Non-Deletable ALG Poste SMS Archive
+        val smsArchiveArray = JSONArray()
+        archivedAlgPosteSms.forEach { sms ->
+            val obj = JSONObject()
+            obj.put("id", sms.id)
+            obj.put("sender", sms.sender)
+            obj.put("rawBody", sms.rawBody)
+            obj.put("receivedAtMillis", sms.receivedAtMillis)
+            obj.put("capturedAtMillis", sms.capturedAtMillis)
+            obj.put("captureSource", sms.captureSource)
+            if (sms.extractedBalance != null) obj.put("extractedBalance", sms.extractedBalance)
+            if (sms.extractedTxAmount != null) obj.put("extractedTxAmount", sms.extractedTxAmount)
+            if (sms.extractedIsExpense != null) obj.put("extractedIsExpense", sms.extractedIsExpense)
+            obj.put("hasExplicitFeeKeyword", sms.hasExplicitFeeKeyword)
+            obj.put("matchedRule", sms.matchedRule)
+            obj.put("studyStatus", sms.studyStatus)
+            smsArchiveArray.put(obj)
+        }
+        root.put("archivedAlgPosteSms", smsArchiveArray)
 
         return root.toString(2)
     }
@@ -147,6 +168,39 @@ data class BackupPayload(
                     }
                 }
 
+                val smsArchiveList = mutableListOf<ArchivedAlgPosteSmsEntity>()
+                val smsArchiveArray = root.optJSONArray("archivedAlgPosteSms")
+                if (smsArchiveArray != null) {
+                    for (i in 0 until smsArchiveArray.length()) {
+                        val obj = smsArchiveArray.getJSONObject(i)
+                        val smsId = obj.optString("id", "")
+                        val rawBody = obj.optString("rawBody", "")
+                        if (smsId.isBlank() || rawBody.isBlank()) continue
+                        smsArchiveList.add(
+                            ArchivedAlgPosteSmsEntity(
+                                id = smsId,
+                                sender = obj.optString("sender", "ALG Poste"),
+                                rawBody = rawBody,
+                                receivedAtMillis = obj.optLong("receivedAtMillis", System.currentTimeMillis()),
+                                capturedAtMillis = obj.optLong("capturedAtMillis", System.currentTimeMillis()),
+                                captureSource = obj.optString("captureSource", "BACKUP"),
+                                extractedBalance = if (obj.has("extractedBalance") && !obj.isNull("extractedBalance")) {
+                                    obj.getDouble("extractedBalance")
+                                } else null,
+                                extractedTxAmount = if (obj.has("extractedTxAmount") && !obj.isNull("extractedTxAmount")) {
+                                    obj.getDouble("extractedTxAmount")
+                                } else null,
+                                extractedIsExpense = if (obj.has("extractedIsExpense") && !obj.isNull("extractedIsExpense")) {
+                                    obj.getBoolean("extractedIsExpense")
+                                } else null,
+                                hasExplicitFeeKeyword = obj.optBoolean("hasExplicitFeeKeyword", false),
+                                matchedRule = obj.optString("matchedRule", "UNRECOGNIZED"),
+                                studyStatus = obj.optString("studyStatus", "NEEDS_STUDY")
+                            )
+                        )
+                    }
+                }
+
                 BackupPayload(
                     exportTimestamp = exportTimestamp,
                     appVersion = appVersion,
@@ -159,7 +213,8 @@ data class BackupPayload(
                     classicCardHolderName = classicCardHolderName,
                     classicCardNumber = classicCardNumber,
                     classicCardExpiry = classicCardExpiry,
-                    classicCardCvc = classicCardCvc
+                    classicCardCvc = classicCardCvc,
+                    archivedAlgPosteSms = smsArchiveList
                 )
             }.getOrNull()
         }

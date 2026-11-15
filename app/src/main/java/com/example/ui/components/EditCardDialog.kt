@@ -64,6 +64,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import com.example.data.AlgerianBankCardCatalog
+import com.example.data.AlgerianBankMotif
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.AmberNeon
@@ -74,18 +80,25 @@ import com.example.ui.theme.RoseNeon
 
 @Composable
 fun EditCardDialog(
+    currentBankStyle: String = "EDAHABIA",
     currentHolderName: String,
     currentCardNumber: String,
     currentExpiry: String,
     currentCvc: String,
     secureScreenshots: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit
+    onSave: (holderName: String, cardNumber: String, expiryDate: String, cvc: String, bankStyle: String) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
 
+    var selectedBankStyle by remember {
+        mutableStateOf(AlgerianBankCardCatalog.findById(currentBankStyle).id)
+    }
+    val bankSpec = remember(selectedBankStyle) {
+        AlgerianBankCardCatalog.findById(selectedBankStyle)
+    }
     var holderName by remember { mutableStateOf(currentHolderName) }
     var cardNumberDigits by remember {
         mutableStateOf(currentCardNumber.filter { it.isDigit() }.take(16))
@@ -180,80 +193,167 @@ fun EditCardDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Live Mini Preview of the Classic Blue Card
+                // Algerian Banks Selector
+                Text(
+                    text = if (isArabic) "اختر تصميم البنك الجزائري (${AlgerianBankCardCatalog.all.size} بطاقة)" else "Choose Algerian Bank Card (${AlgerianBankCardCatalog.all.size} styles)",
+                    color = colors.textSecondary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(AlgerianBankCardCatalog.all, key = { it.id }) { bank ->
+                        val isSelected = bank.id == bankSpec.id
+                        val primaryColor = Color(bank.gradientHexes.first())
+                        val accentColor = Color(bank.accentHex)
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) primaryColor.copy(alpha = 0.30f)
+                                    else colors.glassCard
+                                )
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) accentColor else colors.glassBorderSubtle,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { selectedBankStyle = bank.id }
+                                .testTag("select_dz_bank_${bank.id.lowercase()}")
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(listOf(primaryColor, accentColor))
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
+                                Text(
+                                    text = if (bank.id == "EDAHABIA") {
+                                        if (isArabic) "الذهبية" else "Edahabia"
+                                    } else {
+                                        bank.shortCode
+                                    },
+                                    color = if (isSelected) colors.textPrimary else colors.textSecondary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = if (isArabic) bank.nameAr else bank.nameEn,
+                                    color = colors.textMuted,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Live Mini Preview of the Selected Algerian Bank Card
+                val bankAccent = Color(bankSpec.accentHex)
+                val bankSecondaryText = Color(bankSpec.secondaryTextHex)
+                val isEdahabia = bankSpec.motif == AlgerianBankMotif.EDAHABIA_ZELLIGE
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF2563EB),
-                                    Color(0xFF1D4ED8),
-                                    Color(0xFF15348A),
-                                    Color(0xFF0F2566)
-                                ),
+                                colors = bankSpec.gradientHexes.map { Color(it) },
                                 start = Offset(0f, 0f),
                                 end = Offset(700f, 350f)
                             )
                         )
                         .drawBehind {
-                            val boundary = Path().apply {
-                                moveTo(size.width * 0.85f, 0f)
-                                quadraticTo(
-                                    size.width * 0.90f, size.height * 0.45f,
-                                    size.width * 0.86f, size.height
-                                )
-                            }
-                            val clipP = Path().apply {
-                                addPath(boundary)
-                                lineTo(size.width, size.height)
-                                lineTo(size.width, 0f)
-                                close()
-                            }
-                            clipPath(clipP) {
-                                drawRect(
-                                    color = Color(0xFF1E3A8A),
-                                    topLeft = Offset(size.width * 0.83f, 0f),
-                                    size = Size(size.width * 0.19f, size.height)
-                                )
-                                val miniColors = listOf(
-                                    Color(0xFFFACC15),
-                                    Color.White,
-                                    Color(0xFF38BDF8),
-                                    Color(0xFF1D4ED8)
-                                )
-                                val cw = size.width * 0.065f
-                                val ch = size.height / 3.8f
-                                for (r in -1..5) {
-                                    for (c in 0..3) {
-                                        val cx = size.width * 0.84f + c * cw + (if (r % 2 == 0) 0f else cw * 0.5f)
-                                        val cy = r * ch
-                                        val tile = Path().apply {
-                                            moveTo(cx, cy - ch * 0.5f)
-                                            lineTo(cx + cw * 0.5f, cy)
-                                            lineTo(cx, cy + ch * 0.5f)
-                                            lineTo(cx - cw * 0.5f, cy)
-                                            close()
+                            if (isEdahabia) {
+                                val boundary = Path().apply {
+                                    moveTo(size.width * 0.85f, 0f)
+                                    quadraticTo(
+                                        size.width * 0.90f, size.height * 0.45f,
+                                        size.width * 0.86f, size.height
+                                    )
+                                }
+                                val clipP = Path().apply {
+                                    addPath(boundary)
+                                    lineTo(size.width, size.height)
+                                    lineTo(size.width, 0f)
+                                    close()
+                                }
+                                clipPath(clipP) {
+                                    drawRect(
+                                        color = Color(0xFF1E3A8A),
+                                        topLeft = Offset(size.width * 0.83f, 0f),
+                                        size = Size(size.width * 0.19f, size.height)
+                                    )
+                                    val miniColors = listOf(
+                                        Color(0xFFFACC15),
+                                        Color.White,
+                                        Color(0xFF38BDF8),
+                                        Color(0xFF1D4ED8)
+                                    )
+                                    val cw = size.width * 0.065f
+                                    val ch = size.height / 3.8f
+                                    for (r in -1..5) {
+                                        for (c in 0..3) {
+                                            val cx = size.width * 0.84f + c * cw + (if (r % 2 == 0) 0f else cw * 0.5f)
+                                            val cy = r * ch
+                                            val tile = Path().apply {
+                                                moveTo(cx, cy - ch * 0.5f)
+                                                lineTo(cx + cw * 0.5f, cy)
+                                                lineTo(cx, cy + ch * 0.5f)
+                                                lineTo(cx - cw * 0.5f, cy)
+                                                close()
+                                            }
+                                            drawPath(tile, miniColors[(r + c + 4) % miniColors.size])
                                         }
-                                        drawPath(tile, miniColors[(r + c + 4) % miniColors.size])
                                     }
                                 }
+                                drawPath(
+                                    path = boundary,
+                                    color = Color(0xFF93C5FD).copy(alpha = 0.45f),
+                                    style = Stroke(width = 1.2f)
+                                )
+                            } else {
+                                drawCircle(
+                                    color = bankAccent.copy(alpha = 0.14f),
+                                    radius = size.height * 0.55f,
+                                    center = Offset(size.width * 0.88f, size.height * 0.42f),
+                                    style = Stroke(width = 14f)
+                                )
+                                val ribbon = Path().apply {
+                                    moveTo(size.width * 0.52f, 0f)
+                                    lineTo(size.width * 0.72f, 0f)
+                                    lineTo(size.width * 0.44f, size.height)
+                                    lineTo(size.width * 0.24f, size.height)
+                                    close()
+                                }
+                                drawPath(ribbon, bankAccent.copy(alpha = 0.09f))
                             }
-                            drawPath(
-                                path = boundary,
-                                color = Color(0xFF93C5FD).copy(alpha = 0.45f),
-                                style = Stroke(width = 1.2f)
-                            )
                         }
                         .border(
                             1.dp,
-                            Color(0xFF7DD3FC).copy(alpha = 0.55f),
+                            bankAccent.copy(alpha = 0.55f),
                             RoundedCornerShape(16.dp)
                         )
-                        .padding(start = 14.dp, end = 42.dp, top = 12.dp, bottom = 12.dp)
+                        .padding(
+                            start = 14.dp,
+                            end = if (isEdahabia) 42.dp else 14.dp,
+                            top = 12.dp,
+                            bottom = 12.dp
+                        )
                 ) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -262,16 +362,18 @@ fun EditCardDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.End) {
+                                Column(horizontalAlignment = Alignment.Start) {
                                     Text(
-                                        text = "الذهبية",
-                                        color = Color(0xFFE0F2FE),
+                                        text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
+                                        color = bankSecondaryText,
                                         fontSize = 8.sp,
                                         fontWeight = FontWeight.Bold,
-                                        lineHeight = 9.sp
+                                        lineHeight = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "CLASSIC",
+                                        text = bankSpec.cardTypeLabel,
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -280,15 +382,15 @@ fun EditCardDialog(
                                     )
                                 }
                                 Text(
-                                    text = "بريد الجزائر",
-                                    color = Color.White.copy(alpha = 0.92f),
+                                    text = if (isEdahabia) "بريد الجزائر" else "CIB • ${bankSpec.shortCode}",
+                                    color = bankAccent,
                                     fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                             }
 
                             val previewNumber = if (cardNumberDigits.isBlank()) {
-                                "6280  26••  ••••  9842"
+                                bankSpec.defaultNumberPrefix
                             } else {
                                 formatCardDigitsPreview(cardNumberDigits)
                             }
@@ -329,14 +431,14 @@ fun EditCardDialog(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(
                                         text = "EXP $previewExp",
-                                        color = Color(0xFFBAE6FD),
+                                        color = bankSecondaryText,
                                         fontSize = 9.5.sp,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = "CVC $previewCvc",
-                                        color = Color(0xFFBAE6FD),
+                                        color = bankSecondaryText,
                                         fontSize = 9.5.sp,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold
@@ -482,7 +584,8 @@ fun EditCardDialog(
                                 holderName.trim(),
                                 cardNumberDigits,
                                 formattedExp,
-                                cvcDigits
+                                cvcDigits,
+                                bankSpec.id
                             )
                             onDismiss()
                         }

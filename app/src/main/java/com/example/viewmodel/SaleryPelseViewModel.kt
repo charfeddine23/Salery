@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
+import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.BackupPayload
 import com.example.data.CcpAccountEntry
 import com.example.data.DebtEntity
@@ -39,6 +40,7 @@ import com.example.notification.DebtReminderScheduler
 import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.AlgPosteSmsCodec
 import com.example.sms.AlgPosteSmsInboxScanner
+import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
@@ -47,6 +49,14 @@ import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
 import com.example.update.isMandatoryBlockActive
 import com.example.update.compareVersionTags
+import com.example.crypto.BinanceCryptoCatalog
+import com.example.crypto.BinanceCryptoCodec
+import com.example.crypto.BinanceMarketPriceFetcher
+import com.example.crypto.CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS
+import com.example.crypto.CryptoHoldingEntry
+import com.example.crypto.CryptoMarketPriceEntry
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
@@ -168,6 +178,33 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         .map { AlgPosteSmsCodec.parseBalanceHistory(it.smsBalanceHistoryJson) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Permanent non-deletable archive of every ALG Poste SMS (survives phone SMS deletion)
+    val archivedAlgPosteSms: StateFlow<List<ArchivedAlgPosteSmsEntity>> = dao.getAllArchivedAlgPosteSms()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Live algorithm study metrics computed from the permanent archive & caught taxes
+    val archiveStudyReport: StateFlow<ArchivedSmsStudyReport> = combine(
+        archivedAlgPosteSms,
+        detectedSmsTaxes
+    ) { archived, taxes ->
+        AlgPosteSmsAnalyzer.buildStudyReport(archived, taxes)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArchivedSmsStudyReport())
+
+    // Binance Card Crypto Portfolio & Live Hourly Market Prices
+    val binanceHoldings: StateFlow<List<CryptoHoldingEntry>> = settings
+        .map { BinanceCryptoCodec.parseHoldings(it.binanceHoldingsJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val binancePrices: StateFlow<Map<String, CryptoMarketPriceEntry>> = settings
+        .map { BinanceCryptoCodec.parsePrices(it.binancePricesJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private val _isRefreshingCryptoPrices = MutableStateFlow(false)
+    val isRefreshingCryptoPrices: StateFlow<Boolean> = _isRefreshingCryptoPrices.asStateFlow()
+
+    private val _cryptoPriceError = MutableStateFlow<String?>(null)
+    val cryptoPriceError: StateFlow<String?> = _cryptoPriceError.asStateFlow()
+
     // Notification events for UI banners
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -203,6 +240,20 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
         // Silent background check for newer release on GitHub
         checkForUpdates(manual = false)
+
+        // Hourly market price synchronization loop for Binance Crypto Card
+        viewModelScope.launch {
+            while (isActive) {
+                val cfg = settings.value
+                val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
+                    (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
+                    BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty()
+                if (usesBinance) {
+                    refreshCryptoMarketPrices(force = false, showFeedback = false)
+                }
+                delay(CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS)
+            }
+        }
     }
 
     private suspend fun cleanExistingMockDataIfPresent() {
@@ -581,7 +632,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         holderName: String,
         cardNumber: String,
         expiryDate: String,
-        cvc: String
+        cvc: String,
+        bankStyle: String = settings.value.classicCardBankStyle
     ) {
         val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }
         val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
@@ -592,9 +644,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             expiryDate.trim().ifBlank { "11/29" }
         }
         val cleanCvc = cvc.filter { it.isDigit() }.take(4)
+        val cleanBankStyle = com.example.data.AlgerianBankCardCatalog.findById(bankStyle).id
 
         prefsManager.updateSettings {
             it.copy(
+                classicCardBankStyle = cleanBankStyle,
                 classicCardHolderName = cleanName,
                 classicCardNumber = cleanDigits,
                 classicCardExpiry = formattedExpiry,
@@ -653,6 +707,71 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _toastEvent.emit(
                 if (isAr) "تم حفظ بطاقة $label بنجاح 💳"
                 else "$label card saved successfully 💳"
+            )
+        }
+    }
+
+    fun updateThirdCardDetails(
+        provider: String,
+        holderName: String,
+        cardNumber: String,
+        expiryDate: String,
+        cvc: String
+    ) {
+        val cleanProvider = when (provider.uppercase()) {
+            "REDOTPAY" -> "REDOTPAY"
+            "BYBIT" -> "BYBIT"
+            "BINANCE" -> "BINANCE"
+            else -> "DEFAULT"
+        }
+        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase()
+        val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
+        val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
+        val formattedExpiry = if (cleanExpiryDigits.length == 4) {
+            "${cleanExpiryDigits.substring(0, 2)}/${cleanExpiryDigits.substring(2, 4)}"
+        } else {
+            expiryDate.trim().ifBlank { "08/28" }
+        }
+        val cleanCvc = cvc.filter { it.isDigit() }.take(4)
+
+        prefsManager.updateSettings {
+            it.copy(
+                thirdCardEnabled = true,
+                thirdCardProvider = cleanProvider,
+                thirdCardHolderName = cleanName,
+                thirdCardNumber = cleanDigits,
+                thirdCardExpiry = formattedExpiry,
+                thirdCardCvc = cleanCvc
+            )
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val label = when (cleanProvider) {
+                "REDOTPAY" -> "RedotPay"
+                "BYBIT" -> "Bybit"
+                "BINANCE" -> "Binance"
+                else -> "Visa"
+            }
+            _toastEvent.emit(
+                if (isAr) "تم حفظ البطاقة الثالثة ($label) بنجاح 💳"
+                else "Third card ($label) saved successfully 💳"
+            )
+        }
+    }
+
+    fun removeThirdCard() {
+        prefsManager.updateSettings {
+            it.copy(
+                thirdCardEnabled = false,
+                thirdCardNumber = "",
+                thirdCardCvc = ""
+            )
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تمت إزالة البطاقة الثالثة 💳"
+                else "Third card removed 💳"
             )
         }
     }
@@ -1113,6 +1232,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     suspend fun exportBackupJson(): String {
         val trans = dao.getAllTransactionsList()
         val debts = dao.getAllDebtsList()
+        val archivedSms = dao.getAllArchivedAlgPosteSmsList()
         val userConfig = settings.value
 
         val payload = BackupPayload(
@@ -1127,7 +1247,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             classicCardHolderName = userConfig.classicCardHolderName,
             classicCardNumber = userConfig.classicCardNumber,
             classicCardExpiry = userConfig.classicCardExpiry,
-            classicCardCvc = userConfig.classicCardCvc
+            classicCardCvc = userConfig.classicCardCvc,
+            archivedAlgPosteSms = archivedSms
         )
 
         prefsManager.updateSettings {
@@ -1143,6 +1264,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
         dao.insertTransactions(payload.transactions)
         dao.insertDebts(payload.debts)
+        if (payload.archivedAlgPosteSms.isNotEmpty()) {
+            // Merge into permanent archive without deleting existing permanent SMS records
+            dao.insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
+        }
 
         prefsManager.updateSettings {
             it.copy(
@@ -1156,6 +1281,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 lastBackupTimestamp = System.currentTimeMillis()
             )
         }
+        reanalyzePermanentSmsArchive(showFeedback = false)
         _toastEvent.emit("Restored ${payload.transactions.size} transactions and ${payload.debts.size} debts")
         return true
     }
@@ -1392,10 +1518,27 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
                 return@launch
             }
-            val snapshots = withContext(Dispatchers.IO) {
-                AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
+            val (snapshots, archivedSnapshots) = withContext(Dispatchers.IO) {
+                val rawList = AlgPosteSmsInboxScanner.scanAllRawAlgPosteSms(context)
+                val toArchive = rawList.mapNotNull { raw ->
+                    AlgPosteSmsAnalyzer.toArchivedEntity(
+                        sender = raw.sender,
+                        body = raw.body,
+                        timestampMillis = raw.dateMillis,
+                        captureSource = "INBOX",
+                        allowAnySenderForManualTest = false
+                    )
+                }
+                if (toArchive.isNotEmpty()) {
+                    dao.insertArchivedSmsIfMissing(toArchive)
+                }
+                val liveSnaps = AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
+                val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
+                    dao.getAllArchivedAlgPosteSmsList()
+                )
+                liveSnaps to permanentSnaps
             }
-            if (snapshots.isEmpty()) {
+            if (snapshots.isEmpty() && archivedSnapshots.isEmpty()) {
                 if (showFeedback) {
                     _toastEvent.emit(
                         if (isAr) "لم يتم العثور على أرصدة في رسائل ALG Poste / BaridiMob"
@@ -1409,7 +1552,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var latestBalance = -1.0
             prefsManager.updateSettings { current ->
                 val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = (existingHistory + snapshots)
+                val mergedHistory = (existingHistory + archivedSnapshots + snapshots)
                     .distinctBy { it.id }
                     .sortedBy { it.timestampMillis }
                 val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
@@ -1441,6 +1584,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun clearSmsBalanceHistory() {
+        // Clears only the display timeline; the permanent ALG Poste archive in Room is NEVER deleted.
         prefsManager.updateSettings { current ->
             current.copy(
                 smsBalanceHistoryJson = "[]",
@@ -1448,6 +1592,60 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 latestSmsBalanceUpdatedAt = 0L,
                 latestSmsBalanceRawSnippet = ""
             )
+        }
+    }
+
+    fun reanalyzePermanentSmsArchive(showFeedback: Boolean = true) {
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val reanalyzed = withContext(Dispatchers.IO) {
+                val existing = dao.getAllArchivedAlgPosteSmsList()
+                val updated = existing.map { AlgPosteSmsAnalyzer.reanalyzeArchivedEntity(it) }
+                if (updated.isNotEmpty()) {
+                    dao.updateArchivedSmsAnalysis(updated)
+                }
+                updated
+            }
+            if (reanalyzed.isEmpty()) {
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "السجل الدائم لرسائل ALG Poste فارغ حالياً"
+                        else "Permanent ALG Poste SMS archive is currently empty"
+                    )
+                }
+                return@launch
+            }
+
+            val reconstructedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(reanalyzed)
+            var totalTaxes = 0
+            prefsManager.updateSettings { current ->
+                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                val mergedHistory = (existingHistory + reconstructedSnaps)
+                    .distinctBy { it.id }
+                    .sortedBy { it.timestampMillis }
+                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                    snapshots = mergedHistory,
+                    existingAnomalies = existingTaxes
+                )
+                totalTaxes = updatedTaxes.size
+
+                current.copy(
+                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                )
+            }
+
+            if (showFeedback) {
+                _toastEvent.emit(
+                    if (isAr) "تمت إعادة دراسة ${reanalyzed.size} رسالة دائمة • رصد $totalTaxes ضرائب (≤ 1,000 دج)"
+                    else "Re-studied ${reanalyzed.size} permanent SMS • $totalTaxes caught taxes (≤ 1,000 DA)"
+                )
+            }
         }
     }
 
@@ -1465,12 +1663,28 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             val baselineMillis = settings.value.smsSyncBaselineTimestampMillis
-            val scanResult = withContext(Dispatchers.IO) {
-                AlgPosteSmsInboxScanner.scanInboxWithBalances(
+            val (scanResult, archivedSnapshots) = withContext(Dispatchers.IO) {
+                val res = AlgPosteSmsInboxScanner.scanInboxWithBalances(
                     context = context,
                     minTimestampMillis = baselineMillis,
                     applyMinTimestampToSnapshots = false
                 )
+                val toArchive = res.rawMessages.mapNotNull { raw ->
+                    AlgPosteSmsAnalyzer.toArchivedEntity(
+                        sender = raw.sender,
+                        body = raw.body,
+                        timestampMillis = raw.dateMillis,
+                        captureSource = "INBOX",
+                        allowAnySenderForManualTest = false
+                    )
+                }
+                if (toArchive.isNotEmpty()) {
+                    dao.insertArchivedSmsIfMissing(toArchive)
+                }
+                val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
+                    dao.getAllArchivedAlgPosteSmsList()
+                )
+                res to permanentSnaps
             }
 
             var addedCount = 0
@@ -1484,7 +1698,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 addedCount = newOnes.size
 
                 val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = (existingHistory + scanResult.snapshots)
+                val mergedHistory = (existingHistory + archivedSnapshots + scanResult.snapshots)
                     .distinctBy { it.id }
                     .sortedBy { it.timestampMillis }
                 newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
@@ -1552,22 +1766,36 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             val now = System.currentTimeMillis()
+            val effectiveSender = sender.ifBlank { "ALG Poste" }
             val parsed = AlgPosteSmsAnalyzer.parseSms(
-                sender = sender.ifBlank { "ALG Poste" },
+                sender = effectiveSender,
                 body = body,
                 timestampMillis = now,
                 allowAnySenderForManualTest = true
             )
             val snapshot = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
-                sender = sender.ifBlank { "ALG Poste" },
+                sender = effectiveSender,
                 body = body,
                 timestampMillis = now,
                 allowAnySenderForManualTest = true
             )
+            // Always archive into the permanent study log even if unrecognized so algorithm can learn it
+            val archivedEntity = AlgPosteSmsAnalyzer.toArchivedEntity(
+                sender = effectiveSender,
+                body = body,
+                timestampMillis = now,
+                captureSource = "MANUAL",
+                allowAnySenderForManualTest = true
+            )
+            if (archivedEntity != null) {
+                withContext(Dispatchers.IO) {
+                    dao.insertArchivedSmsIfMissing(listOf(archivedEntity))
+                }
+            }
             if (parsed == null && snapshot == null) {
                 _toastEvent.emit(
-                    if (isAr) "تعذر استخراج مبلغ أو رصيد من هذه الرسالة"
-                    else "Could not detect a valid transaction amount or balance from this SMS"
+                    if (isAr) "تم حفظ الرسالة في السجل الدائم لدراسة الخوارزمية (تعذر استخراج مبلغ تلقائياً)"
+                    else "Archived SMS for algorithm study (could not auto-extract amount or balance)"
                 )
                 return@launch
             }
@@ -1753,6 +1981,99 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
             )
         }
+    }
+
+    // ==================== Binance Crypto Card & Hourly Market Prices ====================
+
+    fun refreshCryptoMarketPrices(force: Boolean = false, showFeedback: Boolean = false) {
+        if (_isRefreshingCryptoPrices.value) return
+        val lastSync = settings.value.binanceLastPriceSyncMillis
+        if (!force && !BinanceCryptoCatalog.shouldRefreshMarketPrices(lastSync)) {
+            return
+        }
+
+        viewModelScope.launch {
+            _isRefreshingCryptoPrices.value = true
+            _cryptoPriceError.value = null
+            val result = BinanceMarketPriceFetcher.fetchLivePrices()
+            _isRefreshingCryptoPrices.value = false
+
+            val isAr = settings.value.language == "ar"
+            result.onSuccess { fetchedMap ->
+                val now = System.currentTimeMillis()
+                prefsManager.updateSettings { current ->
+                    val merged = BinanceCryptoCodec.parsePrices(current.binancePricesJson).toMutableMap()
+                    merged.putAll(fetchedMap)
+                    current.copy(
+                        binancePricesJson = BinanceCryptoCodec.encodePrices(merged),
+                        binanceLastPriceSyncMillis = now
+                    )
+                }
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تم تحديث أسعار العملات الرقمية من السوق ✅"
+                        else "Crypto market prices updated ✅"
+                    )
+                }
+            }.onFailure {
+                val msg = if (isAr) {
+                    "تعذر الاتصال بالسوق لتحديث الأسعار"
+                } else {
+                    "Unable to fetch live market prices"
+                }
+                _cryptoPriceError.value = msg
+                if (showFeedback) {
+                    _toastEvent.emit(msg)
+                }
+            }
+        }
+    }
+
+    fun upsertCryptoHolding(symbol: String, quantity: Double) {
+        val cleanSym = symbol.trim().uppercase()
+        if (cleanSym.isBlank()) return
+        val isAr = settings.value.language == "ar"
+
+        prefsManager.updateSettings { current ->
+            val list = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
+                .filterNot { it.symbol.equals(cleanSym, ignoreCase = true) }
+                .toMutableList()
+            if (quantity > 0.0) {
+                list.add(
+                    0,
+                    CryptoHoldingEntry(
+                        symbol = cleanSym,
+                        quantity = quantity,
+                        updatedAtMillis = System.currentTimeMillis()
+                    )
+                )
+            }
+            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(list))
+        }
+
+        // Ensure we have fresh prices if stale or if coin price isn't cached yet
+        val currentPrices = BinanceCryptoCodec.parsePrices(settings.value.binancePricesJson)
+        if (quantity > 0.0 && (currentPrices[cleanSym] == null ||
+                BinanceCryptoCatalog.shouldRefreshMarketPrices(settings.value.binanceLastPriceSyncMillis))
+        ) {
+            refreshCryptoMarketPrices(force = true, showFeedback = false)
+        }
+
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (quantity > 0.0) {
+                    if (isAr) "تم حفظ رصيد $cleanSym في محفظة Binance ✅"
+                    else "Saved $cleanSym holding to Binance Wallet ✅"
+                } else {
+                    if (isAr) "تمت إزالة $cleanSym من المحفظة"
+                    else "Removed $cleanSym from Binance Wallet"
+                }
+            )
+        }
+    }
+
+    fun removeCryptoHolding(symbol: String) {
+        upsertCryptoHolding(symbol, 0.0)
     }
 }
 

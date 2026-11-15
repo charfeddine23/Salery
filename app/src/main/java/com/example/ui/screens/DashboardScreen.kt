@@ -1,12 +1,6 @@
 package com.example.ui.screens
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,24 +32,19 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -134,35 +123,10 @@ fun DashboardScreen(
     val typo = LocalAdaptiveTypography.current
     val context = LocalContext.current
 
-    // Auto-read latest CCP balance from ALG Poste / BaridiMob SMS once on dashboard load if permission is granted
+    // Auto-read latest Alg Post balance from ALG Poste / BaridiMob SMS once on dashboard load if permission is granted
     LaunchedEffect(Unit) {
         if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
             onRefreshCcpBalanceFromSms(false)
-        }
-    }
-
-    val smsPermLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = results[Manifest.permission.READ_SMS] == true ||
-            AlgPosteSmsInboxScanner.hasSmsPermissions(context)
-        if (granted) {
-            onRefreshCcpBalanceFromSms(true)
-        } else {
-            onRefreshCcpBalanceFromSms(true)
-        }
-    }
-
-    val handleReadCcpSmsBalance = {
-        if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
-            onRefreshCcpBalanceFromSms(true)
-        } else {
-            smsPermLauncher.launch(
-                arrayOf(
-                    Manifest.permission.READ_SMS,
-                    Manifest.permission.RECEIVE_SMS
-                )
-            )
         }
     }
 
@@ -209,23 +173,12 @@ fun DashboardScreen(
                 item {
                     CcpBalanceCard(
                         userSettings = userSettings,
-                        isStealth = isStealth,
-                        strings = strings,
-                        colors = colors,
-                        onRefreshFromSms = handleReadCcpSmsBalance,
-                        onOpenBaridiMobSync = onOpenBaridiMobSync
-                    )
-                }
-
-                item {
-                    BaridiMobCardRadarTile(
-                        userSettings = userSettings,
                         pendingCount = pendingSmsSuggestions.size,
                         detectedTaxes = detectedSmsTaxes,
                         isStealth = isStealth,
                         strings = strings,
                         colors = colors,
-                        onClick = onOpenBaridiMobSync
+                        onOpenBaridiMobSync = onOpenBaridiMobSync
                     )
                 }
 
@@ -329,23 +282,12 @@ fun DashboardScreen(
             item {
                 CcpBalanceCard(
                     userSettings = userSettings,
-                    isStealth = isStealth,
-                    strings = strings,
-                    colors = colors,
-                    onRefreshFromSms = handleReadCcpSmsBalance,
-                    onOpenBaridiMobSync = onOpenBaridiMobSync
-                )
-            }
-
-            item {
-                BaridiMobCardRadarTile(
-                    userSettings = userSettings,
                     pendingCount = pendingSmsSuggestions.size,
                     detectedTaxes = detectedSmsTaxes,
                     isStealth = isStealth,
                     strings = strings,
                     colors = colors,
-                    onClick = onOpenBaridiMobSync
+                    onOpenBaridiMobSync = onOpenBaridiMobSync
                 )
             }
 
@@ -800,32 +742,64 @@ private fun BaridiMobSmsSuggestionBanner(
 }
 
 @Composable
-private fun BaridiMobCardRadarTile(
+private fun CcpBalanceCard(
     userSettings: UserSettings,
     pendingCount: Int,
     detectedTaxes: List<SmsTaxAnomalyEntry>,
     isStealth: Boolean,
     strings: StringsBundle,
     colors: LiquidGlassColors,
-    onClick: () -> Unit
+    onOpenBaridiMobSync: () -> Unit
 ) {
     val isArabic = strings is ArabicStrings
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
-    val hasExtractedBalance = userSettings.latestSmsBalanceAmount >= 0.0
+
+    val hasBalance = userSettings.latestSmsBalanceAmount >= 0.0
     val hasBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
     val totalTaxes = detectedTaxes.sumOf { it.taxAmount }
     val unrecordedTaxes = detectedTaxes.count { !it.isRecordedAsExpense }
 
+    val posteGold = Color(0xFFFACC15)
+    val posteNavy = Color(0xFF1E3A8A)
+
+    val updatedText = remember(userSettings.latestSmsBalanceUpdatedAt, isArabic) {
+        if (userSettings.latestSmsBalanceUpdatedAt > 0L) {
+            SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault())
+                .format(Date(userSettings.latestSmsBalanceUpdatedAt))
+        } else ""
+    }
+
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("dashboard_baridimob_radar_card"),
+            .testTag("dashboard_ccp_balance_card"),
         backgroundColor = colors.glassCard,
-        borderColor = Color(0xFF818CF8).copy(alpha = 0.45f),
+        borderColor = posteGold.copy(alpha = 0.45f),
         shape = RoundedCornerShape(dimens.cornerRadiusLg),
-        onClick = onClick
+        cornerRadius = dimens.cornerRadiusLg,
+        onClick = onOpenBaridiMobSync
     ) {
+        if (!colors.isNeumorphic) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val glowCenter = Offset(size.width * 0.85f, size.height * 0.25f)
+                val glowRadius = size.maxDimension * 0.52f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            posteGold.copy(alpha = 0.16f),
+                            posteNavy.copy(alpha = 0.12f),
+                            Color.Transparent
+                        ),
+                        center = glowCenter,
+                        radius = glowRadius
+                    ),
+                    center = glowCenter,
+                    radius = glowRadius
+                )
+            }
+        }
+
         Column(modifier = Modifier.padding(dimens.cardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -833,50 +807,98 @@ private fun BaridiMobCardRadarTile(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(dimens.iconSizeXl + 4.dp)
+                        .size(44.dp)
                         .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                         .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFF6366F1), CyanNeon)
+                            Brush.linearGradient(
+                                colors = listOf(posteGold, Color(0xFFD97706))
                             )
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Sms,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(dimens.iconSizeMd)
+                        imageVector = Icons.Default.AccountBalanceWallet,
+                        contentDescription = "Alg Post Balance",
+                        tint = Color(0xFF0B1F3A),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.width(dimens.spacingMd))
 
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Alg Post Balance",
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = typo.titleSm,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (hasBalance) EmeraldNeon else posteGold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (isArabic) "مزامنة بريدي موب وكاشف الضرائب" else "BaridiMob SMS & Tax Radar",
-                        color = colors.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = typo.bodyLg,
+                        text = if (isArabic) {
+                            "بريدي موب SMS • رادار الضرائب والأرصدة"
+                        } else {
+                            "BaridiMob SMS & Tax Radar • ALG Poste"
+                        },
+                        color = colors.textMuted,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.glassSurface.copy(alpha = 0.72f))
+                    .border(
+                        width = 0.8.dp,
+                        color = if (hasBalance) EmeraldNeon.copy(alpha = 0.28f) else colors.glassBorder,
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (hasExtractedBalance) {
-                            val balStr = formatDzdAmount(
-                                userSettings.latestSmsBalanceAmount,
-                                strings.currencyCode,
+                        text = if (isArabic) "الرصيد الحالي في الحساب البريدي" else "Current ALG Poste Balance",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (hasBalance) {
+                            formatDzdAmount(
+                                amount = userSettings.latestSmsBalanceAmount,
+                                currencyText = strings.currencyCode,
                                 isStealth = isStealth
                             )
-                            if (isArabic) "رصيد البطاقة المستخرج: $balStr" else "SMS Balance: $balStr"
                         } else {
-                            if (isArabic) "استخراج الرصيد من الرسائل • كشف الفوارق"
-                            else "Extract card balance & detect hidden fees"
+                            if (isArabic) "--- دج • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS"
                         },
-                        color = if (hasExtractedBalance) EmeraldNeon else colors.textMuted,
-                        fontSize = typo.bodySm,
-                        fontWeight = if (hasExtractedBalance) FontWeight.Bold else FontWeight.Normal,
+                        color = if (hasBalance) EmeraldNeon else posteGold,
+                        fontSize = if (hasBalance) 24.sp else 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -884,9 +906,9 @@ private fun BaridiMobCardRadarTile(
 
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
+                    contentDescription = if (isArabic) "فتح تفاصيل بريدي موب" else "Open BaridiMob Sync",
                     tint = colors.textSecondary,
-                    modifier = Modifier.size(dimens.iconSizeSm)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -967,220 +989,6 @@ private fun BaridiMobCardRadarTile(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CcpBalanceCard(
-    userSettings: UserSettings,
-    isStealth: Boolean,
-    strings: StringsBundle,
-    colors: LiquidGlassColors,
-    onRefreshFromSms: () -> Unit,
-    onOpenBaridiMobSync: () -> Unit
-) {
-    val isArabic = strings is ArabicStrings
-    val dimens = LocalAdaptiveDimens.current
-    val typo = LocalAdaptiveTypography.current
-
-    val hasBalance = userSettings.latestSmsBalanceAmount >= 0.0
-    val posteGold = Color(0xFFFACC15)
-    val posteNavy = Color(0xFF1E3A8A)
-    var refreshSpins by remember { mutableIntStateOf(0) }
-    val rotationAngle by animateFloatAsState(
-        targetValue = refreshSpins * 360f,
-        animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
-        label = "ccp_refresh_spin"
-    )
-
-    val updatedText = remember(userSettings.latestSmsBalanceUpdatedAt, isArabic) {
-        if (userSettings.latestSmsBalanceUpdatedAt > 0L) {
-            SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault())
-                .format(Date(userSettings.latestSmsBalanceUpdatedAt))
-        } else ""
-    }
-
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("dashboard_ccp_balance_card"),
-        backgroundColor = colors.glassCard,
-        borderColor = posteGold.copy(alpha = 0.45f),
-        shape = RoundedCornerShape(dimens.cornerRadiusLg),
-        cornerRadius = dimens.cornerRadiusLg,
-        onClick = onOpenBaridiMobSync
-    ) {
-        if (!colors.isNeumorphic) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val glowCenter = Offset(size.width * 0.85f, size.height * 0.25f)
-                val glowRadius = size.maxDimension * 0.52f
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            posteGold.copy(alpha = 0.16f),
-                            posteNavy.copy(alpha = 0.12f),
-                            Color.Transparent
-                        ),
-                        center = glowCenter,
-                        radius = glowRadius
-                    ),
-                    center = glowCenter,
-                    radius = glowRadius
-                )
-            }
-        }
-
-        Column(modifier = Modifier.padding(dimens.cardPadding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(dimens.cornerRadiusSm))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(posteGold, Color(0xFFD97706))
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = "CCP Balance",
-                            tint = Color(0xFF0B1F3A),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(dimens.spacingMd))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = "CCP Balance",
-                                color = colors.textPrimary,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = typo.titleSm,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(if (hasBalance) EmeraldNeon else posteGold)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isArabic) {
-                                "آخر رصيد عبر بريدي موب • ALG Poste"
-                            } else {
-                                "Latest Balance via BaridiMob • ALG Poste"
-                            },
-                            color = colors.textMuted,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(posteGold.copy(alpha = 0.16f))
-                        .border(1.dp, posteGold.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                        .clickable {
-                            refreshSpins += 1
-                            onRefreshFromSms()
-                        }
-                        .testTag("ccp_balance_refresh_btn")
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = if (isArabic) "تحديث رصيد CCP" else "Refresh CCP Balance",
-                            tint = posteGold,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .rotate(rotationAngle)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isArabic) "قراءة SMS" else "Read SMS",
-                            color = posteGold,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.glassSurface.copy(alpha = 0.72f))
-                    .border(
-                        width = 0.8.dp,
-                        color = if (hasBalance) EmeraldNeon.copy(alpha = 0.28f) else colors.glassBorder,
-                        shape = RoundedCornerShape(14.dp)
-                    )
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isArabic) "الرصيد الحالي في الحساب البريدي" else "Current ALG Poste Balance",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (hasBalance) {
-                            formatDzdAmount(
-                                amount = userSettings.latestSmsBalanceAmount,
-                                currencyText = strings.currencyCode,
-                                isStealth = isStealth
-                            )
-                        } else {
-                            if (isArabic) "--- دج • اضغط قراءة SMS" else "--- ${strings.currencyCode} • Tap Read SMS"
-                        },
-                        color = if (hasBalance) EmeraldNeon else posteGold,
-                        fontSize = if (hasBalance) 24.sp else 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = if (isArabic) "فتح تفاصيل بريدي موب" else "Open BaridiMob Sync",
-                    tint = colors.textSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
             }
 
             if (hasBalance && (updatedText.isNotEmpty() || userSettings.latestSmsBalanceRawSnippet.isNotBlank())) {

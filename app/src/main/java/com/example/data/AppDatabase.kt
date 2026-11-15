@@ -46,9 +46,33 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `archived_alg_post_sms` (
+                `id` TEXT NOT NULL,
+                `sender` TEXT NOT NULL,
+                `rawBody` TEXT NOT NULL,
+                `receivedAtMillis` INTEGER NOT NULL,
+                `capturedAtMillis` INTEGER NOT NULL,
+                `captureSource` TEXT NOT NULL,
+                `extractedBalance` REAL,
+                `extractedTxAmount` REAL,
+                `extractedIsExpense` INTEGER,
+                `hasExplicitFeeKeyword` INTEGER NOT NULL,
+                `matchedRule` TEXT NOT NULL,
+                `studyStatus` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 @Database(
-    entities = [TransactionEntity::class, DebtEntity::class],
-    version = 3,
+    entities = [TransactionEntity::class, DebtEntity::class, ArchivedAlgPosteSmsEntity::class],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -66,7 +90,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "salerypelse_database"
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

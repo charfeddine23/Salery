@@ -36,11 +36,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -89,12 +91,16 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import com.example.data.AlgerianBankCardCatalog
+import com.example.data.AlgerianBankCardSpec
+import com.example.data.AlgerianBankMotif
 import com.example.data.UserSettings
 import com.example.ui.components.EditCardDialog
 import com.example.ui.components.EditVisaCardDialog
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.components.formatCardDigitsDisplay
+import java.util.Locale
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
@@ -119,10 +125,15 @@ import kotlinx.coroutines.delay
 fun CardsHubScreen(
     summary: FinancialSummary,
     userSettings: UserSettings,
+    binancePortfolioTotalUsd: Double = 0.0,
+    binanceHoldingsCount: Int = 0,
     onOpenDashboard: () -> Unit,
     onOpenVisaDetails: () -> Unit,
-    onUpdateClassicCard: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _ -> },
+    onOpenBinanceWallet: () -> Unit = {},
+    onUpdateClassicCard: (holderName: String, cardNumber: String, expiryDate: String, cvc: String, bankStyle: String) -> Unit = { _, _, _, _, _ -> },
     onUpdateVisaCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
+    onUpdateThirdCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
+    onRemoveThirdCard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -177,17 +188,19 @@ fun CardsHubScreen(
 
     var showEditClassicCardDialog by remember { mutableStateOf(false) }
     var showEditVisaCardDialog by remember { mutableStateOf(false) }
+    var showEditThirdCardDialog by remember { mutableStateOf(false) }
 
     if (showEditClassicCardDialog) {
         EditCardDialog(
+            currentBankStyle = userSettings.classicCardBankStyle,
             currentHolderName = userSettings.classicCardHolderName,
             currentCardNumber = userSettings.classicCardNumber,
             currentExpiry = userSettings.classicCardExpiry,
             currentCvc = userSettings.classicCardCvc,
             secureScreenshots = isScreenshotBlocked,
             onDismiss = { showEditClassicCardDialog = false },
-            onSave = { name, number, expiry, cvc ->
-                onUpdateClassicCard(name, number, expiry, cvc)
+            onSave = { name, number, expiry, cvc, bankStyle ->
+                onUpdateClassicCard(name, number, expiry, cvc, bankStyle)
             }
         )
     }
@@ -204,6 +217,24 @@ fun CardsHubScreen(
             onSave = { provider, name, number, expiry, cvc ->
                 onUpdateVisaCard(provider, name, number, expiry, cvc)
                 showEditVisaCardDialog = false
+            }
+        )
+    }
+
+    if (showEditThirdCardDialog) {
+        EditVisaCardDialog(
+            currentProvider = userSettings.thirdCardProvider,
+            currentHolderName = userSettings.thirdCardHolderName,
+            currentCardNumber = userSettings.thirdCardNumber,
+            currentExpiry = userSettings.thirdCardExpiry,
+            currentCvc = userSettings.thirdCardCvc,
+            secureScreenshots = isScreenshotBlocked,
+            isThirdCard = true,
+            onDeleteThirdCard = if (userSettings.thirdCardEnabled) onRemoveThirdCard else null,
+            onDismiss = { showEditThirdCardDialog = false },
+            onSave = { provider, name, number, expiry, cvc ->
+                onUpdateThirdCard(provider, name, number, expiry, cvc)
+                showEditThirdCardDialog = false
             }
         )
     }
@@ -255,7 +286,11 @@ fun CardsHubScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = strings.activeCardsCount,
+                            text = if (userSettings.thirdCardEnabled) {
+                                if (isArabic) "3 بطاقات نشطة" else "3 Cards Active"
+                            } else {
+                                strings.activeCardsCount
+                            },
                             color = colors.textPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -265,8 +300,9 @@ fun CardsHubScreen(
             }
         }
 
-        // 1. Primary Card: Algérie Poste - Edahabia (الذهبية)
+        // 1. Primary Card: Algérie Poste - Edahabia OR Algerian CIB Bank Card
         item {
+            val bankSpec = AlgerianBankCardCatalog.findById(userSettings.classicCardBankStyle)
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
@@ -276,11 +312,19 @@ fun CardsHubScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = strings.edahabiaCardTitle,
+                        text = if (bankSpec.id == "EDAHABIA") {
+                            strings.edahabiaCardTitle
+                        } else {
+                            if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCode})" else bankSpec.nameEn
+                        },
                         color = colors.textPrimary,
                         fontSize = typo.body,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = strings.currentAccount,
                         color = CyanNeon,
@@ -294,6 +338,7 @@ fun CardsHubScreen(
                 EdahabiaCardRealistic(
                     summary = summary,
                     userSettings = userSettings,
+                    bankSpec = bankSpec,
                     isArabic = isArabic,
                     isDark = isDark,
                     onClick = onOpenDashboard,
@@ -355,17 +400,202 @@ fun CardsHubScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 VisaCardRealistic(
-                    userSettings = userSettings,
+                    provider = visaProvider,
+                    holderName = userSettings.visaCardHolderName,
+                    cardNumber = userSettings.visaCardNumber,
+                    expiry = userSettings.visaCardExpiry,
+                    cvc = userSettings.visaCardCvc,
+                    cardTestTag = "visa_hub_card",
+                    binancePortfolioTotalUsd = binancePortfolioTotalUsd,
+                    binanceHoldingsCount = binanceHoldingsCount,
                     isArabic = isArabic,
                     isDark = isDark,
-                    onClick = onOpenVisaDetails,
+                    onClick = {
+                        if (visaProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
+                    },
                     onLongPressEdit = { showEditVisaCardDialog = true }
+                )
+            }
+        }
+
+        // 3. Third Optional Card at the bottom in Card Hub
+        item {
+            if (userSettings.thirdCardEnabled) {
+                val thirdProvider = userSettings.thirdCardProvider.uppercase()
+                val thirdSectionTitle = when (thirdProvider) {
+                    "REDOTPAY" -> if (isArabic) "البطاقة الثالثة • RedotPay" else "Third Card • RedotPay"
+                    "BYBIT" -> if (isArabic) "البطاقة الثالثة • Bybit" else "Third Card • Bybit"
+                    "BINANCE" -> if (isArabic) "البطاقة الثالثة • Binance" else "Third Card • Binance"
+                    else -> if (isArabic) "البطاقة الثالثة • Visa" else "Third Card • Visa"
+                }
+                val thirdBadgeColor = when (thirdProvider) {
+                    "REDOTPAY" -> Color(0xFFFB7185)
+                    "BYBIT" -> Color(0xFFF7A600)
+                    "BINANCE" -> Color(0xFFF0B90B)
+                    else -> CyanNeon
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = thirdSectionTitle,
+                            color = colors.textPrimary,
+                            fontSize = typo.body,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(thirdBadgeColor.copy(alpha = 0.15f))
+                                    .border(1.dp, thirdBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                                    .clickable { showEditThirdCardDialog = true }
+                                    .testTag("edit_third_card_badge")
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (isArabic) "تعديل" else "EDIT",
+                                    color = thirdBadgeColor,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    VisaCardRealistic(
+                        provider = thirdProvider,
+                        holderName = userSettings.thirdCardHolderName,
+                        cardNumber = userSettings.thirdCardNumber,
+                        expiry = userSettings.thirdCardExpiry,
+                        cvc = userSettings.thirdCardCvc,
+                        cardTestTag = "third_hub_card",
+                        binancePortfolioTotalUsd = binancePortfolioTotalUsd,
+                        binanceHoldingsCount = binanceHoldingsCount,
+                        isArabic = isArabic,
+                        isDark = isDark,
+                        onClick = {
+                            if (thirdProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
+                        },
+                        onLongPressEdit = { showEditThirdCardDialog = true }
+                    )
+                }
+            } else {
+                AddThirdCardSlotCard(
+                    isArabic = isArabic,
+                    onClick = { showEditThirdCardDialog = true }
                 )
             }
         }
 
         item {
             Spacer(modifier = Modifier.height(dimens.spacingLg))
+        }
+    }
+}
+
+@Composable
+private fun AddThirdCardSlotCard(
+    isArabic: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+    val goldAccent = Color(0xFFF0B90B)
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .testTag("add_third_card_button"),
+        backgroundColor = colors.glassCard,
+        borderColor = goldAccent.copy(alpha = 0.42f),
+        shape = RoundedCornerShape(20.dp),
+        cornerRadius = 20.dp,
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(goldAccent.copy(alpha = 0.25f), CyanNeon.copy(alpha = 0.22f))
+                            )
+                        )
+                        .border(1.2.dp, goldAccent.copy(alpha = 0.65f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = if (isArabic) "إضافة بطاقة ثالثة" else "Add Third Card",
+                        tint = goldAccent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = if (isArabic) "إضافة بطاقة ثالثة" else "Add Third Card",
+                        color = colors.textPrimary,
+                        fontSize = typo.titleSm,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (isArabic) {
+                            "أضف Binance أو RedotPay أو Bybit أو Visa"
+                        } else {
+                            "Add Binance, RedotPay, Bybit or Visa card"
+                        },
+                        color = colors.textMuted,
+                        fontSize = typo.caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(goldAccent.copy(alpha = 0.16f))
+                    .border(1.dp, goldAccent.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (isArabic) "+ إضافة" else "+ Add",
+                    color = goldAccent,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
     }
 }
@@ -380,6 +610,7 @@ fun CardsHubScreen(
 private fun EdahabiaCardRealistic(
     summary: FinancialSummary,
     userSettings: UserSettings,
+    bankSpec: AlgerianBankCardSpec,
     isArabic: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
@@ -389,6 +620,11 @@ private fun EdahabiaCardRealistic(
     val strings = AppStrings.current
     val isStealth = LocalStealthMode.current
     val haptic = LocalHapticFeedback.current
+    val isEdahabia = bankSpec.motif == AlgerianBankMotif.EDAHABIA_ZELLIGE
+    val bankAccent = Color(bankSpec.accentHex)
+    val bankSecondary = Color(bankSpec.secondaryTextHex)
+    val bankGlowPrimary = Color(bankSpec.glowPrimaryHex)
+    val bankGlowSecondary = Color(bankSpec.glowSecondaryHex)
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -424,8 +660,8 @@ private fun EdahabiaCardRealistic(
             .fillMaxWidth()
             .scale(cardScale)
             .breathingGlow(
-                glowColor = Color(0xFF2563EB),
-                secondaryGlowColor = Color(0xFF0284C7),
+                glowColor = bankGlowPrimary,
+                secondaryGlowColor = bankGlowSecondary,
                 cornerRadius = 22.dp,
                 minAlpha = if (isDark) 0.24f else 0.14f,
                 maxAlpha = if (isDark) 0.52f else 0.34f,
@@ -436,7 +672,7 @@ private fun EdahabiaCardRealistic(
             .testTag("classic_blue_card")
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, color = CyanNeon),
+                indication = ripple(bounded = true, color = bankAccent),
                 onClick = {
                     if (didTriggerLongPress) {
                         didTriggerLongPress = false
@@ -448,7 +684,7 @@ private fun EdahabiaCardRealistic(
         contentAlignment = Alignment.Center
     ) {
 
-        // The Physical Tactile Classic Blue Card (Algérie Poste Classic Reference Design)
+        // The Physical Tactile Classic Algerian Bank / Edahabia Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -456,19 +692,13 @@ private fun EdahabiaCardRealistic(
                 .shadow(
                     elevation = if (isDark) 16.dp else 12.dp,
                     shape = RoundedCornerShape(22.dp),
-                    spotColor = if (isDark) Color(0xFF020617) else Color(0x661D4ED8),
-                    ambientColor = if (isDark) Color(0xFF2563EB).copy(alpha = 0.35f) else Color(0x331D4ED8)
+                    spotColor = if (isDark) Color(0xFF020617) else bankGlowPrimary.copy(alpha = 0.40f),
+                    ambientColor = bankGlowPrimary.copy(alpha = 0.32f)
                 )
                 .clip(RoundedCornerShape(22.dp))
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF2563EB), // Vibrant royal cobalt upper-left
-                            Color(0xFF1D4ED8), // Classic Algérie Poste blue
-                            Color(0xFF1A42A8), // Rich sapphire midtone
-                            Color(0xFF15348A), // Deep blue lower-right
-                            Color(0xFF0F2566)  // Deep navy shadow edge
-                        ),
+                        colors = bankSpec.gradientHexes.map { Color(it) },
                         start = Offset(0f, 0f),
                         end = Offset(1000f, 650f)
                     )
@@ -486,19 +716,23 @@ private fun EdahabiaCardRealistic(
                     } else {
                         Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFFBAE6FD).copy(alpha = 0.85f),
-                                Color(0xFF38BDF8).copy(alpha = 0.55f),
-                                Color(0xFF1D4ED8).copy(alpha = 0.65f),
-                                Color(0xFFBAE6FD).copy(alpha = 0.45f)
+                                bankSecondary.copy(alpha = 0.85f),
+                                bankAccent.copy(alpha = 0.55f),
+                                bankGlowPrimary.copy(alpha = 0.65f),
+                                bankSecondary.copy(alpha = 0.45f)
                             )
                         )
                     },
                     shape = RoundedCornerShape(22.dp)
                 )
         ) {
-            // Classic Algérie Poste Artwork: Landmarks Skyline, Diagonal Gloss & Right Zellige Mosaic
+            // Card Surface Artwork: Classic Edahabia Zellige or selected Algerian CIB Bank geometric motif
             Canvas(modifier = Modifier.fillMaxSize()) {
-                drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
+                if (isEdahabia) {
+                    drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
+                } else {
+                    drawAlgerianBankArtwork(bankSpec = bankSpec, holdProgress = holdAnim.value)
+                }
             }
 
             // Card Inner Content (Always LTR to match physical bank card typography, kept clear of right mosaic)
@@ -506,29 +740,36 @@ private fun EdahabiaCardRealistic(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 18.dp, end = 52.dp, top = 14.dp, bottom = 14.dp),
+                        .padding(
+                            start = 18.dp,
+                            end = if (isEdahabia) 52.dp else 18.dp,
+                            top = 14.dp,
+                            bottom = 14.dp
+                        ),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Row: "الذهبية / CLASSIC" on Left & White Algérie Poste Crest on Right
+                    // Top Row: Brand Title on Left & Algérie Poste or Algerian CIB Crest on Right
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column(horizontalAlignment = Alignment.End) {
+                        Column(horizontalAlignment = Alignment.Start) {
                             Text(
-                                text = "الذهبية",
-                                color = Color(0xFFE0F2FE),
-                                fontSize = 11.sp,
+                                text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
+                                color = bankSecondary,
+                                fontSize = if (isEdahabia) 11.sp else 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                lineHeight = 12.sp
+                                lineHeight = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "CLASSIC",
+                                text = bankSpec.cardTypeLabel,
                                 color = Color.White,
-                                fontSize = 20.sp,
+                                fontSize = if (isEdahabia) 20.sp else 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.6.sp,
+                                letterSpacing = 1.4.sp,
                                 lineHeight = 21.sp,
                                 style = TextStyle(
                                     shadow = Shadow(
@@ -540,7 +781,11 @@ private fun EdahabiaCardRealistic(
                             )
                         }
 
-                        AlgeriePosteWhiteLogo()
+                        if (isEdahabia) {
+                            AlgeriePosteWhiteLogo()
+                        } else {
+                            AlgerianCibBankBadge(bankSpec = bankSpec)
+                        }
                     }
 
                     // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
@@ -554,7 +799,7 @@ private fun EdahabiaCardRealistic(
                             Spacer(modifier = Modifier.width(8.dp))
                             ContactlessWaves(
                                 modifier = Modifier.size(18.dp),
-                                tint = Color(0xFFBAE6FD).copy(alpha = 0.88f)
+                                tint = bankSecondary.copy(alpha = 0.88f)
                             )
                         }
 
@@ -562,14 +807,14 @@ private fun EdahabiaCardRealistic(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(11.dp))
-                                .background(Color(0xFF0B1F56).copy(alpha = 0.56f))
-                                .border(0.9.dp, Color(0xFF7DD3FC).copy(alpha = 0.5f), RoundedCornerShape(11.dp))
+                                .background(Color(0xFF090D16).copy(alpha = 0.56f))
+                                .border(0.9.dp, bankAccent.copy(alpha = 0.5f), RoundedCornerShape(11.dp))
                                 .padding(horizontal = 9.dp, vertical = 4.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = if (isArabic) "الرصيد الإجمالي" else "Total Balance",
-                                    color = Color(0xFF93C5FD),
+                                    color = bankSecondary,
                                     fontSize = 8.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     lineHeight = 10.sp
@@ -587,13 +832,19 @@ private fun EdahabiaCardRealistic(
                     }
 
                     // Card Number: Embossed Pure White Monospace Digits
+                    val classicDigits = userSettings.classicCardNumber.filter { it.isDigit() }
+                    val classicDisplayNum = if (classicDigits.isEmpty()) {
+                        if (isStealth) "••••  ••••  ••••  ••••" else bankSpec.defaultNumberPrefix
+                    } else {
+                        formatCardDigitsDisplay(userSettings.classicCardNumber, isStealth)
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = formatCardDigitsDisplay(userSettings.classicCardNumber, isStealth),
+                            text = classicDisplayNum,
                             color = Color.White,
                             fontSize = 15.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -761,7 +1012,14 @@ private fun EdahabiaCardRealistic(
  */
 @Composable
 private fun VisaCardRealistic(
-    userSettings: UserSettings,
+    provider: String,
+    holderName: String,
+    cardNumber: String,
+    expiry: String,
+    cvc: String,
+    cardTestTag: String = "visa_hub_card",
+    binancePortfolioTotalUsd: Double = 0.0,
+    binanceHoldingsCount: Int = 0,
     isArabic: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
@@ -769,7 +1027,6 @@ private fun VisaCardRealistic(
 ) {
     val isStealth = LocalStealthMode.current
     val haptic = LocalHapticFeedback.current
-    val provider = userSettings.visaCardProvider.uppercase()
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -929,7 +1186,7 @@ private fun VisaCardRealistic(
                 maxScale = 1.04f,
                 durationMillis = 2800
             )
-            .testTag("visa_hub_card")
+            .testTag(cardTestTag)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true, color = glowPrimary),
@@ -1329,7 +1586,16 @@ private fun VisaCardRealistic(
                                     text = when (provider) {
                                         "REDOTPAY" -> if (isArabic) "RedotPay • USD" else "RedotPay • USD Virtual"
                                         "BYBIT" -> if (isArabic) "Bybit • USDT / EUR" else "Bybit • Crypto Debit"
-                                        "BINANCE" -> if (isArabic) "Binance • BNB / USDT" else "Binance • Crypto Visa"
+                                        "BINANCE" -> when {
+                                            isStealth -> "Binance • $ ••••"
+                                            binanceHoldingsCount > 0 -> String.format(
+                                                Locale.US,
+                                                "$%,.2f • %d Crypto",
+                                                binancePortfolioTotalUsd,
+                                                binanceHoldingsCount
+                                            )
+                                            else -> if (isArabic) "محفظة كريبتو • اضغط للفتح" else "Crypto Wallet • Tap to Open"
+                                        }
                                         else -> if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency"
                                     },
                                     color = when (provider) {
@@ -1347,7 +1613,7 @@ private fun VisaCardRealistic(
 
                     // Card Number
                     val displayNumber = formatVisaNumberDisplay(
-                        rawDigits = userSettings.visaCardNumber,
+                        rawDigits = cardNumber,
                         provider = provider,
                         isStealth = isStealth
                     )
@@ -1377,7 +1643,7 @@ private fun VisaCardRealistic(
                                 letterSpacing = 0.4.sp
                             )
                             Text(
-                                text = userSettings.visaCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                text = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
                                 color = primaryTextColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -1399,7 +1665,7 @@ private fun VisaCardRealistic(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (isStealth) "••/••" else userSettings.visaCardExpiry.ifBlank { "08/28" },
+                                    text = if (isStealth) "••/••" else expiry.ifBlank { "08/28" },
                                     color = primaryTextColor,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -1416,7 +1682,7 @@ private fun VisaCardRealistic(
                                     letterSpacing = 0.5.sp
                                 )
                                 Text(
-                                    text = if (isStealth || userSettings.visaCardCvc.isBlank()) "•••" else userSettings.visaCardCvc,
+                                    text = if (isStealth || cvc.isBlank()) "•••" else cvc,
                                     color = primaryTextColor,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -1941,6 +2207,145 @@ private fun DrawScope.drawClassicEdahabiaArtwork(holdProgress: Float) {
     if (holdProgress > 0.02f) {
         drawRoundRect(
             color = CyanNeon.copy(alpha = 0.9f),
+            topLeft = Offset(0f, size.height - 6f),
+            size = Size(size.width * holdProgress, 6f),
+            cornerRadius = CornerRadius(4f, 4f)
+        )
+    }
+}
+
+@Composable
+private fun AlgerianCibBankBadge(bankSpec: AlgerianBankCardSpec) {
+    val accent = Color(bankSpec.accentHex)
+    Column(horizontalAlignment = Alignment.End) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.14f))
+                .border(1.dp, accent.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 9.dp, vertical = 4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(accent)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = bankSpec.shortCode,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.6.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "CIB INTERBANK",
+            color = accent.copy(alpha = 0.90f),
+            fontSize = 7.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.7.sp
+        )
+    }
+}
+
+private fun DrawScope.drawAlgerianBankArtwork(
+    bankSpec: AlgerianBankCardSpec,
+    holdProgress: Float
+) {
+    val accent = Color(bankSpec.accentHex)
+    val secondary = Color(bankSpec.secondaryTextHex)
+
+    when (bankSpec.motif) {
+        AlgerianBankMotif.EMERALD_ARCS,
+        AlgerianBankMotif.EDAHABIA_ZELLIGE -> {
+            drawCircle(
+                color = accent.copy(alpha = 0.12f),
+                radius = size.height * 0.62f,
+                center = Offset(size.width * 0.88f, size.height * 0.42f),
+                style = Stroke(width = 24f)
+            )
+            drawCircle(
+                color = secondary.copy(alpha = 0.10f),
+                radius = size.height * 0.40f,
+                center = Offset(size.width * 0.88f, size.height * 0.42f),
+                style = Stroke(width = 12f)
+            )
+        }
+        AlgerianBankMotif.SOVEREIGN_RINGS -> {
+            for (ring in 1..3) {
+                drawCircle(
+                    color = accent.copy(alpha = 0.15f - ring * 0.03f),
+                    radius = size.height * (0.28f + ring * 0.18f),
+                    center = Offset(size.width * 0.84f, size.height * 0.48f),
+                    style = Stroke(width = 6f)
+                )
+            }
+        }
+        AlgerianBankMotif.DIAGONAL_RIBBONS -> {
+            val ray1 = Path().apply {
+                moveTo(size.width * 0.54f, 0f)
+                lineTo(size.width * 0.74f, 0f)
+                lineTo(size.width * 0.46f, size.height)
+                lineTo(size.width * 0.26f, size.height)
+                close()
+            }
+            drawPath(ray1, accent.copy(alpha = 0.11f))
+            val ray2 = Path().apply {
+                moveTo(size.width * 0.78f, 0f)
+                lineTo(size.width * 0.88f, 0f)
+                lineTo(size.width * 0.60f, size.height)
+                lineTo(size.width * 0.50f, size.height)
+                close()
+            }
+            drawPath(ray2, Color.White.copy(alpha = 0.08f))
+        }
+        AlgerianBankMotif.ISLAMIC_STAR_LATTICE -> {
+            val cx = size.width * 0.84f
+            val cy = size.height * 0.48f
+            val r = size.height * 0.38f
+            val star = Path()
+            for (p in 0 until 16) {
+                val angle = (p * PI / 8.0).toFloat()
+                val rad = if (p % 2 == 0) r else r * 0.52f
+                val px = cx + cos(angle) * rad
+                val py = cy + sin(angle) * rad
+                if (p == 0) star.moveTo(px, py) else star.lineTo(px, py)
+            }
+            star.close()
+            drawPath(star, accent.copy(alpha = 0.16f), style = Stroke(width = 4.5f))
+            drawCircle(
+                color = accent.copy(alpha = 0.12f),
+                radius = r * 0.34f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 3f)
+            )
+        }
+        AlgerianBankMotif.SPLIT_DYNAMIC -> {
+            val split = Path().apply {
+                moveTo(size.width * 0.58f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width, size.height)
+                lineTo(size.width * 0.36f, size.height)
+                close()
+            }
+            drawPath(split, Color.Black.copy(alpha = 0.22f))
+            drawLine(
+                color = accent.copy(alpha = 0.38f),
+                start = Offset(size.width * 0.58f, 0f),
+                end = Offset(size.width * 0.36f, size.height),
+                strokeWidth = 3f
+            )
+        }
+    }
+
+    if (holdProgress > 0.02f) {
+        drawRoundRect(
+            color = accent.copy(alpha = 0.92f),
             topLeft = Offset(0f, size.height - 6f),
             size = Size(size.width * holdProgress, 6f),
             cornerRadius = CornerRadius(4f, 4f)

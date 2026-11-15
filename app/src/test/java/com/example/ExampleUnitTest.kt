@@ -674,4 +674,349 @@ class ExampleUnitTest {
     assertEquals(3_000_000L, decoded[2].timestampMillis)
     assertEquals(4_000_000L, decoded[3].timestampMillis)
   }
+
+  @Test
+  fun algPosteSmsAnalyzer_improvedTaxDetection_comparesWithPreviousBalance_andClearsStaleAnomalies() {
+    // 1. Unsigned neutral operation inferred against previous SMS balance:
+    // Prev = 25,000 DA, Withdrawn (unsigned) = 2,000 DA -> Expected = 23,000 DA
+    // Current = 22,950 DA -> Difference (Tax) = 50 DA (NOT 2,050 DA!)
+    val prevSnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Virement reçu +5 000,00 DA. Nouveau solde: 25 000,00 DA",
+      timestampMillis = 10_000_000L
+    )!!
+    val neutralOpSnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "ALG Poste: Opération 2 000,00 DA. Nouveau solde: 22 950,00 DA",
+      timestampMillis = 10_100_000L
+    )!!
+
+    val detected = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(prevSnap, neutralOpSnap)
+    )
+    val caught = detected.firstOrNull { it.smsId == neutralOpSnap.id }
+    assertNotNull("Expected unsigned operation discrepancy of 50 DA to be caught", caught)
+    assertEquals(25000.0, caught!!.previousBalance, 0.01)
+    assertEquals(2000.0, caught.transactionAmount, 0.01)
+    assertTrue(caught.isExpense)
+    assertEquals(23000.0, caught.expectedBalance, 0.01)
+    assertEquals(22950.0, caught.actualBalance, 0.01)
+    assertEquals(50.0, caught.taxAmount, 0.01)
+    assertTrue(caught.explanationEn.contains("25,000"))
+    assertTrue(caught.explanationEn.contains("2,000"))
+    assertTrue(caught.explanationEn.contains("22,950"))
+    assertTrue(caught.explanationEn.contains("50"))
+
+    // 2. Inline Ancien solde extraction on a standalone first SMS
+    val inlinePrevSnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Ancien solde: 10 000,00 DA. Retrait 1 000,00 DA. Nouveau solde: 8 970,00 DA",
+      timestampMillis = 20_000_000L
+    )!!
+    assertEquals(8970.0, inlinePrevSnap.balance, 0.01)
+
+    val standaloneAnomalies = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(inlinePrevSnap)
+    )
+    val inlineAnomaly = standaloneAnomalies.firstOrNull { it.smsId == inlinePrevSnap.id }
+    assertNotNull("Expected inline Ancien solde discrepancy to be caught", inlineAnomaly)
+    assertEquals(10000.0, inlineAnomaly!!.previousBalance, 0.01)
+    assertEquals(1000.0, inlineAnomaly.transactionAmount, 0.01)
+    assertEquals(9000.0, inlineAnomaly.expectedBalance, 0.01)
+    assertEquals(8970.0, inlineAnomaly.actualBalance, 0.01)
+    assertEquals(30.0, inlineAnomaly.taxAmount, 0.01)
+
+    // 3. Stale unrecorded anomaly cleanup while preserving recorded expense anomalies
+    val cleanOpSnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -2 000,00 DA. Nouveau solde: 23 000,00 DA",
+      timestampMillis = 10_100_000L
+    )!!.copy(id = neutralOpSnap.id)
+
+    val staleUnrecorded = caught.copy(isRecordedAsExpense = false)
+    val externalRecorded = com.example.sms.SmsTaxAnomalyEntry(
+      id = "tax_diff_old_recorded",
+      smsId = "old_recorded_sms",
+      taxAmount = 75.0,
+      detectionKind = "BALANCE_DISCREPANCY",
+      detectedAtMillis = 5_000_000L,
+      isRecordedAsExpense = true
+    )
+    val refreshed = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(prevSnap, cleanOpSnap),
+      existingAnomalies = listOf(staleUnrecorded, externalRecorded)
+    )
+    org.junit.Assert.assertFalse(
+      "Stale unrecorded anomaly should be cleared once balance matches",
+      refreshed.any { it.id == staleUnrecorded.id }
+    )
+    assertTrue(
+      "Already recorded historical anomaly must be preserved",
+      refreshed.any { it.id == externalRecorded.id && it.isRecordedAsExpense }
+    )
+
+    // 4. Explicit fee + balance discrepancy coexistence on the same SMS
+    val baseSnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 20 000,00 DA",
+      timestampMillis = 30_000_000L
+    )!!
+    val feePlusDiscrepancySnap = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Frais de gestion -200,00 DA. Nouveau solde: 19 750,00 DA",
+      timestampMillis = 30_100_000L
+    )!!
+    val bothAnomalies = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(baseSnap, feePlusDiscrepancySnap)
+    )
+    val diffPart = bothAnomalies.firstOrNull { it.id == "tax_diff_${feePlusDiscrepancySnap.id}" }
+    val feePart = bothAnomalies.firstOrNull { it.id == "tax_fee_${feePlusDiscrepancySnap.id}" }
+    assertNotNull("Discrepancy of 50 DA should be reported", diffPart)
+    assertNotNull("Explicit fee of 200 DA should also be reported", feePart)
+    assertEquals(50.0, diffPart!!.taxAmount, 0.01)
+    assertEquals(200.0, feePart!!.taxAmount, 0.01)
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_caughtTax_ignoresAmountsExceeding1000Dzd() {
+    val snap0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 50 000,00 DA",
+      timestampMillis = 1_000_000L
+    )!!
+    // Discrepancy = 1,500 DA (> 1,000 DA) -> MUST be ignored by Caught Tax
+    val snapLargeDiff = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -1 000,00 DA. Nouveau solde: 47 500,00 DA",
+      timestampMillis = 2_000_000L
+    )!!
+    // Discrepancy = 1,000 DA exact (<= 1,000 DA) -> MUST be kept
+    val snapBoundaryDiff = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -2 000,00 DA. Nouveau solde: 44 500,00 DA",
+      timestampMillis = 3_000_000L
+    )!!
+    // Discrepancy = 1,000.01 DA (> 1,000 DA) -> MUST be ignored
+    val snapJustOver = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -1 000,00 DA. Nouveau solde: 42 499,99 DA",
+      timestampMillis = 4_000_000L
+    )!!
+    // Explicit fee > 1,000 DA -> MUST also be ignored by Caught Tax
+    val snapLargeExplicitFee = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Frais annuels -1 250,00 DA. Nouveau solde: 41 249,99 DA",
+      timestampMillis = 5_000_000L
+    )!!
+    // Normal small fee = 30 DA -> MUST be kept
+    val snapSmallTax = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Paiement TPE -500,00 DA. Nouveau solde: 40 719,99 DA",
+      timestampMillis = 6_000_000L
+    )!!
+
+    val caught = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(
+        snap0,
+        snapLargeDiff,
+        snapBoundaryDiff,
+        snapJustOver,
+        snapLargeExplicitFee,
+        snapSmallTax
+      )
+    )
+
+    org.junit.Assert.assertFalse(
+      "Discrepancy of 1,500 DA (> 1,000 DA) must be ignored",
+      caught.any { it.smsId == snapLargeDiff.id }
+    )
+    assertTrue(
+      "Discrepancy of exactly 1,000 DA must be kept",
+      caught.any { it.smsId == snapBoundaryDiff.id && kotlin.math.abs(it.taxAmount - 1000.0) < 0.01 }
+    )
+    org.junit.Assert.assertFalse(
+      "Discrepancy of 1,000.01 DA (> 1,000 DA) must be ignored",
+      caught.any { it.smsId == snapJustOver.id }
+    )
+    org.junit.Assert.assertFalse(
+      "Explicit fee of 1,250 DA (> 1,000 DA) must be ignored",
+      caught.any { it.smsId == snapLargeExplicitFee.id }
+    )
+    assertTrue(
+      "Small 30 DA tax must be caught",
+      caught.any { it.smsId == snapSmallTax.id && kotlin.math.abs(it.taxAmount - 30.0) < 0.01 }
+    )
+
+    // Codec parseTaxAnomalies must also filter stale unrecorded anomalies > 1000 DZD
+    val staleOver = com.example.sms.SmsTaxAnomalyEntry(
+      id = "tax_diff_stale_over",
+      smsId = "s_over",
+      taxAmount = 2500.0,
+      isRecordedAsExpense = false
+    )
+    val validTax = caught.first { it.smsId == snapSmallTax.id }
+    val rawJson = com.example.sms.AlgPosteSmsCodec.encodeTaxAnomalies(listOf(staleOver, validTax))
+    val filteredParsed = com.example.sms.AlgPosteSmsCodec.parseTaxAnomalies(rawJson)
+    org.junit.Assert.assertFalse(filteredParsed.any { it.id == staleOver.id })
+    assertTrue(filteredParsed.any { it.id == validTax.id })
+  }
+
+  @Test
+  fun permanentAlgPosteArchive_reconstructsDeletedHistory_studiesPatterns_andRoundTripsBackup() {
+    val msg1 = com.example.sms.AlgPosteSmsAnalyzer.toArchivedEntity(
+      sender = "ALG Poste",
+      body = "Virement reçu +10 000,00 DA. Nouveau solde: 30 000,00 DA",
+      timestampMillis = 10_000_000L,
+      captureSource = "RECEIVER"
+    )!!
+    val msg2 = com.example.sms.AlgPosteSmsAnalyzer.toArchivedEntity(
+      sender = "ALG Poste",
+      body = "Retrait GAB -2 000,00 DA. Nouveau solde: 27 970,00 DA",
+      timestampMillis = 20_000_000L,
+      captureSource = "RECEIVER"
+    )!!
+    val msgOtp = com.example.sms.AlgPosteSmsAnalyzer.toArchivedEntity(
+      sender = "ALG Poste",
+      body = "Votre code OTP de confirmation est 123456.",
+      timestampMillis = 25_000_000L,
+      captureSource = "RECEIVER"
+    )!!
+    val msgUnknown = com.example.sms.AlgPosteSmsAnalyzer.toArchivedEntity(
+      sender = "ALG Poste",
+      body = "Notification BaridiMob: mise a jour de votre profil effectuee.",
+      timestampMillis = 30_000_000L,
+      captureSource = "INBOX"
+    )!!
+
+    assertEquals("FULL_MATCH", msg1.studyStatus)
+    assertEquals(30000.0, msg1.extractedBalance!!, 0.01)
+    assertEquals("OTP_IGNORED", msgOtp.studyStatus)
+    assertEquals("NEEDS_STUDY", msgUnknown.studyStatus)
+
+    // Reconstruct chronological balance timeline purely from permanent archive (even after phone SMS deletion)
+    val reconstructed = com.example.sms.AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
+      listOf(msg2, msgOtp, msgUnknown, msg1)
+    )
+    assertEquals(2, reconstructed.size)
+    assertEquals(30000.0, reconstructed[0].balance, 0.01)
+    assertEquals(27970.0, reconstructed[1].balance, 0.01)
+
+    val taxes = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(reconstructed)
+    assertEquals(1, taxes.size)
+    assertEquals(30.0, taxes[0].taxAmount, 0.01)
+
+    val report = com.example.sms.AlgPosteSmsAnalyzer.buildStudyReport(
+      archived = listOf(msg1, msg2, msgOtp, msgUnknown),
+      caughtTaxes = taxes
+    )
+    assertEquals(4, report.totalArchived)
+    assertEquals(2, report.fullMatchCount)
+    assertEquals(1, report.otpIgnoredCount)
+    assertEquals(1, report.needsStudyCount)
+    assertEquals(67, report.recognitionAccuracyPercent) // 2 of 3 non-OTP matched
+    assertEquals(1, report.learnedFeePatterns.size)
+    assertEquals(30.0, report.learnedFeePatterns[0].amountDzd, 0.01)
+    assertEquals(1, report.learnedFeePatterns[0].occurrences)
+
+    // BackupPayload round-trip preserves permanent SMS archive
+    val backup = com.example.data.BackupPayload(
+      exportTimestamp = 1_763_120_000_000L,
+      appVersion = APP_VERSION,
+      developer = DEVELOPER_NAME,
+      transactions = emptyList(),
+      debts = emptyList(),
+      salaryAmount = 85000.0,
+      salaryPayday = 25,
+      salaryEmployer = "Enterprise Algiers",
+      archivedAlgPosteSms = listOf(msg1, msg2, msgOtp)
+    )
+    val restored = com.example.data.BackupPayload.fromJsonString(backup.toJsonString())
+    assertNotNull(restored)
+    assertEquals(3, restored!!.archivedAlgPosteSms.size)
+    assertEquals(msg2.rawBody, restored.archivedAlgPosteSms[1].rawBody)
+    assertEquals(27970.0, restored.archivedAlgPosteSms[1].extractedBalance!!, 0.01)
+  }
+
+  @Test
+  fun binanceCryptoPortfolio_includesXrpFirst_parsesMarketPrices_andEnforcesHourlySync() {
+    val catalog = com.example.crypto.BinanceCryptoCatalog.majorAssets
+    assertTrue(catalog.size >= 15)
+    assertEquals("XRP", catalog.first().symbol)
+    assertNotNull(com.example.crypto.BinanceCryptoCatalog.findBySymbol("xrp"))
+    assertNotNull(com.example.crypto.BinanceCryptoCatalog.findBySymbol("BTC"))
+    assertNotNull(com.example.crypto.BinanceCryptoCatalog.findBySymbol("ETH"))
+    assertNotNull(com.example.crypto.BinanceCryptoCatalog.findBySymbol("BNB"))
+    assertNotNull(com.example.crypto.BinanceCryptoCatalog.findBySymbol("SOL"))
+
+    // Hourly refresh interval check (3,600,000 ms)
+    val now = 10_000_000L
+    assertTrue(com.example.crypto.BinanceCryptoCatalog.shouldRefreshMarketPrices(0L, now))
+    org.junit.Assert.assertFalse(
+      com.example.crypto.BinanceCryptoCatalog.shouldRefreshMarketPrices(now - 1_800_000L, now)
+    )
+    assertTrue(
+      com.example.crypto.BinanceCryptoCatalog.shouldRefreshMarketPrices(now - 3_600_000L, now)
+    )
+
+    // Parse Binance 24hr payload
+    val binanceJson = """
+      [
+        {"symbol":"XRPUSDT","lastPrice":"2.15","priceChangePercent":"4.50"},
+        {"symbol":"BTCUSDT","lastPrice":"90000.00","priceChangePercent":"1.25"}
+      ]
+    """.trimIndent()
+    val binanceParsed = com.example.crypto.BinanceCryptoCatalog.parseBinance24hrResponse(binanceJson, now)
+    assertEquals(2.15, binanceParsed["XRP"]!!.priceUsd, 0.001)
+    assertEquals(90000.0, binanceParsed["BTC"]!!.priceUsd, 0.01)
+    assertEquals(1.0, binanceParsed["USDT"]!!.priceUsd, 0.001)
+
+    // Parse CoinGecko fallback payload
+    val cgJson = """
+      {
+        "ripple":{"usd":2.18,"usd_24h_change":3.2},
+        "bitcoin":{"usd":91000.0,"usd_24h_change":-0.5}
+      }
+    """.trimIndent()
+    val cgParsed = com.example.crypto.BinanceCryptoCatalog.parseCoinGeckoResponse(cgJson, now)
+    assertEquals(2.18, cgParsed["XRP"]!!.priceUsd, 0.001)
+    assertEquals(91000.0, cgParsed["BTC"]!!.priceUsd, 0.01)
+
+    // Portfolio valuation: 500 XRP * 2.15 + 0.1 BTC * 90000 = 1075 + 9000 = 10075.0 USD
+    val holdings = listOf(
+      com.example.crypto.CryptoHoldingEntry(symbol = "XRP", quantity = 500.0),
+      com.example.crypto.CryptoHoldingEntry(symbol = "BTC", quantity = 0.1)
+    )
+    val totalUsd = com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(holdings, binanceParsed)
+    assertEquals(10075.0, totalUsd, 0.01)
+
+    // Codec round-trips
+    val encodedHoldings = com.example.crypto.BinanceCryptoCodec.encodeHoldings(holdings)
+    val decodedHoldings = com.example.crypto.BinanceCryptoCodec.parseHoldings(encodedHoldings)
+    assertEquals(2, decodedHoldings.size)
+    assertEquals(500.0, decodedHoldings.first { it.symbol == "XRP" }.quantity, 0.001)
+
+    val encodedPrices = com.example.crypto.BinanceCryptoCodec.encodePrices(binanceParsed)
+    val decodedPrices = com.example.crypto.BinanceCryptoCodec.parsePrices(encodedPrices)
+    assertEquals(2.15, decodedPrices["XRP"]!!.priceUsd, 0.001)
+  }
+
+  @Test
+  fun algerianBankCardCatalog_andThirdCardSettings_areComplete() {
+    val banks = com.example.data.AlgerianBankCardCatalog.all
+    assertEquals(17, banks.size)
+    val expectedIds = listOf(
+      "EDAHABIA", "BNA", "CPA", "BEA", "BADR", "BDL", "CNEP",
+      "AGB", "SGA", "BNP", "NATIXIS", "HOUSING", "AL_BARAKA",
+      "AL_SALAM", "TRUST", "ABC", "FRANSABANK"
+    )
+    expectedIds.forEach { id ->
+      assertEquals(id, com.example.data.AlgerianBankCardCatalog.findById(id).id)
+    }
+    assertEquals("EDAHABIA", com.example.data.AlgerianBankCardCatalog.findById("UNKNOWN").id)
+
+    val defaults = UserSettings()
+    assertEquals("EDAHABIA", defaults.classicCardBankStyle)
+    org.junit.Assert.assertFalse(defaults.thirdCardEnabled)
+    assertEquals("BINANCE", defaults.thirdCardProvider)
+  }
 }
