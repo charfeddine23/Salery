@@ -302,21 +302,23 @@ fun CardsHubScreen(
             }
         }
 
-        // 2. Secondary Card: Visa / RedotPay / Bybit Card
+        // 2. Secondary Card: Visa / RedotPay / Bybit / Binance Card
         item {
             val visaProvider = userSettings.visaCardProvider.uppercase()
             val visaSectionTitle = when (visaProvider) {
                 "REDOTPAY" -> if (isArabic) "بطاقة RedotPay الدولية" else "RedotPay Visa Card"
                 "BYBIT" -> if (isArabic) "بطاقة Bybit الدولية" else "Bybit Card"
+                "BINANCE" -> if (isArabic) "بطاقة Binance الدولية" else "Binance Visa Card"
                 else -> strings.visaCardTitle
             }
             val visaBadgeColor = when (visaProvider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
                 "BYBIT" -> Color(0xFFF7A600)
+                "BINANCE" -> Color(0xFFF0B90B)
                 else -> CyanNeon
             }
             val visaBadgeText = when (visaProvider) {
-                "REDOTPAY", "BYBIT" -> if (isArabic) "مفعّلة" else "ACTIVE"
+                "REDOTPAY", "BYBIT", "BINANCE" -> if (isArabic) "مفعّلة" else "ACTIVE"
                 else -> strings.comingSoon
             }
 
@@ -798,11 +800,13 @@ private fun VisaCardRealistic(
     val glowPrimary = when (provider) {
         "REDOTPAY" -> Color(0xFFE11D48)
         "BYBIT" -> Color(0xFFF7A600)
+        "BINANCE" -> Color(0xFFF0B90B)
         else -> Color(0xFF0284C7)
     }
     val glowSecondary = when (provider) {
         "REDOTPAY" -> Color(0xFF9F1239)
         "BYBIT" -> Color(0xFFD97706)
+        "BINANCE" -> Color(0xFFB45309)
         else -> Color(0xFF0369A1)
     }
 
@@ -811,6 +815,7 @@ private fun VisaCardRealistic(
     val secondaryTextColor = when {
         provider == "REDOTPAY" -> Color(0xFFFECDD3)
         provider == "BYBIT" -> Color(0xFF9CA3AF)
+        provider == "BINANCE" -> Color(0xFFFDE68A).copy(alpha = 0.85f)
         isDark -> Color(0xFF94A3B8)
         else -> Color(0xFF64748B)
     }
@@ -832,6 +837,16 @@ private fun VisaCardRealistic(
                 Color(0xFF151B26), // Carbon slate
                 Color(0xFF1E2533), // Graphite sheen
                 Color(0xFF10141D)  // Deep black corner
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(900f, 600f)
+        )
+        "BINANCE" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF0B0E11), // Official Binance deep obsidian black
+                Color(0xFF181A20), // Rich charcoal matte
+                Color(0xFF1E2329), // Metallic graphite
+                Color(0xFF0B0E11)  // Satin black edge
             ),
             start = Offset(0f, 0f),
             end = Offset(900f, 600f)
@@ -874,6 +889,13 @@ private fun VisaCardRealistic(
                 Color(0xFFF7A600).copy(alpha = 0.78f),
                 Color(0xFF1E293B).copy(alpha = 0.55f),
                 Color(0xFFFBBF24).copy(alpha = 0.65f)
+            )
+        )
+        "BINANCE" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFF0B90B).copy(alpha = 0.85f),
+                Color(0xFF2B3139).copy(alpha = 0.55f),
+                Color(0xFFFCD535).copy(alpha = 0.78f)
             )
         )
         else -> Brush.linearGradient(
@@ -1002,6 +1024,47 @@ private fun VisaCardRealistic(
                             color = Color(0xFFF7A600).copy(alpha = 0.22f)
                         )
                     }
+                    "BINANCE" -> {
+                        // Iconic Binance interlocking geometric diamond watermark & gold filigree
+                        val cx = size.width * 0.82f
+                        val cy = size.height * 0.48f
+                        val r = size.height * 0.48f
+                        val outer = Path().apply {
+                            moveTo(cx, cy - r)
+                            lineTo(cx + r, cy)
+                            lineTo(cx, cy + r)
+                            lineTo(cx - r, cy)
+                            close()
+                        }
+                        drawPath(
+                            path = outer,
+                            color = Color(0xFFF0B90B).copy(alpha = 0.14f),
+                            style = Stroke(width = 8f)
+                        )
+                        val mid = Path().apply {
+                            moveTo(cx, cy - r * 0.64f)
+                            lineTo(cx + r * 0.64f, cy)
+                            lineTo(cx, cy + r * 0.64f)
+                            lineTo(cx - r * 0.64f, cy)
+                            close()
+                        }
+                        drawPath(
+                            path = mid,
+                            color = Color(0xFFFCD535).copy(alpha = 0.11f),
+                            style = Stroke(width = 4f)
+                        )
+                        val core = Path().apply {
+                            moveTo(cx, cy - r * 0.26f)
+                            lineTo(cx + r * 0.26f, cy)
+                            lineTo(cx, cy + r * 0.26f)
+                            lineTo(cx - r * 0.26f, cy)
+                            close()
+                        }
+                        drawPath(
+                            path = core,
+                            color = Color(0xFFF0B90B).copy(alpha = 0.20f)
+                        )
+                    }
                     else -> {
                         val path = Path().apply {
                             moveTo(size.width * 0.45f, 0f)
@@ -1104,6 +1167,48 @@ private fun VisaCardRealistic(
                                     )
                                 }
                             }
+                            "BINANCE" -> {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Canvas(modifier = Modifier.size(18.dp)) {
+                                            val cx = size.width / 2f
+                                            val cy = size.height / 2f
+                                            val r = size.minDimension * 0.45f
+                                            val centerDiamond = Path().apply {
+                                                moveTo(cx, cy - r * 0.42f)
+                                                lineTo(cx + r * 0.42f, cy)
+                                                lineTo(cx, cy + r * 0.42f)
+                                                lineTo(cx - r * 0.42f, cy)
+                                                close()
+                                            }
+                                            drawPath(centerDiamond, Color(0xFFF0B90B))
+                                            val ringDiamond = Path().apply {
+                                                moveTo(cx, cy - r)
+                                                lineTo(cx + r, cy)
+                                                lineTo(cx, cy + r)
+                                                lineTo(cx - r, cy)
+                                                close()
+                                            }
+                                            drawPath(ringDiamond, Color(0xFFFCD535), style = Stroke(width = 3.2f))
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "BINANCE",
+                                            color = Color(0xFFF0B90B),
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 1.6.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "BINANCE CARD • CRYPTO VISA",
+                                        color = Color(0xFFFCD535).copy(alpha = 0.82f),
+                                        fontSize = 7.8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.7.sp
+                                    )
+                                }
+                            }
                             else -> {
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1150,7 +1255,11 @@ private fun VisaCardRealistic(
                         } else {
                             Text(
                                 text = "VISA",
-                                color = if (isDefaultLight) Color(0xFF1E3A8A) else Color.White,
+                                color = when {
+                                    provider == "BINANCE" -> Color(0xFFFCD535)
+                                    isDefaultLight -> Color(0xFF1E3A8A)
+                                    else -> Color.White
+                                },
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Black,
                                 fontStyle = FontStyle.Italic,
@@ -1166,7 +1275,7 @@ private fun VisaCardRealistic(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (provider == "BYBIT") {
+                            if (provider == "BYBIT" || provider == "BINANCE") {
                                 EmvChipRealistic(modifier = Modifier.size(width = 40.dp, height = 30.dp))
                             } else {
                                 SilverEmvChip(modifier = Modifier.size(width = 40.dp, height = 30.dp), isDark = isDark)
@@ -1177,6 +1286,7 @@ private fun VisaCardRealistic(
                                 tint = when (provider) {
                                     "REDOTPAY" -> Color.White.copy(alpha = 0.85f)
                                     "BYBIT" -> Color(0xFFF7A600)
+                                    "BINANCE" -> Color(0xFFF0B90B)
                                     else -> if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
                                 }
                             )
@@ -1189,6 +1299,7 @@ private fun VisaCardRealistic(
                                     when (provider) {
                                         "REDOTPAY" -> Color.White.copy(alpha = 0.16f)
                                         "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.16f)
+                                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.16f)
                                         else -> if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFF0284C7).copy(alpha = 0.12f)
                                     }
                                 )
@@ -1197,6 +1308,7 @@ private fun VisaCardRealistic(
                                     when (provider) {
                                         "REDOTPAY" -> Color.White.copy(alpha = 0.45f)
                                         "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.55f)
+                                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.60f)
                                         else -> Color(0xFF38BDF8).copy(alpha = 0.5f)
                                     },
                                     RoundedCornerShape(10.dp)
@@ -1217,11 +1329,13 @@ private fun VisaCardRealistic(
                                     text = when (provider) {
                                         "REDOTPAY" -> if (isArabic) "RedotPay • USD" else "RedotPay • USD Virtual"
                                         "BYBIT" -> if (isArabic) "Bybit • USDT / EUR" else "Bybit • Crypto Debit"
+                                        "BINANCE" -> if (isArabic) "Binance • BNB / USDT" else "Binance • Crypto Visa"
                                         else -> if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency"
                                     },
                                     color = when (provider) {
                                         "REDOTPAY" -> Color.White
                                         "BYBIT" -> Color(0xFFF7A600)
+                                        "BINANCE" -> Color(0xFFF0B90B)
                                         else -> if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
                                     },
                                     fontSize = 10.sp,
@@ -1316,7 +1430,7 @@ private fun VisaCardRealistic(
         }
     }
 
-    // Hold-to-customize RedotPay / Bybit hint below card
+    // Hold-to-customize RedotPay / Bybit / Binance hint below card
     Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier
@@ -1327,11 +1441,12 @@ private fun VisaCardRealistic(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط مطولاً على البطاقة لإضافة RedotPay أو Bybit"
-            else "Hold card 1s to add RedotPay or Bybit",
+            text = if (isArabic) "اضغط مطولاً على البطاقة لإضافة RedotPay أو Bybit أو Binance"
+            else "Hold card 1s to choose RedotPay, Bybit or Binance",
             color = when (provider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
                 "BYBIT" -> Color(0xFFF7A600)
+                "BINANCE" -> Color(0xFFF0B90B)
                 else -> CyanNeon
             },
             fontSize = 11.sp,
@@ -1344,6 +1459,7 @@ private fun VisaCardRealistic(
             tint = when (provider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
                 "BYBIT" -> Color(0xFFF7A600)
+                "BINANCE" -> Color(0xFFF0B90B)
                 else -> CyanNeon
             },
             modifier = Modifier.size(13.dp)
@@ -1361,6 +1477,7 @@ private fun formatVisaNumberDisplay(
         return when {
             isStealth -> "••••  ••••  ••••  ••••"
             provider == "BYBIT" -> "5316  ••••  ••••  8890"
+            provider == "BINANCE" -> "4895  ••••  ••••  2026"
             else -> "4152  ••••  ••••  3120"
         }
     }

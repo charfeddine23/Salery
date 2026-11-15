@@ -42,7 +42,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         val prefsManager = PreferencesManager(context.applicationContext)
         val currentSettings = prefsManager.settingsFlow.value
         val baselineMillis = currentSettings.smsSyncBaselineTimestampMillis
-        if (baselineMillis > 0L && latestTimestamp <= baselineMillis) return
+        val allowSuggestionForTimestamp = baselineMillis <= 0L || latestTimestamp > baselineMillis
 
         val processedKeys = AlgPosteSmsCodec.parseProcessedKeys(currentSettings.processedSmsKeysJson)
         val existingPending = AlgPosteSmsCodec.parseSuggestions(currentSettings.pendingSmsSuggestionsJson)
@@ -54,8 +54,8 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         val newlyExtractedSnapshots = mutableListOf<SmsBalanceSnapshot>()
 
         for ((sender, bodyBuilder) in groupedBySender) {
-            if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
             val rawText = bodyBuilder.toString()
+            if (!AlgPosteSmsAnalyzer.isAlgPosteMessage(sender, rawText)) continue
 
             AlgPosteSmsAnalyzer.parseBalanceSnapshot(
                 sender = sender,
@@ -66,15 +66,16 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 newlyExtractedSnapshots.add(snap)
             }
 
-            val parsed = AlgPosteSmsAnalyzer.parseSms(
-                sender = sender,
-                body = rawText,
-                timestampMillis = latestTimestamp,
-                allowAnySenderForManualTest = false
-            ) ?: continue
-
-            if (parsed.id !in processedKeys && parsed.id !in existingIds) {
-                newlyDetected.add(parsed)
+            if (currentSettings.baridiMobSmsSyncEnabled && allowSuggestionForTimestamp) {
+                val parsed = AlgPosteSmsAnalyzer.parseSms(
+                    sender = sender,
+                    body = rawText,
+                    timestampMillis = latestTimestamp,
+                    allowAnySenderForManualTest = false
+                )
+                if (parsed != null && parsed.id !in processedKeys && parsed.id !in existingIds) {
+                    newlyDetected.add(parsed)
+                }
             }
         }
 
@@ -92,7 +93,6 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         val updatedList = (newlyDetected + existingPending).distinctBy { it.id }
         prefsManager.updateSettings {
             it.copy(
-                baridiMobSmsSyncEnabled = true,
                 pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
                 smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                 detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),

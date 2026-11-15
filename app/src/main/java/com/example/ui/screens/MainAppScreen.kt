@@ -152,6 +152,7 @@ import com.example.ui.components.PermissionsOnboardingDialog
 import com.example.ui.i18n.LocalStealthMode
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
+import com.example.update.isMandatoryBlockActive
 
 @Composable
 fun MainAppScreen(
@@ -171,6 +172,7 @@ fun MainAppScreen(
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
     val pendingSmsSuggestions by viewModel.pendingSmsSuggestions.collectAsState()
     val detectedSmsTaxes by viewModel.detectedSmsTaxes.collectAsState()
+    val smsBalanceHistory by viewModel.smsBalanceHistory.collectAsState()
     val expandedKeyIds by viewModel.expandedKeyIds.collectAsState()
     val revealedKeyIds by viewModel.revealedKeyIds.collectAsState()
     val expandedCcpIds by viewModel.expandedCcpIds.collectAsState()
@@ -209,11 +211,14 @@ fun MainAppScreen(
                         }
                     }
                 }
-                if (userSettings.baridiMobSmsSyncEnabled &&
-                    AlgPosteSmsInboxScanner.hasSmsPermissions(context)
-                ) {
-                    viewModel.scanAlgPosteSmsInbox(context, showFeedback = false)
+                if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+                    if (userSettings.baridiMobSmsSyncEnabled) {
+                        viewModel.scanAlgPosteSmsInbox(context, showFeedback = false)
+                    } else {
+                        viewModel.refreshCurrentBalanceOnlyFromInbox(context, showFeedback = false)
+                    }
                 }
+                viewModel.checkForUpdatesIfDueOnResume()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -560,14 +565,18 @@ fun MainAppScreen(
                                     userSettings = userSettings,
                                     pendingSuggestions = pendingSmsSuggestions,
                                     detectedTaxes = detectedSmsTaxes,
+                                    balanceHistory = smsBalanceHistory,
                                     onToggleSyncEnabled = { enabled ->
                                         viewModel.setBaridiMobSmsSyncEnabled(enabled)
                                     },
                                     onScanInboxNow = {
                                         viewModel.scanAlgPosteSmsInbox(context, showFeedback = true)
                                     },
-                                    onRefreshCurrentBalanceOnly = {
-                                        viewModel.refreshCurrentBalanceOnlyFromInbox(context)
+                                    onRefreshCurrentBalanceOnly = { showFeedback ->
+                                        viewModel.refreshCurrentBalanceOnlyFromInbox(context, showFeedback)
+                                    },
+                                    onClearBalanceHistory = {
+                                        viewModel.clearSmsBalanceHistory()
                                     },
                                     onSkipOldSmsAndStartFresh = {
                                         viewModel.skipOldSmsAndStartFresh()
@@ -656,7 +665,13 @@ fun MainAppScreen(
                                     onDismissSmsSuggestion = { id ->
                                         viewModel.dismissSmsSuggestion(id)
                                     },
-                                    onOpenBaridiMobSync = { currentRoute = "baridimob_sync" }
+                                    onOpenBaridiMobSync = { currentRoute = "baridimob_sync" },
+                                    onRefreshCcpBalanceFromSms = { showFeedback ->
+                                        viewModel.refreshCurrentBalanceOnlyFromInbox(
+                                            context = context,
+                                            showFeedback = showFeedback
+                                        )
+                                    }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
                                     onBackClick = { currentRoute = "cards" }
@@ -768,7 +783,8 @@ fun MainAppScreen(
                 )
             }
 
-            if (showUpdateDialog) {
+            val forceUpdateVisible = showUpdateDialog || updateUiState.isMandatoryBlockActive
+            if (forceUpdateVisible) {
                 LaunchedEffect(updateUiState) {
                     val allowed = AppUpdateManager.canRequestPackageInstalls(context)
                     canInstallPackages = allowed
@@ -815,7 +831,7 @@ fun MainAppScreen(
                 )
             }
 
-            if (showScreenshotShieldDialog) {
+            if (showScreenshotShieldDialog && !forceUpdateVisible) {
                 ScreenshotProtectionDialog(
                     isProtected = userSettings.screenshotProtectionEnabled,
                     onToggleProtection = { enabled ->
@@ -826,7 +842,7 @@ fun MainAppScreen(
             }
 
             if (!isAppLocked &&
-                !showUpdateDialog &&
+                !forceUpdateVisible &&
                 (!userSettings.hasCompletedPermissionsOnboarding || forceShowPermissionsOnboarding)
             ) {
                 PermissionsOnboardingDialog(

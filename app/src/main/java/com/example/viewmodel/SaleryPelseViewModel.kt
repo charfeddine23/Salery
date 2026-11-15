@@ -39,11 +39,13 @@ import com.example.notification.DebtReminderScheduler
 import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.AlgPosteSmsCodec
 import com.example.sms.AlgPosteSmsInboxScanner
+import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
+import com.example.update.isMandatoryBlockActive
 import com.example.update.compareVersionTags
 
 data class FinancialSummary(
@@ -161,6 +163,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         .map { AlgPosteSmsCodec.parseTaxAnomalies(it.detectedSmsTaxesJson) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Extracted balance history timeline from ALG Poste / BaridiMob SMS messages
+    val smsBalanceHistory: StateFlow<List<SmsBalanceSnapshot>> = settings
+        .map { AlgPosteSmsCodec.parseBalanceHistory(it.smsBalanceHistoryJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Notification events for UI banners
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -185,10 +192,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
             } catch (_: Throwable) {
             }
-            if (settings.value.baridiMobSmsSyncEnabled &&
-                AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())
-            ) {
-                scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+            if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
+                if (settings.value.baridiMobSmsSyncEnabled) {
+                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+                } else {
+                    refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
+                }
             }
         }
 
@@ -611,6 +620,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val cleanProvider = when (provider.uppercase()) {
             "REDOTPAY" -> "REDOTPAY"
             "BYBIT" -> "BYBIT"
+            "BINANCE" -> "BINANCE"
             else -> "DEFAULT"
         }
         val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase()
@@ -637,6 +647,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val label = when (cleanProvider) {
                 "REDOTPAY" -> "RedotPay"
                 "BYBIT" -> "Bybit"
+                "BINANCE" -> "Binance"
                 else -> "Visa"
             }
             _toastEvent.emit(
@@ -1161,18 +1172,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private var lastUpdateCheckElapsedMillis: Long = 0L
+
     // In-App GitHub Releases Update & Download Actions
     fun checkForUpdates(manual: Boolean = true) {
         val activeState = _updateUiState.value
-        if (activeState is AppUpdateUiState.Downloading) {
-            if (manual) _showUpdateDialog.value = true
-            return
-        }
-        if (manual && activeState is AppUpdateUiState.ReadyToInstall) {
+        if (activeState.isMandatoryBlockActive) {
             _showUpdateDialog.value = true
             return
         }
 
+        lastUpdateCheckElapsedMillis = System.currentTimeMillis()
         viewModelScope.launch {
             if (manual) {
                 _updateUiState.value = AppUpdateUiState.Checking
@@ -1203,6 +1213,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     _showUpdateDialog.value = true
                 }
             }
+        }
+    }
+
+    fun checkForUpdatesIfDueOnResume() {
+        if (_updateUiState.value.isMandatoryBlockActive) {
+            _showUpdateDialog.value = true
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - lastUpdateCheckElapsedMillis >= 5 * 60 * 1000L) {
+            checkForUpdates(manual = false)
         }
     }
 
@@ -1297,9 +1318,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun dismissUpdateDialog() {
-        if (_updateUiState.value !is AppUpdateUiState.Downloading) {
-            _showUpdateDialog.value = false
+        if (_updateUiState.value.isMandatoryBlockActive) {
+            _showUpdateDialog.value = true
+            return
         }
+        _showUpdateDialog.value = false
     }
 
     // First-Launch Luxury Permissions Onboarding
@@ -1337,19 +1360,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 smsSyncBaselineTimestampMillis = now,
                 baridiMobSmsSyncEnabled = if (hasPerm) true else current.baridiMobSmsSyncEnabled,
                 pendingSmsSuggestionsJson = "[]",
-                processedSmsKeysJson = "[]",
-                smsBalanceHistoryJson = "[]",
-                detectedSmsTaxesJson = "[]",
-                latestSmsBalanceAmount = -1.0,
-                latestSmsBalanceUpdatedAt = 0L,
-                latestSmsBalanceRawSnippet = ""
+                processedSmsKeysJson = "[]"
             )
         }
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             _toastEvent.emit(
-                if (isAr) "تم تخطي كل الرسائل القديمة والبدء من الصفر — أي رسالة جديدة ستُقترح فوراً"
-                else "Skipped all old SMS & started fresh — new alerts will suggest immediately"
+                if (isAr) "تم تخطي الاقتراحات القديمة والبدء من الصفر — الأرصدة محفوظة وأي رسالة جديدة ستُقترح فوراً"
+                else "Skipped old SMS suggestions & started fresh — balances kept and new alerts suggest immediately"
             )
         }
     }
@@ -1359,41 +1377,76 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         scanAlgPosteSmsInbox(context, showFeedback = true)
     }
 
-    fun refreshCurrentBalanceOnlyFromInbox(context: Context = getApplication()) {
+    fun refreshCurrentBalanceOnlyFromInbox(
+        context: Context = getApplication(),
+        showFeedback: Boolean = true
+    ) {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
-                _toastEvent.emit(
-                    if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
-                    else "Please grant SMS read permission first"
-                )
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
+                        else "Please grant SMS read permission first"
+                    )
+                }
                 return@launch
             }
-            val latestSnap = withContext(Dispatchers.IO) {
-                AlgPosteSmsInboxScanner.scanLatestBalanceSnapshot(context)
+            val snapshots = withContext(Dispatchers.IO) {
+                AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
             }
-            if (latestSnap == null) {
-                _toastEvent.emit(
-                    if (isAr) "لم يتم العثور على رصيد في رسائل ALG Poste"
-                    else "No balance found in ALG Poste SMS inbox"
-                )
+            if (snapshots.isEmpty()) {
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "لم يتم العثور على أرصدة في رسائل ALG Poste / BaridiMob"
+                        else "No balances found in ALG Poste / BaridiMob SMS inbox"
+                    )
+                }
                 return@launch
             }
+
+            var totalHistoryCount = 0
+            var latestBalance = -1.0
             prefsManager.updateSettings { current ->
-                val history = (AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson) + latestSnap)
+                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                val mergedHistory = (existingHistory + snapshots)
                     .distinctBy { it.id }
                     .sortedBy { it.timestampMillis }
+                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                totalHistoryCount = mergedHistory.size
+                latestBalance = latestSnap?.balance ?: current.latestSmsBalanceAmount
+
+                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                    snapshots = mergedHistory,
+                    existingAnomalies = existingTaxes
+                )
+
                 current.copy(
-                    latestSmsBalanceAmount = latestSnap.balance,
-                    latestSmsBalanceUpdatedAt = latestSnap.timestampMillis,
-                    latestSmsBalanceRawSnippet = latestSnap.rawBody,
-                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(history)
+                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
+                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
                 )
             }
-            val formatted = formatDzdAmount(latestSnap.balance, if (isAr) "دج" else "DA")
-            _toastEvent.emit(
-                if (isAr) "تم استخراج الرصيد الحالي: $formatted"
-                else "Extracted current balance: $formatted"
+            if (showFeedback && latestBalance >= 0.0) {
+                val formatted = formatDzdAmount(latestBalance, if (isAr) "دج" else "DA")
+                _toastEvent.emit(
+                    if (isAr) "تم استخراج $totalHistoryCount أرصدة • الحالي: $formatted"
+                    else "Extracted $totalHistoryCount balances • Latest: $formatted"
+                )
+            }
+        }
+    }
+
+    fun clearSmsBalanceHistory() {
+        prefsManager.updateSettings { current ->
+            current.copy(
+                smsBalanceHistoryJson = "[]",
+                latestSmsBalanceAmount = -1.0,
+                latestSmsBalanceUpdatedAt = 0L,
+                latestSmsBalanceRawSnippet = ""
             )
         }
     }
@@ -1415,12 +1468,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val scanResult = withContext(Dispatchers.IO) {
                 AlgPosteSmsInboxScanner.scanInboxWithBalances(
                     context = context,
-                    minTimestampMillis = baselineMillis
+                    minTimestampMillis = baselineMillis,
+                    applyMinTimestampToSnapshots = false
                 )
             }
 
             var addedCount = 0
             var newTaxCount = 0
+            var newSnapshotCount = 0
             prefsManager.updateSettings { current ->
                 val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                 val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
@@ -1432,6 +1487,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 val mergedHistory = (existingHistory + scanResult.snapshots)
                     .distinctBy { it.id }
                     .sortedBy { it.timestampMillis }
+                newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
                 val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
                 val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
@@ -1464,6 +1520,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     } else {
                         "Found $addedCount new ALG Poste transaction suggestions"
                     }
+                    newSnapshotCount > 0 -> if (isAr) {
+                        "تم تحويل $newSnapshotCount رصيد جديد إلى سجل بريدي موب"
+                    } else {
+                        "Logged $newSnapshotCount new SMS balances into BaridiMob history"
+                    }
                     newTaxCount > 0 -> if (isAr) {
                         "تم رصد $newTaxCount فارق ضرائب أو رسوم من الرصيد"
                     } else {
@@ -1477,9 +1538,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         else "No ALG Poste transaction messages found in SMS inbox"
                     }
                     else -> if (isAr) {
-                        "جميع رسائل ALG Poste محدثة بالفعل"
+                        "جميع رسائل وأرصدة ALG Poste محدثة بالفعل"
                     } else {
-                        "All ALG Poste SMS transactions are already synced"
+                        "All ALG Poste SMS & balances are already synced"
                     }
                 }
                 _toastEvent.emit(msg)

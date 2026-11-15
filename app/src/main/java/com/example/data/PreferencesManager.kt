@@ -31,7 +31,7 @@ data class UserSettings(
     val screenshotProtectionEnabled: Boolean = false,
     val vaultKeysJson: String = "[]",
     val ccpAccountsJson: String = "[]",
-    val visaCardProvider: String = "DEFAULT", // "DEFAULT", "REDOTPAY", "BYBIT"
+    val visaCardProvider: String = "DEFAULT", // "DEFAULT", "REDOTPAY", "BYBIT", "BINANCE"
     val visaCardHolderName: String = "CHARFEDDINE KA",
     val visaCardNumber: String = "",
     val visaCardExpiry: String = "08/28",

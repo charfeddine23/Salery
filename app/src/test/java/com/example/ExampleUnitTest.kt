@@ -15,6 +15,7 @@ import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.EnglishStrings
 import com.example.ui.i18n.formatDzdAmount
 import com.example.viewmodel.FinancialSummary
+import com.example.update.isMandatoryBlockActive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -573,5 +574,104 @@ class ExampleUnitTest {
   fun userSettings_defaultsToScreenshotProtectionDisabled() {
     val defaults = UserSettings()
     org.junit.Assert.assertFalse(defaults.screenshotProtectionEnabled)
+  }
+
+  @Test
+  fun appUpdateUiState_mandatoryBlockActive_enforcesNonSkippableUpdates() {
+    val dummyRelease = com.example.update.GitHubReleaseInfo(
+      tagName = "v9.9.9",
+      versionName = "9.9.9",
+      title = "Mandatory Release",
+      releaseNotes = "Critical update",
+      publishedAt = "2026-11-15T00:00:00Z",
+      htmlUrl = "https://github.com/charfeddine23/Salery/releases",
+      apkName = "SaleryPulse-9.9.9.apk",
+      apkDownloadUrl = "https://example.com/SaleryPulse.apk",
+      apkSizeBytes = 12_000_000L
+    )
+
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Idle.isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Checking.isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.UpToDate("1.0.0").isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Error("Offline", null).isMandatoryBlockActive)
+
+    assertTrue(com.example.update.AppUpdateUiState.Available(dummyRelease).isMandatoryBlockActive)
+    assertTrue(com.example.update.AppUpdateUiState.Downloading(dummyRelease, 500L, 1000L).isMandatoryBlockActive)
+    assertTrue(
+      com.example.update.AppUpdateUiState.ReadyToInstall(
+        dummyRelease,
+        java.io.File("dummy.apk")
+      ).isMandatoryBlockActive
+    )
+    assertTrue(com.example.update.AppUpdateUiState.Error("Failed download", dummyRelease).isMandatoryBlockActive)
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_handlesRealWorldSenders_frenchArabicFormats_andBalanceLog() {
+    // 1. Real-world carrier sender variants & hybrid body recognition
+    val algPostTruncated = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Post",
+      body = "Votre nouveau solde est de : 24 500,00 DA",
+      timestampMillis = 1_000_000L
+    )
+    assertNotNull("Truncated 'ALG Post' sender must match", algPostTruncated)
+    assertEquals(24500.0, algPostTruncated!!.balance, 0.01)
+
+    val edahabiaSender = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "EDAHABIA",
+      body = "Opération de paiement TPE de 1 200,00 DA effectuée. Solde le 15/11/2026 : 19.800,50 DZD",
+      timestampMillis = 2_000_000L
+    )
+    assertNotNull("EDAHABIA sender and dated Solde format must match", edahabiaSender)
+    assertEquals(19800.50, edahabiaSender!!.balance, 0.01)
+    assertTrue(edahabiaSender.hasTransaction)
+    assertTrue(edahabiaSender.isExpense)
+    assertEquals(1200.0, edahabiaSender.transactionAmount, 0.01)
+
+    val carrierShortCode = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "777",
+      body = "BaridiMob: Nouveau solde de votre compte 0024567890 est de 32 100.00 DA",
+      timestampMillis = 3_000_000L
+    )
+    assertNotNull("Short carrier code with BaridiMob body must match", carrierShortCode)
+    assertEquals(32100.0, carrierShortCode!!.balance, 0.01)
+
+    // 2. Arabic digits & "د ج" / "الرصيد البريدي" / "الرصيد المتاح هو :"
+    val arAvailableBal = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "الرصيد المتاح هو : ٣٢ ١٠٠ د ج"
+    )
+    assertNotNull(arAvailableBal)
+    assertEquals(32100.0, arAvailableBal!!, 0.01)
+
+    val arDebitAndPostalBal = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "بريدي موب",
+      body = "تم خصم 1500.00 دج من حسابكم البريدي. الرصيد البريدي: 18500.00 دج",
+      timestampMillis = 4_000_000L
+    )
+    assertNotNull(arDebitAndPostalBal)
+    assertEquals(18500.0, arDebitAndPostalBal!!.balance, 0.01)
+    assertTrue(arDebitAndPostalBal.hasTransaction)
+    assertTrue(arDebitAndPostalBal.isExpense)
+    assertEquals(1500.0, arDebitAndPostalBal.transactionAmount, 0.01)
+
+    // 3. Ensure non-Poste carrier promos stay excluded
+    val mobilisSolde = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "Mobilis",
+      body = "Solde internet: 500.00 DA",
+      timestampMillis = 5_000_000L,
+      allowAnySenderForManualTest = false
+    )
+    org.junit.Assert.assertNull(mobilisSolde)
+
+    // 4. Chronological Balance Log round-trip preserves all converted snapshots in order
+    val encoded = com.example.sms.AlgPosteSmsCodec.encodeBalanceHistory(
+      listOf(arDebitAndPostalBal, algPostTruncated, carrierShortCode, edahabiaSender)
+    )
+    val decoded = com.example.sms.AlgPosteSmsCodec.parseBalanceHistory(encoded)
+    assertEquals(4, decoded.size)
+    assertEquals(1_000_000L, decoded[0].timestampMillis)
+    assertEquals(2_000_000L, decoded[1].timestampMillis)
+    assertEquals(3_000_000L, decoded[2].timestampMillis)
+    assertEquals(4_000_000L, decoded[3].timestampMillis)
   }
 }

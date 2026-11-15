@@ -74,19 +74,20 @@ data class InboxScanResult(
 object AlgPosteSmsAnalyzer {
 
     private val debitKeywords = listOf(
-        "retrait", "débit", "debit", "débité", "debite", "paiement", "payement",
-        "tpe", "achat", "virement emis", "virement émis", "émis", "emis",
-        "frais", "commission", "facture", "cotisation", "transfert sortant",
-        "taxe", "taxes", "timbre", "agios", "redevance",
-        "سحب", "خصم", "اقتطاع", "دفع", "شراء", "صرف", "تحويل صادر", "فاتورة",
+        "retrait", "retire", "retiré", "débit", "debit", "débité", "debite",
+        "prélevé", "preleve", "prélèvement", "prelevement", "paiement", "payement",
+        "tpe", "achat", "virement emis", "virement émis", "virement effectue",
+        "virement effectué", "émis", "emis", "frais", "commission", "facture",
+        "cotisation", "transfert sortant", "taxe", "taxes", "timbre", "agios", "redevance",
+        "سحب", "خصم", "حسم", "اقتطاع", "دفع", "شراء", "صرف", "تحويل صادر", "فاتورة",
         "ضريبة", "ضرائب", "رسوم", "رسم", "عمولة"
     )
 
     private val creditKeywords = listOf(
         "crédit", "credit", "crédité", "credite", "versement", "alimentation",
         "virement reçu", "virement recu", "reçu", "recu", "salaire", "dépôt",
-        "depot", "remboursement", "virement entrant", "bonification",
-        "إيداع", "تحويل وارد", "وارد", "استلام", "راتب", "مستحقات", "إضافة", "رصيد مضاف"
+        "depot", "remboursement", "virement entrant", "bonification", "encaissement",
+        "إيداع", "تحويل وارد", "وارد", "استلام", "راتب", "مستحقات", "إضافة", "رصيد مضاف", "صب"
     )
 
     private val explicitFeeKeywords = listOf(
@@ -96,18 +97,45 @@ object AlgPosteSmsAnalyzer {
     )
 
     private val balanceContextMarkers = listOf(
-        "nouveau solde", "solde disponible", "solde actuel", "solde ccp",
-        "n.solde", "solde", "balance",
-        "الرصيد الجديد", "الرصيد الحالي", "الرصيد المتوفر", "الرصيد", "رصيدك الحالي", "رصيدك"
+        "nouveau solde", "solde disponible", "solde actuel", "solde comptable",
+        "solde courant", "solde ccp", "solde final", "solde restant",
+        "n.solde", "solde", "balance", "avoir",
+        "الرصيد الجديد", "الرصيد الحالي", "الرصيد المتاح", "الرصيد المتوفر",
+        "الرصيد البريدي", "الرصيد المتبقي", "الرصيد", "رصيدك الحالي", "رصيدكم", "رصيدك", "رصيد"
     )
 
-    private val prioritizedNewBalanceRegex = Regex(
-        """(?:nouveau\s+solde|solde\s+disponible|solde\s+actuel|n\.?\s*solde|الرصيد\s+الجديد|الرصيد\s+الحالي|الرصيد\s+المتوفر|رصيدك\s+الحالي)\s*(?:est|:|=|-|هو)?\s*([0-9][0-9\s.,]*)\s*(?:DA|DZD|د\.?ج)?""",
+    private const val CURRENCY_PATTERN = """(?:DA|DZD|DZ|د\.?\s*ج|دج|دينار)"""
+    private const val NUMBER_PATTERN =
+        """([0-9]+(?:[ \t\u00A0.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)"""
+    private const val PRIORITIZED_BALANCE_LABELS =
+        """(?:nouveau\s+solde|solde\s+(?:disponible|actuel|comptable|courant|final|net|restant|apr[eè]s\s+op[eé]ration)|n\.?\s*solde|الرصيد\s+(?:الجديد|الحالي|المتاح|المتوفر|المتبقي|البريدي|النهائي)|رصيدك\s+(?:الحالي|الجديد|المتاح)|رصيد\s+(?:الحساب|حسابك|حسابكم|البطاقة))"""
+    private const val GENERIC_BALANCE_LABELS =
+        """(?:solde(?:\s+ccp)?|balance|avoir|الرصيد|رصيدكم|رصيدك|رصيد)"""
+    private const val IMMEDIATE_CONNECTORS =
+        """(?:\s*(?:est\s+de|est|de|du|au|le|à|a|هو|الحالي|الجديد|المتاح|بـ|ب|:|=|-|،)\s*){0,4}"""
+
+    private val prioritizedBalanceCurrencyRegex = Regex(
+        """$PRIORITIZED_BALANCE_LABELS[^\r\n]{0,60}?(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
         RegexOption.IGNORE_CASE
     )
 
-    private val genericBalanceRegex = Regex(
-        """(?:solde(?:\s+ccp)?|balance|الرصيد|رصيدك)\s*(?:est|:|=|-|هو)?\s*([0-9][0-9\s.,]*)\s*(?:DA|DZD|د\.?ج)?""",
+    private val prioritizedBalanceNoCurrencyRegex = Regex(
+        """$PRIORITIZED_BALANCE_LABELS$IMMEDIATE_CONNECTORS(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val genericBalanceCurrencyRegex = Regex(
+        """$GENERIC_BALANCE_LABELS[^\r\n]{0,60}?(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val genericBalanceNoCurrencyRegex = Regex(
+        """$GENERIC_BALANCE_LABELS$IMMEDIATE_CONNECTORS(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val reversedBalanceRegex = Regex(
+        """(?<![0-9/:\-])$NUMBER_PATTERN\s*$CURRENCY_PATTERN\s*(?:est\s+(?:votre\s+)?(?:nouveau\s+)?solde|هو\s*رصيدك)""",
         RegexOption.IGNORE_CASE
     )
 
@@ -117,13 +145,18 @@ object AlgPosteSmsAnalyzer {
     )
 
     private val signedAmountRegex = Regex(
-        """([+-])\s*([0-9][0-9\s.,]*)\s*(DA|DZD|د\.?ج)?""",
+        """([+-])[ \t\u00A0]*$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:[ \t\u00A0]*($CURRENCY_PATTERN))?""",
         RegexOption.IGNORE_CASE
     )
 
     private val currencyAmountRegex = Regex(
-        """([0-9][0-9\s.,]*)\s*(DA|DZD|د\.?ج)""",
+        """(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)[ \t\u00A0]*($CURRENCY_PATTERN)(?![\p{L}])""",
         RegexOption.IGNORE_CASE
+    )
+
+    private data class ExtractedBalanceMatch(
+        val amount: Double,
+        val range: IntRange
     )
 
     fun isAlgPosteSender(sender: String): Boolean {
@@ -131,14 +164,57 @@ object AlgPosteSmsAnalyzer {
             .lowercase(Locale.US)
             .replace(Regex("[\\s._-]+"), "")
         if (norm.isBlank()) return false
-        return norm.contains("algposte") ||
-            norm.contains("algerieposte") ||
-            norm.contains("algérieposte") ||
-            norm.contains("baridimob") ||
+        return norm.contains("algpost") ||
+            norm.contains("algeriepost") ||
+            norm.contains("algériepost") ||
+            norm.contains("algeriapost") ||
+            norm.contains("baridi") ||
+            norm.contains("edahabia") ||
+            norm.contains("dahabia") ||
             norm.contains("postedz") ||
+            norm.contains("postealgerie") ||
             norm == "poste" ||
+            norm == "ccp" ||
+            norm == "eccp" ||
             norm.contains("بريدالجزائر") ||
-            norm.contains("بريدي")
+            norm.contains("بريدي") ||
+            norm.contains("الذهبية")
+    }
+
+    fun isAlgPosteMessage(sender: String, body: String): Boolean {
+        if (isAlgPosteSender(sender)) return true
+        val normSender = normalizeArabicDigits(sender)
+            .lowercase(Locale.US)
+            .replace(Regex("[\\s._-]+"), "")
+        val normBody = normalizeArabicDigits(body).lowercase(Locale.US)
+        val compactBody = normBody.replace(Regex("[\\s._-]+"), "")
+        if (compactBody.contains("algpost") ||
+            compactBody.contains("algeriepost") ||
+            compactBody.contains("algériepost") ||
+            compactBody.contains("baridimob") ||
+            compactBody.contains("barididz") ||
+            compactBody.contains("edahabia") ||
+            compactBody.contains("eccp") ||
+            compactBody.contains("compteccp") ||
+            compactBody.contains("soldeccp") ||
+            compactBody.contains("بريدالجزائر") ||
+            compactBody.contains("بريدي") ||
+            compactBody.contains("البطاقةالذهبية") ||
+            compactBody.contains("حسابكمالبريدي") ||
+            compactBody.contains("حسابكالبريدي")
+        ) {
+            return true
+        }
+        // Carrier short numeric codes (e.g. 600 / 777 / 1530) with explicit Solde + Currency
+        val isShortNumericSender = normSender.isNotBlank() &&
+            normSender.all { it.isDigit() || it == '+' } &&
+            normSender.length <= 6
+        if (isShortNumericSender && extractBalanceFromBody(body) != null) {
+            val hasCurrency = normBody.contains("da") || normBody.contains("dzd") ||
+                normBody.contains("دج") || normBody.contains("د.ج") || normBody.contains("دينار")
+            if (hasCurrency) return true
+        }
+        return false
     }
 
     fun buildSuggestionId(sender: String, body: String, timestampMillis: Long): String {
@@ -156,18 +232,28 @@ object AlgPosteSmsAnalyzer {
     fun extractBalanceFromBody(body: String): Double? {
         val normalizedBody = normalizeArabicDigits(body)
         if (normalizedBody.isBlank()) return null
+        return extractBalanceMatchFromBody(normalizedBody)?.amount
+    }
 
-        val prioritized = prioritizedNewBalanceRegex.findAll(normalizedBody)
-            .mapNotNull { parseFlexibleAmount(it.groupValues[1]) }
-            .filter { it >= 0.0 }
-            .lastOrNull()
-        if (prioritized != null) return roundTwoDecimals(prioritized)
-
-        val generic = genericBalanceRegex.findAll(normalizedBody)
-            .mapNotNull { parseFlexibleAmount(it.groupValues[1]) }
-            .filter { it >= 0.0 }
-            .lastOrNull()
-        return generic?.let(::roundTwoDecimals)
+    private fun extractBalanceMatchFromBody(normalizedBody: String): ExtractedBalanceMatch? {
+        val patterns = listOf(
+            prioritizedBalanceCurrencyRegex,
+            prioritizedBalanceNoCurrencyRegex,
+            genericBalanceCurrencyRegex,
+            genericBalanceNoCurrencyRegex,
+            reversedBalanceRegex
+        )
+        for (regex in patterns) {
+            val match = regex.findAll(normalizedBody)
+                .mapNotNull { res ->
+                    val parsed = parseFlexibleAmount(res.groupValues[1]) ?: return@mapNotNull null
+                    if (parsed < 0.0) return@mapNotNull null
+                    ExtractedBalanceMatch(roundTwoDecimals(parsed), res.range)
+                }
+                .lastOrNull()
+            if (match != null) return match
+        }
+        return null
     }
 
     fun parseBalanceSnapshot(
@@ -180,7 +266,8 @@ object AlgPosteSmsAnalyzer {
         val trimmedBody = body.trim()
         if (trimmedBody.isBlank()) return null
 
-        val senderMatches = isAlgPosteSender(trimmedSender) ||
+        val isKnownPoste = isAlgPosteMessage(trimmedSender, trimmedBody)
+        val senderMatches = isKnownPoste ||
             (allowAnySenderForManualTest && (trimmedSender.isNotBlank() || trimmedBody.isNotBlank()))
         if (!senderMatches) return null
 
@@ -198,7 +285,7 @@ object AlgPosteSmsAnalyzer {
 
         return SmsBalanceSnapshot(
             id = id,
-            sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else "ALG Poste",
+            sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else if (isKnownPoste) trimmedSender else "ALG Poste",
             balance = extractedBalance,
             transactionAmount = txParsed?.amount ?: 0.0,
             hasTransaction = txParsed != null,
@@ -219,7 +306,8 @@ object AlgPosteSmsAnalyzer {
         val trimmedBody = body.trim()
         if (trimmedBody.isBlank()) return null
 
-        val senderMatches = isAlgPosteSender(trimmedSender) ||
+        val isKnownPoste = isAlgPosteMessage(trimmedSender, trimmedBody)
+        val senderMatches = isKnownPoste ||
             (allowAnySenderForManualTest && (trimmedSender.isNotBlank() || trimmedBody.isNotBlank()))
         if (!senderMatches) return null
 
@@ -231,23 +319,27 @@ object AlgPosteSmsAnalyzer {
             lowerBody.endsWith("da") ||
             lowerBody.contains("dzd") ||
             lowerBody.contains("دج") ||
-            lowerBody.contains("د.ج")
+            lowerBody.contains("د.ج") ||
+            lowerBody.contains("د ج") ||
+            lowerBody.contains("دينار")
         if (!hasCurrencyToken && otpNonTransactionMarkers.any { lowerBody.contains(it) }) {
             return null
         }
 
         val hasDebitKeyword = debitKeywords.any { lowerBody.contains(it) }
         val hasCreditKeyword = creditKeywords.any { lowerBody.contains(it) }
-        val extractedBalance = extractBalanceFromBody(normalizedBody)
+        val balanceMatch = extractBalanceMatchFromBody(normalizedBody)
+        val extractedBalance = balanceMatch?.amount
         val isExplicitFee = explicitFeeKeywords.any { lowerBody.contains(it) }
 
-        // 1. Prioritize explicitly signed amounts (e.g. -300.00 DA or +5000.00 DA), ignoring Solde/Balance lines
+        // 1. Prioritize explicitly signed amounts (e.g. -300.00 DA or +5000.00 DA), ignoring Solde/Balance spans
         var pickedAmount: Double? = null
         var pickedIsExpense: Boolean? = null
         var matchedReason = ""
 
         val signedMatches = signedAmountRegex.findAll(normalizedBody).toList()
         for (match in signedMatches) {
+            if (balanceMatch != null && rangesOverlap(match.range, balanceMatch.range)) continue
             if (isInsideBalanceLabel(lowerBody, match.range.first)) continue
             val sign = match.groupValues[1]
             val numStr = match.groupValues[2]
@@ -268,6 +360,7 @@ object AlgPosteSmsAnalyzer {
         if (pickedAmount == null) {
             val currencyMatches = currencyAmountRegex.findAll(normalizedBody).toList()
             for (match in currencyMatches) {
+                if (balanceMatch != null && rangesOverlap(match.range, balanceMatch.range)) continue
                 if (isInsideBalanceLabel(lowerBody, match.range.first)) continue
                 val parsed = parseFlexibleAmount(match.groupValues[1]) ?: continue
                 if (parsed <= 0.0) continue
@@ -305,7 +398,7 @@ object AlgPosteSmsAnalyzer {
 
         return SmsSuggestionEntry(
             id = id,
-            sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else "ALG Poste",
+            sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else if (isKnownPoste) trimmedSender else "ALG Poste",
             rawBody = trimmedBody,
             amount = roundTwoDecimals(finalAmount),
             isExpense = finalIsExpense,
@@ -437,8 +530,11 @@ object AlgPosteSmsAnalyzer {
             .sortedByDescending { it.detectedAtMillis }
     }
 
+    private fun rangesOverlap(a: IntRange, b: IntRange): Boolean =
+        a.first <= b.last && b.first <= a.last
+
     private fun isInsideBalanceLabel(lowerText: String, matchStart: Int): Boolean {
-        val windowStart = (matchStart - 30).coerceAtLeast(0)
+        val windowStart = (matchStart - 45).coerceAtLeast(0)
         val prefix = lowerText.substring(windowStart, matchStart)
         return balanceContextMarkers.any { marker -> prefix.contains(marker) }
     }
@@ -506,6 +602,7 @@ object AlgPosteSmsAnalyzer {
                     compact.replace(",", "")
                 }
             }
+            compact.count { it == '.' } > 1 -> compact.replace(".", "")
             else -> compact
         }
         return normalized.toDoubleOrNull()
@@ -662,6 +759,12 @@ object AlgPosteSmsCodec {
 
 object AlgPosteSmsInboxScanner {
 
+    private data class RawInboxSms(
+        val sender: String,
+        val body: String,
+        val dateMillis: Long
+    )
+
     fun hasSmsPermissions(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -671,15 +774,71 @@ object AlgPosteSmsInboxScanner {
 
     fun scanInbox(
         context: Context,
-        maxRowsToInspect: Int = 250,
+        maxRowsToInspect: Int = 500,
         minTimestampMillis: Long = 0L
     ): List<SmsSuggestionEntry> =
         scanInboxWithBalances(context, maxRowsToInspect, minTimestampMillis).suggestions
 
+    private fun readIncomingSmsMessages(
+        context: Context,
+        maxRowsToInspect: Int
+    ): List<RawInboxSms> {
+        val projection = arrayOf(
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE
+        )
+        val result = mutableListOf<RawInboxSms>()
+        val dedup = HashSet<String>()
+
+        fun readUri(uri: android.net.Uri, selection: String?, selectionArgs: Array<String>?) {
+            if (result.size >= maxRowsToInspect) return
+            try {
+                context.contentResolver.query(
+                    uri,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    "${Telephony.Sms.DATE} DESC"
+                )?.use { cursor ->
+                    val addrIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+                    val bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY)
+                    val dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE)
+
+                    var inspected = 0
+                    while (cursor.moveToNext() && inspected < maxRowsToInspect && result.size < maxRowsToInspect) {
+                        inspected++
+                        val sender = if (addrIdx != -1) cursor.getString(addrIdx).orEmpty() else ""
+                        val body = if (bodyIdx != -1) cursor.getString(bodyIdx).orEmpty() else ""
+                        val dateMillis = if (dateIdx != -1) cursor.getLong(dateIdx) else System.currentTimeMillis()
+                        if (body.isBlank()) continue
+                        val key = "${sender.trim().lowercase(Locale.US)}|${dateMillis / 1000L}|${body.trim()}"
+                        if (dedup.add(key)) {
+                            result.add(RawInboxSms(sender, body, dateMillis))
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+
+        readUri(Telephony.Sms.Inbox.CONTENT_URI, null, null)
+        if (result.isEmpty()) {
+            // Fallback for OEM ROMs where Inbox URI returns empty: query main SMS provider excluding Sent/Draft/Outbox
+            readUri(
+                Telephony.Sms.CONTENT_URI,
+                "${Telephony.Sms.TYPE} NOT IN (2, 3, 4, 5, 6)",
+                null
+            )
+        }
+        return result
+    }
+
     fun scanInboxWithBalances(
         context: Context,
-        maxRowsToInspect: Int = 300,
-        minTimestampMillis: Long = 0L
+        maxRowsToInspect: Int = 500,
+        minTimestampMillis: Long = 0L,
+        applyMinTimestampToSnapshots: Boolean = false
     ): InboxScanResult {
         if (!hasSmsPermissions(context)) {
             return InboxScanResult(emptyList(), emptyList())
@@ -687,53 +846,32 @@ object AlgPosteSmsInboxScanner {
 
         val suggestions = mutableListOf<SmsSuggestionEntry>()
         val snapshots = mutableListOf<SmsBalanceSnapshot>()
-        val projection = arrayOf(
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE
-        )
+        val rawMessages = readIncomingSmsMessages(context, maxRowsToInspect)
 
-        val selection = if (minTimestampMillis > 0L) "${Telephony.Sms.DATE} > ?" else null
-        val selectionArgs = if (minTimestampMillis > 0L) arrayOf(minTimestampMillis.toString()) else null
+        for (sms in rawMessages) {
+            if (!AlgPosteSmsAnalyzer.isAlgPosteMessage(sms.sender, sms.body)) continue
 
-        try {
-            context.contentResolver.query(
-                Telephony.Sms.Inbox.CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                "${Telephony.Sms.DATE} DESC"
-            )?.use { cursor ->
-                val addrIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
-                val bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY)
-                val dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE)
-
-                var inspected = 0
-                while (cursor.moveToNext() && inspected < maxRowsToInspect) {
-                    inspected++
-                    val sender = if (addrIdx != -1) cursor.getString(addrIdx).orEmpty() else ""
-                    val body = if (bodyIdx != -1) cursor.getString(bodyIdx).orEmpty() else ""
-                    val dateMillis = if (dateIdx != -1) cursor.getLong(dateIdx) else System.currentTimeMillis()
-
-                    if (minTimestampMillis > 0L && dateMillis <= minTimestampMillis) continue
-                    if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
-
-                    AlgPosteSmsAnalyzer.parseSms(
-                        sender = sender,
-                        body = body,
-                        timestampMillis = dateMillis,
-                        allowAnySenderForManualTest = false
-                    )?.let { suggestions.add(it) }
-
-                    AlgPosteSmsAnalyzer.parseBalanceSnapshot(
-                        sender = sender,
-                        body = body,
-                        timestampMillis = dateMillis,
-                        allowAnySenderForManualTest = false
-                    )?.let { snapshots.add(it) }
-                }
+            val includeSuggestion = minTimestampMillis <= 0L || sms.dateMillis > minTimestampMillis
+            if (includeSuggestion) {
+                AlgPosteSmsAnalyzer.parseSms(
+                    sender = sms.sender,
+                    body = sms.body,
+                    timestampMillis = sms.dateMillis,
+                    allowAnySenderForManualTest = false
+                )?.let { suggestions.add(it) }
             }
-        } catch (_: Throwable) {
+
+            val includeSnapshot = !applyMinTimestampToSnapshots ||
+                minTimestampMillis <= 0L ||
+                sms.dateMillis > minTimestampMillis
+            if (includeSnapshot) {
+                AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                    sender = sms.sender,
+                    body = sms.body,
+                    timestampMillis = sms.dateMillis,
+                    allowAnySenderForManualTest = false
+                )?.let { snapshots.add(it) }
+            }
         }
 
         return InboxScanResult(
@@ -742,42 +880,26 @@ object AlgPosteSmsInboxScanner {
         )
     }
 
-    fun scanLatestBalanceSnapshot(context: Context, maxRowsToInspect: Int = 200): SmsBalanceSnapshot? {
-        if (!hasSmsPermissions(context)) return null
-        val projection = arrayOf(
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE
-        )
-        try {
-            context.contentResolver.query(
-                Telephony.Sms.Inbox.CONTENT_URI,
-                projection,
-                null,
-                null,
-                "${Telephony.Sms.DATE} DESC"
-            )?.use { cursor ->
-                val addrIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
-                val bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY)
-                val dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE)
-                var inspected = 0
-                while (cursor.moveToNext() && inspected < maxRowsToInspect) {
-                    inspected++
-                    val sender = if (addrIdx != -1) cursor.getString(addrIdx).orEmpty() else ""
-                    val body = if (bodyIdx != -1) cursor.getString(bodyIdx).orEmpty() else ""
-                    val dateMillis = if (dateIdx != -1) cursor.getLong(dateIdx) else System.currentTimeMillis()
-                    if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
-                    val snap = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
-                        sender = sender,
-                        body = body,
-                        timestampMillis = dateMillis,
-                        allowAnySenderForManualTest = false
-                    )
-                    if (snap != null) return snap
-                }
-            }
-        } catch (_: Throwable) {
+    fun scanAllBalanceSnapshots(
+        context: Context,
+        maxRowsToInspect: Int = 500
+    ): List<SmsBalanceSnapshot> {
+        if (!hasSmsPermissions(context)) return emptyList()
+        val rawMessages = readIncomingSmsMessages(context, maxRowsToInspect)
+        val snapshots = mutableListOf<SmsBalanceSnapshot>()
+        for (sms in rawMessages) {
+            if (!AlgPosteSmsAnalyzer.isAlgPosteMessage(sms.sender, sms.body)) continue
+            AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                sender = sms.sender,
+                body = sms.body,
+                timestampMillis = sms.dateMillis,
+                allowAnySenderForManualTest = false
+            )?.let { snapshots.add(it) }
         }
-        return null
+        return snapshots.distinctBy { it.id }.sortedBy { it.timestampMillis }
+    }
+
+    fun scanLatestBalanceSnapshot(context: Context, maxRowsToInspect: Int = 500): SmsBalanceSnapshot? {
+        return scanAllBalanceSnapshots(context, maxRowsToInspect).maxByOrNull { it.timestampMillis }
     }
 }

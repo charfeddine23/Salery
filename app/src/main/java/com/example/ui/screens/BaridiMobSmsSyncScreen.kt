@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Policy
@@ -46,6 +47,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -68,8 +71,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassButton
@@ -97,9 +103,11 @@ fun BaridiMobSmsSyncScreen(
     userSettings: UserSettings,
     pendingSuggestions: List<SmsSuggestionEntry>,
     detectedTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
+    balanceHistory: List<SmsBalanceSnapshot> = emptyList(),
     onToggleSyncEnabled: (Boolean) -> Unit,
     onScanInboxNow: () -> Unit,
-    onRefreshCurrentBalanceOnly: () -> Unit = {},
+    onRefreshCurrentBalanceOnly: (showFeedback: Boolean) -> Unit = {},
+    onClearBalanceHistory: () -> Unit = {},
     onSkipOldSmsAndStartFresh: () -> Unit = {},
     onResetBaselineAndRescan: () -> Unit = {},
     onAnalyzeManualSms: (sender: String, body: String) -> Unit,
@@ -112,6 +120,7 @@ fun BaridiMobSmsSyncScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
@@ -126,6 +135,19 @@ fun BaridiMobSmsSyncScreen(
         )
     }
 
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasReadSmsPerm = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.READ_SMS
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val smsPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
@@ -135,21 +157,36 @@ fun BaridiMobSmsSyncScreen(
         hasReadSmsPerm = readGranted
         if (readGranted) {
             onToggleSyncEnabled(true)
+            onRefreshCurrentBalanceOnly(true)
             onScanInboxNow()
         }
     }
 
     LaunchedEffect(hasReadSmsPerm, userSettings.baridiMobSmsSyncEnabled) {
-        if (hasReadSmsPerm && userSettings.baridiMobSmsSyncEnabled) {
-            onScanInboxNow()
+        if (hasReadSmsPerm) {
+            // Automatically read inbox SMS and convert all balances into BaridiMob Balance Log
+            onRefreshCurrentBalanceOnly(false)
+            if (userSettings.baridiMobSmsSyncEnabled) {
+                onScanInboxNow()
+            }
         }
     }
 
     var manualSmsText by remember { mutableStateOf("") }
+    var showAllBalanceHistory by remember { mutableStateOf(false) }
     val hasFreshBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
     val totalCaughtTaxes = remember(detectedTaxes) {
         detectedTaxes.sumOf { it.taxAmount }
     }
+    val orderedHistoryNewestFirst = remember(balanceHistory) {
+        balanceHistory.sortedByDescending { it.timestampMillis }
+    }
+    val latestHistorySnapshot = orderedHistoryNewestFirst.firstOrNull()
+    val effectiveLatestBalance = latestHistorySnapshot?.balance ?: userSettings.latestSmsBalanceAmount
+    val effectiveUpdatedAt = latestHistorySnapshot?.timestampMillis
+        ?: userSettings.latestSmsBalanceUpdatedAt
+    val effectiveRawSnippet = latestHistorySnapshot?.rawBody
+        ?: userSettings.latestSmsBalanceRawSnippet
 
     LazyColumn(
         modifier = modifier
@@ -161,7 +198,7 @@ fun BaridiMobSmsSyncScreen(
         item {
             Spacer(modifier = Modifier.height(dimens.spacingXs))
 
-            val hasBalance = userSettings.latestSmsBalanceAmount >= 0.0
+            val hasBalance = effectiveLatestBalance >= 0.0
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -213,7 +250,7 @@ fun BaridiMobSmsSyncScreen(
                                     Text(
                                         text = if (hasBalance) {
                                             formatDzdAmount(
-                                                amount = userSettings.latestSmsBalanceAmount,
+                                                amount = effectiveLatestBalance,
                                                 currencyText = strings.currencyCode,
                                                 isStealth = isStealth
                                             )
@@ -243,7 +280,7 @@ fun BaridiMobSmsSyncScreen(
                                             )
                                         )
                                     } else {
-                                        onRefreshCurrentBalanceOnly()
+                                        onRefreshCurrentBalanceOnly(true)
                                     }
                                 }
                                 .padding(horizontal = 10.dp, vertical = 8.dp)
@@ -259,7 +296,7 @@ fun BaridiMobSmsSyncScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isArabic) "تحديث الرصيد" else "Read Solde",
+                                    text = if (isArabic) "قراءة الأرصدة" else "Read Solde",
                                     color = EmeraldNeon,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
@@ -268,7 +305,7 @@ fun BaridiMobSmsSyncScreen(
                         }
                     }
 
-                    if (hasBalance && userSettings.latestSmsBalanceUpdatedAt > 0L) {
+                    if (hasBalance && effectiveUpdatedAt > 0L) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier
@@ -280,8 +317,11 @@ fun BaridiMobSmsSyncScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = userSettings.latestSmsBalanceRawSnippet.ifBlank {
-                                    if (isArabic) "آخر رصيد مرصود من ALG Poste" else "Latest ALG Poste Solde"
+                                text = when {
+                                    isStealth -> "•••••• ••••••"
+                                    effectiveRawSnippet.isNotBlank() -> effectiveRawSnippet
+                                    isArabic -> "آخر رصيد مرصود من ALG Poste"
+                                    else -> "Latest ALG Poste Solde"
                                 },
                                 color = colors.textSecondary,
                                 fontSize = 10.5.sp,
@@ -291,7 +331,7 @@ fun BaridiMobSmsSyncScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = formatDate(userSettings.latestSmsBalanceUpdatedAt),
+                                text = formatDate(effectiveUpdatedAt),
                                 color = colors.textMuted,
                                 fontSize = 10.sp
                             )
@@ -299,6 +339,32 @@ fun BaridiMobSmsSyncScreen(
                     }
                 }
             }
+        }
+
+        // 1B. Automatic SMS Balance History Log (سجل الأرصدة المحوّلة من الرسائل تلقائياً)
+        item {
+            SmsBalanceHistoryLogCard(
+                balanceHistory = balanceHistory,
+                showAll = showAllBalanceHistory,
+                hasReadSmsPerm = hasReadSmsPerm,
+                isArabic = isArabic,
+                isStealth = isStealth,
+                currency = strings.currencyCode,
+                onToggleShowAll = { showAllBalanceHistory = !showAllBalanceHistory },
+                onScanBalancesNow = {
+                    if (!hasReadSmsPerm) {
+                        smsPermLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.READ_SMS,
+                                Manifest.permission.RECEIVE_SMS
+                            )
+                        )
+                    } else {
+                        onRefreshCurrentBalanceOnly(true)
+                    }
+                },
+                onClearHistory = onClearBalanceHistory
+            )
         }
 
         // 2. Hero Sync Control & Skip Old Messages (Start Fresh) Card
@@ -1307,3 +1373,324 @@ fun SmsSuggestionCard(
         }
     }
 }
+
+@Composable
+private fun SmsBalanceHistoryLogCard(
+    balanceHistory: List<SmsBalanceSnapshot>,
+    showAll: Boolean,
+    hasReadSmsPerm: Boolean,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    currency: String,
+    onToggleShowAll: () -> Unit,
+    onScanBalancesNow: () -> Unit,
+    onClearHistory: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val chronological = remember(balanceHistory) {
+        balanceHistory.sortedBy { it.timestampMillis }
+    }
+    val deltaById = remember(chronological) {
+        buildMap {
+            for (i in chronological.indices) {
+                val curr = chronological[i]
+                val prev = chronological.getOrNull(i - 1)
+                put(curr.id, prev?.let { curr.balance - it.balance })
+            }
+        }
+    }
+    val newestFirst = remember(chronological) { chronological.asReversed() }
+    val visibleItems = remember(newestFirst, showAll) {
+        if (showAll) newestFirst else newestFirst.take(6)
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("sms_balance_history_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = CyanNeon.copy(alpha = 0.42f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(CyanNeon.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isArabic) "سجل الأرصدة من الرسائل" else "SMS Balance Log",
+                                color = colors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyanNeon.copy(alpha = 0.16f))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${balanceHistory.size}",
+                                    color = CyanNeon,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (isArabic) {
+                                "تحويل تلقائي لكل الأرصدة المستخرجة من رسائل ALG Poste / BaridiMob"
+                            } else {
+                                "Automatically logs every balance extracted from ALG Poste SMS"
+                            },
+                            color = colors.textMuted,
+                            fontSize = 10.5.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onScanBalancesNow,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("refresh_balance_history_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = if (isArabic) "تحديث السجل" else "Refresh balance log",
+                            tint = CyanNeon,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    if (balanceHistory.isNotEmpty()) {
+                        IconButton(
+                            onClick = onClearHistory,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = if (isArabic) "مسح السجل" else "Clear balance log",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (balanceHistory.isEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.glassSurface)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (!hasReadSmsPerm) {
+                            if (isArabic) "امنح صلاحية قراءة SMS ليقوم النظام بقراءة الرسائل وتحويل كل الأرصدة تلقائياً إلى هذا السجل."
+                            else "Grant SMS read permission to automatically extract and log every balance from your messages."
+                        } else {
+                            if (isArabic) "لم يُرصد أي رصيد في رسائل بريدي موب بعد. اضغط لقراءة كل الرسائل أو جرّب لصق رسالة أدناه."
+                            else "No BaridiMob SMS balances logged yet. Tap below to scan all messages or test a manual SMS."
+                        },
+                        color = colors.textMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(CyanNeon.copy(alpha = 0.16f))
+                            .border(0.9.dp, CyanNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .clickable(onClick = onScanBalancesNow)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .testTag("scan_all_balances_button"),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (!hasReadSmsPerm) {
+                                if (isArabic) "منح الصلاحية وتحويل الأرصدة" else "Grant Access & Log Balances"
+                            } else {
+                                if (isArabic) "قراءة كل الرسائل وتحويل الأرصدة" else "Scan & Log All Balances"
+                            },
+                            color = CyanNeon,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibleItems.forEach { snap ->
+                        val delta = deltaById[snap.id]
+                        val deltaColor = when {
+                            delta == null -> colors.textMuted
+                            delta > 0.005 -> EmeraldNeon
+                            delta < -0.005 -> RoseNeon
+                            else -> colors.textMuted
+                        }
+                        val deltaLabel = when {
+                            isStealth -> "••••"
+                            delta == null -> if (isArabic) "أول رصيد" else "Initial"
+                            delta > 0.005 -> "+" + formatDzdAmount(delta, currency)
+                            delta < -0.005 -> "-" + formatDzdAmount(kotlin.math.abs(delta), currency)
+                            else -> if (isArabic) "ثابت" else "No change"
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.glassSurface)
+                                .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = formatDzdAmount(snap.balance, currency, isStealth),
+                                        color = EmeraldNeon,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(deltaColor.copy(alpha = 0.14f))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = deltaLabel,
+                                            color = deltaColor,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = snap.sender.ifBlank { "ALG Poste" },
+                                        color = CyanNeon,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (snap.hasTransaction && snap.transactionAmount > 0.0) {
+                                        val txColor = if (snap.isExpense) RoseNeon else EmeraldNeon
+                                        val sign = if (snap.isExpense) "-" else "+"
+                                        Text(
+                                            text = if (isStealth) "••••"
+                                            else "$sign${formatDzdAmount(snap.transactionAmount, currency)}",
+                                            color = txColor,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = formatDate(snap.timestampMillis),
+                                    color = colors.textMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
+
+                            if (snap.rawBody.isNotBlank()) {
+                                Text(
+                                    text = if (isStealth) "•••••• ••••••" else snap.rawBody,
+                                    color = colors.textSecondary,
+                                    fontSize = 10.5.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (newestFirst.size > 6) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.glassSurface)
+                            .border(0.8.dp, CyanNeon.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .clickable(onClick = onToggleShowAll)
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (showAll) {
+                                if (isArabic) "عرض أحدث 6 سجلات فقط" else "Show Latest 6 Only"
+                            } else {
+                                if (isArabic) "عرض كل السجل (${newestFirst.size})" else "Show All (${newestFirst.size})"
+                            },
+                            color = CyanNeon,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

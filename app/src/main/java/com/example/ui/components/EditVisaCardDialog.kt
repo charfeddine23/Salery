@@ -102,6 +102,7 @@ fun EditVisaCardDialog(
             when (currentProvider.uppercase()) {
                 "REDOTPAY" -> "REDOTPAY"
                 "BYBIT" -> "BYBIT"
+                "BINANCE" -> "BINANCE"
                 else -> "DEFAULT"
             }
         )
@@ -161,6 +162,7 @@ fun EditVisaCardDialog(
                                     when (selectedProvider) {
                                         "REDOTPAY" -> Color(0xFFE11D48).copy(alpha = 0.22f)
                                         "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.22f)
+                                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.22f)
                                         else -> CyanNeon.copy(alpha = 0.20f)
                                     }
                                 ),
@@ -172,6 +174,7 @@ fun EditVisaCardDialog(
                                 tint = when (selectedProvider) {
                                     "REDOTPAY" -> Color(0xFFFB7185)
                                     "BYBIT" -> Color(0xFFF7A600)
+                                    "BINANCE" -> Color(0xFFF0B90B)
                                     else -> CyanNeon
                                 },
                                 modifier = Modifier.size(20.dp)
@@ -186,7 +189,7 @@ fun EditVisaCardDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (isArabic) "اختر RedotPay أو Bybit وأدخل بيانات بطاقتك" else "Choose RedotPay, Bybit, or default Visa card",
+                                text = if (isArabic) "اختر RedotPay أو Bybit أو Binance وأدخل بيانات بطاقتك" else "Choose RedotPay, Bybit, Binance, or default Visa card",
                                 color = colors.textMuted,
                                 fontSize = 11.sp,
                                 maxLines = 1,
@@ -211,38 +214,57 @@ fun EditVisaCardDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Provider Selection Pills: RedotPay | Bybit | Default
-                Row(
+                // Provider Selection Pills: 2x2 Grid (RedotPay | Bybit / Binance | Default)
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ProviderChoicePill(
-                        title = "RedotPay",
-                        accent = Color(0xFFE11D48),
-                        isSelected = selectedProvider == "REDOTPAY",
-                        onClick = { selectedProvider = "REDOTPAY" },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("select_provider_redotpay")
-                    )
-                    ProviderChoicePill(
-                        title = "Bybit",
-                        accent = Color(0xFFF7A600),
-                        isSelected = selectedProvider == "BYBIT",
-                        onClick = { selectedProvider = "BYBIT" },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("select_provider_bybit")
-                    )
-                    ProviderChoicePill(
-                        title = if (isArabic) "افتراضي" else "Default",
-                        accent = CyanNeon,
-                        isSelected = selectedProvider == "DEFAULT",
-                        onClick = { selectedProvider = "DEFAULT" },
-                        modifier = Modifier
-                            .weight(0.9f)
-                            .testTag("select_provider_default")
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ProviderChoicePill(
+                            title = "RedotPay",
+                            accent = Color(0xFFE11D48),
+                            isSelected = selectedProvider == "REDOTPAY",
+                            onClick = { selectedProvider = "REDOTPAY" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_provider_redotpay")
+                        )
+                        ProviderChoicePill(
+                            title = "Bybit",
+                            accent = Color(0xFFF7A600),
+                            isSelected = selectedProvider == "BYBIT",
+                            onClick = { selectedProvider = "BYBIT" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_provider_bybit")
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ProviderChoicePill(
+                            title = "Binance",
+                            accent = Color(0xFFF0B90B),
+                            isSelected = selectedProvider == "BINANCE",
+                            onClick = { selectedProvider = "BINANCE" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_provider_binance")
+                        )
+                        ProviderChoicePill(
+                            title = if (isArabic) "افتراضي" else "Default",
+                            accent = CyanNeon,
+                            isSelected = selectedProvider == "DEFAULT",
+                            onClick = { selectedProvider = "DEFAULT" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_provider_default")
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -281,7 +303,11 @@ fun EditVisaCardDialog(
                         onValueChange = { input ->
                             cardNumberDigits = input.filter { it.isDigit() }.take(16)
                         },
-                        placeholder = if (selectedProvider == "BYBIT") "5316 00•• •••• 8890" else "4152 •••• •••• 3120",
+                        placeholder = when (selectedProvider) {
+                            "BYBIT" -> "5316 00•• •••• 8890"
+                            "BINANCE" -> "4895 00•• •••• 2026"
+                            else -> "4152 •••• •••• 3120"
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         visualTransformation = VisaNumberVisualTransformation(),
                         isError = !isCardNumberValid,
@@ -351,6 +377,7 @@ fun EditVisaCardDialog(
                         containerColor = when (selectedProvider) {
                             "REDOTPAY" -> Color(0xFFE11D48)
                             "BYBIT" -> Color(0xFFF7A600)
+                            "BINANCE" -> Color(0xFFF0B90B)
                             else -> CyanNeon
                         },
                         contentColor = if (selectedProvider == "REDOTPAY") Color.White else Color(0xFF0B0E14),
@@ -449,6 +476,16 @@ private fun VisaProviderMiniPreview(
             start = Offset(0f, 0f),
             end = Offset(700f, 350f)
         )
+        "BINANCE" -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF0B0E11),
+                Color(0xFF181A20),
+                Color(0xFF1E2329),
+                Color(0xFF0B0E11)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(700f, 350f)
+        )
         else -> Brush.linearGradient(
             colors = listOf(
                 Color(0xFF0F172A),
@@ -472,6 +509,7 @@ private fun VisaProviderMiniPreview(
                     when (provider) {
                         "REDOTPAY" -> Color(0xFFFDA4AF).copy(alpha = 0.45f)
                         "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.55f)
+                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.60f)
                         else -> Color(0xFF38BDF8).copy(alpha = 0.45f)
                     },
                     RoundedCornerShape(16.dp)
@@ -495,6 +533,33 @@ private fun VisaProviderMiniPreview(
                         drawPath(
                             path = slash,
                             color = Color(0xFFF7A600).copy(alpha = 0.14f)
+                        )
+                    } else if (provider == "BINANCE") {
+                        val cx = size.width * 0.84f
+                        val cy = size.height * 0.50f
+                        val r = size.height * 0.42f
+                        val outerDiamond = Path().apply {
+                            moveTo(cx, cy - r)
+                            lineTo(cx + r, cy)
+                            lineTo(cx, cy + r)
+                            lineTo(cx - r, cy)
+                            close()
+                        }
+                        drawPath(
+                            path = outerDiamond,
+                            color = Color(0xFFF0B90B).copy(alpha = 0.14f),
+                            style = Stroke(width = 5f)
+                        )
+                        val innerDiamond = Path().apply {
+                            moveTo(cx, cy - r * 0.46f)
+                            lineTo(cx + r * 0.46f, cy)
+                            lineTo(cx, cy + r * 0.46f)
+                            lineTo(cx - r * 0.46f, cy)
+                            close()
+                        }
+                        drawPath(
+                            path = innerDiamond,
+                            color = Color(0xFFFCD535).copy(alpha = 0.16f)
                         )
                     }
                 }
@@ -524,6 +589,13 @@ private fun VisaProviderMiniPreview(
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.4.sp
                         )
+                        "BINANCE" -> Text(
+                            text = "BINANCE",
+                            color = Color(0xFFF0B90B),
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.5.sp
+                        )
                         else -> Text(
                             text = "SaleryPulse",
                             color = Color.White,
@@ -551,7 +623,7 @@ private fun VisaProviderMiniPreview(
                     } else {
                         Text(
                             text = "VISA",
-                            color = Color.White,
+                            color = if (provider == "BINANCE") Color(0xFFFCD535) else Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             fontStyle = FontStyle.Italic
@@ -562,7 +634,11 @@ private fun VisaProviderMiniPreview(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val previewDigits = if (cardDigits.isEmpty()) {
-                    if (provider == "BYBIT") "5316  ••••  ••••  8890" else "4152  ••••  ••••  3120"
+                    when (provider) {
+                        "BYBIT" -> "5316  ••••  ••••  8890"
+                        "BINANCE" -> "4895  ••••  ••••  2026"
+                        else -> "4152  ••••  ••••  3120"
+                    }
                 } else {
                     cardDigits.padEnd(16, '•').chunked(4).joinToString("  ")
                 }
@@ -600,16 +676,21 @@ private fun VisaProviderMiniPreview(
                             expiryDigits.isNotEmpty() -> expiryDigits
                             else -> "08/28"
                         }
+                        val accentBottomText = when (provider) {
+                            "BYBIT" -> Color(0xFFF7A600)
+                            "BINANCE" -> Color(0xFFF0B90B)
+                            else -> Color.White
+                        }
                         Text(
                             text = expDisplay,
-                            color = if (provider == "BYBIT") Color(0xFFF7A600) else Color.White,
+                            color = accentBottomText,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             text = "CVC ${cvcDigits.ifBlank { "•••" }}",
-                            color = if (provider == "BYBIT") Color(0xFFF7A600).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.9f),
+                            color = accentBottomText.copy(alpha = 0.9f),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace

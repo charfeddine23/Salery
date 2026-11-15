@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,6 +92,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import com.example.update.AppUpdateUiState
 import com.example.update.formatBytesToMb
+import com.example.update.isMandatoryBlockActive
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -113,6 +116,7 @@ fun AppUpdateDialog(
     val isDark = colors.isDark
 
     val isDownloading = state is AppUpdateUiState.Downloading
+    val isMandatory = state.isMandatoryBlockActive
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
 
@@ -154,13 +158,16 @@ fun AppUpdateDialog(
     }
 
     Dialog(
-        onDismissRequest = { if (!isDownloading) onDismiss() },
+        onDismissRequest = { if (!isMandatory && !isDownloading) onDismiss() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = !isDownloading,
-            dismissOnClickOutside = !isDownloading
+            dismissOnBackPress = !isMandatory && !isDownloading,
+            dismissOnClickOutside = !isMandatory && !isDownloading
         )
     ) {
+        BackHandler(enabled = isMandatory) {
+            // Forced mandatory update cannot be skipped with back navigation
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -205,33 +212,59 @@ fun AppUpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Top Row: Subtle Version Chip & Circular X Close Button (48dp touch target)
+                        // Top Row: Close button ONLY when optional (UpToDate / offline check); Locked Mandatory badge otherwise
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
-                                onClick = onDismiss,
-                                enabled = !isDownloading,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .testTag("close_update_dialog_button")
-                            ) {
-                                Box(
+                            if (isMandatory) {
+                                Row(
                                     modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.glassCard)
-                                        .border(0.8.dp, colors.glassBorderSubtle, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(UpdateCrimsonStart.copy(alpha = 0.16f))
+                                        .border(0.9.dp, UpdateCrimsonStart.copy(alpha = 0.48f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                        .testTag("mandatory_update_badge"),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = strings.cancel,
-                                        tint = if (isDownloading) colors.textMuted.copy(alpha = 0.4f) else colors.textSecondary,
-                                        modifier = Modifier.size(18.dp)
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFB7185),
+                                        modifier = Modifier.size(13.dp)
                                     )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = if (isArabic) "تحديث إجباري • ممنوع التخطي" else "Mandatory • No Skip",
+                                        color = Color(0xFFFB7185),
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = onDismiss,
+                                    enabled = !isDownloading,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .testTag("close_update_dialog_button")
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.glassCard)
+                                            .border(0.8.dp, colors.glassBorderSubtle, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = strings.cancel,
+                                            tint = if (isDownloading) colors.textMuted.copy(alpha = 0.4f) else colors.textSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
 
@@ -273,9 +306,9 @@ fun AppUpdateDialog(
                             is AppUpdateUiState.Checking -> strings.checkingForUpdates
                             is AppUpdateUiState.UpToDate -> strings.alreadyUpToDate
                             is AppUpdateUiState.Downloading -> strings.downloadingUpdate
-                            is AppUpdateUiState.ReadyToInstall -> if (isArabic) "التحديث جاهز للتثبيت" else "Update Ready to Install"
+                            is AppUpdateUiState.ReadyToInstall -> if (isArabic) "تحديث إجباري جاهز للتثبيت" else "Mandatory Update Ready"
                             is AppUpdateUiState.Error -> strings.updateCheckFailed
-                            else -> strings.updateAvailableTitle
+                            else -> if (isArabic) "تحديث إجباري مطلوب" else "Mandatory Update Required"
                         }
                         Text(
                             text = mainTitle,
@@ -344,7 +377,11 @@ fun AppUpdateDialog(
                                     ?.lines()
                                     ?.map { it.trim().removePrefix("-").removePrefix("*").removePrefix("#").trim() }
                                     ?.firstOrNull { it.isNotBlank() && !it.startsWith("###") }
-                                cleanedNotes ?: strings.updateAvailableDesc
+                                cleanedNotes ?: if (isArabic) {
+                                    "هذا التحديث إجباري ولا يمكن تخطيه لضمان عمل التطبيق بأعلى كفاءة وأمان."
+                                } else {
+                                    "This update is mandatory and cannot be skipped to keep using SaleryPulse safely."
+                                }
                             }
                         }
                         Text(

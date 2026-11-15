@@ -72,6 +72,19 @@ sealed interface AppUpdateUiState {
     ) : AppUpdateUiState
 }
 
+/**
+ * Any confirmed newer release (Available, Downloading, ReadyToInstall, or Error tied to a pending release)
+ * triggers the mandatory non-skippable update gate.
+ */
+val AppUpdateUiState.isMandatoryBlockActive: Boolean
+    get() = when (this) {
+        is AppUpdateUiState.Available -> true
+        is AppUpdateUiState.Downloading -> true
+        is AppUpdateUiState.ReadyToInstall -> true
+        is AppUpdateUiState.Error -> release != null
+        else -> false
+    }
+
 sealed interface DownloadState {
     data class Progress(val bytesDownloaded: Long, val totalBytes: Long) : DownloadState
     data class Completed(val file: File) : DownloadState
