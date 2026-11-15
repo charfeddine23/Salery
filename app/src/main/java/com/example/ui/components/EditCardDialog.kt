@@ -78,7 +78,7 @@ fun EditCardDialog(
     currentCardNumber: String,
     currentExpiry: String,
     currentCvc: String,
-    secureScreenshots: Boolean = true,
+    secureScreenshots: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit
 ) {

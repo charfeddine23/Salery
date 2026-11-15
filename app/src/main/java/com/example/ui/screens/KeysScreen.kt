@@ -134,6 +134,11 @@ private enum class KeysFilter {
 @Composable
 fun KeysScreen(
     userSettings: UserSettings,
+    expandedKeyIds: Set<String> = emptySet(),
+    revealedKeyIds: Set<String> = emptySet(),
+    onToggleExpandKey: (String) -> Unit = {},
+    onToggleRevealKey: (String) -> Unit = {},
+    onCollapseAllKeys: () -> Unit = {},
     onAddKey: (label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
     onUpdateKey: (keyId: String, label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
     onDeleteKey: (String) -> Unit,
@@ -209,8 +214,6 @@ fun KeysScreen(
         }
     }
 
-    val revealedMap = remember { mutableStateMapOf<String, Boolean>() }
-    val expandedMap = remember { mutableStateMapOf<String, Boolean>() }
     var showAddOrEditDialog by remember { mutableStateOf(false) }
     var editingKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
 
@@ -500,6 +503,13 @@ fun KeysScreen(
                             isSelected = activeFilter == KeysFilter.STRONG,
                             onClick = { activeFilter = KeysFilter.STRONG }
                         )
+                        if (expandedKeyIds.isNotEmpty()) {
+                            GlassPill(
+                                text = if (isArabic) "طي الكل (${expandedKeyIds.size})" else "Collapse (${expandedKeyIds.size})",
+                                isSelected = false,
+                                onClick = onCollapseAllKeys
+                            )
+                        }
                     }
                 }
             }
@@ -526,8 +536,8 @@ fun KeysScreen(
             }
         } else {
             items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
-                val isVisible = !isStealth && (revealedMap[entry.id] == true)
-                val isExpanded = expandedMap[entry.id] ?: true
+                val isVisible = !isStealth && (entry.id in revealedKeyIds)
+                val isExpanded = entry.id in expandedKeyIds
                 VaultKeyRowCard(
                     entry = entry,
                     analysis = analysis,
@@ -537,12 +547,8 @@ fun KeysScreen(
                     isArabic = isArabic,
                     shimmerPhase = shimmerPhase,
                     pulsePhase = pulsePhase,
-                    onToggleExpand = {
-                        expandedMap[entry.id] = !(expandedMap[entry.id] ?: true)
-                    },
-                    onToggleReveal = {
-                        revealedMap[entry.id] = !(revealedMap[entry.id] ?: false)
-                    },
+                    onToggleExpand = { onToggleExpandKey(entry.id) },
+                    onToggleReveal = { onToggleRevealKey(entry.id) },
                     onCopyUsername = {
                         if (entry.username.isNotBlank()) {
                             copyToClipboard(

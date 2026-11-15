@@ -24,12 +24,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrendingDown
@@ -49,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -65,36 +71,51 @@ import androidx.core.content.ContextCompat
 import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.sms.SmsSuggestionEntry
+import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.formatDzdAmount
+import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun BaridiMobSmsSyncScreen(
     userSettings: UserSettings,
     pendingSuggestions: List<SmsSuggestionEntry>,
+    detectedTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
     onToggleSyncEnabled: (Boolean) -> Unit,
     onScanInboxNow: () -> Unit,
+    onRefreshCurrentBalanceOnly: () -> Unit = {},
+    onSkipOldSmsAndStartFresh: () -> Unit = {},
+    onResetBaselineAndRescan: () -> Unit = {},
     onAnalyzeManualSms: (sender: String, body: String) -> Unit,
     onAcceptSuggestion: (suggestionId: String, overrideType: TransactionType?) -> Unit,
     onDismissSuggestion: (suggestionId: String) -> Unit,
     onClearAllSuggestions: () -> Unit,
+    onRecordTaxAsExpense: (anomalyId: String) -> Unit = {},
+    onDismissTaxAnomaly: (anomalyId: String) -> Unit = {},
+    onClearAllTaxes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
+    val isStealth = LocalStealthMode.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
@@ -125,6 +146,10 @@ fun BaridiMobSmsSyncScreen(
     }
 
     var manualSmsText by remember { mutableStateOf("") }
+    val hasFreshBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
+    val totalCaughtTaxes = remember(detectedTaxes) {
+        detectedTaxes.sumOf { it.taxAmount }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -132,10 +157,152 @@ fun BaridiMobSmsSyncScreen(
             .padding(horizontal = dimens.screenPaddingH),
         verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
     ) {
+        // 1. Extracted Current Balance from BaridiMob SMS Card
         item {
             Spacer(modifier = Modifier.height(dimens.spacingXs))
 
-            // Hero Status & Permission Control Card
+            val hasBalance = userSettings.latestSmsBalanceAmount >= 0.0
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("sms_extracted_balance_card"),
+                backgroundColor = colors.glassCard,
+                borderColor = EmeraldNeon.copy(alpha = 0.48f)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                EmeraldNeon.copy(alpha = 0.25f),
+                                                CyanNeon.copy(alpha = 0.20f)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = if (isArabic) "رصيد البطاقة المستخرج من الرسائل"
+                                    else "Extracted BaridiMob Balance",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = if (hasBalance) {
+                                            formatDzdAmount(
+                                                amount = userSettings.latestSmsBalanceAmount,
+                                                currencyText = strings.currencyCode,
+                                                isStealth = isStealth
+                                            )
+                                        } else {
+                                            if (isArabic) "غير مستخرج بعد" else "Not extracted yet"
+                                        },
+                                        color = if (hasBalance) EmeraldNeon else colors.textMuted,
+                                        fontSize = if (hasBalance) 21.sp else 14.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(EmeraldNeon.copy(alpha = 0.16f))
+                                .border(0.9.dp, EmeraldNeon.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
+                                .clickable {
+                                    if (!hasReadSmsPerm) {
+                                        smsPermLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.READ_SMS,
+                                                Manifest.permission.RECEIVE_SMS
+                                            )
+                                        )
+                                    } else {
+                                        onRefreshCurrentBalanceOnly()
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                .testTag("extract_balance_sms_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isArabic) "تحديث الرصيد" else "Read Solde",
+                                    color = EmeraldNeon,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    if (hasBalance && userSettings.latestSmsBalanceUpdatedAt > 0L) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.glassSurface)
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = userSettings.latestSmsBalanceRawSnippet.ifBlank {
+                                    if (isArabic) "آخر رصيد مرصود من ALG Poste" else "Latest ALG Poste Solde"
+                                },
+                                color = colors.textSecondary,
+                                fontSize = 10.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = formatDate(userSettings.latestSmsBalanceUpdatedAt),
+                                color = colors.textMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Hero Sync Control & Skip Old Messages (Start Fresh) Card
+        item {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
@@ -148,7 +315,7 @@ fun BaridiMobSmsSyncScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(46.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF818CF8).copy(alpha = 0.18f)),
                             contentAlignment = Alignment.Center
@@ -157,7 +324,7 @@ fun BaridiMobSmsSyncScreen(
                                 imageVector = Icons.Default.Sms,
                                 contentDescription = null,
                                 tint = Color(0xFF818CF8),
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(23.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
@@ -165,14 +332,14 @@ fun BaridiMobSmsSyncScreen(
                             Text(
                                 text = "BaridiMob SMS & Alert Sync",
                                 color = colors.textPrimary,
-                                fontSize = typo.title,
+                                fontSize = typo.titleSm,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = if (isArabic) {
-                                    "تحليل رسائل ALG Poste تلقائياً وتصنيف السحب (-) كـ Expense والدخل (+) كـ Income"
+                                    "تحليل رسائل ALG Poste داخل البطاقة الجزائرية — السحب (-) مصروف والدخل (+) دخل"
                                 } else {
-                                    "Auto-analyze ALG Poste SMS alerts: negative (-) -> Expense, deposits (+) -> Income"
+                                    "Inside Algerian Card: ALG Poste (-) -> Expense, (+) -> Income & Tax radar"
                                 },
                                 color = colors.textMuted,
                                 fontSize = 11.5.sp,
@@ -181,7 +348,7 @@ fun BaridiMobSmsSyncScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Auto-Sync Toggle
                     Row(
@@ -207,10 +374,10 @@ fun BaridiMobSmsSyncScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (isArabic) "المراقبة والقراءة التلقائية لرسائل ALG Poste"
-                                else "Auto-read ALG Poste SMS alerts",
+                                text = if (isArabic) "القراءة والمراقبة التلقائية للرسائل الجديدة"
+                                else "Auto-detect new ALG Poste SMS",
                                 color = colors.textPrimary,
-                                fontSize = 13.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
@@ -245,6 +412,130 @@ fun BaridiMobSmsSyncScreen(
                         )
                     }
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Baseline Status + Skip Old SMS Button ("البدء من الصفر")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (hasFreshBaseline) CyanNeon.copy(alpha = 0.10f)
+                                else colors.glassSurface
+                            )
+                            .border(
+                                1.dp,
+                                if (hasFreshBaseline) CyanNeon.copy(alpha = 0.45f) else colors.glassBorderSubtle,
+                                RoundedCornerShape(14.dp)
+                            )
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.HistoryToggleOff,
+                                    contentDescription = null,
+                                    tint = if (hasFreshBaseline) CyanNeon else AmberNeon,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (hasFreshBaseline) {
+                                            if (isArabic) "وضع البدء من الصفر مفعّل ✓" else "Fresh Start Active ✓"
+                                        } else {
+                                            if (isArabic) "تصفية الرسائل القديمة" else "Historical SMS Filter"
+                                        },
+                                        color = if (hasFreshBaseline) CyanNeon else colors.textPrimary,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    val timeFmt = remember(userSettings.smsSyncBaselineTimestampMillis) {
+                                        if (hasFreshBaseline) {
+                                            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US)
+                                                .format(Date(userSettings.smsSyncBaselineTimestampMillis))
+                                        } else ""
+                                    }
+                                    Text(
+                                        text = if (hasFreshBaseline) {
+                                            if (isArabic) "تجاهل كل ما قبل $timeFmt • أي رسالة جديدة ستُقترح فوراً"
+                                            else "Ignoring SMS before $timeFmt • New SMS suggest immediately"
+                                        } else {
+                                            if (isArabic) "تخطي الرسائل القديمة وبدء العد من 0 للمستقبل فقط"
+                                            else "Skip old inbox messages and start counting from 0"
+                                        },
+                                        color = colors.textMuted,
+                                        fontSize = 10.5.sp,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(CyanNeon.copy(alpha = 0.18f))
+                                    .border(0.9.dp, CyanNeon.copy(alpha = 0.55f), RoundedCornerShape(11.dp))
+                                    .clickable { onSkipOldSmsAndStartFresh() }
+                                    .padding(horizontal = 10.dp, vertical = 10.dp)
+                                    .testTag("skip_old_sms_button"),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RestartAlt,
+                                    contentDescription = null,
+                                    tint = CyanNeon,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isArabic) "تخطي القديم والبدء من الصفر"
+                                    else "Skip Old & Start From 0",
+                                    color = CyanNeon,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            if (hasFreshBaseline) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(colors.glassCard)
+                                        .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(11.dp))
+                                        .clickable { onResetBaselineAndRescan() }
+                                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                                        .testTag("reset_sms_baseline_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "فحص الكل" else "Scan All",
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     GlassButton(
@@ -276,22 +567,156 @@ fun BaridiMobSmsSyncScreen(
             }
         }
 
-        // Pending Suggestions Header
+        // 3. Tax & Balance Discrepancy Hunter Section (كاشف الفارق وتصيد الضرائب)
+        item {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("tax_discrepancy_hunter_card"),
+                backgroundColor = colors.glassCard,
+                borderColor = AmberNeon.copy(alpha = 0.45f)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(AmberNeon.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Policy,
+                                    contentDescription = null,
+                                    tint = AmberNeon,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (isArabic) "كاشف الفارق وتصيد الضرائب"
+                                    else "Tax & Fee Discrepancy Hunter",
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = if (isArabic) {
+                                        "مقارنة الرصيد السابق ± العملية مع الرصيد الفعلي لاقتناص الضرائب والرسوم الخفية"
+                                    } else {
+                                        "Compares previous vs actual Solde to catch hidden taxes & commissions"
+                                    },
+                                    color = colors.textMuted,
+                                    fontSize = 10.5.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+
+                        if (detectedTaxes.isNotEmpty()) {
+                            IconButton(
+                                onClick = onClearAllTaxes,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteSweep,
+                                    contentDescription = if (isArabic) "مسح" else "Clear",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Total Caught Taxes Summary Pill
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AmberNeon.copy(alpha = 0.12f))
+                            .border(0.8.dp, AmberNeon.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isArabic) "إجمالي الضرائب/الفوارق المرصودة (${detectedTaxes.size})"
+                            else "Total Caught Taxes & Fees (${detectedTaxes.size})",
+                            color = colors.textPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Text(
+                                text = formatDzdAmount(
+                                    amount = totalCaughtTaxes,
+                                    currencyText = strings.currencyCode,
+                                    isStealth = isStealth
+                                ),
+                                color = AmberNeon,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    if (detectedTaxes.isEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = if (isArabic) {
+                                "لم يتم رصد أي فارق أو ضريبة خفية بعد. عند استلام رسالتين تحتويان على الرصيد (Solde)، يحسب المحرك الفرق تلقائياً ليكشف أي اقتطاع."
+                            } else {
+                                "No hidden fees detected yet. Once consecutive SMS alerts include a Solde balance, any unexplained discrepancy is caught here automatically."
+                            },
+                            color = colors.textMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            detectedTaxes.forEach { anomaly ->
+                                TaxAnomalyItemCard(
+                                    anomaly = anomaly,
+                                    isArabic = isArabic,
+                                    isStealth = isStealth,
+                                    currency = strings.currencyCode,
+                                    onRecordAsExpense = { onRecordTaxAsExpense(anomaly.id) },
+                                    onDismiss = { onDismissTaxAnomaly(anomaly.id) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Pending Suggestions Header
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (isArabic) "المعاملات المقترحة (${pendingSuggestions.size})"
-                            else "Suggested Transactions (${pendingSuggestions.size})",
-                            color = colors.textPrimary,
-                            fontSize = typo.titleSm,
-                            fontWeight = FontWeight.Bold
-                        )
-                }
+                Text(
+                    text = if (isArabic) "المعاملات المقترحة (${pendingSuggestions.size})"
+                    else "Suggested Transactions (${pendingSuggestions.size})",
+                    color = colors.textPrimary,
+                    fontSize = typo.titleSm,
+                    fontWeight = FontWeight.Bold
+                )
                 if (pendingSuggestions.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -343,7 +768,7 @@ fun BaridiMobSmsSyncScreen(
             }
         }
 
-        // Manual Paste / Quick Analyzer Box
+        // 5. Manual Paste / Quick Analyzer & Tax Discrepancy Tester
         item {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -370,8 +795,8 @@ fun BaridiMobSmsSyncScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = if (isArabic) "الصق نص رسالة من ALG Poste لاختبار تصنيفها واقتراح إضافتها:"
-                        else "Paste any ALG Poste SMS text to analyze and classify it immediately:",
+                        text = if (isArabic) "الصق نص رسالة من ALG Poste لاختبار تصنيفها، استخراج الرصيد، ورصد الفارق الضريبي:"
+                        else "Paste an ALG Poste SMS to test classification, Solde extraction, and tax hunting:",
                         color = colors.textMuted,
                         fontSize = 11.sp
                     )
@@ -388,9 +813,10 @@ fun BaridiMobSmsSyncScreen(
                     ) {
                         if (manualSmsText.isEmpty()) {
                             Text(
-                                text = if (isArabic) "مثال: ALG Poste: Opération -300.00 DA ..." else "Example: ALG Poste: Retrait -300.00 DA ...",
+                                text = if (isArabic) "مثال: ALG Poste: Opération -300.00 DA • Nouveau solde: 24500.00 DA"
+                                else "Example: ALG Poste: Retrait -300.00 DA • Nouveau solde: 24500.00 DA",
                                 color = colors.textMuted.copy(alpha = 0.6f),
-                                fontSize = 12.5.sp
+                                fontSize = 12.sp
                             )
                         }
                         BasicTextField(
@@ -422,13 +848,13 @@ fun BaridiMobSmsSyncScreen(
                                 .background(RoseNeon.copy(alpha = 0.14f))
                                 .border(0.8.dp, RoseNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                                 .clickable {
-                                    manualSmsText = "ALG Poste: Retrait GAB -300.00 DA le 14/11/2026. Solde: 24500.00 DA"
+                                    manualSmsText = "ALG Poste: Retrait GAB -300.00 DA le 15/11/2026. Nouveau solde: 24500.00 DA"
                                 }
                                 .padding(horizontal = 8.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isArabic) "مثال سحب (-300.00 DA)" else "Sample -300.00 DA",
+                                text = if (isArabic) "سحب (-300 DA)" else "Withdraw -300",
                                 color = RoseNeon,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -449,7 +875,7 @@ fun BaridiMobSmsSyncScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isArabic) "مثال دخل (+15000 DA)" else "Sample +15000 DA",
+                                text = if (isArabic) "دخل (+15000 DA)" else "Income +15000",
                                 color = EmeraldNeon,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -459,10 +885,43 @@ fun BaridiMobSmsSyncScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 3rd Preset Chip: Demonstrate tax discrepancy hunting relative to current balance
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(AmberNeon.copy(alpha = 0.14f))
+                            .border(0.8.dp, AmberNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .clickable {
+                                val baseBal = if (userSettings.latestSmsBalanceAmount >= 1100.0) {
+                                    userSettings.latestSmsBalanceAmount
+                                } else {
+                                    24500.0
+                                }
+                                val nextAfterTax = (baseBal - 1050.0).coerceAtLeast(0.0)
+                                val balFmt = String.format(Locale.US, "%.2f", nextAfterTax)
+                                manualSmsText = "ALG Poste: Paiement BaridiMob -1000.00 DA. Nouveau solde: $balFmt DA"
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isArabic) "تجربة تصيّد الضرائب (سحب -1000 مع فارق -50 دج ضريبة)"
+                            else "Sample Tax Hunter (-1000 DA tx with 50 DA hidden fee)",
+                            color = AmberNeon,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(10.dp))
 
                     GlassButton(
-                        text = if (isArabic) "تحليل واقتراح الإضافة" else "Analyze & Suggest",
+                        text = if (isArabic) "تحليل واستخراج الرصيد والضرائب" else "Analyze SMS, Balance & Tax",
                         enabled = manualSmsText.isNotBlank(),
                         containerColor = CyanNeon,
                         contentColor = Color(0xFF04202C),
@@ -478,7 +937,144 @@ fun BaridiMobSmsSyncScreen(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Spacer(modifier = Modifier.height(92.dp)) }
+    }
+}
+
+@Composable
+private fun TaxAnomalyItemCard(
+    anomaly: SmsTaxAnomalyEntry,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    currency: String,
+    onRecordAsExpense: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.glassSurface)
+            .border(0.9.dp, AmberNeon.copy(alpha = 0.42f), RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isArabic) anomaly.titleAr else anomaly.titleEn,
+                    color = AmberNeon,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = formatDate(anomaly.detectedAtMillis),
+                    color = colors.textMuted,
+                    fontSize = 10.sp
+                )
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RoseNeon.copy(alpha = 0.16f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "-" + formatDzdAmount(anomaly.taxAmount, currency, isStealth),
+                        color = RoseNeon,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = if (isArabic) "إزالة" else "Dismiss",
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        Text(
+            text = if (isArabic) anomaly.explanationAr else anomaly.explanationEn,
+            color = colors.textPrimary,
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp
+        )
+
+        if (anomaly.rawBody.isNotBlank()) {
+            Text(
+                text = anomaly.rawBody,
+                color = colors.textMuted,
+                fontSize = 10.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (anomaly.isRecordedAsExpense) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(EmeraldNeon.copy(alpha = 0.14f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = EmeraldNeon,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isArabic) "تم تسجيل الضريبة في المصاريف ✓" else "Logged in Expenses ✓",
+                    color = EmeraldNeon,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(AmberNeon.copy(alpha = 0.18f))
+                    .border(0.8.dp, AmberNeon.copy(alpha = 0.50f), RoundedCornerShape(10.dp))
+                    .clickable(onClick = onRecordAsExpense)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .testTag("record_tax_expense_button"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AddCircle,
+                    contentDescription = null,
+                    tint = AmberNeon,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isArabic) "إضافة كضريبة في المصاريف (Expense)"
+                    else "Log Caught Tax to Expenses",
+                    color = AmberNeon,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
     }
 }
 
@@ -606,6 +1202,19 @@ fun SmsSuggestionCard(
                         overflow = TextOverflow.Ellipsis,
                         lineHeight = 15.sp
                     )
+                    if (suggestion.extractedBalance != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isArabic) {
+                                "الرصيد في الرسالة: ${formatDzd(suggestion.extractedBalance)}"
+                            } else {
+                                "Solde in SMS: ${formatDzd(suggestion.extractedBalance)}"
+                            },
+                            color = EmeraldNeon,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {

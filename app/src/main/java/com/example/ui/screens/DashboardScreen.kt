@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,11 +21,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.HistoryToggleOff
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
@@ -39,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,15 +54,18 @@ import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.sms.SmsSuggestionEntry
+import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
 import com.example.ui.components.TotalBalanceVaultCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.formatDzdAmount
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.DebtBtnGradient
@@ -80,6 +88,7 @@ fun DashboardScreen(
     debts: List<DebtEntity> = emptyList(),
     userSettings: UserSettings,
     pendingSmsSuggestions: List<SmsSuggestionEntry> = emptyList(),
+    detectedSmsTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
     onAddIncomeClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onAddDebtClick: () -> Unit,
@@ -96,6 +105,7 @@ fun DashboardScreen(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val isStealth = LocalStealthMode.current
     val layoutInfo = LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
@@ -136,6 +146,18 @@ fun DashboardScreen(
                         userSettings = userSettings,
                         onLockToVault = onLockToVault,
                         onUnlockFromVault = onUnlockFromVault
+                    )
+                }
+
+                item {
+                    BaridiMobCardRadarTile(
+                        userSettings = userSettings,
+                        pendingCount = pendingSmsSuggestions.size,
+                        detectedTaxes = detectedSmsTaxes,
+                        isStealth = isStealth,
+                        strings = strings,
+                        colors = colors,
+                        onClick = onOpenBaridiMobSync
                     )
                 }
 
@@ -241,6 +263,18 @@ fun DashboardScreen(
                     userSettings = userSettings,
                     onLockToVault = onLockToVault,
                     onUnlockFromVault = onUnlockFromVault
+                )
+            }
+
+            item {
+                BaridiMobCardRadarTile(
+                    userSettings = userSettings,
+                    pendingCount = pendingSmsSuggestions.size,
+                    detectedTaxes = detectedSmsTaxes,
+                    isStealth = isStealth,
+                    strings = strings,
+                    colors = colors,
+                    onClick = onOpenBaridiMobSync
                 )
             }
 
@@ -794,6 +828,179 @@ private fun BaridiMobSmsSuggestionBanner(
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BaridiMobCardRadarTile(
+    userSettings: UserSettings,
+    pendingCount: Int,
+    detectedTaxes: List<SmsTaxAnomalyEntry>,
+    isStealth: Boolean,
+    strings: StringsBundle,
+    colors: LiquidGlassColors,
+    onClick: () -> Unit
+) {
+    val isArabic = strings is ArabicStrings
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+    val hasExtractedBalance = userSettings.latestSmsBalanceAmount >= 0.0
+    val hasBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
+    val totalTaxes = detectedTaxes.sumOf { it.taxAmount }
+    val unrecordedTaxes = detectedTaxes.count { !it.isRecordedAsExpense }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("dashboard_baridimob_radar_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = Color(0xFF818CF8).copy(alpha = 0.45f),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        onClick = onClick
+    ) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(dimens.iconSizeXl + 4.dp)
+                        .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFF6366F1), CyanNeon)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sms,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(dimens.iconSizeMd)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(dimens.spacingMd))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isArabic) "مزامنة بريدي موب وكاشف الضرائب" else "BaridiMob SMS & Tax Radar",
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = typo.bodyLg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = if (hasExtractedBalance) {
+                            val balStr = formatDzdAmount(
+                                userSettings.latestSmsBalanceAmount,
+                                strings.currencyCode,
+                                isStealth = isStealth
+                            )
+                            if (isArabic) "رصيد البطاقة المستخرج: $balStr" else "SMS Balance: $balStr"
+                        } else {
+                            if (isArabic) "استخراج الرصيد من الرسائل • كشف الفوارق"
+                            else "Extract card balance & detect hidden fees"
+                        },
+                        color = if (hasExtractedBalance) EmeraldNeon else colors.textMuted,
+                        fontSize = typo.bodySm,
+                        fontWeight = if (hasExtractedBalance) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(dimens.iconSizeSm)
+                )
+            }
+
+            if (totalTaxes > 0.0 || pendingCount > 0 || hasBaseline) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (totalTaxes > 0.0) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(RoseNeon.copy(alpha = 0.14f))
+                                .border(0.8.dp, RoseNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Policy,
+                                contentDescription = null,
+                                tint = RoseNeon,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            val taxText = formatDzdAmount(totalTaxes, strings.currencyCode, isStealth = isStealth)
+                            Text(
+                                text = if (isArabic) {
+                                    "ضرائب متصيدة: $taxText" + if (unrecordedTaxes > 0) " ($unrecordedTaxes)" else ""
+                                } else {
+                                    "Taxes caught: $taxText"
+                                },
+                                color = RoseNeon,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    if (pendingCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF818CF8).copy(alpha = 0.18f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isArabic) "$pendingCount رسائل جديدة" else "$pendingCount new SMS",
+                                color = Color(0xFF818CF8),
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    if (hasBaseline) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CyanNeon.copy(alpha = 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HistoryToggleOff,
+                                contentDescription = null,
+                                tint = CyanNeon,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isArabic) "عدّ من الصفر" else "From 0",
+                                color = CyanNeon,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

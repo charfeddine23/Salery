@@ -28,7 +28,7 @@ data class UserSettings(
     val classicCardExpiry: String = "11/29",
     val classicCardCvc: String = "",
     val breathingGlowEnabled: Boolean = true,
-    val screenshotProtectionEnabled: Boolean = true,
+    val screenshotProtectionEnabled: Boolean = false,
     val vaultKeysJson: String = "[]",
     val ccpAccountsJson: String = "[]",
     val visaCardProvider: String = "DEFAULT", // "DEFAULT", "REDOTPAY", "BYBIT"
@@ -39,6 +39,12 @@ data class UserSettings(
     val baridiMobSmsSyncEnabled: Boolean = false,
     val pendingSmsSuggestionsJson: String = "[]",
     val processedSmsKeysJson: String = "[]",
+    val smsSyncBaselineTimestampMillis: Long = 0L,
+    val latestSmsBalanceAmount: Double = -1.0,
+    val latestSmsBalanceUpdatedAt: Long = 0L,
+    val latestSmsBalanceRawSnippet: String = "",
+    val smsBalanceHistoryJson: String = "[]",
+    val detectedSmsTaxesJson: String = "[]",
     val hasCompletedPermissionsOnboarding: Boolean = false
 )
 
@@ -55,6 +61,19 @@ class PreferencesManager(context: Context) {
                 is Float -> raw
                 is Number -> raw.toFloat()
                 is String -> raw.toFloatOrNull() ?: default
+                else -> default
+            }
+        } catch (_: Throwable) {
+            default
+        }
+    }
+
+    private fun safeDouble(key: String, default: Double): Double {
+        return try {
+            when (val raw = prefs.all[key]) {
+                is Double -> raw
+                is Number -> raw.toDouble()
+                is String -> raw.toDoubleOrNull() ?: default
                 else -> default
             }
         } catch (_: Throwable) {
@@ -137,7 +156,7 @@ class PreferencesManager(context: Context) {
             classicCardExpiry = safeString("classic_card_expiry", "11/29"),
             classicCardCvc = safeString("classic_card_cvc", ""),
             breathingGlowEnabled = safeBoolean("breathing_glow_enabled", true),
-            screenshotProtectionEnabled = safeBoolean("screenshot_protection_enabled", true),
+            screenshotProtectionEnabled = safeBoolean("screenshot_protection_enabled", false),
             vaultKeysJson = safeString("vault_keys_json", "[]"),
             ccpAccountsJson = safeString("ccp_accounts_json", "[]"),
             visaCardProvider = safeString("visa_card_provider", "DEFAULT"),
@@ -148,6 +167,12 @@ class PreferencesManager(context: Context) {
             baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", false),
             pendingSmsSuggestionsJson = safeString("pending_sms_suggestions_json", "[]"),
             processedSmsKeysJson = safeString("processed_sms_keys_json", "[]"),
+            smsSyncBaselineTimestampMillis = safeLong("sms_sync_baseline_millis", 0L),
+            latestSmsBalanceAmount = safeDouble("latest_sms_balance_amount", -1.0),
+            latestSmsBalanceUpdatedAt = safeLong("latest_sms_balance_updated_at", 0L),
+            latestSmsBalanceRawSnippet = safeString("latest_sms_balance_snippet", ""),
+            smsBalanceHistoryJson = safeString("sms_balance_history_json", "[]"),
+            detectedSmsTaxesJson = safeString("detected_sms_taxes_json", "[]"),
             hasCompletedPermissionsOnboarding = safeBoolean("has_completed_permissions_onboarding", false)
         )
     }
@@ -192,6 +217,12 @@ class PreferencesManager(context: Context) {
             .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
             .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
             .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)
+            .putLong("sms_sync_baseline_millis", finalUpdated.smsSyncBaselineTimestampMillis)
+            .putString("latest_sms_balance_amount", finalUpdated.latestSmsBalanceAmount.toString())
+            .putLong("latest_sms_balance_updated_at", finalUpdated.latestSmsBalanceUpdatedAt)
+            .putString("latest_sms_balance_snippet", finalUpdated.latestSmsBalanceRawSnippet)
+            .putString("sms_balance_history_json", finalUpdated.smsBalanceHistoryJson)
+            .putString("detected_sms_taxes_json", finalUpdated.detectedSmsTaxesJson)
             .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
             .apply()
         _settingsFlow.value = finalUpdated

@@ -41,16 +41,34 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
 
         val prefsManager = PreferencesManager(context.applicationContext)
         val currentSettings = prefsManager.settingsFlow.value
+        val baselineMillis = currentSettings.smsSyncBaselineTimestampMillis
+        if (baselineMillis > 0L && latestTimestamp <= baselineMillis) return
+
         val processedKeys = AlgPosteSmsCodec.parseProcessedKeys(currentSettings.processedSmsKeysJson)
         val existingPending = AlgPosteSmsCodec.parseSuggestions(currentSettings.pendingSmsSuggestionsJson)
         val existingIds = existingPending.map { it.id }.toSet()
+        val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(currentSettings.smsBalanceHistoryJson)
+        val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
 
         val newlyDetected = mutableListOf<SmsSuggestionEntry>()
+        val newlyExtractedSnapshots = mutableListOf<SmsBalanceSnapshot>()
+
         for ((sender, bodyBuilder) in groupedBySender) {
             if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
+            val rawText = bodyBuilder.toString()
+
+            AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                sender = sender,
+                body = rawText,
+                timestampMillis = latestTimestamp,
+                allowAnySenderForManualTest = false
+            )?.let { snap ->
+                newlyExtractedSnapshots.add(snap)
+            }
+
             val parsed = AlgPosteSmsAnalyzer.parseSms(
                 sender = sender,
-                body = bodyBuilder.toString(),
+                body = rawText,
                 timestampMillis = latestTimestamp,
                 allowAnySenderForManualTest = false
             ) ?: continue
@@ -60,21 +78,38 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             }
         }
 
-        if (newlyDetected.isEmpty()) return
+        if (newlyDetected.isEmpty() && newlyExtractedSnapshots.isEmpty()) return
+
+        val mergedHistory = (existingHistory + newlyExtractedSnapshots)
+            .distinctBy { it.id }
+            .sortedBy { it.timestampMillis }
+        val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+        val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+            snapshots = mergedHistory,
+            existingAnomalies = existingTaxes
+        )
 
         val updatedList = (newlyDetected + existingPending).distinctBy { it.id }
         prefsManager.updateSettings {
             it.copy(
                 baridiMobSmsSyncEnabled = true,
-                pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList)
+                pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
+                smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                latestSmsBalanceAmount = latestSnap?.balance ?: it.latestSmsBalanceAmount,
+                latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: it.latestSmsBalanceUpdatedAt,
+                latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: it.latestSmsBalanceRawSnippet
             )
         }
 
-        postSuggestionNotification(
-            context = context.applicationContext,
-            suggestion = newlyDetected.first(),
-            isArabic = currentSettings.language == "ar"
-        )
+        val primarySuggestion = newlyDetected.firstOrNull()
+        if (primarySuggestion != null) {
+            postSuggestionNotification(
+                context = context.applicationContext,
+                suggestion = primarySuggestion,
+                isArabic = currentSettings.language == "ar"
+            )
+        }
     }
 
     private fun postSuggestionNotification(

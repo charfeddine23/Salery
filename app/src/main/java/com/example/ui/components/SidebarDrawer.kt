@@ -157,7 +157,9 @@ fun SidebarDrawer(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Navigation Items
-            val isInsideCard = selectedRoute in listOf("dashboard_details", "income", "expenses", "debts", "insights")
+            val isInsideCard = selectedRoute in listOf(
+                "dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights"
+            )
 
             DrawerNavItem(
                 icon = Icons.Default.CreditCard,
@@ -180,14 +182,6 @@ fun SidebarDrawer(
                     iconTint = EmeraldNeon,
                     isSelected = selectedRoute == "ccps",
                     onClick = { onNavigate("ccps") }
-                )
-                DrawerNavItem(
-                    icon = Icons.Default.Sms,
-                    title = if (strings is ArabicStrings) "مزامنة بريدي موب" else "BaridiMob SMS Sync",
-                    iconTint = Color(0xFF818CF8),
-                    isSelected = selectedRoute == "baridimob_sync",
-                    badgeCount = pendingSmsCount,
-                    onClick = { onNavigate("baridimob_sync") }
                 )
                 DrawerNavItem(
                     icon = Icons.Default.AutoAwesome,

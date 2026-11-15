@@ -463,4 +463,115 @@ class ExampleUnitTest {
     assertEquals("LIQUID_GLASS", fallback.id)
     assertTrue(com.example.ui.theme.ThemeEngineCatalog.resolveColors("NEUMORPHISM", isDark = true).isNeumorphic)
   }
+
+  @Test
+  fun algPosteSmsAnalyzer_extractsBalance_huntsHiddenTaxes_andRoundTripsSnapshots() {
+    // 1. French & Arabic balance extraction
+    val frBal = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "Retrait GAB -1000.00 DA le 15/11/2026. Nouveau solde: 23 950,00 DA"
+    )
+    assertNotNull(frBal)
+    assertEquals(23950.0, frBal!!, 0.01)
+
+    val arBal = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "تم خصم -500.00 دج. الرصيد الحالي: 19400.00 دج"
+    )
+    assertNotNull(arBal)
+    assertEquals(19400.0, arBal!!, 0.01)
+
+    // 2. Balance discrepancy tax hunting:
+    // Previous SMS balance = 25,000.00 DA
+    // Debit SMS = -1,000.00 DA -> Expected balance = 24,000.00 DA
+    // Actual balance = 23,950.00 DA -> Caught hidden tax/fee = 50.00 DA!
+    val snap1 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Virement reçu +1000.00 DA. Nouveau solde: 25000.00 DA",
+      timestampMillis = 1_000_000L
+    )!!
+    val snap2 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Paiement TPE -1000.00 DA. Nouveau solde: 23950.00 DA",
+      timestampMillis = 2_000_000L
+    )!!
+    // 3. Explicit standalone tax/fee SMS
+    val snap3 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Frais tenue de compte -250.00 DA. Solde: 23700.00 DA",
+      timestampMillis = 3_000_000L
+    )!!
+
+    val existingRecorded = listOf(
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_fee_${snap3.id}",
+        smsId = snap3.id,
+        taxAmount = 250.0,
+        detectionKind = "EXPLICIT_TAX_FEE",
+        isRecordedAsExpense = true
+      )
+    )
+
+    val anomalies = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = listOf(snap1, snap2, snap3),
+      existingAnomalies = existingRecorded
+    )
+
+    val discrepancy = anomalies.firstOrNull { it.smsId == snap2.id }
+    assertNotNull("Expected 50 DA discrepancy anomaly to be caught", discrepancy)
+    assertEquals(25000.0, discrepancy!!.previousBalance, 0.01)
+    assertEquals(24000.0, discrepancy.expectedBalance, 0.01)
+    assertEquals(23950.0, discrepancy.actualBalance, 0.01)
+    assertEquals(50.0, discrepancy.taxAmount, 0.01)
+
+    val explicitFee = anomalies.firstOrNull { it.smsId == snap3.id }
+    assertNotNull("Expected explicit fee anomaly", explicitFee)
+    assertEquals(250.0, explicitFee!!.taxAmount, 0.01)
+    assertTrue("Should preserve recorded state", explicitFee.isRecordedAsExpense)
+
+    // 4. Snapshot & Tax Anomaly Codec round-trips
+    val encodedSnaps = com.example.sms.AlgPosteSmsCodec.encodeBalanceHistory(listOf(snap1, snap2, snap3))
+    val decodedSnaps = com.example.sms.AlgPosteSmsCodec.parseBalanceHistory(encodedSnaps)
+    assertEquals(3, decodedSnaps.size)
+    assertEquals(23950.0, decodedSnaps[1].balance, 0.01)
+
+    val encodedTaxes = com.example.sms.AlgPosteSmsCodec.encodeTaxAnomalies(anomalies)
+    val decodedTaxes = com.example.sms.AlgPosteSmsCodec.parseTaxAnomalies(encodedTaxes)
+    assertEquals(anomalies.size, decodedTaxes.size)
+  }
+
+  @Test
+  fun ccpAccountEntry_appPresetResolution_andLegacyJsonBackwardCompat() {
+    val styledEntry = com.example.data.CcpAccountEntry(
+      id = "c_styled_1",
+      firstName = "Charfeddine",
+      lastName = "Ka",
+      holderName = "Charfeddine Ka",
+      ccpNumber = "12345678",
+      ccpKey = "99",
+      appPresetId = "redotpay"
+    )
+    val encoded = com.example.data.HubVaultCodec.encodeCcpAccounts(listOf(styledEntry))
+    val decoded = com.example.data.HubVaultCodec.parseCcpAccounts(encoded)
+    assertEquals(1, decoded.size)
+    assertEquals("redotpay", decoded[0].appPresetId)
+    assertEquals(
+      "redotpay",
+      com.example.data.VaultAppPresets.resolveForCcpEntry(decoded[0]).id
+    )
+
+    // Legacy JSON saved before appPresetId was added must parse cleanly with "algerie_poste"
+    val legacyJson = """[{"id":"c_legacy","holderName":"Amine","ccpNumber":"87654321","ccpKey":"12"}]"""
+    val parsedLegacy = com.example.data.HubVaultCodec.parseCcpAccounts(legacyJson)
+    assertEquals(1, parsedLegacy.size)
+    assertEquals("algerie_poste", parsedLegacy[0].appPresetId)
+    assertEquals(
+      "algerie_poste",
+      com.example.data.VaultAppPresets.resolveForCcpEntry(parsedLegacy[0]).id
+    )
+  }
+
+  @Test
+  fun userSettings_defaultsToScreenshotProtectionDisabled() {
+    val defaults = UserSettings()
+    org.junit.Assert.assertFalse(defaults.screenshotProtectionEnabled)
+  }
 }

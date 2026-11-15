@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Nfc
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -64,8 +63,6 @@ private data class RoadmapFeature(
 @Composable
 fun HubSoonScreen(
     onOpenVisaPreview: () -> Unit,
-    pendingSmsCount: Int = 0,
-    onOpenBaridiMobSync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -75,18 +72,6 @@ fun HubSoonScreen(
     val typo = LocalAdaptiveTypography.current
 
     val roadmapItems = listOf(
-        RoadmapFeature(
-            icon = Icons.Default.Sync,
-            accent = Color(0xFF818CF8),
-            titleEn = "BaridiMob SMS & Alert Sync",
-            titleAr = "مزامنة رسائل بريدي موب",
-            descEn = "Automatically analyze ALG Poste SMS alerts and categorize (- / +) into Expenses or Income. Tap to open.",
-            descAr = "قراءة وتحليل رسائل ALG Poste تلقائياً لاقتراح إضافتها في المصاريف (-) أو الدخل (+). اضغط للفتح.",
-            progress = 1.0f,
-            badgeEn = if (pendingSmsCount > 0) "LIVE • $pendingSmsCount NEW" else "LIVE • READY",
-            badgeAr = if (pendingSmsCount > 0) "مفعّل • $pendingSmsCount جديد" else "مفعّل • اضغط للفتح",
-            onClickAction = onOpenBaridiMobSync
-        ),
         RoadmapFeature(
             icon = Icons.Default.CreditCard,
             accent = CyanNeon,

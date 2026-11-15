@@ -12,6 +12,7 @@ import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.security.MessageDigest
 import java.util.Locale
+import kotlin.math.roundToLong
 
 @JsonClass(generateAdapter = true)
 data class SmsSuggestionEntry(
@@ -24,11 +25,51 @@ data class SmsSuggestionEntry(
     val suggestedTitleAr: String = "",
     val suggestedTitleEn: String = "",
     val receivedAtMillis: Long = System.currentTimeMillis(),
-    val matchedReason: String = ""
+    val matchedReason: String = "",
+    val extractedBalance: Double? = null,
+    val hasExplicitFeeKeyword: Boolean = false
 ) {
     val transactionType: TransactionType
         get() = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
 }
+
+@JsonClass(generateAdapter = true)
+data class SmsBalanceSnapshot(
+    val id: String = "",
+    val sender: String = "ALG Poste",
+    val balance: Double = 0.0,
+    val transactionAmount: Double = 0.0,
+    val hasTransaction: Boolean = false,
+    val isExpense: Boolean = true,
+    val hasExplicitFeeKeyword: Boolean = false,
+    val timestampMillis: Long = 0L,
+    val rawBody: String = ""
+)
+
+@JsonClass(generateAdapter = true)
+data class SmsTaxAnomalyEntry(
+    val id: String = "",
+    val smsId: String = "",
+    val previousBalance: Double = 0.0,
+    val transactionAmount: Double = 0.0,
+    val isExpense: Boolean = true,
+    val expectedBalance: Double = 0.0,
+    val actualBalance: Double = 0.0,
+    val taxAmount: Double = 0.0,
+    val detectionKind: String = "BALANCE_DISCREPANCY", // "BALANCE_DISCREPANCY" or "EXPLICIT_TAX_FEE"
+    val detectedAtMillis: Long = System.currentTimeMillis(),
+    val titleAr: String = "",
+    val titleEn: String = "",
+    val explanationAr: String = "",
+    val explanationEn: String = "",
+    val rawBody: String = "",
+    val isRecordedAsExpense: Boolean = false
+)
+
+data class InboxScanResult(
+    val suggestions: List<SmsSuggestionEntry>,
+    val snapshots: List<SmsBalanceSnapshot>
+)
 
 object AlgPosteSmsAnalyzer {
 
@@ -36,7 +77,9 @@ object AlgPosteSmsAnalyzer {
         "retrait", "débit", "debit", "débité", "debite", "paiement", "payement",
         "tpe", "achat", "virement emis", "virement émis", "émis", "emis",
         "frais", "commission", "facture", "cotisation", "transfert sortant",
-        "سحب", "خصم", "اقتطاع", "دفع", "شراء", "صرف", "تحويل صادر", "فاتورة"
+        "taxe", "taxes", "timbre", "agios", "redevance",
+        "سحب", "خصم", "اقتطاع", "دفع", "شراء", "صرف", "تحويل صادر", "فاتورة",
+        "ضريبة", "ضرائب", "رسوم", "رسم", "عمولة"
     )
 
     private val creditKeywords = listOf(
@@ -46,8 +89,26 @@ object AlgPosteSmsAnalyzer {
         "إيداع", "تحويل وارد", "وارد", "استلام", "راتب", "مستحقات", "إضافة", "رصيد مضاف"
     )
 
+    private val explicitFeeKeywords = listOf(
+        "frais", "taxe", "taxes", "commission", "timbre", "tva", "agios",
+        "cotisation", "redevance", "prelevement fiscal", "prélèvement fiscal",
+        "ضريبة", "الضريبة", "ضرائب", "رسم", "رسوم", "عمولة", "اقتطاع", "طابع", "مصاريف بنكية"
+    )
+
     private val balanceContextMarkers = listOf(
-        "nouveau solde", "solde disponible", "solde", "balance", "الرصيد", "رصيدك"
+        "nouveau solde", "solde disponible", "solde actuel", "solde ccp",
+        "n.solde", "solde", "balance",
+        "الرصيد الجديد", "الرصيد الحالي", "الرصيد المتوفر", "الرصيد", "رصيدك الحالي", "رصيدك"
+    )
+
+    private val prioritizedNewBalanceRegex = Regex(
+        """(?:nouveau\s+solde|solde\s+disponible|solde\s+actuel|n\.?\s*solde|الرصيد\s+الجديد|الرصيد\s+الحالي|الرصيد\s+المتوفر|رصيدك\s+الحالي)\s*(?:est|:|=|-|هو)?\s*([0-9][0-9\s.,]*)\s*(?:DA|DZD|د\.?ج)?""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val genericBalanceRegex = Regex(
+        """(?:solde(?:\s+ccp)?|balance|الرصيد|رصيدك)\s*(?:est|:|=|-|هو)?\s*([0-9][0-9\s.,]*)\s*(?:DA|DZD|د\.?ج)?""",
+        RegexOption.IGNORE_CASE
     )
 
     private val otpNonTransactionMarkers = listOf(
@@ -81,11 +142,71 @@ object AlgPosteSmsAnalyzer {
     }
 
     fun buildSuggestionId(sender: String, body: String, timestampMillis: Long): String {
-        // Bucket timestamp to nearest minute so BroadcastReceiver and Inbox scan generate the exact same ID
         val minuteBucket = timestampMillis / 60_000L
         val payload = "${sender.trim().lowercase(Locale.US)}|${body.trim()}|$minuteBucket"
         val digest = MessageDigest.getInstance("SHA-256").digest(payload.toByteArray(Charsets.UTF_8))
         return digest.take(16).joinToString("") { "%02x".format(it) }
+    }
+
+    fun hasExplicitFeeKeyword(body: String): Boolean {
+        val lower = normalizeArabicDigits(body).lowercase(Locale.US)
+        return explicitFeeKeywords.any { lower.contains(it) }
+    }
+
+    fun extractBalanceFromBody(body: String): Double? {
+        val normalizedBody = normalizeArabicDigits(body)
+        if (normalizedBody.isBlank()) return null
+
+        val prioritized = prioritizedNewBalanceRegex.findAll(normalizedBody)
+            .mapNotNull { parseFlexibleAmount(it.groupValues[1]) }
+            .filter { it >= 0.0 }
+            .lastOrNull()
+        if (prioritized != null) return roundTwoDecimals(prioritized)
+
+        val generic = genericBalanceRegex.findAll(normalizedBody)
+            .mapNotNull { parseFlexibleAmount(it.groupValues[1]) }
+            .filter { it >= 0.0 }
+            .lastOrNull()
+        return generic?.let(::roundTwoDecimals)
+    }
+
+    fun parseBalanceSnapshot(
+        sender: String,
+        body: String,
+        timestampMillis: Long = System.currentTimeMillis(),
+        allowAnySenderForManualTest: Boolean = false
+    ): SmsBalanceSnapshot? {
+        val trimmedSender = sender.trim().ifBlank { "ALG Poste" }
+        val trimmedBody = body.trim()
+        if (trimmedBody.isBlank()) return null
+
+        val senderMatches = isAlgPosteSender(trimmedSender) ||
+            (allowAnySenderForManualTest && (trimmedSender.isNotBlank() || trimmedBody.isNotBlank()))
+        if (!senderMatches) return null
+
+        val normalizedBody = normalizeArabicDigits(trimmedBody)
+        val lowerBody = normalizedBody.lowercase(Locale.US)
+        val extractedBalance = extractBalanceFromBody(normalizedBody) ?: return null
+
+        val txParsed = parseSms(
+            sender = trimmedSender,
+            body = trimmedBody,
+            timestampMillis = timestampMillis,
+            allowAnySenderForManualTest = allowAnySenderForManualTest
+        )
+        val id = txParsed?.id ?: buildSuggestionId(trimmedSender, trimmedBody, timestampMillis)
+
+        return SmsBalanceSnapshot(
+            id = id,
+            sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else "ALG Poste",
+            balance = extractedBalance,
+            transactionAmount = txParsed?.amount ?: 0.0,
+            hasTransaction = txParsed != null,
+            isExpense = txParsed?.isExpense ?: true,
+            hasExplicitFeeKeyword = explicitFeeKeywords.any { lowerBody.contains(it) },
+            timestampMillis = timestampMillis,
+            rawBody = trimmedBody
+        )
     }
 
     fun parseSms(
@@ -117,6 +238,8 @@ object AlgPosteSmsAnalyzer {
 
         val hasDebitKeyword = debitKeywords.any { lowerBody.contains(it) }
         val hasCreditKeyword = creditKeywords.any { lowerBody.contains(it) }
+        val extractedBalance = extractBalanceFromBody(normalizedBody)
+        val isExplicitFee = explicitFeeKeywords.any { lowerBody.contains(it) }
 
         // 1. Prioritize explicitly signed amounts (e.g. -300.00 DA or +5000.00 DA), ignoring Solde/Balance lines
         var pickedAmount: Double? = null
@@ -160,7 +283,6 @@ object AlgPosteSmsAnalyzer {
                     matchedReason = "CREDIT_KEYWORD"
                     break
                 } else if (hasDebitKeyword && hasCreditKeyword) {
-                    // Check which keyword appears closer/earlier to the transaction start
                     val firstDebitIdx = debitKeywords.mapNotNull { kw ->
                         lowerBody.indexOf(kw).takeIf { it >= 0 }
                     }.minOrNull() ?: Int.MAX_VALUE
@@ -178,32 +300,159 @@ object AlgPosteSmsAnalyzer {
         val finalAmount = pickedAmount ?: return null
         val finalIsExpense = pickedIsExpense ?: return null
 
-        val (category, titleAr, titleEn) = classifyMetadata(lowerBody, finalIsExpense)
+        val (category, titleAr, titleEn) = classifyMetadata(lowerBody, finalIsExpense, isExplicitFee)
         val id = buildSuggestionId(trimmedSender, trimmedBody, timestampMillis)
 
         return SmsSuggestionEntry(
             id = id,
             sender = if (isAlgPosteSender(trimmedSender)) trimmedSender else "ALG Poste",
             rawBody = trimmedBody,
-            amount = finalAmount,
+            amount = roundTwoDecimals(finalAmount),
             isExpense = finalIsExpense,
             suggestedCategory = category,
             suggestedTitleAr = titleAr,
             suggestedTitleEn = titleEn,
             receivedAtMillis = timestampMillis,
-            matchedReason = matchedReason
+            matchedReason = matchedReason,
+            extractedBalance = extractedBalance,
+            hasExplicitFeeKeyword = isExplicitFee
         )
     }
 
+    /**
+     * Analyzes chronological ALG Poste balance snapshots to detect:
+     * 1. Mathematical discrepancy between expected balance (prev +/- tx) and actual reported balance,
+     *    catching hidden bank taxes, commissions, and unannounced deductions.
+     * 2. Explicit fee/tax SMS debits when already directly billed as a standalone fee message.
+     */
+    fun detectTaxAnomalies(
+        snapshots: List<SmsBalanceSnapshot>,
+        existingAnomalies: List<SmsTaxAnomalyEntry> = emptyList()
+    ): List<SmsTaxAnomalyEntry> {
+        if (snapshots.isEmpty()) return existingAnomalies
+
+        val ordered = snapshots
+            .distinctBy { it.id }
+            .sortedWith(compareBy<SmsBalanceSnapshot> { it.timestampMillis }.thenBy { it.id })
+        val existingById = existingAnomalies.associateBy { it.id }
+        val resultMap = LinkedHashMap<String, SmsTaxAnomalyEntry>()
+        existingAnomalies.forEach { resultMap[it.id] = it }
+
+        for (i in ordered.indices) {
+            val curr = ordered[i]
+            val prev = if (i > 0) ordered[i - 1] else null
+
+            if (prev != null) {
+                val expectedBalance = roundTwoDecimals(
+                    if (curr.hasTransaction) {
+                        if (curr.isExpense) prev.balance - curr.transactionAmount
+                        else prev.balance + curr.transactionAmount
+                    } else {
+                        prev.balance
+                    }
+                )
+                val discrepancy = roundTwoDecimals(expectedBalance - curr.balance)
+
+                if (discrepancy >= 0.01) {
+                    val anomalyId = "tax_diff_${curr.id}"
+                    val alreadyRecorded = existingById[anomalyId]?.isRecordedAsExpense == true
+                    val isLikelyFee = curr.hasExplicitFeeKeyword ||
+                        !curr.hasTransaction ||
+                        discrepancy <= maxOf(500.0, curr.transactionAmount * 0.25)
+
+                    val signStr = if (curr.hasTransaction) {
+                        if (curr.isExpense) " - ${formatCompactAmount(curr.transactionAmount)}"
+                        else " + ${formatCompactAmount(curr.transactionAmount)}"
+                    } else ""
+
+                    val titleAr = when {
+                        !curr.hasTransaction -> "فارق رصيد / اقتطاع ضرائب غير معلن"
+                        isLikelyFee -> "رصد ضريبة / عمولة مقتطعة من الرصيد"
+                        else -> "فارق رصيد / خصم إضافي مكتشف"
+                    }
+                    val titleEn = when {
+                        !curr.hasTransaction -> "Unannounced Balance Deduction / Tax"
+                        isLikelyFee -> "Hidden Bank Fee / Tax Detected"
+                        else -> "Balance Discrepancy / Deduction Caught"
+                    }
+                    val explanationAr = if (curr.hasTransaction) {
+                        "السابق ${formatCompactAmount(prev.balance)}$signStr = المتوقع ${formatCompactAmount(expectedBalance)} • الفعلي ${formatCompactAmount(curr.balance)} ⟵ الفارق المقتطع: ${formatCompactAmount(discrepancy)} دج"
+                    } else {
+                        "الرصيد السابق ${formatCompactAmount(prev.balance)} • الرصيد الحالي ${formatCompactAmount(curr.balance)} ⟵ الفارق المقتطع: ${formatCompactAmount(discrepancy)} دج"
+                    }
+                    val explanationEn = if (curr.hasTransaction) {
+                        "Prev ${formatCompactAmount(prev.balance)}$signStr = Expected ${formatCompactAmount(expectedBalance)} • Actual ${formatCompactAmount(curr.balance)} ⟵ Caught tax/fee: ${formatCompactAmount(discrepancy)} DA"
+                    } else {
+                        "Prev ${formatCompactAmount(prev.balance)} • Actual ${formatCompactAmount(curr.balance)} ⟵ Caught deduction: ${formatCompactAmount(discrepancy)} DA"
+                    }
+
+                    resultMap[anomalyId] = SmsTaxAnomalyEntry(
+                        id = anomalyId,
+                        smsId = curr.id,
+                        previousBalance = prev.balance,
+                        transactionAmount = curr.transactionAmount,
+                        isExpense = curr.isExpense,
+                        expectedBalance = expectedBalance,
+                        actualBalance = curr.balance,
+                        taxAmount = discrepancy,
+                        detectionKind = "BALANCE_DISCREPANCY",
+                        detectedAtMillis = curr.timestampMillis,
+                        titleAr = titleAr,
+                        titleEn = titleEn,
+                        explanationAr = explanationAr,
+                        explanationEn = explanationEn,
+                        rawBody = curr.rawBody,
+                        isRecordedAsExpense = alreadyRecorded
+                    )
+                    continue
+                }
+            }
+
+            // Explicit standalone fee/tax message (e.g. Frais de tenue de compte -250 DA)
+            if (curr.hasExplicitFeeKeyword && curr.hasTransaction && curr.isExpense && curr.transactionAmount > 0.0) {
+                val anomalyId = "tax_fee_${curr.id}"
+                val alreadyRecorded = existingById[anomalyId]?.isRecordedAsExpense == true
+                resultMap[anomalyId] = SmsTaxAnomalyEntry(
+                    id = anomalyId,
+                    smsId = curr.id,
+                    previousBalance = prev?.balance ?: (curr.balance + curr.transactionAmount),
+                    transactionAmount = curr.transactionAmount,
+                    isExpense = true,
+                    expectedBalance = curr.balance,
+                    actualBalance = curr.balance,
+                    taxAmount = curr.transactionAmount,
+                    detectionKind = "EXPLICIT_TAX_FEE",
+                    detectedAtMillis = curr.timestampMillis,
+                    titleAr = "رسوم / ضريبة صريحة من بريد الجزائر",
+                    titleEn = "Explicit ALG Poste Fee / Tax",
+                    explanationAr = "اقتطاع مباشر مصنف كرسوم أو ضريبة بقيمة ${formatCompactAmount(curr.transactionAmount)} دج",
+                    explanationEn = "Direct fee/tax debit detected for ${formatCompactAmount(curr.transactionAmount)} DA",
+                    rawBody = curr.rawBody,
+                    isRecordedAsExpense = alreadyRecorded
+                )
+            }
+        }
+
+        return resultMap.values
+            .sortedByDescending { it.detectedAtMillis }
+    }
+
     private fun isInsideBalanceLabel(lowerText: String, matchStart: Int): Boolean {
-        val windowStart = (matchStart - 26).coerceAtLeast(0)
+        val windowStart = (matchStart - 30).coerceAtLeast(0)
         val prefix = lowerText.substring(windowStart, matchStart)
         return balanceContextMarkers.any { marker -> prefix.contains(marker) }
     }
 
-    private fun classifyMetadata(lowerBody: String, isExpense: Boolean): Triple<String, String, String> {
+    private fun classifyMetadata(
+        lowerBody: String,
+        isExpense: Boolean,
+        isExplicitFee: Boolean
+    ): Triple<String, String, String> {
         return if (isExpense) {
             when {
+                isExplicitFee ->
+                    Triple("taxes_fees", "ضرائب ورسوم (ALG Poste)", "Bank Tax / Fee (ALG Poste)")
+
                 lowerBody.contains("mobilis") || lowerBody.contains("djezzy") ||
                     lowerBody.contains("ooredoo") || lowerBody.contains("internet") ||
                     lowerBody.contains("recharge") || lowerBody.contains("فليكسي") ->
@@ -244,10 +493,8 @@ object AlgPosteSmsAnalyzer {
         val normalized = when {
             compact.contains(',') && compact.contains('.') -> {
                 if (compact.lastIndexOf(',') > compact.lastIndexOf('.')) {
-                    // European: 1.500,25 -> 1500.25
                     compact.replace(".", "").replace(',', '.')
                 } else {
-                    // US: 1,500.25 -> 1500.25
                     compact.replace(",", "")
                 }
             }
@@ -263,6 +510,13 @@ object AlgPosteSmsAnalyzer {
         }
         return normalized.toDoubleOrNull()
     }
+
+    private fun roundTwoDecimals(value: Double): Double =
+        (value * 100.0).roundToLong() / 100.0
+
+    private fun formatCompactAmount(value: Double): String =
+        if (value % 1.0 == 0.0) String.format(Locale.US, "%,.0f", value)
+        else String.format(Locale.US, "%,.2f", value)
 
     private fun normalizeArabicDigits(input: String): String {
         val sb = StringBuilder(input.length)
@@ -284,6 +538,8 @@ object AlgPosteSmsAnalyzer {
 object AlgPosteSmsCodec {
     private const val MAX_PROCESSED_KEYS = 500
     private const val MAX_PENDING_ITEMS = 120
+    private const val MAX_SNAPSHOT_ITEMS = 200
+    private const val MAX_TAX_ITEMS = 120
 
     private val moshi: Moshi by lazy {
         Moshi.Builder()
@@ -294,6 +550,16 @@ object AlgPosteSmsCodec {
     private val suggestionListAdapter by lazy {
         val type = Types.newParameterizedType(List::class.java, SmsSuggestionEntry::class.java)
         moshi.adapter<List<SmsSuggestionEntry>>(type)
+    }
+
+    private val snapshotListAdapter by lazy {
+        val type = Types.newParameterizedType(List::class.java, SmsBalanceSnapshot::class.java)
+        moshi.adapter<List<SmsBalanceSnapshot>>(type)
+    }
+
+    private val taxListAdapter by lazy {
+        val type = Types.newParameterizedType(List::class.java, SmsTaxAnomalyEntry::class.java)
+        moshi.adapter<List<SmsTaxAnomalyEntry>>(type)
     }
 
     private val stringListAdapter by lazy {
@@ -320,6 +586,56 @@ object AlgPosteSmsCodec {
                 list.distinctBy { it.id }
                     .sortedByDescending { it.receivedAtMillis }
                     .take(MAX_PENDING_ITEMS)
+            )
+        } catch (_: Throwable) {
+            "[]"
+        }
+    }
+
+    fun parseBalanceHistory(json: String): List<SmsBalanceSnapshot> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            snapshotListAdapter.fromJson(json)
+                ?.filter { it.id.isNotBlank() && it.balance >= 0.0 }
+                ?.sortedBy { it.timestampMillis }
+                ?.takeLast(MAX_SNAPSHOT_ITEMS)
+                ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    fun encodeBalanceHistory(list: List<SmsBalanceSnapshot>): String {
+        return try {
+            snapshotListAdapter.toJson(
+                list.distinctBy { it.id }
+                    .sortedBy { it.timestampMillis }
+                    .takeLast(MAX_SNAPSHOT_ITEMS)
+            )
+        } catch (_: Throwable) {
+            "[]"
+        }
+    }
+
+    fun parseTaxAnomalies(json: String): List<SmsTaxAnomalyEntry> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            taxListAdapter.fromJson(json)
+                ?.filter { it.id.isNotBlank() && it.taxAmount > 0.0 }
+                ?.sortedByDescending { it.detectedAtMillis }
+                ?.take(MAX_TAX_ITEMS)
+                ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    fun encodeTaxAnomalies(list: List<SmsTaxAnomalyEntry>): String {
+        return try {
+            taxListAdapter.toJson(
+                list.distinctBy { it.id }
+                    .sortedByDescending { it.detectedAtMillis }
+                    .take(MAX_TAX_ITEMS)
             )
         } catch (_: Throwable) {
             "[]"
@@ -353,22 +669,39 @@ object AlgPosteSmsInboxScanner {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun scanInbox(context: Context, maxRowsToInspect: Int = 250): List<SmsSuggestionEntry> {
-        if (!hasSmsPermissions(context)) return emptyList()
+    fun scanInbox(
+        context: Context,
+        maxRowsToInspect: Int = 250,
+        minTimestampMillis: Long = 0L
+    ): List<SmsSuggestionEntry> =
+        scanInboxWithBalances(context, maxRowsToInspect, minTimestampMillis).suggestions
 
-        val results = mutableListOf<SmsSuggestionEntry>()
+    fun scanInboxWithBalances(
+        context: Context,
+        maxRowsToInspect: Int = 300,
+        minTimestampMillis: Long = 0L
+    ): InboxScanResult {
+        if (!hasSmsPermissions(context)) {
+            return InboxScanResult(emptyList(), emptyList())
+        }
+
+        val suggestions = mutableListOf<SmsSuggestionEntry>()
+        val snapshots = mutableListOf<SmsBalanceSnapshot>()
         val projection = arrayOf(
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
             Telephony.Sms.DATE
         )
 
+        val selection = if (minTimestampMillis > 0L) "${Telephony.Sms.DATE} > ?" else null
+        val selectionArgs = if (minTimestampMillis > 0L) arrayOf(minTimestampMillis.toString()) else null
+
         try {
             context.contentResolver.query(
                 Telephony.Sms.Inbox.CONTENT_URI,
                 projection,
-                null,
-                null,
+                selection,
+                selectionArgs,
                 "${Telephony.Sms.DATE} DESC"
             )?.use { cursor ->
                 val addrIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
@@ -382,21 +715,69 @@ object AlgPosteSmsInboxScanner {
                     val body = if (bodyIdx != -1) cursor.getString(bodyIdx).orEmpty() else ""
                     val dateMillis = if (dateIdx != -1) cursor.getLong(dateIdx) else System.currentTimeMillis()
 
+                    if (minTimestampMillis > 0L && dateMillis <= minTimestampMillis) continue
                     if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
-                    val parsed = AlgPosteSmsAnalyzer.parseSms(
+
+                    AlgPosteSmsAnalyzer.parseSms(
                         sender = sender,
                         body = body,
                         timestampMillis = dateMillis,
                         allowAnySenderForManualTest = false
-                    )
-                    if (parsed != null) {
-                        results.add(parsed)
-                    }
+                    )?.let { suggestions.add(it) }
+
+                    AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                        sender = sender,
+                        body = body,
+                        timestampMillis = dateMillis,
+                        allowAnySenderForManualTest = false
+                    )?.let { snapshots.add(it) }
                 }
             }
         } catch (_: Throwable) {
         }
 
-        return results.distinctBy { it.id }.sortedByDescending { it.receivedAtMillis }
+        return InboxScanResult(
+            suggestions = suggestions.distinctBy { it.id }.sortedByDescending { it.receivedAtMillis },
+            snapshots = snapshots.distinctBy { it.id }.sortedBy { it.timestampMillis }
+        )
+    }
+
+    fun scanLatestBalanceSnapshot(context: Context, maxRowsToInspect: Int = 200): SmsBalanceSnapshot? {
+        if (!hasSmsPermissions(context)) return null
+        val projection = arrayOf(
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE
+        )
+        try {
+            context.contentResolver.query(
+                Telephony.Sms.Inbox.CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${Telephony.Sms.DATE} DESC"
+            )?.use { cursor ->
+                val addrIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+                val bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY)
+                val dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE)
+                var inspected = 0
+                while (cursor.moveToNext() && inspected < maxRowsToInspect) {
+                    inspected++
+                    val sender = if (addrIdx != -1) cursor.getString(addrIdx).orEmpty() else ""
+                    val body = if (bodyIdx != -1) cursor.getString(bodyIdx).orEmpty() else ""
+                    val dateMillis = if (dateIdx != -1) cursor.getLong(dateIdx) else System.currentTimeMillis()
+                    if (!AlgPosteSmsAnalyzer.isAlgPosteSender(sender)) continue
+                    val snap = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                        sender = sender,
+                        body = body,
+                        timestampMillis = dateMillis,
+                        allowAnySenderForManualTest = false
+                    )
+                    if (snap != null) return snap
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return null
     }
 }

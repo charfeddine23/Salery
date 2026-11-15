@@ -353,6 +353,17 @@ object VaultAppPresets {
         return detectFromLabel(entry.label) ?: findById("custom")
     }
 
+    fun resolveForCcpEntry(entry: CcpAccountEntry): VaultAppPreset {
+        val explicit = entry.appPresetId.trim().lowercase()
+        if (explicit.isNotEmpty() && explicit != "custom") {
+            all.firstOrNull { it.id == explicit }?.let { return it }
+        }
+        if (explicit == "custom") {
+            return detectFromLabel("${entry.displayFullName} ${entry.agencyNote}") ?: findById("custom")
+        }
+        return detectFromLabel("${entry.displayFullName} ${entry.agencyNote}") ?: findById("algerie_poste")
+    }
+
     fun detectFromLabel(label: String): VaultAppPreset? {
         val norm = label.trim().lowercase()
         if (norm.isEmpty()) return null
@@ -381,7 +392,8 @@ data class CcpAccountEntry(
     val contactPhone: String = "",
     val isPinned: Boolean = false,
     val pinnedAt: Long = 0L,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val appPresetId: String = "algerie_poste"
 ) {
     val displayFullName: String
         get() = listOf(firstName.trim(), lastName.trim())

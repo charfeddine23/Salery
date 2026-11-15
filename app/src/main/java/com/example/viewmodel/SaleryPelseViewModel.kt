@@ -40,6 +40,7 @@ import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.AlgPosteSmsCodec
 import com.example.sms.AlgPosteSmsInboxScanner
 import com.example.sms.SmsSuggestionEntry
+import com.example.sms.SmsTaxAnomalyEntry
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
@@ -127,6 +128,20 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     private val _isAppLocked = MutableStateFlow(false)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
 
+    // Session-scoped expand & reveal states for Keys and CCPs:
+    // Preserved across screen switches inside the app, and auto-collapsed when exiting the app.
+    private val _expandedKeyIds = MutableStateFlow<Set<String>>(emptySet())
+    val expandedKeyIds: StateFlow<Set<String>> = _expandedKeyIds.asStateFlow()
+
+    private val _revealedKeyIds = MutableStateFlow<Set<String>>(emptySet())
+    val revealedKeyIds: StateFlow<Set<String>> = _revealedKeyIds.asStateFlow()
+
+    private val _expandedCcpIds = MutableStateFlow<Set<String>>(emptySet())
+    val expandedCcpIds: StateFlow<Set<String>> = _expandedCcpIds.asStateFlow()
+
+    private val _hiddenCcpIds = MutableStateFlow<Set<String>>(emptySet())
+    val hiddenCcpIds: StateFlow<Set<String>> = _hiddenCcpIds.asStateFlow()
+
     // In-App GitHub Update state
     private val _updateUiState = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
     val updateUiState: StateFlow<AppUpdateUiState> = _updateUiState.asStateFlow()
@@ -139,6 +154,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Pending BaridiMob / ALG Poste SMS transaction suggestions
     val pendingSmsSuggestions: StateFlow<List<SmsSuggestionEntry>> = settings
         .map { AlgPosteSmsCodec.parseSuggestions(it.pendingSmsSuggestionsJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Caught hidden bank fees / tax discrepancies from ALG Poste SMS balance diffs
+    val detectedSmsTaxes: StateFlow<List<SmsTaxAnomalyEntry>> = settings
+        .map { AlgPosteSmsCodec.parseTaxAnomalies(it.detectedSmsTaxesJson) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Notification events for UI banners
@@ -637,9 +657,57 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun lockApp() {
+        collapseAllVaultContainersForSecurity()
         if (settings.value.patternLockEnabled && settings.value.patternLockHash.isNotBlank()) {
             _isAppLocked.value = true
         }
+    }
+
+    fun toggleKeyExpanded(keyId: String) {
+        _expandedKeyIds.value = if (keyId in _expandedKeyIds.value) {
+            _expandedKeyIds.value - keyId
+        } else {
+            _expandedKeyIds.value + keyId
+        }
+    }
+
+    fun collapseAllKeys() {
+        _expandedKeyIds.value = emptySet()
+        _revealedKeyIds.value = emptySet()
+    }
+
+    fun toggleKeyRevealed(keyId: String) {
+        _revealedKeyIds.value = if (keyId in _revealedKeyIds.value) {
+            _revealedKeyIds.value - keyId
+        } else {
+            _revealedKeyIds.value + keyId
+        }
+    }
+
+    fun toggleCcpExpanded(accountId: String) {
+        _expandedCcpIds.value = if (accountId in _expandedCcpIds.value) {
+            _expandedCcpIds.value - accountId
+        } else {
+            _expandedCcpIds.value + accountId
+        }
+    }
+
+    fun collapseAllCcps() {
+        _expandedCcpIds.value = emptySet()
+    }
+
+    fun toggleCcpHidden(accountId: String) {
+        _hiddenCcpIds.value = if (accountId in _hiddenCcpIds.value) {
+            _hiddenCcpIds.value - accountId
+        } else {
+            _hiddenCcpIds.value + accountId
+        }
+    }
+
+    fun collapseAllVaultContainersForSecurity() {
+        _expandedKeyIds.value = emptySet()
+        _revealedKeyIds.value = emptySet()
+        _expandedCcpIds.value = emptySet()
     }
 
     fun saveNewPattern(pattern: List<Int>) {
@@ -755,6 +823,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun deleteVaultKey(keyId: String) {
+        _expandedKeyIds.value = _expandedKeyIds.value - keyId
+        _revealedKeyIds.value = _revealedKeyIds.value - keyId
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).filterNot { it.id == keyId }
             current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
@@ -771,7 +841,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         contactName: String = "",
         contactUri: String = "",
         contactPhone: String = "",
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        appPresetId: String = "algerie_poste"
     ) {
         val cleanFirst = firstName.trim()
         val cleanLast = lastName.trim()
@@ -792,6 +863,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
+        val resolvedPreset = appPresetId.trim().ifBlank { "algerie_poste" }
         val now = System.currentTimeMillis()
         prefsManager.updateSettings { current ->
             val currentList = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson)
@@ -809,7 +881,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 contactPhone = contactPhone.trim(),
                 isPinned = isPinned,
                 pinnedAt = if (isPinned) now else 0L,
-                createdAt = now
+                createdAt = now,
+                appPresetId = resolvedPreset
             )
             current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
         }
@@ -826,7 +899,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         contactName: String = "",
         contactUri: String = "",
         contactPhone: String = "",
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        appPresetId: String = "algerie_poste"
     ) {
         val cleanFirst = firstName.trim()
         val cleanLast = lastName.trim()
@@ -834,6 +908,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val cleanCcp = ccpNumber.filter { it.isDigit() }
         val cleanRip = ripNumber.filter { it.isDigit() }.take(20)
         if (fullName.isEmpty() || (cleanCcp.isEmpty() && cleanRip.isEmpty())) return
+        val resolvedPreset = appPresetId.trim().ifBlank { "algerie_poste" }
         val now = System.currentTimeMillis()
 
         prefsManager.updateSettings { current ->
@@ -855,7 +930,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             isPinned && !item.isPinned -> now
                             isPinned -> item.pinnedAt.takeIf { it > 0L } ?: now
                             else -> 0L
-                        }
+                        },
+                        appPresetId = resolvedPreset
                     )
                 } else {
                     item
@@ -884,6 +960,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun deleteCcpAccount(accountId: String) {
+        _expandedCcpIds.value = _expandedCcpIds.value - accountId
+        _hiddenCcpIds.value = _hiddenCcpIds.value - accountId
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson).filterNot { it.id == accountId }
             current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
@@ -1246,6 +1324,80 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Skip all historical ALG Poste SMS and start counting from zero.
+     * Every future SMS arriving after this timestamp will immediately be suggested
+     * in Expense (-) or Income (+), extract balance, and check tax variance.
+     */
+    fun skipOldSmsAndStartFresh() {
+        val now = System.currentTimeMillis()
+        val hasPerm = AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())
+        prefsManager.updateSettings { current ->
+            current.copy(
+                smsSyncBaselineTimestampMillis = now,
+                baridiMobSmsSyncEnabled = if (hasPerm) true else current.baridiMobSmsSyncEnabled,
+                pendingSmsSuggestionsJson = "[]",
+                processedSmsKeysJson = "[]",
+                smsBalanceHistoryJson = "[]",
+                detectedSmsTaxesJson = "[]",
+                latestSmsBalanceAmount = -1.0,
+                latestSmsBalanceUpdatedAt = 0L,
+                latestSmsBalanceRawSnippet = ""
+            )
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تم تخطي كل الرسائل القديمة والبدء من الصفر — أي رسالة جديدة ستُقترح فوراً"
+                else "Skipped all old SMS & started fresh — new alerts will suggest immediately"
+            )
+        }
+    }
+
+    fun resetSmsBaselineAndRescan(context: Context = getApplication()) {
+        prefsManager.updateSettings { it.copy(smsSyncBaselineTimestampMillis = 0L) }
+        scanAlgPosteSmsInbox(context, showFeedback = true)
+    }
+
+    fun refreshCurrentBalanceOnlyFromInbox(context: Context = getApplication()) {
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+                _toastEvent.emit(
+                    if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
+                    else "Please grant SMS read permission first"
+                )
+                return@launch
+            }
+            val latestSnap = withContext(Dispatchers.IO) {
+                AlgPosteSmsInboxScanner.scanLatestBalanceSnapshot(context)
+            }
+            if (latestSnap == null) {
+                _toastEvent.emit(
+                    if (isAr) "لم يتم العثور على رصيد في رسائل ALG Poste"
+                    else "No balance found in ALG Poste SMS inbox"
+                )
+                return@launch
+            }
+            prefsManager.updateSettings { current ->
+                val history = (AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson) + latestSnap)
+                    .distinctBy { it.id }
+                    .sortedBy { it.timestampMillis }
+                current.copy(
+                    latestSmsBalanceAmount = latestSnap.balance,
+                    latestSmsBalanceUpdatedAt = latestSnap.timestampMillis,
+                    latestSmsBalanceRawSnippet = latestSnap.rawBody,
+                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(history)
+                )
+            }
+            val formatted = formatDzdAmount(latestSnap.balance, if (isAr) "دج" else "DA")
+            _toastEvent.emit(
+                if (isAr) "تم استخراج الرصيد الحالي: $formatted"
+                else "Extracted current balance: $formatted"
+            )
+        }
+    }
+
     fun scanAlgPosteSmsInbox(context: Context = getApplication(), showFeedback: Boolean = true) {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
@@ -1259,37 +1411,70 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            val scanned = withContext(Dispatchers.IO) {
-                AlgPosteSmsInboxScanner.scanInbox(context)
+            val baselineMillis = settings.value.smsSyncBaselineTimestampMillis
+            val scanResult = withContext(Dispatchers.IO) {
+                AlgPosteSmsInboxScanner.scanInboxWithBalances(
+                    context = context,
+                    minTimestampMillis = baselineMillis
+                )
             }
 
             var addedCount = 0
+            var newTaxCount = 0
             prefsManager.updateSettings { current ->
                 val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                 val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
                 val existingIds = existing.map { it.id }.toSet()
-                val newOnes = scanned.filter { it.id !in processed && it.id !in existingIds }
+                val newOnes = scanResult.suggestions.filter { it.id !in processed && it.id !in existingIds }
                 addedCount = newOnes.size
-                if (newOnes.isEmpty()) {
-                    current
-                } else {
-                    current.copy(
-                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(newOnes + existing)
-                    )
-                }
+
+                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                val mergedHistory = (existingHistory + scanResult.snapshots)
+                    .distinctBy { it.id }
+                    .sortedBy { it.timestampMillis }
+                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+
+                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                    snapshots = mergedHistory,
+                    existingAnomalies = existingTaxes
+                )
+                newTaxCount = (updatedTaxes.size - existingTaxes.size).coerceAtLeast(0)
+
+                current.copy(
+                    pendingSmsSuggestionsJson = if (newOnes.isEmpty()) current.pendingSmsSuggestionsJson
+                    else AlgPosteSmsCodec.encodeSuggestions(newOnes + existing),
+                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                )
             }
 
             if (showFeedback) {
                 val msg = when {
+                    addedCount > 0 && newTaxCount > 0 -> if (isAr) {
+                        "تم اكتشاف $addedCount معاملة و $newTaxCount فارق ضرائب/رسوم!"
+                    } else {
+                        "Found $addedCount transactions & $newTaxCount tax/fee discrepancies!"
+                    }
                     addedCount > 0 -> if (isAr) {
                         "تم اكتشاف $addedCount معاملة جديدة من رسائل ALG Poste"
                     } else {
                         "Found $addedCount new ALG Poste transaction suggestions"
                     }
-                    scanned.isEmpty() -> if (isAr) {
-                        "لم يتم العثور على رسائل معاملات من ALG Poste في صندوق الوارد"
+                    newTaxCount > 0 -> if (isAr) {
+                        "تم رصد $newTaxCount فارق ضرائب أو رسوم من الرصيد"
                     } else {
-                        "No ALG Poste transaction messages found in SMS inbox"
+                        "Detected $newTaxCount balance tax/fee discrepancies"
+                    }
+                    scanResult.suggestions.isEmpty() && scanResult.snapshots.isEmpty() -> if (isAr) {
+                        if (baselineMillis > 0L) "لا توجد رسائل جديدة منذ البدء من الصفر"
+                        else "لم يتم العثور على رسائل معاملات من ALG Poste في صندوق الوارد"
+                    } else {
+                        if (baselineMillis > 0L) "No new ALG Poste SMS since Fresh Start"
+                        else "No ALG Poste transaction messages found in SMS inbox"
                     }
                     else -> if (isAr) {
                         "جميع رسائل ALG Poste محدثة بالفعل"
@@ -1305,39 +1490,125 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun analyzeManualSmsSample(sender: String, body: String) {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
+            val now = System.currentTimeMillis()
             val parsed = AlgPosteSmsAnalyzer.parseSms(
                 sender = sender.ifBlank { "ALG Poste" },
                 body = body,
-                timestampMillis = System.currentTimeMillis(),
+                timestampMillis = now,
                 allowAnySenderForManualTest = true
             )
-            if (parsed == null) {
+            val snapshot = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                sender = sender.ifBlank { "ALG Poste" },
+                body = body,
+                timestampMillis = now,
+                allowAnySenderForManualTest = true
+            )
+            if (parsed == null && snapshot == null) {
                 _toastEvent.emit(
-                    if (isAr) "تعذر استخراج مبلغ أو نوع العملية (سحب - / دخل +) من هذه الرسالة"
-                    else "Could not detect a valid transaction amount or type from this SMS"
+                    if (isAr) "تعذر استخراج مبلغ أو رصيد من هذه الرسالة"
+                    else "Could not detect a valid transaction amount or balance from this SMS"
                 )
                 return@launch
             }
 
+            var caughtNewTaxAmount = 0.0
             prefsManager.updateSettings { current ->
                 val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                val merged = (listOf(parsed) + existing.filterNot { it.id == parsed.id })
+                val updatedPending = if (parsed != null) {
+                    listOf(parsed) + existing.filterNot { it.id == parsed.id }
+                } else existing
+
+                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                val mergedHistory = if (snapshot != null) {
+                    (existingHistory + snapshot).distinctBy { it.id }.sortedBy { it.timestampMillis }
+                } else existingHistory
+                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+
+                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                    snapshots = mergedHistory,
+                    existingAnomalies = existingTaxes
+                )
+                val prevTaxIds = existingTaxes.map { it.id }.toSet()
+                caughtNewTaxAmount = updatedTaxes.firstOrNull { it.id !in prevTaxIds }?.taxAmount ?: 0.0
+
                 current.copy(
-                    pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(merged)
+                    pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedPending),
+                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                 )
             }
 
-            val kindLabel = if (parsed.isExpense) {
-                if (isAr) "مصروف (Expense)" else "Expense"
-            } else {
-                if (isAr) "دخل (Income)" else "Income"
+            val msg = buildString {
+                if (parsed != null) {
+                    val kindLabel = if (parsed.isExpense) {
+                        if (isAr) "مصروف (Expense)" else "Expense"
+                    } else {
+                        if (isAr) "دخل (Income)" else "Income"
+                    }
+                    val amtLabel = formatDzdAmount(parsed.amount, if (isAr) "دج" else "DA")
+                    append(if (isAr) "$kindLabel: $amtLabel" else "$kindLabel: $amtLabel")
+                } else if (snapshot != null) {
+                    val balLabel = formatDzdAmount(snapshot.balance, if (isAr) "دج" else "DA")
+                    append(if (isAr) "الرصيد المستخرج: $balLabel" else "Balance extracted: $balLabel")
+                }
+                if (caughtNewTaxAmount > 0.0) {
+                    val taxLabel = formatDzdAmount(caughtNewTaxAmount, if (isAr) "دج" else "DA")
+                    append(if (isAr) " • تم تصيّد ضرائب/فارق: $taxLabel!" else " • Caught fee/tax: $taxLabel!")
+                }
             }
-            val amtLabel = formatDzdAmount(parsed.amount, if (isAr) "دج" else "DA")
+            _toastEvent.emit(msg)
+        }
+    }
+
+    fun recordTaxAnomalyAsExpense(anomalyId: String) {
+        viewModelScope.launch {
+            val currentSettings = settings.value
+            val isAr = currentSettings.language == "ar"
+            val taxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
+            val target = taxes.firstOrNull { it.id == anomalyId } ?: return@launch
+            if (target.isRecordedAsExpense) return@launch
+
+            dao.insertTransaction(
+                TransactionEntity(
+                    type = TransactionType.EXPENSE,
+                    amount = target.taxAmount,
+                    category = "taxes_fees",
+                    title = if (isAr) target.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
+                    else target.titleEn.ifBlank { "BaridiMob Tax / Fee" },
+                    note = (if (isAr) target.explanationAr else target.explanationEn).take(240),
+                    dateMillis = target.detectedAtMillis
+                )
+            )
+
+            prefsManager.updateSettings { current ->
+                val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
+                    if (item.id == anomalyId) item.copy(isRecordedAsExpense = true) else item
+                }
+                current.copy(detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updated))
+            }
+
+            val formattedTax = formatDzdAmount(target.taxAmount, if (isAr) "دج" else "DA")
             _toastEvent.emit(
-                if (isAr) "تم تحليل الرسالة: $kindLabel بقيمة $amtLabel"
-                else "Analyzed SMS: $kindLabel of $amtLabel"
+                if (isAr) "تم تسجيل الضريبة/الفارق ($formattedTax) في المصاريف ✓"
+                else "Recorded caught tax/fee ($formattedTax) to Expenses ✓"
             )
         }
+    }
+
+    fun dismissTaxAnomaly(anomalyId: String) {
+        prefsManager.updateSettings { current ->
+            val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                .filterNot { it.id == anomalyId }
+            current.copy(detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updated))
+        }
+    }
+
+    fun clearAllTaxAnomalies() {
+        prefsManager.updateSettings { it.copy(detectedSmsTaxesJson = "[]") }
     }
 
     fun acceptSmsSuggestion(suggestionId: String, overrideType: TransactionType? = null) {

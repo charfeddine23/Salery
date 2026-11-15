@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -45,6 +48,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VpnKey
@@ -166,6 +170,11 @@ fun MainAppScreen(
     val updateUiState by viewModel.updateUiState.collectAsState()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
     val pendingSmsSuggestions by viewModel.pendingSmsSuggestions.collectAsState()
+    val detectedSmsTaxes by viewModel.detectedSmsTaxes.collectAsState()
+    val expandedKeyIds by viewModel.expandedKeyIds.collectAsState()
+    val revealedKeyIds by viewModel.revealedKeyIds.collectAsState()
+    val expandedCcpIds by viewModel.expandedCcpIds.collectAsState()
+    val hiddenCcpIds by viewModel.hiddenCcpIds.collectAsState()
 
     var canInstallPackages by remember {
         mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
@@ -178,7 +187,11 @@ fun MainAppScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context, userSettings.baridiMobSmsSyncEnabled) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
+            if (event == Lifecycle.Event.ON_STOP) {
+                if (!context.isHostActivityChangingConfigurations()) {
+                    viewModel.collapseAllVaultContainersForSecurity()
+                }
+            } else if (event == Lifecycle.Event.ON_RESUME) {
                 val allowed = AppUpdateManager.canRequestPackageInstalls(context)
                 canInstallPackages = allowed
                 if (allowed) {
@@ -264,13 +277,13 @@ fun MainAppScreen(
     var currentRoute by remember { mutableStateOf("cards") }
     val hubRoutes = listOf("cards", "keys", "ccps", "hub_soon")
     val isOnHubTabs = currentRoute in hubRoutes
-    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "insights")
+    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights")
     val isInsideCard = currentRoute in cardInnerRoutes
 
     // Intercept system back gestures: exit sub-tabs back to Dashboard, or exit Card back to Cards Hub
     if (currentRoute != "cards") {
         BackHandler {
-            currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "insights")) {
+            currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
                 "dashboard_details"
             } else {
                 "cards"
@@ -400,7 +413,7 @@ fun MainAppScreen(
                                 },
                                 canGoBack = isSubScreen,
                                 onBackClick = {
-                                    currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "insights")) {
+                                    currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
                                         "dashboard_details"
                                     } else {
                                         "cards"
@@ -440,13 +453,14 @@ fun MainAppScreen(
                                 ) {
                                     LiquidGlassBottomBar(
                                         currentRoute = currentRoute,
+                                        pendingSmsCount = pendingSmsSuggestions.size,
                                         onRouteSelect = { currentRoute = it }
                                     )
                                 }
                             }
                         },
                         floatingActionButton = {
-                            if (isInsideCard) {
+                            if (isInsideCard && currentRoute != "baridimob_sync") {
                                 FloatingActionButton(
                                     onClick = {
                                         when (currentRoute) {
@@ -504,6 +518,11 @@ fun MainAppScreen(
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
+                                    expandedKeyIds = expandedKeyIds,
+                                    revealedKeyIds = revealedKeyIds,
+                                    onToggleExpandKey = { viewModel.toggleKeyExpanded(it) },
+                                    onToggleRevealKey = { viewModel.toggleKeyRevealed(it) },
+                                    onCollapseAllKeys = { viewModel.collapseAllKeys() },
                                     onAddKey = { label, username, secret, category, note, appPresetId ->
                                         viewModel.addVaultKey(label, username, secret, category, note, appPresetId)
                                     },
@@ -516,11 +535,16 @@ fun MainAppScreen(
                                 )
                                 "ccps" -> CcpsScreen(
                                     userSettings = userSettings,
-                                    onAddCcpAccount = { first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned ->
-                                        viewModel.addCcpAccount(first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned)
+                                    expandedCcpIds = expandedCcpIds,
+                                    hiddenCcpIds = hiddenCcpIds,
+                                    onToggleExpandCcp = { viewModel.toggleCcpExpanded(it) },
+                                    onToggleHideCcp = { viewModel.toggleCcpHidden(it) },
+                                    onCollapseAllCcps = { viewModel.collapseAllCcps() },
+                                    onAddCcpAccount = { first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned, appPresetId ->
+                                        viewModel.addCcpAccount(first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned, appPresetId)
                                     },
-                                    onUpdateCcpAccount = { id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned ->
-                                        viewModel.updateCcpAccount(id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned)
+                                    onUpdateCcpAccount = { id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned, appPresetId ->
+                                        viewModel.updateCcpAccount(id, first, last, ccp, key, rip, note, cName, cUri, cPhone, pinned, appPresetId)
                                     },
                                     onTogglePinCcpAccount = { id ->
                                         viewModel.togglePinCcpAccount(id)
@@ -530,18 +554,26 @@ fun MainAppScreen(
                                     }
                                 )
                                 "hub_soon" -> HubSoonScreen(
-                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" },
-                                    pendingSmsCount = pendingSmsSuggestions.size,
-                                    onOpenBaridiMobSync = { currentRoute = "baridimob_sync" }
+                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" }
                                 )
                                 "baridimob_sync" -> BaridiMobSmsSyncScreen(
                                     userSettings = userSettings,
                                     pendingSuggestions = pendingSmsSuggestions,
+                                    detectedTaxes = detectedSmsTaxes,
                                     onToggleSyncEnabled = { enabled ->
                                         viewModel.setBaridiMobSmsSyncEnabled(enabled)
                                     },
                                     onScanInboxNow = {
                                         viewModel.scanAlgPosteSmsInbox(context, showFeedback = true)
+                                    },
+                                    onRefreshCurrentBalanceOnly = {
+                                        viewModel.refreshCurrentBalanceOnlyFromInbox(context)
+                                    },
+                                    onSkipOldSmsAndStartFresh = {
+                                        viewModel.skipOldSmsAndStartFresh()
+                                    },
+                                    onResetBaselineAndRescan = {
+                                        viewModel.resetSmsBaselineAndRescan(context)
                                     },
                                     onAnalyzeManualSms = { sender, body ->
                                         viewModel.analyzeManualSmsSample(sender, body)
@@ -554,6 +586,15 @@ fun MainAppScreen(
                                     },
                                     onClearAllSuggestions = {
                                         viewModel.clearAllSmsSuggestions()
+                                    },
+                                    onRecordTaxAsExpense = { anomalyId ->
+                                        viewModel.recordTaxAnomalyAsExpense(anomalyId)
+                                    },
+                                    onDismissTaxAnomaly = { anomalyId ->
+                                        viewModel.dismissTaxAnomaly(anomalyId)
+                                    },
+                                    onClearAllTaxes = {
+                                        viewModel.clearAllTaxAnomalies()
                                     }
                                 )
                                 "access_permissions" -> AccessPermissionsScreen(
@@ -587,6 +628,7 @@ fun MainAppScreen(
                                     debts = debts,
                                     userSettings = userSettings,
                                     pendingSmsSuggestions = pendingSmsSuggestions,
+                                    detectedSmsTaxes = detectedSmsTaxes,
                                     onAddIncomeClick = {
                                         addTransactionType = TransactionType.INCOME
                                         showAddTransactionDialog = true
@@ -813,7 +855,7 @@ fun MainTopAppBar(
     showMoneyBag: Boolean = true,
     onOpenInsights: () -> Unit = {},
     showScreenshotShield: Boolean = false,
-    isScreenshotProtected: Boolean = true,
+    isScreenshotProtected: Boolean = false,
     onShieldClick: () -> Unit = {},
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {},
@@ -1134,6 +1176,7 @@ private fun ScreenshotShieldTopButton(
 @Composable
 fun LiquidGlassBottomBar(
     currentRoute: String,
+    pendingSmsCount: Int = 0,
     onRouteSelect: (String) -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
@@ -1146,7 +1189,8 @@ fun LiquidGlassBottomBar(
         NavigationItem("dashboard_details", if (isArabic) "لوحة التحكم" else "Dashboard", Icons.Default.Dashboard),
         NavigationItem("income", strings.navIncome, Icons.Default.TrendingUp),
         NavigationItem("expenses", strings.navExpenses, Icons.Default.TrendingDown),
-        NavigationItem("debts", strings.navDebts, Icons.Default.AccountBalanceWallet)
+        NavigationItem("debts", strings.navDebts, Icons.Default.AccountBalanceWallet),
+        NavigationItem("baridimob_sync", if (isArabic) "الرسائل" else "SMS", Icons.Default.Sms)
     )
 
     Box(
@@ -1158,7 +1202,7 @@ fun LiquidGlassBottomBar(
     ) {
         GlassCard(
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 580.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
             backgroundColor = colors.glassCard
@@ -1166,7 +1210,7 @@ fun LiquidGlassBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 8.dp),
+                    .padding(vertical = 8.dp, horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1176,6 +1220,7 @@ fun LiquidGlassBottomBar(
                         "income" -> EmeraldNeon
                         "expenses" -> RoseNeon
                         "debts" -> AmberNeon
+                        "baridimob_sync" -> Color(0xFF818CF8)
                         else -> colors.primaryNeon
                     }
 
@@ -1184,15 +1229,26 @@ fun LiquidGlassBottomBar(
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .clickable { onRouteSelect(item.route) }
-                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                            .padding(horizontal = 2.dp, vertical = 6.dp)
+                            .testTag("card_tab_${item.route}"),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            tint = if (isSelected) activeColor else colors.textMuted,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Box(contentAlignment = Alignment.TopEnd) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.label,
+                                tint = if (isSelected) activeColor else colors.textMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            if (item.route == "baridimob_sync" && pendingSmsCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(RoseNeon)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = item.label,
@@ -1295,3 +1351,9 @@ private data class NavigationItem(
     val label: String,
     val icon: ImageVector
 )
+
+private tailrec fun Context.isHostActivityChangingConfigurations(): Boolean = when (this) {
+    is Activity -> isChangingConfigurations
+    is ContextWrapper -> baseContext.isHostActivityChangingConfigurations()
+    else -> false
+}

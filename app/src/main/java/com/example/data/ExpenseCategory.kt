@@ -149,6 +149,15 @@ object ExpenseCategories {
         isExpense = true
     )
 
+    val CATEGORY_TAXES_FEES = CategoryItem(
+        id = "taxes_fees",
+        nameEn = "Taxes & Fees",
+        nameAr = "ضرائب ورسوم",
+        icon = Icons.Default.AccountBalanceWallet,
+        color = AmberNeon,
+        isExpense = true
+    )
+
     val CATEGORY_OTHER_EXPENSE = CategoryItem(
         id = "other",
         nameEn = "Other Expense",
@@ -226,6 +235,7 @@ object ExpenseCategories {
         CATEGORY_PERSONAL_CARE,
         CATEGORY_TRAVEL,
         CATEGORY_SAVINGS_EXPENSE,
+        CATEGORY_TAXES_FEES,
         CATEGORY_OTHER_EXPENSE
     )
 
@@ -258,6 +268,7 @@ object ExpenseCategories {
                 lower.contains("care") || lower.contains("عناية") -> CATEGORY_PERSONAL_CARE
                 lower.contains("trip") || lower.contains("travel") || lower.contains("سفر") -> CATEGORY_TRAVEL
                 lower.contains("saving") || lower.contains("ادخار") -> CATEGORY_SAVINGS_EXPENSE
+                lower.contains("tax") || lower.contains("fee") || lower.contains("ضريب") || lower.contains("رسوم") -> CATEGORY_TAXES_FEES
                 lower.contains("salary") || lower.contains("راتب") -> CATEGORY_SALARY
                 lower.contains("free") || lower.contains("عمل") -> CATEGORY_FREELANCE
                 else -> CATEGORY_OTHER_EXPENSE
