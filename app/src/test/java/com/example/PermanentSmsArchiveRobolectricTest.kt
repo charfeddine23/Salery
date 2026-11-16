@@ -120,17 +120,22 @@ class PermanentSmsArchiveRobolectricTest {
         val externalPrefs = PreferencesManager(app)
 
         // Simulate AlgPosteSmsReceiver updating latestSmsBalanceAmount from a second PreferencesManager
+        // while user also has funds in the Savings Wallet (محفظة الادخار)
         externalPrefs.updateSettings {
             it.copy(
                 latestSmsBalanceAmount = 42350.75,
-                savingsWalletBalance = 0.0
+                savingsWalletBalance = 12000.0
             )
         }
 
         val syncedSummary = withTimeout(3000L) {
-            vm.financialSummary.first { kotlin.math.abs(it.totalBalance - 42350.75) < 0.01 }
+            vm.financialSummary.first {
+                kotlin.math.abs(it.totalBalance - 42350.75) < 0.01 &&
+                    kotlin.math.abs(it.savingsBalance - 12000.0) < 0.01
+            }
         }
         assertEquals(42350.75, syncedSummary.totalBalance, 0.01)
         assertEquals(42350.75, syncedSummary.grossBalance, 0.01)
+        assertEquals(12000.0, syncedSummary.savingsBalance, 0.01)
     }
 }

@@ -547,11 +547,14 @@ fun MainAppScreen(
                                     onToggleExpandKey = { viewModel.toggleKeyExpanded(it) },
                                     onToggleRevealKey = { viewModel.toggleKeyRevealed(it) },
                                     onCollapseAllKeys = { viewModel.collapseAllKeys() },
-                                    onAddKey = { label, username, secret, category, note, appPresetId ->
-                                        viewModel.addVaultKey(label, username, secret, category, note, appPresetId)
+                                    onAddKey = { label, username, secret, category, note, pinned, appPresetId ->
+                                        viewModel.addVaultKey(label, username, secret, category, note, pinned, appPresetId)
                                     },
-                                    onUpdateKey = { id, label, username, secret, category, note, appPresetId ->
-                                        viewModel.updateVaultKey(id, label, username, secret, category, note, appPresetId)
+                                    onUpdateKey = { id, label, username, secret, category, note, pinned, appPresetId ->
+                                        viewModel.updateVaultKey(id, label, username, secret, category, note, pinned, appPresetId)
+                                    },
+                                    onTogglePinKey = { id ->
+                                        viewModel.togglePinVaultKey(id)
                                     },
                                     onDeleteKey = { id ->
                                         viewModel.deleteVaultKey(id)

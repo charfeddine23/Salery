@@ -30,6 +30,8 @@ data class VaultKeyEntry(
     val secretValue: String = "",
     val category: String = "APP", // "APP", "BANK", "EMAIL", "PIN"
     val note: String = "",
+    val isPinned: Boolean = false,
+    val pinnedAt: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val appPresetId: String = "custom"
 )
@@ -67,7 +69,8 @@ data class VaultAppPreset(
     val surfaceTintDarkHex: Long,
     val surfaceTintLightHex: Long,
     val motif: VaultAppMotif,
-    val keywords: List<String> = emptyList()
+    val keywords: List<String> = emptyList(),
+    val packageNames: List<String> = emptyList()
 )
 
 object VaultAppPresets {
@@ -84,7 +87,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0E1A33,
             surfaceTintLightHex = 0xFFFFFBEB,
             motif = VaultAppMotif.POSTAL_ARCS,
-            keywords = listOf("baridi", "baridimob", "بريدي")
+            keywords = listOf("baridi", "baridimob", "بريدي"),
+            packageNames = listOf("dz.poste.baridimob", "com.algposte.baridimob")
         ),
         VaultAppPreset(
             id = "algerie_poste",
@@ -98,7 +102,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0C1930,
             surfaceTintLightHex = 0xFFFEFCE8,
             motif = VaultAppMotif.POSTAL_ARCS,
-            keywords = listOf("eccp", "ccp", "poste", "edahabia", "بريد", "الذهبية")
+            keywords = listOf("eccp", "ccp", "poste", "edahabia", "بريد", "الذهبية"),
+            packageNames = listOf("dz.poste.eccp", "com.algposte.eccp")
         ),
         VaultAppPreset(
             id = "redotpay",
@@ -112,7 +117,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF210B10,
             surfaceTintLightHex = 0xFFFEF2F2,
             motif = VaultAppMotif.CRYSTAL_FACETS,
-            keywords = listOf("redot", "redotpay")
+            keywords = listOf("redot", "redotpay"),
+            packageNames = listOf("com.redotpay")
         ),
         VaultAppPreset(
             id = "bybit",
@@ -126,7 +132,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF17140B,
             surfaceTintLightHex = 0xFFFFFBEB,
             motif = VaultAppMotif.CRYPTO_HEX_GRID,
-            keywords = listOf("bybit")
+            keywords = listOf("bybit"),
+            packageNames = listOf("com.bybit.app")
         ),
         VaultAppPreset(
             id = "binance",
@@ -140,7 +147,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF1A1708,
             surfaceTintLightHex = 0xFFFEFCE8,
             motif = VaultAppMotif.CRYPTO_DIAMONDS,
-            keywords = listOf("binance", "bnb")
+            keywords = listOf("binance", "bnb"),
+            packageNames = listOf("com.binance.dev", "com.binance.us")
         ),
         VaultAppPreset(
             id = "google",
@@ -154,7 +162,23 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0E172A,
             surfaceTintLightHex = 0xFFEFF6FF,
             motif = VaultAppMotif.AURORA_ORBS,
-            keywords = listOf("google", "gmail", "youtube", "جوجل", "جيميل")
+            keywords = listOf("google", "gmail", "جوجل", "جيميل"),
+            packageNames = listOf("com.google.android.gm", "com.google.android.googlequicksearchbox")
+        ),
+        VaultAppPreset(
+            id = "youtube",
+            nameEn = "YouTube",
+            nameAr = "يوتيوب",
+            monogram = "YT",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFFFF0000,
+            secondaryColorHex = 0xFF991B1B,
+            accentColorHex = 0xFFFCA5A5,
+            surfaceTintDarkHex = 0xFF21090B,
+            surfaceTintLightHex = 0xFFFEF2F2,
+            motif = VaultAppMotif.CINEMA_STRIPES,
+            keywords = listOf("youtube", "يوتيوب"),
+            packageNames = listOf("com.google.android.youtube")
         ),
         VaultAppPreset(
             id = "instagram",
@@ -168,7 +192,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF210D22,
             surfaceTintLightHex = 0xFFFDF2F8,
             motif = VaultAppMotif.CAMERA_LENS_RINGS,
-            keywords = listOf("instagram", "insta", "انستا", "انستغرام", "إنستغرام")
+            keywords = listOf("instagram", "insta", "انستا", "انستغرام", "إنستغرام"),
+            packageNames = listOf("com.instagram.android")
         ),
         VaultAppPreset(
             id = "facebook",
@@ -182,7 +207,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0B1830,
             surfaceTintLightHex = 0xFFEFF6FF,
             motif = VaultAppMotif.SOCIAL_WAVES,
-            keywords = listOf("facebook", "fb", "meta", "فيسبوك")
+            keywords = listOf("facebook", "fb", "meta", "فيسبوك"),
+            packageNames = listOf("com.facebook.katana", "com.facebook.lite")
         ),
         VaultAppPreset(
             id = "tiktok",
@@ -196,7 +222,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0F131E,
             surfaceTintLightHex = 0xFFECFEFF,
             motif = VaultAppMotif.SOUND_WAVES,
-            keywords = listOf("tiktok", "تيك توك", "تيكتوك")
+            keywords = listOf("tiktok", "تيك توك", "تيكتوك"),
+            packageNames = listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill")
         ),
         VaultAppPreset(
             id = "whatsapp",
@@ -210,7 +237,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF091E18,
             surfaceTintLightHex = 0xFFF0FDF4,
             motif = VaultAppMotif.CHAT_BUBBLES,
-            keywords = listOf("whatsapp", "واتساب")
+            keywords = listOf("whatsapp", "واتساب"),
+            packageNames = listOf("com.whatsapp", "com.whatsapp.w4b")
         ),
         VaultAppPreset(
             id = "telegram",
@@ -224,7 +252,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF081B2C,
             surfaceTintLightHex = 0xFFF0F9FF,
             motif = VaultAppMotif.PAPER_PLANES,
-            keywords = listOf("telegram", "تلغرام", "تيليجرام")
+            keywords = listOf("telegram", "تلغرام", "تيليجرام"),
+            packageNames = listOf("org.telegram.messenger", "org.telegram.plus", "org.thunderdog.challegram")
         ),
         VaultAppPreset(
             id = "snapchat",
@@ -238,7 +267,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF1F1B06,
             surfaceTintLightHex = 0xFFFEFCE8,
             motif = VaultAppMotif.SPARK_STARS,
-            keywords = listOf("snapchat", "snap", "سناب")
+            keywords = listOf("snapchat", "snap", "سناب"),
+            packageNames = listOf("com.snapchat.android")
         ),
         VaultAppPreset(
             id = "x_twitter",
@@ -252,7 +282,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0D1117,
             surfaceTintLightHex = 0xFFF8FAFC,
             motif = VaultAppMotif.DIAGONAL_SLASHES,
-            keywords = listOf("twitter", "x.com", "تويتر")
+            keywords = listOf("twitter", "x.com", "تويتر"),
+            packageNames = listOf("com.twitter.android")
         ),
         VaultAppPreset(
             id = "netflix",
@@ -266,7 +297,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF1E080A,
             surfaceTintLightHex = 0xFFFEF2F2,
             motif = VaultAppMotif.CINEMA_STRIPES,
-            keywords = listOf("netflix", "نتفليكس")
+            keywords = listOf("netflix", "نتفليكس"),
+            packageNames = listOf("com.netflix.mediaclient")
         ),
         VaultAppPreset(
             id = "spotify",
@@ -280,7 +312,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF091B10,
             surfaceTintLightHex = 0xFFF0FDF4,
             motif = VaultAppMotif.SOUND_RINGS,
-            keywords = listOf("spotify", "سبوتيفاي")
+            keywords = listOf("spotify", "سبوتيفاي"),
+            packageNames = listOf("com.spotify.music")
         ),
         VaultAppPreset(
             id = "discord",
@@ -294,7 +327,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF12142B,
             surfaceTintLightHex = 0xFFEEF2FF,
             motif = VaultAppMotif.ORBIT_NODES,
-            keywords = listOf("discord", "ديسكورد")
+            keywords = listOf("discord", "ديسكورد"),
+            packageNames = listOf("com.discord")
         ),
         VaultAppPreset(
             id = "github",
@@ -308,7 +342,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF121024,
             surfaceTintLightHex = 0xFFF5F3FF,
             motif = VaultAppMotif.CODE_NODES,
-            keywords = listOf("github", "git")
+            keywords = listOf("github", "git"),
+            packageNames = listOf("com.github.android")
         ),
         VaultAppPreset(
             id = "paypal",
@@ -322,7 +357,38 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF09162D,
             surfaceTintLightHex = 0xFFEFF6FF,
             motif = VaultAppMotif.CARD_RIBBONS,
-            keywords = listOf("paypal", "بايبال", "باي بال")
+            keywords = listOf("paypal", "بايبال", "باي بال"),
+            packageNames = listOf("com.paypal.android.p2pmobile")
+        ),
+        VaultAppPreset(
+            id = "wise",
+            nameEn = "Wise",
+            nameAr = "Wise",
+            monogram = "W",
+            defaultCategory = "BANK",
+            primaryColorHex = 0xFF9FE870,
+            secondaryColorHex = 0xFF163300,
+            accentColorHex = 0xFF4ADE80,
+            surfaceTintDarkHex = 0xFF0B1C0E,
+            surfaceTintLightHex = 0xFFF0FDF4,
+            motif = VaultAppMotif.CARD_RIBBONS,
+            keywords = listOf("wise", "transferwise", "وايز"),
+            packageNames = listOf("com.transferwise.android")
+        ),
+        VaultAppPreset(
+            id = "linkedin",
+            nameEn = "LinkedIn",
+            nameAr = "لينكد إن",
+            monogram = "in",
+            defaultCategory = "APP",
+            primaryColorHex = 0xFF0A66C2,
+            secondaryColorHex = 0xFF004182,
+            accentColorHex = 0xFF60A5FA,
+            surfaceTintDarkHex = 0xFF09182C,
+            surfaceTintLightHex = 0xFFEFF6FF,
+            motif = VaultAppMotif.SOCIAL_WAVES,
+            keywords = listOf("linkedin", "لينكد"),
+            packageNames = listOf("com.linkedin.android")
         ),
         VaultAppPreset(
             id = "custom",
@@ -336,7 +402,8 @@ object VaultAppPresets {
             surfaceTintDarkHex = 0xFF0F172A,
             surfaceTintLightHex = 0xFFF8FAFC,
             motif = VaultAppMotif.LIQUID_AURORA,
-            keywords = emptyList()
+            keywords = emptyList(),
+            packageNames = emptyList()
         )
     )
 
@@ -596,13 +663,21 @@ object HubVaultCodec {
         moshi.adapter<List<CcpAccountEntry>>(type)
     }
 
+    fun sortVaultKeys(list: List<VaultKeyEntry>): List<VaultKeyEntry> {
+        return list.sortedWith(
+            compareByDescending<VaultKeyEntry> { it.isPinned }
+                .thenByDescending { if (it.isPinned) it.pinnedAt else 0L }
+                .thenByDescending { it.createdAt }
+        )
+    }
+
     fun parseVaultKeys(json: String): List<VaultKeyEntry> {
         if (json.isBlank()) return emptyList()
         return try {
-            vaultKeysAdapter.fromJson(json)
+            val filtered = vaultKeysAdapter.fromJson(json)
                 ?.filter { it.label.isNotBlank() && it.secretValue.isNotBlank() }
-                ?.sortedByDescending { it.createdAt }
                 ?: emptyList()
+            sortVaultKeys(filtered)
         } catch (_: Throwable) {
             emptyList()
         }
@@ -610,7 +685,7 @@ object HubVaultCodec {
 
     fun encodeVaultKeys(list: List<VaultKeyEntry>): String {
         return try {
-            vaultKeysAdapter.toJson(list)
+            vaultKeysAdapter.toJson(sortVaultKeys(list))
         } catch (_: Throwable) {
             "[]"
         }

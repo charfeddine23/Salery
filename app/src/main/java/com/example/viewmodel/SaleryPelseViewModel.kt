@@ -127,8 +127,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         } else {
             totalInc - totalExp
         }
-        // Available spendable balance: Alg Post Balance (or transaction net fallback) minus Savings Wallet
-        val available = baseGross - savings
+        // When Alg Post Balance is available, show it as-is in Balance without deducting Savings Wallet.
+        val available = if (hasAlgPostBalance) {
+            userSettings.latestSmsBalanceAmount
+        } else {
+            baseGross - savings
+        }
         val gross = baseGross
 
         FinancialSummary(
@@ -902,6 +906,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         secretValue: String,
         category: String,
         note: String,
+        isPinned: Boolean = false,
         appPresetId: String = "custom"
     ) {
         val cleanLabel = label.trim()
@@ -910,6 +915,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val resolvedPreset = appPresetId.trim().ifBlank {
             VaultAppPresets.detectFromLabel(cleanLabel)?.id ?: "custom"
         }
+        val now = System.currentTimeMillis()
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson) + VaultKeyEntry(
                 label = cleanLabel,
@@ -917,7 +923,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 secretValue = cleanSecret,
                 category = category.ifBlank { "APP" },
                 note = note.trim(),
-                createdAt = System.currentTimeMillis(),
+                isPinned = isPinned,
+                pinnedAt = if (isPinned) now else 0L,
+                createdAt = now,
                 appPresetId = resolvedPreset
             )
             current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
@@ -931,6 +939,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         secretValue: String,
         category: String,
         note: String,
+        isPinned: Boolean = false,
         appPresetId: String = "custom"
     ) {
         val cleanLabel = label.trim()
@@ -939,6 +948,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val resolvedPreset = appPresetId.trim().ifBlank {
             VaultAppPresets.detectFromLabel(cleanLabel)?.id ?: "custom"
         }
+        val now = System.currentTimeMillis()
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).map { item ->
                 if (item.id == keyId) {
@@ -948,7 +958,31 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         secretValue = cleanSecret,
                         category = category.ifBlank { "APP" },
                         note = note.trim(),
+                        isPinned = isPinned,
+                        pinnedAt = when {
+                            isPinned && !item.isPinned -> now
+                            isPinned -> item.pinnedAt.takeIf { it > 0L } ?: now
+                            else -> 0L
+                        },
                         appPresetId = resolvedPreset
+                    )
+                } else {
+                    item
+                }
+            }
+            current.copy(vaultKeysJson = HubVaultCodec.encodeVaultKeys(updated))
+        }
+    }
+
+    fun togglePinVaultKey(keyId: String) {
+        val now = System.currentTimeMillis()
+        prefsManager.updateSettings { current ->
+            val updated = HubVaultCodec.parseVaultKeys(current.vaultKeysJson).map { item ->
+                if (item.id == keyId) {
+                    val nextPinned = !item.isPinned
+                    item.copy(
+                        isPinned = nextPinned,
+                        pinnedAt = if (nextPinned) now else 0L
                     )
                 } else {
                     item

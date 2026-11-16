@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -26,6 +27,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,23 +54,26 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -79,11 +85,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -110,6 +119,7 @@ import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.VaultAppBrandBackdrop
 import com.example.ui.components.VaultAppEmblemBadge
+import com.example.ui.components.VaultHoldActionDialog
 import com.example.ui.components.accentColor
 import com.example.ui.components.primaryColor
 import com.example.ui.components.secondaryColor
@@ -127,6 +137,7 @@ import kotlinx.coroutines.delay
 
 private enum class KeysFilter {
     ALL,
+    PINNED,
     WEAK_OR_REUSED,
     STRONG
 }
@@ -139,8 +150,9 @@ fun KeysScreen(
     onToggleExpandKey: (String) -> Unit = {},
     onToggleRevealKey: (String) -> Unit = {},
     onCollapseAllKeys: () -> Unit = {},
-    onAddKey: (label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
-    onUpdateKey: (keyId: String, label: String, username: String, secretValue: String, category: String, note: String, appPresetId: String) -> Unit,
+    onAddKey: (label: String, username: String, secretValue: String, category: String, note: String, isPinned: Boolean, appPresetId: String) -> Unit,
+    onUpdateKey: (keyId: String, label: String, username: String, secretValue: String, category: String, note: String, isPinned: Boolean, appPresetId: String) -> Unit,
+    onTogglePinKey: (String) -> Unit = {},
     onDeleteKey: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -169,6 +181,7 @@ fun KeysScreen(
         }
     }
 
+    val pinnedCount = remember(keys) { keys.count { it.isPinned } }
     val strongCount = remember(analyzedItems) {
         analyzedItems.count {
             it.second.level == PasswordStrengthLevel.STRONG || it.second.level == PasswordStrengthLevel.GOOD
@@ -201,6 +214,7 @@ fun KeysScreen(
                     entry.appPresetId.lowercase().contains(q)
                 val matchesFilter = when (activeFilter) {
                     KeysFilter.ALL -> true
+                    KeysFilter.PINNED -> entry.isPinned
                     KeysFilter.WEAK_OR_REUSED ->
                         analysis.level == PasswordStrengthLevel.WEAK ||
                             analysis.level == PasswordStrengthLevel.FAIR ||
@@ -216,6 +230,7 @@ fun KeysScreen(
 
     var showAddOrEditDialog by remember { mutableStateOf(false) }
     var editingKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
+    var holdActionTargetKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
 
     // Shared infinite animations for silky-smooth 90fps luxury vault containers
     val vaultTransition = rememberInfiniteTransition(label = "keys_vault_shimmer")
@@ -238,6 +253,43 @@ fun KeysScreen(
         label = "pulse_phase"
     )
 
+    holdActionTargetKey?.let { targetKey ->
+        val preset = remember(targetKey.appPresetId, targetKey.label) {
+            VaultAppPresets.resolveForEntry(targetKey)
+        }
+        VaultHoldActionDialog(
+            title = targetKey.label,
+            subtitle = if (preset.id == "custom") targetKey.category else {
+                if (isArabic) preset.nameAr else preset.nameEn
+            },
+            preset = preset,
+            isPinned = targetKey.isPinned,
+            isArabic = isArabic,
+            onPinToggle = {
+                onTogglePinKey(targetKey.id)
+                Toast.makeText(
+                    context,
+                    if (!targetKey.isPinned) {
+                        if (isArabic) "تم تثبيت التطبيق في الأعلى 📌" else "App pinned to top 📌"
+                    } else {
+                        if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
+                    },
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
+            onEdit = {
+                editingKey = targetKey
+                showAddOrEditDialog = true
+            },
+            onDelete = {
+                onDeleteKey(targetKey.id)
+            },
+            onDismiss = {
+                holdActionTargetKey = null
+            }
+        )
+    }
+
     if (showAddOrEditDialog) {
         AddOrEditVaultKeyDialog(
             existing = editingKey,
@@ -248,12 +300,12 @@ fun KeysScreen(
                 showAddOrEditDialog = false
                 editingKey = null
             },
-            onSave = { label, username, secret, category, note, appPresetId ->
+            onSave = { label, username, secret, category, note, isPinned, appPresetId ->
                 val target = editingKey
                 if (target == null) {
-                    onAddKey(label, username, secret, category, note, appPresetId)
+                    onAddKey(label, username, secret, category, note, isPinned, appPresetId)
                 } else {
-                    onUpdateKey(target.id, label, username, secret, category, note, appPresetId)
+                    onUpdateKey(target.id, label, username, secret, category, note, isPinned, appPresetId)
                 }
                 showAddOrEditDialog = false
                 editingKey = null
@@ -289,8 +341,8 @@ fun KeysScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isArabic) "خزنة كلمات السر بتصاميم تفاعلية ذكية لكل تطبيق"
-                        else "Smart password vault with app-themed animated cards",
+                        text = if (isArabic) "اضغط مطولاً 0.5 ث على أي حاوية للتعديل أو الحذف"
+                        else "Hold any app card 0.5s to edit or delete",
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
@@ -494,6 +546,11 @@ fun KeysScreen(
                             onClick = { activeFilter = KeysFilter.ALL }
                         )
                         GlassPill(
+                            text = if (isArabic) "مثبتة ($pinnedCount)" else "Pinned ($pinnedCount)",
+                            isSelected = activeFilter == KeysFilter.PINNED,
+                            onClick = { activeFilter = KeysFilter.PINNED }
+                        )
+                        GlassPill(
                             text = if (isArabic) "ضعيفة ومكررة ($weakCount)" else "Weak / Reused ($weakCount)",
                             isSelected = activeFilter == KeysFilter.WEAK_OR_REUSED,
                             onClick = { activeFilter = KeysFilter.WEAK_OR_REUSED }
@@ -549,6 +606,21 @@ fun KeysScreen(
                     pulsePhase = pulsePhase,
                     onToggleExpand = { onToggleExpandKey(entry.id) },
                     onToggleReveal = { onToggleRevealKey(entry.id) },
+                    onTogglePin = {
+                        onTogglePinKey(entry.id)
+                        Toast.makeText(
+                            context,
+                            if (!entry.isPinned) {
+                                if (isArabic) "تم تثبيت التطبيق في الأعلى 📌" else "Pinned to top 📌"
+                            } else {
+                                if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
+                            },
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onHoldActions = {
+                        holdActionTargetKey = entry
+                    },
                     onCopyUsername = {
                         if (entry.username.isNotBlank()) {
                             copyToClipboard(
@@ -564,12 +636,7 @@ fun KeysScreen(
                             text = entry.secretValue,
                             msg = if (isArabic) "تم نسخ كلمة السر ✓" else "Password copied ✓"
                         )
-                    },
-                    onEdit = {
-                        editingKey = entry
-                        showAddOrEditDialog = true
-                    },
-                    onDelete = { onDeleteKey(entry.id) }
+                    }
                 )
             }
         }
@@ -617,12 +684,13 @@ private fun VaultKeyRowCard(
     pulsePhase: Float,
     onToggleExpand: () -> Unit,
     onToggleReveal: () -> Unit,
+    onTogglePin: () -> Unit,
+    onHoldActions: () -> Unit,
     onCopyUsername: () -> Unit,
-    onCopySecret: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onCopySecret: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val haptic = LocalHapticFeedback.current
     val preset = remember(entry.appPresetId, entry.label) {
         VaultAppPresets.resolveForEntry(entry)
     }
@@ -632,6 +700,33 @@ private fun VaultKeyRowCard(
 
     var copiedUsernameRecently by remember { mutableStateOf(false) }
     var copiedSecretRecently by remember { mutableStateOf(false) }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val holdAnim = remember { Animatable(0f) }
+    var didTriggerLongPress by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didTriggerLongPress = false
+            holdAnim.snapTo(0f)
+            // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
+            // so 400ms animation equals 0.5 full seconds of holding.
+            holdAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 400, easing = LinearEasing)
+            )
+            didTriggerLongPress = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onHoldActions()
+        } else {
+            holdAnim.snapTo(0f)
+            if (didTriggerLongPress) {
+                delay(150)
+                didTriggerLongPress = false
+            }
+        }
+    }
 
     LaunchedEffect(copiedUsernameRecently) {
         if (copiedUsernameRecently) {
@@ -647,10 +742,12 @@ private fun VaultKeyRowCard(
     }
 
     val cardShape = RoundedCornerShape(24.dp)
+    val cardScale = 1f - (holdAnim.value * 0.02f)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(cardScale)
             .shadow(
                 elevation = if (colors.isDark) 14.dp else 8.dp,
                 shape = cardShape,
@@ -659,15 +756,26 @@ private fun VaultKeyRowCard(
             )
             .clip(cardShape)
             .border(
-                width = 1.25.dp,
+                width = if (entry.isPinned) 1.55.dp else 1.25.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        brandPrimary.copy(alpha = 0.72f),
+                        if (entry.isPinned) AmberNeon.copy(alpha = 0.85f) else brandPrimary.copy(alpha = 0.72f),
                         brandSecondary.copy(alpha = 0.45f),
                         brandPrimary.copy(alpha = 0.25f + 0.35f * pulsePhase)
                     )
                 ),
                 shape = cardShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = brandPrimary),
+                onClick = {
+                    if (didTriggerLongPress) {
+                        didTriggerLongPress = false
+                    } else {
+                        onToggleExpand()
+                    }
+                }
             )
             .animateContentSize(
                 animationSpec = spring(
@@ -687,11 +795,9 @@ private fun VaultKeyRowCard(
         }
 
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row: App Emblem + Label + App Tag + Strength Pill + Controls
+            // Header Row: Real App Emblem + Label + App Tag + Strength Pill + Pin & Expand
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onToggleExpand),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -737,6 +843,22 @@ private fun VaultKeyRowCard(
                                 )
                             }
 
+                            if (entry.isPinned) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(AmberNeon.copy(alpha = 0.20f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "مثبت" else "PINNED",
+                                        color = AmberNeon,
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            }
+
                             // Strength Pill
                             Box(
                                 modifier = Modifier
@@ -772,23 +894,25 @@ private fun VaultKeyRowCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("pin_key_${entry.id}")
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = if (isArabic) "تعديل" else "Edit",
-                            tint = brandPrimary,
+                            imageVector = if (entry.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                            contentDescription = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
+                            tint = if (entry.isPinned) AmberNeon else colors.textMuted,
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = if (isArabic) "حذف" else "Delete",
-                            tint = RoseNeon,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(onClick = onToggleExpand, modifier = Modifier.size(36.dp)) {
+                    IconButton(
+                        onClick = onToggleExpand,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("expand_key_${entry.id}")
+                    ) {
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
@@ -1016,7 +1140,7 @@ private fun AddOrEditVaultKeyDialog(
     shimmerPhase: Float,
     pulsePhase: Float,
     onDismiss: () -> Unit,
-    onSave: (label: String, username: String, secret: String, category: String, note: String, appPresetId: String) -> Unit
+    onSave: (label: String, username: String, secret: String, category: String, note: String, isPinned: Boolean, appPresetId: String) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
@@ -1034,6 +1158,7 @@ private fun AddOrEditVaultKeyDialog(
     var secret by remember(existing) { mutableStateOf(existing?.secretValue ?: "") }
     var category by remember(existing) { mutableStateOf(existing?.category ?: "APP") }
     var note by remember(existing) { mutableStateOf(existing?.note ?: "") }
+    var isPinned by remember(existing) { mutableStateOf(existing?.isPinned ?: false) }
     var showPasswordInDialog by remember { mutableStateOf(true) }
 
     val activePreset = remember(selectedPresetId) { VaultAppPresets.findById(selectedPresetId) }
@@ -1233,22 +1358,7 @@ private fun AddOrEditVaultKeyDialog(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(
-                                        Brush.linearGradient(listOf(pColor, p.secondaryColor()))
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = p.monogram.take(2),
-                                    color = Color.White,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
+                            VaultAppEmblemBadge(preset = p, size = 20.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = p.nameEn.substringBefore(" /"),
@@ -1461,6 +1571,46 @@ private fun AddOrEditVaultKeyDialog(
                     onValueChange = { note = it }
                 )
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Pin at Top toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.glassCard)
+                        .clickable { isPinned = !isPinned }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = null,
+                            tint = if (isPinned) AmberNeon else colors.textMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Switch(
+                        checked = isPinned,
+                        onCheckedChange = { isPinned = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = AmberNeon,
+                            checkedTrackColor = AmberNeon.copy(alpha = 0.35f),
+                            uncheckedThumbColor = colors.textMuted,
+                            uncheckedTrackColor = colors.glassSurface
+                        )
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
@@ -1480,7 +1630,7 @@ private fun AddOrEditVaultKeyDialog(
                         containerColor = presetAccent,
                         contentColor = Color(0xFF0F172A),
                         modifier = Modifier.weight(1.2f),
-                        onClick = { onSave(label, username, secret, category, note, selectedPresetId) }
+                        onClick = { onSave(label, username, secret, category, note, isPinned, selectedPresetId) }
                     )
                 }
             }

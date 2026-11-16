@@ -18,6 +18,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -36,6 +37,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,8 +67,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
@@ -81,6 +82,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -95,11 +97,14 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -125,6 +130,7 @@ import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.VaultAppBrandBackdrop
 import com.example.ui.components.VaultAppEmblemBadge
+import com.example.ui.components.VaultHoldActionDialog
 import com.example.ui.components.primaryColor
 import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings
@@ -249,6 +255,47 @@ fun CcpsScreen(
 
     var showAddOrEditDialog by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<CcpAccountEntry?>(null) }
+    var holdActionTargetAccount by remember { mutableStateOf<CcpAccountEntry?>(null) }
+
+    holdActionTargetAccount?.let { targetAcc ->
+        val preset = remember(targetAcc.appPresetId, targetAcc.displayFullName, targetAcc.agencyNote) {
+            VaultAppPresets.resolveForCcpEntry(targetAcc)
+        }
+        VaultHoldActionDialog(
+            title = targetAcc.displayFullName,
+            subtitle = buildString {
+                append(if (isArabic) preset.nameAr else preset.nameEn)
+                if (targetAcc.ccpNumber.isNotBlank()) {
+                    append(" • ${targetAcc.ccpNumber}")
+                }
+            },
+            preset = preset,
+            isPinned = targetAcc.isPinned,
+            isArabic = isArabic,
+            onPinToggle = {
+                onTogglePinCcpAccount(targetAcc.id)
+                Toast.makeText(
+                    context,
+                    if (!targetAcc.isPinned) {
+                        if (isArabic) "تم تثبيت الملف في الأعلى 📌" else "Pinned to top 📌"
+                    } else {
+                        if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
+                    },
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
+            onEdit = {
+                editingAccount = targetAcc
+                showAddOrEditDialog = true
+            },
+            onDelete = {
+                onDeleteCcpAccount(targetAcc.id)
+            },
+            onDismiss = {
+                holdActionTargetAccount = null
+            }
+        )
+    }
 
     if (showAddOrEditDialog) {
         AddOrEditCcpAccountDialog(
@@ -320,8 +367,8 @@ fun CcpsScreen(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (isArabic) "دليل الحسابات البريدية، جهات الاتصال والنسخ السريع"
-                        else "CCP directory, manual RIP, linked contacts & quick copy",
+                        text = if (isArabic) "اضغط مطولاً 0.5 ث على أي بطاقة للتعديل أو الحذف"
+                        else "Hold any CCP card 0.5s to edit or delete",
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
@@ -584,9 +631,8 @@ fun CcpsScreen(
                             Toast.LENGTH_SHORT
                         ).show()
                     },
-                    onEdit = {
-                        editingAccount = acc
-                        showAddOrEditDialog = true
+                    onHoldActions = {
+                        holdActionTargetAccount = acc
                     },
                     onCopyName = {
                         copyText(
@@ -635,8 +681,7 @@ fun CcpsScreen(
                             text = fullBlock,
                             toastMessage = if (isArabic) "تم نسخ جميع معطيات الملف ✓" else "All profile data copied ✓"
                         )
-                    },
-                    onDelete = { onDeleteCcpAccount(acc.id) }
+                    }
                 )
             }
         }
@@ -684,15 +729,15 @@ private fun CcpAccountCard(
     onToggleExpand: () -> Unit,
     onToggleDigitsVisibility: () -> Unit,
     onTogglePin: () -> Unit,
-    onEdit: () -> Unit,
+    onHoldActions: () -> Unit,
     onCopyName: () -> Unit,
     onCopyCcp: () -> Unit,
     onCopyRip: () -> Unit,
     onCopyPhone: () -> Unit,
-    onCopyAll: () -> Unit,
-    onDelete: () -> Unit
+    onCopyAll: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val haptic = LocalHapticFeedback.current
     val preset = remember(account.appPresetId, account.displayFullName, account.agencyNote) {
         VaultAppPresets.resolveForCcpEntry(account)
     }
@@ -702,6 +747,33 @@ private fun CcpAccountCard(
     var copiedCcpRecently by remember { mutableStateOf(false) }
     var copiedRipRecently by remember { mutableStateOf(false) }
     var copiedAllRecently by remember { mutableStateOf(false) }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val holdAnim = remember { Animatable(0f) }
+    var didTriggerLongPress by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            didTriggerLongPress = false
+            holdAnim.snapTo(0f)
+            // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
+            // so 400ms animation equals 0.5 full seconds of holding.
+            holdAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 400, easing = LinearEasing)
+            )
+            didTriggerLongPress = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onHoldActions()
+        } else {
+            holdAnim.snapTo(0f)
+            if (didTriggerLongPress) {
+                delay(150)
+                didTriggerLongPress = false
+            }
+        }
+    }
 
     LaunchedEffect(copiedCcpRecently) {
         if (copiedCcpRecently) {
@@ -723,10 +795,12 @@ private fun CcpAccountCard(
     }
 
     val cardShape = RoundedCornerShape(24.dp)
+    val cardScale = 1f - (holdAnim.value * 0.02f)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(cardScale)
             .shadow(
                 elevation = if (colors.isDark) 14.dp else 8.dp,
                 shape = cardShape,
@@ -744,6 +818,17 @@ private fun CcpAccountCard(
                     )
                 ),
                 shape = cardShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = brandPrimary),
+                onClick = {
+                    if (didTriggerLongPress) {
+                        didTriggerLongPress = false
+                    } else {
+                        onToggleExpand()
+                    }
+                }
             )
             .animateContentSize(
                 animationSpec = spring(
@@ -765,9 +850,7 @@ private fun CcpAccountCard(
         Column(modifier = Modifier.padding(16.dp)) {
             // Top Collapsible Header Row
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onToggleExpand),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -862,7 +945,7 @@ private fun CcpAccountCard(
                     }
                 }
 
-                // Compact Action Icons
+                // Compact Action Icons (Pin + Expand/Collapse; Edit & Delete via 0.5s hold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onTogglePin,
@@ -874,22 +957,6 @@ private fun CcpAccountCard(
                             imageVector = if (account.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
                             contentDescription = if (isArabic) "تثبيت في الأعلى" else "Pin to top",
                             tint = if (account.isPinned) AmberNeon else colors.textMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = if (isArabic) "تعديل" else "Edit",
-                            tint = brandPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = if (isArabic) "حذف" else "Delete",
-                            tint = RoseNeon,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -1457,22 +1524,7 @@ private fun AddOrEditCcpAccountDialog(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(
-                                        Brush.linearGradient(listOf(pColor, p.secondaryColor()))
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = p.monogram.take(2),
-                                    color = Color.White,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
+                            VaultAppEmblemBadge(preset = p, size = 20.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = p.nameEn.substringBefore(" /"),

@@ -162,9 +162,10 @@ fun TotalBalanceVaultCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val hasAlgPostBalance = userSettings.latestSmsBalanceAmount >= 0.0
                 Column {
                     Text(
-                        text = if (lockedAmount > 0) {
+                        text = if (lockedAmount > 0 && !hasAlgPostBalance) {
                             if (isArabic) "الرصيد المتاح للصرف" else "Daily Spendable Balance"
                         } else {
                             strings.totalBalance
@@ -173,7 +174,7 @@ fun TotalBalanceVaultCard(
                         fontSize = typo.body,
                         fontWeight = FontWeight.Medium
                     )
-                    if (lockedAmount > 0) {
+                    if (lockedAmount > 0 && !hasAlgPostBalance) {
                         Text(
                             text = if (isArabic) "مستثنى منه رصيد محفظة الادخار" else "Savings wallet reserve excluded",
                             color = EmeraldNeon,
@@ -222,7 +223,7 @@ fun TotalBalanceVaultCard(
                 letterSpacing = 0.5.sp
             )
 
-            // If Safe Pocket is locked, show net gross breakdown chip
+            // If Safe Pocket has funds, show savings info chip (without altering Alg Post Balance)
             if (lockedAmount > 0) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -240,8 +241,13 @@ fun TotalBalanceVaultCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = (if (isArabic) "إجمالي الثروة (المتاح + الادخار): " else "Gross Wealth (Available + Savings): ") +
-                                formatDzd(grossBalance, strings.currencyCode, isStealth),
+                        text = if (userSettings.latestSmsBalanceAmount >= 0.0) {
+                            (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
+                                formatDzd(lockedAmount, strings.currencyCode, isStealth)
+                        } else {
+                            (if (isArabic) "إجمالي الثروة (المتاح + الادخار): " else "Gross Wealth (Available + Savings): ") +
+                                formatDzd(grossBalance, strings.currencyCode, isStealth)
+                        },
                         color = colors.textMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium

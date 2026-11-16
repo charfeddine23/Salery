@@ -1001,4 +1001,51 @@ class ExampleUnitTest {
     org.junit.Assert.assertFalse(defaults.thirdCardEnabled)
     assertEquals("BINANCE", defaults.thirdCardProvider)
   }
+
+  @Test
+  fun vaultKeys_pinSorting_andRealAppPackagePresets() {
+    val olderUnpinned = com.example.data.VaultKeyEntry(
+      id = "k_old",
+      label = "GitHub",
+      username = "dev",
+      secretValue = "Secret#1234",
+      isPinned = false,
+      createdAt = 1000L,
+      appPresetId = "github"
+    )
+    val newerUnpinned = com.example.data.VaultKeyEntry(
+      id = "k_new",
+      label = "Instagram",
+      username = "@insta",
+      secretValue = "Secret#5678",
+      isPinned = false,
+      createdAt = 3000L,
+      appPresetId = "instagram"
+    )
+    val pinnedKey = com.example.data.VaultKeyEntry(
+      id = "k_pin",
+      label = "BaridiMob",
+      username = "user",
+      secretValue = "Secret#9999",
+      isPinned = true,
+      pinnedAt = 2000L,
+      createdAt = 500L,
+      appPresetId = "baridimob"
+    )
+
+    val sorted = com.example.data.HubVaultCodec.parseVaultKeys(
+      com.example.data.HubVaultCodec.encodeVaultKeys(listOf(olderUnpinned, newerUnpinned, pinnedKey))
+    )
+    assertEquals(3, sorted.size)
+    assertEquals("k_pin", sorted[0].id)
+    assertTrue(sorted[0].isPinned)
+    assertEquals("k_new", sorted[1].id)
+    assertEquals("k_old", sorted[2].id)
+
+    assertEquals(listOf("com.instagram.android"), com.example.data.VaultAppPresets.findById("instagram").packageNames)
+    assertEquals(listOf("com.google.android.youtube"), com.example.data.VaultAppPresets.findById("youtube").packageNames)
+    assertEquals(listOf("com.transferwise.android"), com.example.data.VaultAppPresets.findById("wise").packageNames)
+    assertEquals(listOf("com.linkedin.android"), com.example.data.VaultAppPresets.findById("linkedin").packageNames)
+    assertTrue(com.example.data.VaultAppPresets.findById("baridimob").packageNames.contains("dz.poste.baridimob"))
+  }
 }

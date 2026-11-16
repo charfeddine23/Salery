@@ -34,6 +34,36 @@
             <action android:name="android.intent.action.PICK" />
             <data android:mimeType="vnd.android.cursor.dir/phone_v2" />
         </intent>
+        <package android:name="dz.poste.baridimob" />
+        <package android:name="com.algposte.baridimob" />
+        <package android:name="dz.poste.eccp" />
+        <package android:name="com.algposte.eccp" />
+        <package android:name="com.redotpay" />
+        <package android:name="com.bybit.app" />
+        <package android:name="com.binance.dev" />
+        <package android:name="com.binance.us" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.plus" />
+        <package android:name="org.thunderdog.challegram" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.discord" />
+        <package android:name="com.github.android" />
+        <package android:name="com.paypal.android.p2pmobile" />
+        <package android:name="com.transferwise.android" />
+        <package android:name="com.linkedin.android" />
     </queries>
 
     <application
