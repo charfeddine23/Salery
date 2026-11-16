@@ -577,12 +577,12 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun appUpdateUiState_mandatoryBlockActive_enforcesNonSkippableUpdates() {
+  fun appUpdateUiState_updatesAreOptionalAndNeverBlockApp() {
     val dummyRelease = com.example.update.GitHubReleaseInfo(
       tagName = "v9.9.9",
       versionName = "9.9.9",
-      title = "Mandatory Release",
-      releaseNotes = "Critical update",
+      title = "Optional Release",
+      releaseNotes = "Feature update",
       publishedAt = "2026-11-15T00:00:00Z",
       htmlUrl = "https://github.com/charfeddine23/Salery/releases",
       apkName = "SaleryPulse-9.9.9.apk",
@@ -594,16 +594,15 @@ class ExampleUnitTest {
     org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Checking.isMandatoryBlockActive)
     org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.UpToDate("1.0.0").isMandatoryBlockActive)
     org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Error("Offline", null).isMandatoryBlockActive)
-
-    assertTrue(com.example.update.AppUpdateUiState.Available(dummyRelease).isMandatoryBlockActive)
-    assertTrue(com.example.update.AppUpdateUiState.Downloading(dummyRelease, 500L, 1000L).isMandatoryBlockActive)
-    assertTrue(
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Available(dummyRelease).isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Downloading(dummyRelease, 500L, 1000L).isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(
       com.example.update.AppUpdateUiState.ReadyToInstall(
         dummyRelease,
         java.io.File("dummy.apk")
       ).isMandatoryBlockActive
     )
-    assertTrue(com.example.update.AppUpdateUiState.Error("Failed download", dummyRelease).isMandatoryBlockActive)
+    org.junit.Assert.assertFalse(com.example.update.AppUpdateUiState.Error("Failed download", dummyRelease).isMandatoryBlockActive)
   }
 
   @Test
@@ -1104,27 +1103,78 @@ class ExampleUnitTest {
     )
     assertEquals(134.0, fawazRates["USD"]!!, 0.01)
 
+    val floatRates = com.example.market.SquareMarketCatalog.parseFloatRatesResponse(
+      """{"dzd":{"rate":134.5},"eur":{"rate":0.91}}"""
+    )
+    assertEquals(134.5, floatRates["USD"]!!, 0.01)
+
+    // Multi-site official bank consensus
+    val bankConsensus = com.example.market.SquareMarketCatalog.computeBankRatesConsensus(
+      listOf(
+        "Open ER-API" to bankRates,
+        "Currency-API" to fawazRates,
+        "FloatRates" to floatRates
+      )
+    )
+    assertNotNull(bankConsensus)
+    assertEquals(134.5, bankConsensus!!.first["USD"]!!, 0.01)
+    assertEquals(3, bankConsensus.third)
+
+    // Multi-site gold consensus rejects rogue outlier (4999.0)
+    val yahooGold = com.example.market.SquareMarketCatalog.parseYahooGoldChartResponse(
+      """{"chart":{"result":[{"meta":{"regularMarketPrice":2655.0,"chartPreviousClose":2640.0}}]}}"""
+    )
+    assertNotNull(yahooGold)
+    val xauFawaz = com.example.market.SquareMarketCatalog.parseFawazXauResponse(
+      """{"xau":{"usd":2652.0}}"""
+    )
+    assertNotNull(xauFawaz)
+    val rogueGold = com.example.market.GoldSpotQuote(4999.0, 20.0, "RogueSite")
+    val goldConsensus = com.example.market.SquareMarketCatalog.computeGoldConsensus(
+      listOf(goldQuote, paxgQuote, yahooGold!!, xauFawaz!!, rogueGold)
+    )
+    assertNotNull(goldConsensus)
+    assertEquals(2653.5, goldConsensus!!.first.priceOzUsd, 3.0)
+    assertEquals(4, goldConsensus.second)
+
     val p2pMedian = com.example.market.SquareMarketCatalog.parseBinanceP2pMedianDzd(
-      """{"data":[{"adv":{"price":"238.0"}},{"adv":{"price":"240.0"}},{"adv":{"price":"242.0"}}]}"""
+      """{"data":[{"adv":{"price":"238.0","tradableQuantity":"100","minSingleTransAmount":"5000"}},{"adv":{"price":"240.0","tradableQuantity":"200","minSingleTransAmount":"5000"}},{"adv":{"price":"242.0","tradableQuantity":"150","minSingleTransAmount":"5000"}}]}"""
     )
     assertEquals(240.0, p2pMedian!!, 0.01)
 
+    // Row-scoped HTML parser ignores French prose traps ("heure", "meilleur", "vendeur", "country", "cadre")
+    // and parses 100-unit spaced quotes ("25 400" -> 254.0) accurately.
+    val trickyHtml = """
+      <header><div>Mise à jour il y a 1 heure - meilleur taux vendeur country cadre 2026 - 199.00</div></header>
+      <table>
+        <tr><th>Devise</th><th>EUR</th><th>USD</th></tr>
+        <tr><td>EUR Euro (100 EUR)</td><td>25 400</td><td>25 700</td></tr>
+        <tr><td>USD Dollar US</td><td>236.50</td><td>239.00</td></tr>
+      </table>
+    """.trimIndent()
     val htmlQuotes = com.example.market.SquareMarketCatalog.parseSquareHtmlQuotes(
-      "<div>EUR Euro Achat 254.00 Vente 257.00</div><div>USD Dollar 236.50 / 239.00</div>",
-      bankRates
+      trickyHtml,
+      bankRates,
+      sourceLabel = "DeviseSquare"
     )
     assertEquals(254.0, htmlQuotes["EUR"]!!.buyDzd, 0.01)
     assertEquals(257.0, htmlQuotes["EUR"]!!.sellDzd, 0.01)
     assertEquals(236.5, htmlQuotes["USD"]!!.buyDzd, 0.01)
     assertEquals(239.0, htmlQuotes["USD"]!!.sellDzd, 0.01)
+    org.junit.Assert.assertFalse(htmlQuotes.containsKey("TRY"))
+    org.junit.Assert.assertFalse(htmlQuotes.containsKey("CAD"))
 
     // 4. Moshi Snapshot round-trip
     val snapshot = com.example.market.SquareMarketSnapshot(
+      version = com.example.market.SQUARE_SNAPSHOT_VERSION,
       goldOzUsd = goldOzUsd,
       gold24hChangePercent = 1.15,
-      goldSource = "Gold-API",
-      bankSource = "Open ER-API",
-      parallelSource = "Square Port-Saïd",
+      goldSource = goldConsensus.first.source,
+      bankSource = bankConsensus.second,
+      parallelSource = "2 sites (DeviseSquare, Binance P2P)",
+      goldSourceCount = goldConsensus.second,
+      bankSourceCount = bankConsensus.third,
+      parallelSourceCount = 2,
       goldKarats = karats,
       currencies = listOf(
         com.example.market.CurrencySquareRate(
@@ -1135,7 +1185,9 @@ class ExampleUnitTest {
           symbol = "€",
           bankRateDzd = 150.0,
           parallelBuyDzd = 254.0,
-          parallelSellDzd = 257.0
+          parallelSellDzd = 257.0,
+          parallelSource = "DeviseSquare",
+          sourceCount = 2
         )
       ),
       updatedAtMillis = now
@@ -1144,7 +1196,8 @@ class ExampleUnitTest {
       com.example.market.SquareMarketCodec.encodeSnapshot(snapshot)
     )
     assertNotNull(decoded)
-    assertEquals(6, decoded!!.goldKarats.size)
+    assertEquals(com.example.market.SQUARE_SNAPSHOT_VERSION, decoded!!.version)
+    assertEquals(6, decoded.goldKarats.size)
     assertEquals("EUR", decoded.currencies[0].code)
     assertEquals(257.0, decoded.currencies[0].parallelSellDzd, 0.01)
   }

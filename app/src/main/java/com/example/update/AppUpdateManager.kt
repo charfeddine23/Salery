@@ -73,17 +73,11 @@ sealed interface AppUpdateUiState {
 }
 
 /**
- * Any confirmed newer release (Available, Downloading, ReadyToInstall, or Error tied to a pending release)
- * triggers the mandatory non-skippable update gate.
+ * App updates are optional: users can install immediately, download in the background,
+ * or dismiss and continue using SaleryPulse uninterrupted.
  */
 val AppUpdateUiState.isMandatoryBlockActive: Boolean
-    get() = when (this) {
-        is AppUpdateUiState.Available -> true
-        is AppUpdateUiState.Downloading -> true
-        is AppUpdateUiState.ReadyToInstall -> true
-        is AppUpdateUiState.Error -> release != null
-        else -> false
-    }
+    get() = false
 
 sealed interface DownloadState {
     data class Progress(val bytesDownloaded: Long, val totalBytes: Long) : DownloadState

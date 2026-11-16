@@ -47,7 +47,6 @@ import com.example.sms.SmsTaxAnomalyEntry
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
-import com.example.update.isMandatoryBlockActive
 import com.example.update.compareVersionTags
 import com.example.crypto.BinanceCryptoCatalog
 import com.example.crypto.BinanceCryptoCodec
@@ -55,6 +54,7 @@ import com.example.crypto.BinanceMarketPriceFetcher
 import com.example.crypto.CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS
 import com.example.crypto.CryptoHoldingEntry
 import com.example.crypto.CryptoMarketPriceEntry
+import com.example.market.SQUARE_SNAPSHOT_VERSION
 import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketFetcher
@@ -1343,13 +1343,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private var lastUpdateCheckElapsedMillis: Long = 0L
+    private var dismissedUpdateVersionTag: String? = null
 
-    // In-App GitHub Releases Update & Download Actions
+    // In-App GitHub Releases Optional Update & Download Actions
     fun checkForUpdates(manual: Boolean = true) {
-        val activeState = _updateUiState.value
-        if (activeState.isMandatoryBlockActive) {
-            _showUpdateDialog.value = true
-            return
+        if (manual) {
+            dismissedUpdateVersionTag = null
         }
 
         lastUpdateCheckElapsedMillis = System.currentTimeMillis()
@@ -1369,7 +1368,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     } else {
                         AppUpdateUiState.Available(release)
                     }
-                    _showUpdateDialog.value = true
+                    if (manual || dismissedUpdateVersionTag != release.tagName) {
+                        _showUpdateDialog.value = true
+                    }
                 } else if (manual) {
                     _updateUiState.value = AppUpdateUiState.UpToDate(APP_VERSION)
                     _showUpdateDialog.value = true
@@ -1387,10 +1388,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun checkForUpdatesIfDueOnResume() {
-        if (_updateUiState.value.isMandatoryBlockActive) {
-            _showUpdateDialog.value = true
-            return
-        }
         val now = System.currentTimeMillis()
         if (now - lastUpdateCheckElapsedMillis >= 5 * 60 * 1000L) {
             checkForUpdates(manual = false)
@@ -1480,6 +1477,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun openUpdateDialog() {
+        dismissedUpdateVersionTag = null
         if (_updateUiState.value is AppUpdateUiState.Idle) {
             checkForUpdates(manual = true)
         } else {
@@ -1488,9 +1486,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun dismissUpdateDialog() {
-        if (_updateUiState.value.isMandatoryBlockActive) {
-            _showUpdateDialog.value = true
-            return
+        val releaseTag = when (val current = _updateUiState.value) {
+            is AppUpdateUiState.Available -> current.release.tagName
+            is AppUpdateUiState.ReadyToInstall -> current.release.tagName
+            is AppUpdateUiState.Error -> current.release?.tagName
+            else -> null
+        }
+        if (!releaseTag.isNullOrBlank()) {
+            dismissedUpdateVersionTag = releaseTag
         }
         _showUpdateDialog.value = false
     }
@@ -2182,8 +2185,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun refreshSquareMarketData(force: Boolean = false, showFeedback: Boolean = false) {
         if (_isRefreshingSquareMarket.value) return
         val lastSync = settings.value.squareLastPriceSyncMillis
-        val hasCached = SquareMarketCodec.parseSnapshot(settings.value.squareMarketSnapshotJson) != null
-        if (!force && hasCached && !SquareMarketCatalog.shouldRefresh(lastSync)) {
+        val cachedSnapshot = SquareMarketCodec.parseSnapshot(settings.value.squareMarketSnapshotJson)
+        val hasCurrentVersionCache = cachedSnapshot != null && cachedSnapshot.version >= SQUARE_SNAPSHOT_VERSION
+        if (!force && hasCurrentVersionCache && !SquareMarketCatalog.shouldRefresh(lastSync)) {
             return
         }
 

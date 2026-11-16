@@ -151,7 +151,6 @@ import com.example.ui.components.PermissionsOnboardingDialog
 import com.example.ui.i18n.LocalStealthMode
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
-import com.example.update.isMandatoryBlockActive
 
 @Composable
 fun MainAppScreen(
@@ -844,8 +843,8 @@ fun MainAppScreen(
                 )
             }
 
-            val forceUpdateVisible = showUpdateDialog || updateUiState.isMandatoryBlockActive
-            if (forceUpdateVisible) {
+            val updateDialogVisible = showUpdateDialog
+            if (updateDialogVisible) {
                 LaunchedEffect(updateUiState) {
                     val allowed = AppUpdateManager.canRequestPackageInstalls(context)
                     canInstallPackages = allowed
@@ -892,7 +891,7 @@ fun MainAppScreen(
                 )
             }
 
-            if (showScreenshotShieldDialog && !forceUpdateVisible) {
+            if (showScreenshotShieldDialog && !updateDialogVisible) {
                 ScreenshotProtectionDialog(
                     isProtected = userSettings.screenshotProtectionEnabled,
                     onToggleProtection = { enabled ->
@@ -903,7 +902,7 @@ fun MainAppScreen(
             }
 
             if (!isAppLocked &&
-                !forceUpdateVisible &&
+                !updateDialogVisible &&
                 (!userSettings.hasCompletedPermissionsOnboarding || forceShowPermissionsOnboarding)
             ) {
                 PermissionsOnboardingDialog(

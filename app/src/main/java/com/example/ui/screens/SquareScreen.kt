@@ -365,18 +365,23 @@ fun SquareScreen(
                         )
                     }
 
-                    if (snapshot != null && (snapshot.goldSource.isNotBlank() || snapshot.bankSource.isNotBlank())) {
+                    if (snapshot != null && (snapshot.goldSource.isNotBlank() || snapshot.bankSource.isNotBlank() || snapshot.parallelSource.isNotBlank())) {
                         Spacer(modifier = Modifier.height(6.dp))
+                        val totalSites = snapshot.goldSourceCount + snapshot.bankSourceCount + snapshot.parallelSourceCount
                         val sourcesText = listOfNotNull(
-                            snapshot.goldSource.takeIf { it.isNotBlank() },
-                            snapshot.bankSource.takeIf { it.isNotBlank() },
-                            snapshot.parallelSource.takeIf { it.isNotBlank() }
+                            snapshot.goldSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "ذهب: " else "Gold: ") + it },
+                            snapshot.parallelSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "سكوار: " else "Square: ") + it },
+                            snapshot.bankSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "بنك: " else "Bank: ") + it }
                         ).joinToString(" • ")
                         Text(
-                            text = if (isArabic) "المصادر: $sourcesText" else "Sources: $sourcesText",
-                            color = colors.textMuted,
+                            text = if (isArabic) {
+                                "إجماع $totalSites مصادر • $sourcesText"
+                            } else {
+                                "$totalSites-feed consensus • $sourcesText"
+                            },
+                            color = EmeraldNeon.copy(alpha = 0.9f),
                             fontSize = 10.sp,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -901,10 +906,17 @@ private fun CurrencySquareCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val subLabel = if (rate.parallelSource.isNotBlank()) {
+                            "1 ${rate.code} (${rate.symbol}) • ${rate.parallelSource}"
+                        } else {
+                            "1 ${rate.code} (${rate.symbol})"
+                        }
                         Text(
-                            text = "1 ${rate.code} (${rate.symbol})",
+                            text = subLabel,
                             color = colors.textMuted,
-                            fontSize = 11.sp
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
