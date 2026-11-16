@@ -282,7 +282,7 @@ object EnglishStrings : StringsBundle {
     override val holdToEditCardHint = "Tap to open dashboard • Hold 1s to edit details"
     override val holdingToEditLabel = "Hold 1s to edit..."
 
-    override val totalBalance = "Total Balance"
+    override val totalBalance = "Balance"
     override val monthlyIncome = "Monthly Income"
     override val monthlyExpense = "Monthly Expenses"
     override val activeDebts = "Active Debts"
@@ -536,7 +536,7 @@ object ArabicStrings : StringsBundle {
     override val holdToEditCardHint = "اضغط لفتح لوحة التحكم • اضغط ثانية واحدة للتعديل"
     override val holdingToEditLabel = "استمر بالضغط للتعديل..."
 
-    override val totalBalance = "الرصيد الإجمالي"
+    override val totalBalance = "الرصيد"
     override val monthlyIncome = "الدخل الشهري"
     override val monthlyExpense = "مصاريف الشهر"
     override val activeDebts = "الديون النشطة"

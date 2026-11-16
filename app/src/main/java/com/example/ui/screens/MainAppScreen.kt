@@ -119,7 +119,6 @@ import com.example.ui.components.BackupRestoreDialog
 import com.example.ui.components.DynamicMoneyBag
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
-import com.example.ui.components.BreathingSpLogo
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.ScreenshotProtectionDialog
 import com.example.ui.components.SidebarDrawer
@@ -957,22 +956,7 @@ fun MainTopAppBar(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Fixed Icon Positioning with Double-Tap to Toggle Stealth Mode & Breathing Glow
-            Box(
-                modifier = Modifier.pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = { onToggleStealth() }
-                    )
-                }
-            ) {
-                BreathingSpLogo(
-                    size = 38.dp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Screen Title anchored directly next to the fixed icon
+            // Screen Title
             Text(
                 text = title,
                 color = colors.textPrimary,

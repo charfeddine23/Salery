@@ -813,7 +813,7 @@ private fun EdahabiaCardRealistic(
                         ) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = if (isArabic) "الرصيد الإجمالي" else "Total Balance",
+                                    text = if (isArabic) "الرصيد" else "Balance",
                                     color = bankSecondary,
                                     fontSize = 8.5.sp,
                                     fontWeight = FontWeight.SemiBold,

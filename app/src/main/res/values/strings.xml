@@ -13,7 +13,7 @@
     <string name="nav_settings">Settings</string>
 
     <!-- Financial Summary -->
-    <string name="total_balance">Total Balance</string>
+    <string name="total_balance">Balance</string>
     <string name="monthly_income">Monthly Income</string>
     <string name="monthly_expense">Monthly Expenses</string>
     <string name="active_debts">Active Debts</string>

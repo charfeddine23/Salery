@@ -121,9 +121,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         val savings = userSettings.savingsWalletBalance
-        // Available spendable balance: Total Income minus Total Expenses minus Savings Wallet
-        val available = totalInc - totalExp - savings
-        val gross = totalInc - totalExp
+        val hasAlgPostBalance = userSettings.latestSmsBalanceAmount >= 0.0
+        val baseGross = if (hasAlgPostBalance) {
+            userSettings.latestSmsBalanceAmount
+        } else {
+            totalInc - totalExp
+        }
+        // Available spendable balance: Alg Post Balance (or transaction net fallback) minus Savings Wallet
+        val available = baseGross - savings
+        val gross = baseGross
 
         FinancialSummary(
             totalBalance = available,
@@ -1460,8 +1466,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 baridiMobSmsSyncEnabled = if (enableSmsSyncIfGranted && smsGranted) true else it.baridiMobSmsSyncEnabled
             )
         }
-        if (enableSmsSyncIfGranted && smsGranted) {
-            scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+        if (smsGranted) {
+            if (enableSmsSyncIfGranted) {
+                scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+            } else {
+                refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
+            }
         }
     }
 

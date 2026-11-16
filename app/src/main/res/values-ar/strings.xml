@@ -13,7 +13,7 @@
     <string name="nav_settings">الإعدادات</string>
 
     <!-- Financial Summary -->
-    <string name="total_balance">الرصيد الإجمالي</string>
+    <string name="total_balance">الرصيد</string>
     <string name="monthly_income">الدخل الشهري</string>
     <string name="monthly_expense">مصاريف الشهر</string>
     <string name="active_debts">الديون النشطة</string>

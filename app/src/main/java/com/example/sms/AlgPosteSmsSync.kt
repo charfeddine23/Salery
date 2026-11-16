@@ -800,8 +800,25 @@ object AlgPosteSmsAnalyzer {
 
     private fun isInsideBalanceLabel(lowerText: String, matchStart: Int): Boolean {
         val windowStart = (matchStart - 45).coerceAtLeast(0)
-        val prefix = lowerText.substring(windowStart, matchStart)
-        return balanceContextMarkers.any { marker -> prefix.contains(marker) }
+        var prefix = lowerText.substring(windowStart, matchStart)
+        val cutIdx = listOf(". ", ";", "\n", "\r", " da", " dzd", "دج", "د.ج", "دينار")
+            .mapNotNull { sep -> prefix.lastIndexOf(sep).takeIf { it >= 0 }?.plus(sep.length) }
+            .maxOrNull()
+        if (cutIdx != null && cutIdx <= prefix.length) {
+            prefix = prefix.substring(cutIdx)
+        }
+        val lastMarkerEnd = balanceContextMarkers
+            .mapNotNull { marker ->
+                prefix.lastIndexOf(marker).takeIf { it >= 0 }?.plus(marker.length)
+            }
+            .maxOrNull() ?: return false
+        val tailAfterMarker = prefix.substring(lastMarkerEnd)
+        if (debitKeywords.any { tailAfterMarker.contains(it) } ||
+            creditKeywords.any { tailAfterMarker.contains(it) }
+        ) {
+            return false
+        }
+        return true
     }
 
     private fun classifyMetadata(

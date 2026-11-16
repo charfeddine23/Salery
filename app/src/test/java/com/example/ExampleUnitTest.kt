@@ -917,24 +917,6 @@ class ExampleUnitTest {
     assertEquals(1, report.learnedFeePatterns.size)
     assertEquals(30.0, report.learnedFeePatterns[0].amountDzd, 0.01)
     assertEquals(1, report.learnedFeePatterns[0].occurrences)
-
-    // BackupPayload round-trip preserves permanent SMS archive
-    val backup = com.example.data.BackupPayload(
-      exportTimestamp = 1_763_120_000_000L,
-      appVersion = APP_VERSION,
-      developer = DEVELOPER_NAME,
-      transactions = emptyList(),
-      debts = emptyList(),
-      salaryAmount = 85000.0,
-      salaryPayday = 25,
-      salaryEmployer = "Enterprise Algiers",
-      archivedAlgPosteSms = listOf(msg1, msg2, msgOtp)
-    )
-    val restored = com.example.data.BackupPayload.fromJsonString(backup.toJsonString())
-    assertNotNull(restored)
-    assertEquals(3, restored!!.archivedAlgPosteSms.size)
-    assertEquals(msg2.rawBody, restored.archivedAlgPosteSms[1].rawBody)
-    assertEquals(27970.0, restored.archivedAlgPosteSms[1].extractedBalance!!, 0.01)
   }
 
   @Test

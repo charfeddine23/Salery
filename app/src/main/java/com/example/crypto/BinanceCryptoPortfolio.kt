@@ -9,8 +9,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -199,19 +197,49 @@ object BinanceCryptoCatalog {
         return total
     }
 
+    private data class BinanceTickerRaw(
+        val symbol: String = "",
+        val lastPrice: String = "",
+        val priceChangePercent: String = "0"
+    )
+
+    private val jsonMoshi: Moshi by lazy {
+        Moshi.Builder()
+            .addLast(KotlinJsonAdapterFactory())
+            .build()
+    }
+
+    private val binanceTickerListAdapter by lazy {
+        val type = Types.newParameterizedType(List::class.java, BinanceTickerRaw::class.java)
+        jsonMoshi.adapter<List<BinanceTickerRaw>>(type)
+    }
+
+    private val coinGeckoMapAdapter by lazy {
+        val innerMapType = Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+        val outerMapType = Types.newParameterizedType(Map::class.java, String::class.java, innerMapType)
+        jsonMoshi.adapter<Map<String, Map<String, Any>>>(outerMapType)
+    }
+
+    private val symbolArrayAdapter by lazy {
+        val type = Types.newParameterizedType(List::class.java, String::class.java)
+        jsonMoshi.adapter<List<String>>(type)
+    }
+
+    fun encodeBinanceSymbolsParam(pairs: List<String>): String =
+        symbolArrayAdapter.toJson(pairs)
+
     fun parseBinance24hrResponse(
         jsonBody: String,
         timestampMillis: Long = System.currentTimeMillis()
     ): Map<String, CryptoMarketPriceEntry> {
         val result = LinkedHashMap<String, CryptoMarketPriceEntry>()
-        val array = JSONArray(jsonBody)
-        for (i in 0 until array.length()) {
-            val obj = array.optJSONObject(i) ?: continue
-            val pair = obj.optString("symbol", "").uppercase(Locale.US)
+        val list = binanceTickerListAdapter.fromJson(jsonBody).orEmpty()
+        for (item in list) {
+            val pair = item.symbol.uppercase(Locale.US)
             val spec = byPair[pair] ?: continue
-            val lastPrice = obj.optString("lastPrice", "").toDoubleOrNull() ?: continue
+            val lastPrice = item.lastPrice.toDoubleOrNull() ?: continue
             if (lastPrice <= 0.0) continue
-            val changePct = obj.optString("priceChangePercent", "0").toDoubleOrNull() ?: 0.0
+            val changePct = item.priceChangePercent.toDoubleOrNull() ?: 0.0
             result[spec.symbol] = CryptoMarketPriceEntry(
                 symbol = spec.symbol,
                 priceUsd = lastPrice,
@@ -237,12 +265,12 @@ object BinanceCryptoCatalog {
         timestampMillis: Long = System.currentTimeMillis()
     ): Map<String, CryptoMarketPriceEntry> {
         val result = LinkedHashMap<String, CryptoMarketPriceEntry>()
-        val root = JSONObject(jsonBody)
+        val root = coinGeckoMapAdapter.fromJson(jsonBody).orEmpty()
         for (spec in majorAssets) {
-            val coinObj = root.optJSONObject(spec.coingeckoId) ?: continue
-            val usd = coinObj.optDouble("usd", -1.0)
+            val coinObj = root[spec.coingeckoId] ?: continue
+            val usd = (coinObj["usd"] as? Number)?.toDouble() ?: continue
             if (usd <= 0.0 || usd.isNaN()) continue
-            val change = coinObj.optDouble("usd_24h_change", 0.0).let {
+            val change = ((coinObj["usd_24h_change"] as? Number)?.toDouble() ?: 0.0).let {
                 if (it.isNaN()) 0.0 else it
             }
             result[spec.symbol] = CryptoMarketPriceEntry(
@@ -332,11 +360,11 @@ object BinanceMarketPriceFetcher {
 
         // 1. Primary: Official Binance public market 24hr ticker endpoint (no API key required)
         val binanceResult = runCatching {
-            val symbolsJson = JSONArray(
+            val symbolsJson = BinanceCryptoCatalog.encodeBinanceSymbolsParam(
                 BinanceCryptoCatalog.majorAssets
                     .filter { !it.isStablecoin }
                     .map { it.binancePair }
-            ).toString()
+            )
 
             val url = "https://api.binance.com/api/v3/ticker/24hr".toHttpUrl()
                 .newBuilder()

@@ -65,6 +65,19 @@ class PreferencesManager(context: Context) {
     private val _settingsFlow = MutableStateFlow(loadSettings())
     val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
+    @Volatile
+    private var isSelfUpdating = false
+
+    private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        if (!isSelfUpdating) {
+            _settingsFlow.value = loadSettings()
+        }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
+    }
+
     private fun safeFloat(key: String, default: Float): Float {
         return try {
             when (val raw = prefs.all[key]) {
@@ -197,64 +210,71 @@ class PreferencesManager(context: Context) {
         )
     }
 
+    @Synchronized
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
-        val updated = transform(_settingsFlow.value)
+        val currentLatest = loadSettings()
+        val updated = transform(currentLatest)
         val finalUpdated = if (updated.savingsWalletBalance != updated.vaultLockedAmount) {
             updated.copy(vaultLockedAmount = updated.savingsWalletBalance)
         } else {
             updated
         }
-        prefs.edit()
-            .putFloat("salary_amount", finalUpdated.salaryAmount.toFloat())
-            .putInt("salary_payday", finalUpdated.salaryPayday)
-            .putString("salary_employer", finalUpdated.salaryEmployer)
-            .putBoolean("salary_auto_credit", finalUpdated.salaryAutoCredit)
-            .putString("last_credited_month", finalUpdated.lastCreditedMonthYear)
-            .putBoolean("pattern_lock_enabled", finalUpdated.patternLockEnabled)
-            .putString("pattern_lock_hash", finalUpdated.patternLockHash)
-            .putBoolean("biometric_enabled", finalUpdated.biometricEnabled)
-            .putString("app_language", finalUpdated.language)
-            .putString("theme_mode", finalUpdated.themeMode)
-            .putString("design_style", finalUpdated.designStyle)
-            .putBoolean("gdrive_connected", finalUpdated.googleDriveConnected)
-            .putLong("last_backup_time", finalUpdated.lastBackupTimestamp)
-            .putBoolean("stealth_mode", finalUpdated.stealthMode)
-            .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
-            .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
-            .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
-            .putString("classic_card_holder", finalUpdated.classicCardHolderName)
-            .putString("classic_card_number", finalUpdated.classicCardNumber)
-            .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
-            .putString("classic_card_cvc", finalUpdated.classicCardCvc)
-            .putBoolean("breathing_glow_enabled", finalUpdated.breathingGlowEnabled)
-            .putBoolean("screenshot_protection_enabled", finalUpdated.screenshotProtectionEnabled)
-            .putString("vault_keys_json", finalUpdated.vaultKeysJson)
-            .putString("ccp_accounts_json", finalUpdated.ccpAccountsJson)
-            .putString("visa_card_provider", finalUpdated.visaCardProvider)
-            .putString("visa_card_holder", finalUpdated.visaCardHolderName)
-            .putString("visa_card_number", finalUpdated.visaCardNumber)
-            .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
-            .putString("visa_card_cvc", finalUpdated.visaCardCvc)
-            .putBoolean("third_card_enabled", finalUpdated.thirdCardEnabled)
-            .putString("third_card_provider", finalUpdated.thirdCardProvider)
-            .putString("third_card_holder", finalUpdated.thirdCardHolderName)
-            .putString("third_card_number", finalUpdated.thirdCardNumber)
-            .putString("third_card_expiry", finalUpdated.thirdCardExpiry)
-            .putString("third_card_cvc", finalUpdated.thirdCardCvc)
-            .putString("binance_holdings_json", finalUpdated.binanceHoldingsJson)
-            .putString("binance_prices_json", finalUpdated.binancePricesJson)
-            .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
-            .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
-            .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
-            .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)
-            .putLong("sms_sync_baseline_millis", finalUpdated.smsSyncBaselineTimestampMillis)
-            .putString("latest_sms_balance_amount", finalUpdated.latestSmsBalanceAmount.toString())
-            .putLong("latest_sms_balance_updated_at", finalUpdated.latestSmsBalanceUpdatedAt)
-            .putString("latest_sms_balance_snippet", finalUpdated.latestSmsBalanceRawSnippet)
-            .putString("sms_balance_history_json", finalUpdated.smsBalanceHistoryJson)
-            .putString("detected_sms_taxes_json", finalUpdated.detectedSmsTaxesJson)
-            .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
-            .apply()
-        _settingsFlow.value = finalUpdated
+        isSelfUpdating = true
+        try {
+            prefs.edit()
+                .putFloat("salary_amount", finalUpdated.salaryAmount.toFloat())
+                .putInt("salary_payday", finalUpdated.salaryPayday)
+                .putString("salary_employer", finalUpdated.salaryEmployer)
+                .putBoolean("salary_auto_credit", finalUpdated.salaryAutoCredit)
+                .putString("last_credited_month", finalUpdated.lastCreditedMonthYear)
+                .putBoolean("pattern_lock_enabled", finalUpdated.patternLockEnabled)
+                .putString("pattern_lock_hash", finalUpdated.patternLockHash)
+                .putBoolean("biometric_enabled", finalUpdated.biometricEnabled)
+                .putString("app_language", finalUpdated.language)
+                .putString("theme_mode", finalUpdated.themeMode)
+                .putString("design_style", finalUpdated.designStyle)
+                .putBoolean("gdrive_connected", finalUpdated.googleDriveConnected)
+                .putLong("last_backup_time", finalUpdated.lastBackupTimestamp)
+                .putBoolean("stealth_mode", finalUpdated.stealthMode)
+                .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
+                .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
+                .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
+                .putString("classic_card_holder", finalUpdated.classicCardHolderName)
+                .putString("classic_card_number", finalUpdated.classicCardNumber)
+                .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
+                .putString("classic_card_cvc", finalUpdated.classicCardCvc)
+                .putBoolean("breathing_glow_enabled", finalUpdated.breathingGlowEnabled)
+                .putBoolean("screenshot_protection_enabled", finalUpdated.screenshotProtectionEnabled)
+                .putString("vault_keys_json", finalUpdated.vaultKeysJson)
+                .putString("ccp_accounts_json", finalUpdated.ccpAccountsJson)
+                .putString("visa_card_provider", finalUpdated.visaCardProvider)
+                .putString("visa_card_holder", finalUpdated.visaCardHolderName)
+                .putString("visa_card_number", finalUpdated.visaCardNumber)
+                .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
+                .putString("visa_card_cvc", finalUpdated.visaCardCvc)
+                .putBoolean("third_card_enabled", finalUpdated.thirdCardEnabled)
+                .putString("third_card_provider", finalUpdated.thirdCardProvider)
+                .putString("third_card_holder", finalUpdated.thirdCardHolderName)
+                .putString("third_card_number", finalUpdated.thirdCardNumber)
+                .putString("third_card_expiry", finalUpdated.thirdCardExpiry)
+                .putString("third_card_cvc", finalUpdated.thirdCardCvc)
+                .putString("binance_holdings_json", finalUpdated.binanceHoldingsJson)
+                .putString("binance_prices_json", finalUpdated.binancePricesJson)
+                .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
+                .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
+                .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
+                .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)
+                .putLong("sms_sync_baseline_millis", finalUpdated.smsSyncBaselineTimestampMillis)
+                .putString("latest_sms_balance_amount", finalUpdated.latestSmsBalanceAmount.toString())
+                .putLong("latest_sms_balance_updated_at", finalUpdated.latestSmsBalanceUpdatedAt)
+                .putString("latest_sms_balance_snippet", finalUpdated.latestSmsBalanceRawSnippet)
+                .putString("sms_balance_history_json", finalUpdated.smsBalanceHistoryJson)
+                .putString("detected_sms_taxes_json", finalUpdated.detectedSmsTaxesJson)
+                .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
+                .apply()
+            _settingsFlow.value = finalUpdated
+        } finally {
+            isSelfUpdating = false
+        }
     }
 }
