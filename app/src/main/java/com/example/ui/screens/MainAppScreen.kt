@@ -43,8 +43,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
@@ -182,6 +182,9 @@ fun MainAppScreen(
     val binancePrices by viewModel.binancePrices.collectAsState()
     val isRefreshingCryptoPrices by viewModel.isRefreshingCryptoPrices.collectAsState()
     val cryptoPriceError by viewModel.cryptoPriceError.collectAsState()
+    val squareSnapshot by viewModel.squareSnapshot.collectAsState()
+    val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
+    val squareMarketError by viewModel.squareMarketError.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
         com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(binanceHoldings, binancePrices)
     }
@@ -228,6 +231,7 @@ fun MainAppScreen(
                 }
                 viewModel.checkForUpdatesIfDueOnResume()
                 viewModel.refreshCryptoMarketPrices(force = false, showFeedback = false)
+                viewModel.refreshSquareMarketData(force = false, showFeedback = false)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -289,7 +293,7 @@ fun MainAppScreen(
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
-    val hubRoutes = listOf("cards", "keys", "ccps", "hub_soon")
+    val hubRoutes = listOf("cards", "keys", "ccps", "square")
     val isOnHubTabs = currentRoute in hubRoutes
     val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights")
     val isInsideCard = currentRoute in cardInnerRoutes
@@ -413,7 +417,7 @@ fun MainAppScreen(
                                     "cards" -> activeStrings.cardsHubTitle
                                     "keys" -> "Keys"
                                     "ccps" -> "CCP's"
-                                    "hub_soon" -> "Soon"
+                                    "square" -> "Square"
                                     "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
                                     "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
                                     "theme_engine" -> "Theme Engine"
@@ -580,8 +584,14 @@ fun MainAppScreen(
                                         viewModel.deleteCcpAccount(id)
                                     }
                                 )
-                                "hub_soon" -> HubSoonScreen(
-                                    onOpenVisaPreview = { currentRoute = "visa_coming_soon" }
+                                "square" -> SquareScreen(
+                                    snapshot = squareSnapshot,
+                                    lastSyncMillis = userSettings.squareLastPriceSyncMillis,
+                                    isRefreshing = isRefreshingSquareMarket,
+                                    errorMessage = squareMarketError,
+                                    onRefresh = { force ->
+                                        viewModel.refreshSquareMarketData(force = force, showFeedback = force)
+                                    }
                                 )
                                 "baridimob_sync" -> BaridiMobSmsSyncScreen(
                                     userSettings = userSettings,
@@ -694,10 +704,17 @@ fun MainAppScreen(
                                     },
                                     onOpenBaridiMobSync = { currentRoute = "baridimob_sync" },
                                     onRefreshCcpBalanceFromSms = { showFeedback ->
-                                        viewModel.refreshCurrentBalanceOnlyFromInbox(
-                                            context = context,
-                                            showFeedback = showFeedback
-                                        )
+                                        if (userSettings.baridiMobSmsSyncEnabled) {
+                                            viewModel.scanAlgPosteSmsInbox(
+                                                context = context,
+                                                showFeedback = showFeedback
+                                            )
+                                        } else {
+                                            viewModel.refreshCurrentBalanceOnlyFromInbox(
+                                                context = context,
+                                                showFeedback = showFeedback
+                                            )
+                                        }
                                     }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
@@ -1323,7 +1340,7 @@ fun HubBottomBar(
         NavigationItem("cards", "Card Hub", Icons.Default.CreditCard),
         NavigationItem("keys", "Keys", Icons.Default.VpnKey),
         NavigationItem("ccps", "CCP's", Icons.Default.AccountBalance),
-        NavigationItem("hub_soon", "Soon", Icons.Default.AutoAwesome)
+        NavigationItem("square", "Square", Icons.Default.CurrencyExchange)
     )
 
     Box(
@@ -1353,7 +1370,7 @@ fun HubBottomBar(
                     val activeColor = when (item.route) {
                         "keys" -> AmberNeon
                         "ccps" -> EmeraldNeon
-                        "hub_soon" -> Color(0xFF818CF8)
+                        "square" -> AmberNeon
                         else -> CyanNeon
                     }
 

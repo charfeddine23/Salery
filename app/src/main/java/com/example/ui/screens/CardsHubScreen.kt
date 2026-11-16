@@ -819,8 +819,13 @@ private fun EdahabiaCardRealistic(
                                     fontWeight = FontWeight.SemiBold,
                                     lineHeight = 10.sp
                                 )
+                                val hubCardBalance = if (userSettings.latestSmsBalanceAmount >= 0.0) {
+                                    userSettings.latestSmsBalanceAmount
+                                } else {
+                                    summary.totalBalance
+                                }
                                 Text(
-                                    text = formatDzd(summary.totalBalance),
+                                    text = formatDzd(hubCardBalance),
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,

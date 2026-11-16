@@ -46,7 +46,9 @@ data class UserSettings(
     val binanceHoldingsJson: String = "[]",
     val binancePricesJson: String = "[]",
     val binanceLastPriceSyncMillis: Long = 0L,
-    val baridiMobSmsSyncEnabled: Boolean = false,
+    val squareMarketSnapshotJson: String = "",
+    val squareLastPriceSyncMillis: Long = 0L,
+    val baridiMobSmsSyncEnabled: Boolean = true,
     val pendingSmsSuggestionsJson: String = "[]",
     val processedSmsKeysJson: String = "[]",
     val smsSyncBaselineTimestampMillis: Long = 0L,
@@ -197,7 +199,9 @@ class PreferencesManager(context: Context) {
             binanceHoldingsJson = safeString("binance_holdings_json", "[]"),
             binancePricesJson = safeString("binance_prices_json", "[]"),
             binanceLastPriceSyncMillis = safeLong("binance_last_price_sync_millis", 0L),
-            baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", false),
+            squareMarketSnapshotJson = safeString("square_market_snapshot_json", ""),
+            squareLastPriceSyncMillis = safeLong("square_last_price_sync_millis", 0L),
+            baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", true),
             pendingSmsSuggestionsJson = safeString("pending_sms_suggestions_json", "[]"),
             processedSmsKeysJson = safeString("processed_sms_keys_json", "[]"),
             smsSyncBaselineTimestampMillis = safeLong("sms_sync_baseline_millis", 0L),
@@ -261,6 +265,8 @@ class PreferencesManager(context: Context) {
                 .putString("binance_holdings_json", finalUpdated.binanceHoldingsJson)
                 .putString("binance_prices_json", finalUpdated.binancePricesJson)
                 .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
+                .putString("square_market_snapshot_json", finalUpdated.squareMarketSnapshotJson)
+                .putLong("square_last_price_sync_millis", finalUpdated.squareLastPriceSyncMillis)
                 .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
                 .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
                 .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)

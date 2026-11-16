@@ -1048,4 +1048,165 @@ class ExampleUnitTest {
     assertEquals(listOf("com.linkedin.android"), com.example.data.VaultAppPresets.findById("linkedin").packageNames)
     assertTrue(com.example.data.VaultAppPresets.findById("baridimob").packageNames.contains("dz.poste.baridimob"))
   }
+
+  @Test
+  fun squareMarket_goldAllKarats_bankVsParallelCurrencies_hourlySync_andCodec() {
+    // 1. Hourly refresh check (1h = 3,600,000 ms)
+    val now = 20_000_000L
+    assertTrue(com.example.market.SquareMarketCatalog.shouldRefresh(0L, now))
+    org.junit.Assert.assertFalse(
+      com.example.market.SquareMarketCatalog.shouldRefresh(now - 1_800_000L, now)
+    )
+    assertTrue(
+      com.example.market.SquareMarketCatalog.shouldRefresh(now - 3_600_000L, now)
+    )
+
+    // 2. Gold all karats (24K, 22K, 21K, 18K, 14K, 9K) in USD & DZD (Parallel + Bank)
+    val goldOzUsd = 3110.34768 // exactly $100/g for 24K
+    val karats = com.example.market.SquareMarketCatalog.buildGoldKarats(
+      goldOzUsd = goldOzUsd,
+      usdBankDzd = 135.0,
+      usdParallelDzd = 240.0
+    )
+    assertEquals(listOf(24, 22, 21, 18, 14, 9), karats.map { it.karat })
+
+    val k24 = karats.first { it.karat == 24 }
+    assertEquals(100.0, k24.pricePerGramUsd, 0.01)
+    assertEquals(24000.0, k24.pricePerGramDzdParallel, 0.1)
+    assertEquals(13500.0, k24.pricePerGramDzdBank, 0.1)
+
+    val k18 = karats.first { it.karat == 18 }
+    assertEquals(75.0, k18.pricePerGramUsd, 0.01)
+    assertEquals(18000.0, k18.pricePerGramDzdParallel, 0.1)
+    assertEquals(10125.0, k18.pricePerGramDzdBank, 0.1)
+
+    // 3. Spot Gold & FX parsers
+    val goldQuote = com.example.market.SquareMarketCatalog.parseGoldApiResponse(
+      """{"price":2650.5,"chp":1.25}"""
+    )
+    assertNotNull(goldQuote)
+    assertEquals(2650.5, goldQuote!!.priceOzUsd, 0.01)
+
+    val paxgQuote = com.example.market.SquareMarketCatalog.parseBinancePaxgResponse(
+      """{"lastPrice":"2660.00","priceChangePercent":"-0.45"}"""
+    )
+    assertNotNull(paxgQuote)
+    assertEquals(2660.0, paxgQuote!!.priceOzUsd, 0.01)
+
+    val bankRates = com.example.market.SquareMarketCatalog.parseOpenErRatesResponse(
+      """{"result":"success","rates":{"DZD":135.0,"EUR":0.90,"GBP":0.75,"CAD":1.35}}"""
+    )
+    assertEquals(135.0, bankRates["USD"]!!, 0.01)
+    assertEquals(150.0, bankRates["EUR"]!!, 0.01)
+
+    val fawazRates = com.example.market.SquareMarketCatalog.parseFawazCurrencyResponse(
+      """{"usd":{"dzd":134.0,"eur":0.92}}"""
+    )
+    assertEquals(134.0, fawazRates["USD"]!!, 0.01)
+
+    val p2pMedian = com.example.market.SquareMarketCatalog.parseBinanceP2pMedianDzd(
+      """{"data":[{"adv":{"price":"238.0"}},{"adv":{"price":"240.0"}},{"adv":{"price":"242.0"}}]}"""
+    )
+    assertEquals(240.0, p2pMedian!!, 0.01)
+
+    val htmlQuotes = com.example.market.SquareMarketCatalog.parseSquareHtmlQuotes(
+      "<div>EUR Euro Achat 254.00 Vente 257.00</div><div>USD Dollar 236.50 / 239.00</div>",
+      bankRates
+    )
+    assertEquals(254.0, htmlQuotes["EUR"]!!.buyDzd, 0.01)
+    assertEquals(257.0, htmlQuotes["EUR"]!!.sellDzd, 0.01)
+    assertEquals(236.5, htmlQuotes["USD"]!!.buyDzd, 0.01)
+    assertEquals(239.0, htmlQuotes["USD"]!!.sellDzd, 0.01)
+
+    // 4. Moshi Snapshot round-trip
+    val snapshot = com.example.market.SquareMarketSnapshot(
+      goldOzUsd = goldOzUsd,
+      gold24hChangePercent = 1.15,
+      goldSource = "Gold-API",
+      bankSource = "Open ER-API",
+      parallelSource = "Square Port-Saïd",
+      goldKarats = karats,
+      currencies = listOf(
+        com.example.market.CurrencySquareRate(
+          code = "EUR",
+          nameEn = "Euro",
+          nameAr = "اليورو الأوروبي",
+          flag = "🇪🇺",
+          symbol = "€",
+          bankRateDzd = 150.0,
+          parallelBuyDzd = 254.0,
+          parallelSellDzd = 257.0
+        )
+      ),
+      updatedAtMillis = now
+    )
+    val decoded = com.example.market.SquareMarketCodec.parseSnapshot(
+      com.example.market.SquareMarketCodec.encodeSnapshot(snapshot)
+    )
+    assertNotNull(decoded)
+    assertEquals(6, decoded!!.goldKarats.size)
+    assertEquals("EUR", decoded.currencies[0].code)
+    assertEquals(257.0, decoded.currencies[0].parallelSellDzd, 0.01)
+  }
+
+  @Test
+  fun algPosteBalanceOperations_suggestsIncomeAndOutcome_andSupportsDismiss() {
+    assertTrue(UserSettings().baridiMobSmsSyncEnabled)
+
+    val snapBase = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 20 000,00 DA",
+      timestampMillis = 1_000_000L
+    )!!
+    // Balance-only SMS showing balance INCREASE (+8,500 DA) -> Income operation
+    val snapIncrease = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Votre solde disponible est de 28 500,00 DA",
+      timestampMillis = 2_000_000L
+    )!!
+    // Balance-only SMS showing balance DECREASE (-3,300 DA) -> Outcome / Expense operation
+    val snapDecrease = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Votre nouveau solde est de 25 200,00 DA",
+      timestampMillis = 3_000_000L
+    )!!
+    // Explicit SMS operation with previous balance attached
+    val snapExplicitDebit = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Paiement TPE -1 200,00 DA. Nouveau solde: 24 000,00 DA",
+      timestampMillis = 4_000_000L
+    )!!
+
+    val ops = com.example.sms.AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+      snapshots = listOf(snapBase, snapIncrease, snapDecrease, snapExplicitDebit)
+    )
+
+    assertEquals(3, ops.size)
+
+    val explicitOp = ops[0]
+    assertEquals(1200.0, explicitOp.amount, 0.01)
+    assertTrue(explicitOp.isExpense)
+    assertEquals(25200.0, explicitOp.previousBalance!!, 0.01)
+    assertEquals(24000.0, explicitOp.extractedBalance!!, 0.01)
+
+    val decreaseOp = ops[1]
+    assertEquals("bal_op_${snapDecrease.id}", decreaseOp.id)
+    assertEquals(3300.0, decreaseOp.amount, 0.01)
+    assertTrue("Balance decrease must suggest Outcome/Expense", decreaseOp.isExpense)
+    assertEquals(28500.0, decreaseOp.previousBalance!!, 0.01)
+    assertEquals(25200.0, decreaseOp.extractedBalance!!, 0.01)
+
+    val increaseOp = ops[2]
+    assertEquals("bal_op_${snapIncrease.id}", increaseOp.id)
+    assertEquals(8500.0, increaseOp.amount, 0.01)
+    org.junit.Assert.assertFalse("Balance increase must suggest Income", increaseOp.isExpense)
+    assertEquals(20000.0, increaseOp.previousBalance!!, 0.01)
+    assertEquals(28500.0, increaseOp.extractedBalance!!, 0.01)
+
+    // Codec round-trip preserves previousBalance
+    val encoded = com.example.sms.AlgPosteSmsCodec.encodeSuggestions(ops)
+    val decoded = com.example.sms.AlgPosteSmsCodec.parseSuggestions(encoded)
+    assertEquals(3, decoded.size)
+    assertEquals(28500.0, decoded[1].previousBalance!!, 0.01)
+  }
 }

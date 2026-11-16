@@ -29,6 +29,7 @@ data class SmsSuggestionEntry(
     val receivedAtMillis: Long = System.currentTimeMillis(),
     val matchedReason: String = "",
     val extractedBalance: Double? = null,
+    val previousBalance: Double? = null,
     val hasExplicitFeeKeyword: Boolean = false
 ) {
     val transactionType: TransactionType
@@ -660,6 +661,88 @@ object AlgPosteSmsAnalyzer {
 
         return resultMap.values
             .sortedByDescending { it.detectedAtMillis }
+    }
+
+    /**
+     * Detects Income (+) or Outcome (-) operation suggestions whenever Alg Post Balance changes,
+     * covering both explicit transaction SMS and balance-only SMS where only the new balance changed.
+     */
+    fun detectBalanceOperationSuggestions(
+        snapshots: List<SmsBalanceSnapshot>,
+        minTimestampMillis: Long = 0L
+    ): List<SmsSuggestionEntry> {
+        if (snapshots.isEmpty()) return emptyList()
+
+        val ordered = snapshots
+            .distinctBy { it.id }
+            .sortedWith(compareBy<SmsBalanceSnapshot> { it.timestampMillis }.thenBy { it.id })
+
+        val results = mutableListOf<SmsSuggestionEntry>()
+        for (i in ordered.indices) {
+            val curr = ordered[i]
+            val prev = if (i > 0) ordered[i - 1] else null
+            val inlinePrev = if (prev == null && curr.rawBody.isNotBlank()) {
+                extractPreviousBalanceMatchFromBody(normalizeArabicDigits(curr.rawBody))?.amount
+            } else null
+            val refPrevBalance = prev?.balance ?: inlinePrev
+
+            if (minTimestampMillis > 0L && curr.timestampMillis <= minTimestampMillis) {
+                continue
+            }
+
+            val explicitParsed = if (curr.rawBody.isNotBlank()) {
+                parseSms(
+                    sender = curr.sender,
+                    body = curr.rawBody,
+                    timestampMillis = curr.timestampMillis,
+                    allowAnySenderForManualTest = true
+                )
+            } else null
+
+            if (explicitParsed != null) {
+                results.add(
+                    explicitParsed.copy(
+                        extractedBalance = explicitParsed.extractedBalance ?: curr.balance,
+                        previousBalance = refPrevBalance
+                    )
+                )
+                continue
+            }
+
+            if (refPrevBalance != null) {
+                val delta = roundTwoDecimals(curr.balance - refPrevBalance)
+                if (kotlin.math.abs(delta) >= 0.01) {
+                    val isOutcome = delta < 0.0
+                    val absDelta = roundTwoDecimals(kotlin.math.abs(delta))
+                    results.add(
+                        SmsSuggestionEntry(
+                            id = "bal_op_${curr.id}",
+                            sender = curr.sender.ifBlank { "ALG Poste" },
+                            rawBody = curr.rawBody,
+                            amount = absDelta,
+                            isExpense = isOutcome,
+                            suggestedCategory = if (isOutcome) "other" else "transfer",
+                            suggestedTitleAr = if (isOutcome) {
+                                "عملية خصم في Alg Post Balance"
+                            } else {
+                                "عملية إيداع / دخل في Alg Post Balance"
+                            },
+                            suggestedTitleEn = if (isOutcome) {
+                                "Alg Post Balance Outcome"
+                            } else {
+                                "Alg Post Balance Income"
+                            },
+                            receivedAtMillis = curr.timestampMillis,
+                            matchedReason = if (isOutcome) "BALANCE_DELTA_EXPENSE" else "BALANCE_DELTA_INCOME",
+                            extractedBalance = curr.balance,
+                            previousBalance = refPrevBalance,
+                            hasExplicitFeeKeyword = curr.hasExplicitFeeKeyword
+                        )
+                    )
+                }
+            }
+        }
+        return results.sortedByDescending { it.receivedAtMillis }
     }
 
     fun toArchivedEntity(

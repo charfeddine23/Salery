@@ -162,26 +162,19 @@ fun TotalBalanceVaultCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val hasAlgPostBalance = userSettings.latestSmsBalanceAmount >= 0.0
                 Column {
                     Text(
-                        text = if (lockedAmount > 0 && !hasAlgPostBalance) {
-                            if (isArabic) "الرصيد المتاح للصرف" else "Daily Spendable Balance"
-                        } else {
-                            strings.totalBalance
-                        },
+                        text = strings.totalBalance,
                         color = colors.textSecondary,
                         fontSize = typo.body,
                         fontWeight = FontWeight.Medium
                     )
-                    if (lockedAmount > 0 && !hasAlgPostBalance) {
-                        Text(
-                            text = if (isArabic) "مستثنى منه رصيد محفظة الادخار" else "Savings wallet reserve excluded",
-                            color = EmeraldNeon,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Text(
+                        text = if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense",
+                        color = colors.textMuted,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
 
                 // Cash Flow Phase Indicator Badge
@@ -241,13 +234,8 @@ fun TotalBalanceVaultCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (userSettings.latestSmsBalanceAmount >= 0.0) {
-                            (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
-                                formatDzd(lockedAmount, strings.currencyCode, isStealth)
-                        } else {
-                            (if (isArabic) "إجمالي الثروة (المتاح + الادخار): " else "Gross Wealth (Available + Savings): ") +
-                                formatDzd(grossBalance, strings.currencyCode, isStealth)
-                        },
+                        text = (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
+                            formatDzd(lockedAmount, strings.currencyCode, isStealth),
                         color = colors.textMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium

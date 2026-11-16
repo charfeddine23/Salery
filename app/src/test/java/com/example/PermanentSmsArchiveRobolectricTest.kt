@@ -23,6 +23,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.EnglishStrings
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 @RunWith(RobolectricTestRunner::class)
@@ -111,31 +112,64 @@ class PermanentSmsArchiveRobolectricTest {
     }
 
     @Test
-    fun balanceLabel_andFinancialSummary_pullRemainingFromAlgPostBalance() = runBlocking {
+    fun dashboardBalance_computesIncomeMinusExpense_unlinkedFromAlgPostBalance() = runBlocking {
         assertEquals("Balance", EnglishStrings.totalBalance)
         assertEquals("الرصيد", ArabicStrings.totalBalance)
 
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val vm = SaleryPelseViewModel(app)
         val externalPrefs = PreferencesManager(app)
-
-        // Simulate AlgPosteSmsReceiver updating latestSmsBalanceAmount from a second PreferencesManager
-        // while user also has funds in the Savings Wallet (محفظة الادخار)
         externalPrefs.updateSettings {
             it.copy(
-                latestSmsBalanceAmount = 42350.75,
+                salaryAutoCredit = false,
+                latestSmsBalanceAmount = 99999.75,
                 savingsWalletBalance = 12000.0
             )
         }
 
-        val syncedSummary = withTimeout(3000L) {
-            vm.financialSummary.first {
-                kotlin.math.abs(it.totalBalance - 42350.75) < 0.01 &&
-                    kotlin.math.abs(it.savingsBalance - 12000.0) < 0.01
-            }
+        val db = AppDatabase.getDatabase(app)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            db.clearAllTables()
+            db.appDao().insertTransaction(
+                com.example.data.TransactionEntity(
+                    type = com.example.data.TransactionType.INCOME,
+                    amount = 65000.0,
+                    category = "salary",
+                    title = "Salary"
+                )
+            )
+            db.appDao().insertTransaction(
+                com.example.data.TransactionEntity(
+                    type = com.example.data.TransactionType.EXPENSE,
+                    amount = 15500.0,
+                    category = "shopping",
+                    title = "Groceries"
+                )
+            )
         }
-        assertEquals(42350.75, syncedSummary.totalBalance, 0.01)
-        assertEquals(42350.75, syncedSummary.grossBalance, 0.01)
-        assertEquals(12000.0, syncedSummary.savingsBalance, 0.01)
+
+        val vm = SaleryPelseViewModel(app)
+        val collectJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            vm.financialSummary.collect { }
+        }
+        try {
+            val deadline = System.currentTimeMillis() + 5000L
+            while (System.currentTimeMillis() < deadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                val cur = vm.financialSummary.value
+                if (kotlin.math.abs(cur.totalBalance - 49500.0) < 0.01 &&
+                    kotlin.math.abs(cur.savingsBalance - 12000.0) < 0.01
+                ) {
+                    break
+                }
+                kotlinx.coroutines.delay(50)
+            }
+            val syncedSummary = vm.financialSummary.value
+            assertEquals(49500.0, syncedSummary.totalBalance, 0.01)
+            assertEquals(49500.0, syncedSummary.grossBalance, 0.01)
+            assertEquals(12000.0, syncedSummary.savingsBalance, 0.01)
+            assertEquals(99999.75, externalPrefs.settingsFlow.value.latestSmsBalanceAmount, 0.01)
+        } finally {
+            collectJob.cancel()
+        }
     }
 }

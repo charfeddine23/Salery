@@ -598,11 +598,15 @@ private fun BaridiMobSmsSuggestionBanner(
     val isArabic = strings is ArabicStrings
     val isExpense = latest.isExpense
     val accent = if (isExpense) RoseNeon else EmeraldNeon
+    val oppositeType = if (isExpense) TransactionType.INCOME else TransactionType.EXPENSE
+    val oppositeAccent = if (isExpense) EmeraldNeon else RoseNeon
 
     GlassCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("dashboard_sms_suggestion_banner"),
         backgroundColor = colors.glassCard,
-        borderColor = Color(0xFF818CF8).copy(alpha = 0.45f)
+        borderColor = accent.copy(alpha = 0.5f)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -616,15 +620,15 @@ private fun BaridiMobSmsSuggestionBanner(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF818CF8).copy(alpha = 0.16f)),
+                            .background(accent.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Sms,
                             contentDescription = null,
-                            tint = Color(0xFF818CF8),
+                            tint = accent,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -632,9 +636,9 @@ private fun BaridiMobSmsSuggestionBanner(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isArabic) {
-                                "رسالة جديدة من ${latest.sender} (${suggestions.size})"
+                                "عملية في Alg Post Balance (${suggestions.size})"
                             } else {
-                                "New ${latest.sender} SMS (${suggestions.size})"
+                                "Alg Post Balance Operation (${suggestions.size})"
                             },
                             color = colors.textPrimary,
                             fontSize = 12.5.sp,
@@ -652,15 +656,19 @@ private fun BaridiMobSmsSuggestionBanner(
                     }
                 }
 
-                IconButton(
-                    onClick = { onDismiss(latest.id) },
-                    modifier = Modifier.size(36.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassSurface)
+                        .clickable(onClick = onOpenSync)
+                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = if (isArabic) "تجاهل" else "Dismiss",
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = if (isArabic) "عرض الكل" else "All",
+                        color = Color(0xFF818CF8),
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -672,41 +680,54 @@ private fun BaridiMobSmsSuggestionBanner(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(colors.glassSurface)
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = latest.rawBody,
-                    color = colors.textSecondary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = latest.rawBody,
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (latest.previousBalance != null && latest.extractedBalance != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${formatDzd(latest.previousBalance, strings.currencyCode)} → ${formatDzd(latest.extractedBalance, strings.currencyCode)}",
+                            color = CyanNeon,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = (if (isExpense) "-" else "+") + formatDzd(latest.amount, strings.currencyCode),
                     color = accent,
-                    fontSize = 12.5.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(9.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Primary button: Add directly to detected Income or Expense
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(accent.copy(alpha = 0.18f))
+                        .weight(1.35f)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(accent.copy(alpha = 0.2f))
+                        .border(0.8.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
                         .clickable { onAccept(latest.id, latest.transactionType) }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 10.dp, horizontal = 8.dp)
+                        .testTag("sms_suggestion_accept_btn"),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -717,23 +738,55 @@ private fun BaridiMobSmsSuggestionBanner(
                         },
                         color = accent,
                         fontSize = 11.5.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                // Quick switch button: allow filing under the other side (Income <-> Expense)
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassSurface)
-                        .clickable(onClick = onOpenSync)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .weight(0.95f)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(oppositeAccent.copy(alpha = 0.12f))
+                        .border(0.8.dp, oppositeAccent.copy(alpha = 0.3f), RoundedCornerShape(11.dp))
+                        .clickable { onAccept(latest.id, oppositeType) }
+                        .padding(vertical = 10.dp, horizontal = 6.dp)
+                        .testTag("sms_suggestion_switch_btn"),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isArabic) "عرض الكل" else "View All",
-                        color = Color(0xFF818CF8),
+                        text = if (isExpense) {
+                            if (isArabic) "أو الدخل" else "As Income"
+                        } else {
+                            if (isArabic) "أو مصروف" else "As Expense"
+                        },
+                        color = oppositeAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Explicit Dismiss / Ignore button
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(colors.glassSurface)
+                        .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(11.dp))
+                        .clickable { onDismiss(latest.id) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .testTag("sms_suggestion_dismiss_btn"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isArabic) "تجاهل" else "Dismiss",
+                        color = colors.textMuted,
                         fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
             }

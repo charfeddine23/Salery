@@ -55,6 +55,10 @@ import com.example.crypto.BinanceMarketPriceFetcher
 import com.example.crypto.CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS
 import com.example.crypto.CryptoHoldingEntry
 import com.example.crypto.CryptoMarketPriceEntry
+import com.example.market.SquareMarketCatalog
+import com.example.market.SquareMarketCodec
+import com.example.market.SquareMarketFetcher
+import com.example.market.SquareMarketSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -121,23 +125,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         val savings = userSettings.savingsWalletBalance
-        val hasAlgPostBalance = userSettings.latestSmsBalanceAmount >= 0.0
-        val baseGross = if (hasAlgPostBalance) {
-            userSettings.latestSmsBalanceAmount
-        } else {
-            totalInc - totalExp
-        }
-        // When Alg Post Balance is available, show it as-is in Balance without deducting Savings Wallet.
-        val available = if (hasAlgPostBalance) {
-            userSettings.latestSmsBalanceAmount
-        } else {
-            baseGross - savings
-        }
-        val gross = baseGross
+        // Dashboard Balance strictly computes the difference between Income and Expense (unlinked from Alg Post Balance)
+        val netIncomeExpenseBalance = totalInc - totalExp
 
         FinancialSummary(
-            totalBalance = available,
-            grossBalance = gross,
+            totalBalance = netIncomeExpenseBalance,
+            grossBalance = netIncomeExpenseBalance,
             savingsBalance = savings,
             monthlyIncome = monthInc,
             monthlyExpenses = monthExp,
@@ -214,6 +207,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _cryptoPriceError = MutableStateFlow<String?>(null)
     val cryptoPriceError: StateFlow<String?> = _cryptoPriceError.asStateFlow()
+
+    // Square Market (Gold All Karats in DZD & USD + Hard Currencies Bank vs Parallel)
+    val squareSnapshot: StateFlow<SquareMarketSnapshot?> = settings
+        .map { SquareMarketCodec.parseSnapshot(it.squareMarketSnapshotJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _isRefreshingSquareMarket = MutableStateFlow(false)
+    val isRefreshingSquareMarket: StateFlow<Boolean> = _isRefreshingSquareMarket.asStateFlow()
+
+    private val _squareMarketError = MutableStateFlow<String?>(null)
+    val squareMarketError: StateFlow<String?> = _squareMarketError.asStateFlow()
 
     // Notification events for UI banners
     private val _toastEvent = MutableSharedFlow<String>()
@@ -1609,7 +1613,30 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     existingAnomalies = existingTaxes
                 )
 
+                val updatedSuggestions = if (current.baridiMobSmsSyncEnabled) {
+                    val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
+                    val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                    val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
+                    val deltaOps = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                        snapshots = mergedHistory,
+                        minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                    ).filter { op ->
+                        val baseKey = op.id.removePrefix("bal_op_")
+                        op.id !in processed &&
+                            baseKey !in processed &&
+                            "bal_op_$baseKey" !in processed &&
+                            baseKey !in existingBaseIds
+                    }
+                    if (deltaOps.isEmpty()) current.pendingSmsSuggestionsJson
+                    else AlgPosteSmsCodec.encodeSuggestions(
+                        (deltaOps + existingPending).distinctBy { it.id.removePrefix("bal_op_") }
+                    )
+                } else {
+                    current.pendingSmsSuggestionsJson
+                }
+
                 current.copy(
+                    pendingSmsSuggestionsJson = updatedSuggestions,
                     latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                     latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                     latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
@@ -1737,9 +1764,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             prefsManager.updateSettings { current ->
                 val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                 val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                val existingIds = existing.map { it.id }.toSet()
-                val newOnes = scanResult.suggestions.filter { it.id !in processed && it.id !in existingIds }
-                addedCount = newOnes.size
+                val existingBaseIds = existing.map { it.id.removePrefix("bal_op_") }.toSet()
 
                 val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                 val mergedHistory = (existingHistory + archivedSnapshots + scanResult.snapshots)
@@ -1747,6 +1772,21 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     .sortedBy { it.timestampMillis }
                 newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
                 val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+
+                val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                    snapshots = mergedHistory,
+                    minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                )
+                val combinedCandidates = (scanResult.suggestions + deltaOperations)
+                    .distinctBy { it.id.removePrefix("bal_op_") }
+                val newOnes = combinedCandidates.filter { candidate ->
+                    val baseKey = candidate.id.removePrefix("bal_op_")
+                    candidate.id !in processed &&
+                        baseKey !in processed &&
+                        "bal_op_$baseKey" !in processed &&
+                        baseKey !in existingBaseIds
+                }
+                addedCount = newOnes.size
 
                 val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                 val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
@@ -1757,7 +1797,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
                 current.copy(
                     pendingSmsSuggestionsJson = if (newOnes.isEmpty()) current.pendingSmsSuggestionsJson
-                    else AlgPosteSmsCodec.encodeSuggestions(newOnes + existing),
+                    else AlgPosteSmsCodec.encodeSuggestions(
+                        (newOnes + existing).distinctBy { it.id.removePrefix("bal_op_") }
+                    ),
                     smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                     detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
                     latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
@@ -1847,15 +1889,22 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var caughtNewTaxAmount = 0.0
             prefsManager.updateSettings { current ->
                 val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                val updatedPending = if (parsed != null) {
-                    listOf(parsed) + existing.filterNot { it.id == parsed.id }
-                } else existing
-
                 val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                 val mergedHistory = if (snapshot != null) {
                     (existingHistory + snapshot).distinctBy { it.id }.sortedBy { it.timestampMillis }
                 } else existingHistory
                 val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+
+                val manualDeltaSuggestion = if (parsed == null && snapshot != null) {
+                    AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(mergedHistory)
+                        .firstOrNull { it.id.removePrefix("bal_op_") == snapshot.id }
+                } else null
+                val effectiveSuggestion = parsed ?: manualDeltaSuggestion
+
+                val updatedPending = if (effectiveSuggestion != null) {
+                    val base = effectiveSuggestion.id.removePrefix("bal_op_")
+                    listOf(effectiveSuggestion) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
+                } else existing
 
                 val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                 val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
@@ -1984,9 +2033,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             )
 
             prefsManager.updateSettings { current ->
+                val baseKey = suggestionId.removePrefix("bal_op_")
                 val remaining = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                    .filterNot { it.id == suggestionId }
-                val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + suggestionId
+                    .filterNot { it.id == suggestionId || it.id.removePrefix("bal_op_") == baseKey }
+                val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) +
+                    listOf(suggestionId, baseKey, "bal_op_$baseKey")
                 current.copy(
                     pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(remaining),
                     processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
@@ -2006,9 +2057,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun dismissSmsSuggestion(suggestionId: String) {
         prefsManager.updateSettings { current ->
+            val baseKey = suggestionId.removePrefix("bal_op_")
             val remaining = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                .filterNot { it.id == suggestionId }
-            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + suggestionId
+                .filterNot { it.id == suggestionId || it.id.removePrefix("bal_op_") == baseKey }
+            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) +
+                listOf(suggestionId, baseKey, "bal_op_$baseKey")
             current.copy(
                 pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(remaining),
                 processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
@@ -2018,8 +2071,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearAllSmsSuggestions() {
         prefsManager.updateSettings { current ->
-            val pendingIds = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson).map { it.id }
-            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + pendingIds
+            val pendingKeys = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                .flatMap { s ->
+                    val base = s.id.removePrefix("bal_op_")
+                    listOf(s.id, base, "bal_op_$base")
+                }
+            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson) + pendingKeys
             current.copy(
                 pendingSmsSuggestionsJson = "[]",
                 processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(processed)
@@ -2118,6 +2175,54 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun removeCryptoHolding(symbol: String) {
         upsertCryptoHolding(symbol, 0.0)
+    }
+
+    // ==================== Square Market (Gold Karats + Bank/Parallel FX, Hourly) ====================
+
+    fun refreshSquareMarketData(force: Boolean = false, showFeedback: Boolean = false) {
+        if (_isRefreshingSquareMarket.value) return
+        val lastSync = settings.value.squareLastPriceSyncMillis
+        val hasCached = SquareMarketCodec.parseSnapshot(settings.value.squareMarketSnapshotJson) != null
+        if (!force && hasCached && !SquareMarketCatalog.shouldRefresh(lastSync)) {
+            return
+        }
+
+        viewModelScope.launch {
+            _isRefreshingSquareMarket.value = true
+            _squareMarketError.value = null
+            val result = SquareMarketFetcher.fetchLiveSnapshot()
+            _isRefreshingSquareMarket.value = false
+
+            val isAr = settings.value.language == "ar"
+            result.onSuccess { snapshot ->
+                val encoded = SquareMarketCodec.encodeSnapshot(snapshot)
+                val now = snapshot.updatedAtMillis
+                if (encoded.isNotBlank()) {
+                    prefsManager.updateSettings { current ->
+                        current.copy(
+                            squareMarketSnapshotJson = encoded,
+                            squareLastPriceSyncMillis = now
+                        )
+                    }
+                }
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تم تحديث أسعار الذهب والعملة الصعبة ✅"
+                        else "Square gold & currency rates updated ✅"
+                    )
+                }
+            }.onFailure {
+                val msg = if (isAr) {
+                    "تعذر تحديث أسعار الذهب والعملة حالياً"
+                } else {
+                    "Unable to fetch live Square market rates"
+                }
+                _squareMarketError.value = msg
+                if (showFeedback) {
+                    _toastEvent.emit(msg)
+                }
+            }
+        }
     }
 }
 

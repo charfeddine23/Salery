@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Fingerprint
@@ -184,11 +185,11 @@ fun SidebarDrawer(
                     onClick = { onNavigate("ccps") }
                 )
                 DrawerNavItem(
-                    icon = Icons.Default.AutoAwesome,
-                    title = "Soon",
-                    iconTint = Color(0xFF818CF8),
-                    isSelected = selectedRoute == "hub_soon",
-                    onClick = { onNavigate("hub_soon") }
+                    icon = Icons.Default.CurrencyExchange,
+                    title = "Square",
+                    iconTint = com.example.ui.theme.AmberNeon,
+                    isSelected = selectedRoute == "square",
+                    onClick = { onNavigate("square") }
                 )
             } else {
                 DrawerNavItem(

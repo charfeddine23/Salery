@@ -151,7 +151,28 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                     it.smsId in newSnapIds && it.id !in existingTaxIds
                 }
 
-                val updatedList = (newlyDetected + existingPending).distinctBy { it.id }
+                // Suggest any new explicit SMS operation OR balance change (Income / Outcome) in Alg Post Balance
+                val newDeltaSuggestions = if (currentSettings.baridiMobSmsSyncEnabled && allowSuggestionForTimestamp) {
+                    AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                        snapshots = mergedHistory,
+                        minTimestampMillis = baselineMillis
+                    ).filter { op ->
+                        val baseKey = op.id.removePrefix("bal_op_")
+                        (baseKey in newSnapIds) &&
+                            op.id !in processedKeys &&
+                            baseKey !in processedKeys &&
+                            "bal_op_$baseKey" !in processedKeys &&
+                            op.id !in existingIds &&
+                            baseKey !in existingIds
+                    }
+                } else {
+                    emptyList()
+                }
+
+                val combinedNewSuggestions = (newlyDetected + newDeltaSuggestions)
+                    .distinctBy { it.id.removePrefix("bal_op_") }
+                val updatedList = (combinedNewSuggestions + existingPending)
+                    .distinctBy { it.id.removePrefix("bal_op_") }
                 prefsManager.updateSettings {
                     it.copy(
                         pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
