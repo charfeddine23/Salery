@@ -11,7 +11,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -274,15 +273,6 @@ fun CcpsScreen(
             isArabic = isArabic,
             onPinToggle = {
                 onTogglePinCcpAccount(targetAcc.id)
-                Toast.makeText(
-                    context,
-                    if (!targetAcc.isPinned) {
-                        if (isArabic) "تم تثبيت الملف في الأعلى 📌" else "Pinned to top 📌"
-                    } else {
-                        if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
-                    },
-                    Toast.LENGTH_SHORT
-                ).show()
             },
             onEdit = {
                 editingAccount = targetAcc
@@ -321,10 +311,9 @@ fun CcpsScreen(
         )
     }
 
-    fun copyText(label: String, text: String, toastMessage: String) {
+    fun copyText(label: String, text: String, @Suppress("UNUSED_PARAMETER") toastMessage: String) {
         val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
     }
 
     LazyColumn(
@@ -621,15 +610,6 @@ fun CcpsScreen(
                     onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
                     onTogglePin = {
                         onTogglePinCcpAccount(acc.id)
-                        Toast.makeText(
-                            context,
-                            if (!acc.isPinned) {
-                                if (isArabic) "تم تثبيت الملف في الأعلى 📌" else "Pinned to top 📌"
-                            } else {
-                                if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
-                            },
-                            Toast.LENGTH_SHORT
-                        ).show()
                     },
                     onHoldActions = {
                         holdActionTargetAccount = acc
@@ -1305,11 +1285,6 @@ private fun AddOrEditCcpAccountDialog(
             contactPhone = phone
         }
         contactsPermissionDeniedHint = false
-        Toast.makeText(
-            context,
-            if (isArabic) "تم ربط جهة الاتصال بنجاح" else "Contact linked successfully",
-            Toast.LENGTH_SHORT
-        ).show()
     }
 
     val contactPickerLauncher = rememberLauncherForActivityResult(
@@ -1322,12 +1297,6 @@ private fun AddOrEditCcpAccountDialog(
                     showInAppContactsPicker = true
                 } else {
                     contactsPermissionDeniedHint = true
-                    Toast.makeText(
-                        context,
-                        if (isArabic) "تعذّرت قراءة جهة الاتصال بدون إذن جهات الاتصال"
-                        else "Contacts permission is needed to read contact details",
-                        Toast.LENGTH_LONG
-                    ).show()
                 }
             } else {
                 applyResolvedContact(resolvedName, resolvedPhone, resolvedUriStr)
@@ -1343,12 +1312,6 @@ private fun AddOrEditCcpAccountDialog(
                 showInAppContactsPicker = true
             } else {
                 contactsPermissionDeniedHint = true
-                Toast.makeText(
-                    context,
-                    if (isArabic) "يرجى السماح بالوصول إلى جهات الاتصال أو فتح الإعدادات"
-                    else "Please allow Contacts access in settings",
-                    Toast.LENGTH_LONG
-                ).show()
             }
         }
     }

@@ -525,6 +525,33 @@ object SquareMarketCodec {
         moshi.adapter(SquareMarketSnapshot::class.java)
     }
 
+    private val stringSetType = Types.newParameterizedType(List::class.java, String::class.java)
+    private val stringListAdapter by lazy { moshi.adapter<List<String>>(stringSetType) }
+
+    val DEFAULT_PINNED_IDS = setOf("XAU_SPOT", "XAU_24K", "XAU_18K", "EUR", "USD")
+    const val DEFAULT_PINNED_JSON = "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]"
+
+    fun parsePinnedIds(json: String): Set<String> {
+        if (json.isBlank()) return DEFAULT_PINNED_IDS
+        return try {
+            stringListAdapter.fromJson(json)
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: DEFAULT_PINNED_IDS
+        } catch (_: Throwable) {
+            DEFAULT_PINNED_IDS
+        }
+    }
+
+    fun encodePinnedIds(ids: Set<String>): String {
+        return try {
+            stringListAdapter.toJson(ids.toList())
+        } catch (_: Throwable) {
+            DEFAULT_PINNED_JSON
+        }
+    }
+
     fun encodeSnapshot(snapshot: SquareMarketSnapshot): String {
         return try {
             snapshotAdapter.toJson(snapshot)

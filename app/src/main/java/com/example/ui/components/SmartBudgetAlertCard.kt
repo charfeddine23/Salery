@@ -2,7 +2,6 @@ package com.example.ui.components
 
 import android.Manifest
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -128,21 +127,8 @@ fun SmartBudgetAlertCard(
     ) { isGranted ->
         if (isGranted) {
             pendingAlertToNotify?.let { alert ->
-                val sent = SmartBudgetAlertManager.sendAlertNotification(context, alert, isArabic)
-                if (sent) {
-                    Toast.makeText(
-                        context,
-                        if (isArabic) "تم إرسال إشعار الميزانية الذكي بنجاح 🔔" else "Smart budget alert notification sent 🔔",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                SmartBudgetAlertManager.sendAlertNotification(context, alert, isArabic)
             }
-        } else {
-            Toast.makeText(
-                context,
-                if (isArabic) "يرجى منح إذن الإشعارات لتلقي تنبيهات الميزانية" else "Please grant notification permission for budget alerts",
-                Toast.LENGTH_SHORT
-            ).show()
         }
         pendingAlertToNotify = null
     }
@@ -484,14 +470,7 @@ fun SmartBudgetAlertCard(
                             pendingAlertToNotify = currentAlert
                             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else {
-                            val sent = SmartBudgetAlertManager.sendAlertNotification(context, currentAlert, isArabic)
-                            if (sent) {
-                                Toast.makeText(
-                                    context,
-                                    if (isArabic) "تم إرسال إشعار الميزانية الذكي إلى شريط التنبيهات 🔔" else "Smart budget alert notification sent to status bar 🔔",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
+                            SmartBudgetAlertManager.sendAlertNotification(context, currentAlert, isArabic)
                         }
                     }
                 )
@@ -575,11 +554,6 @@ fun SmartBudgetAlertCard(
                                     val updated = customCaps.toMutableMap()
                                     updated[currentAlert.categoryId] = newCap
                                     customCaps = updated
-                                    Toast.makeText(
-                                        context,
-                                        if (isArabic) "تم تحديث سقف الميزانية بنجاح" else "Budget cap updated successfully",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
                                 }
                                 showAdjustCapDialog = false
                             }

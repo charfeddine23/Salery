@@ -3,7 +3,6 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -267,15 +266,6 @@ fun KeysScreen(
             isArabic = isArabic,
             onPinToggle = {
                 onTogglePinKey(targetKey.id)
-                Toast.makeText(
-                    context,
-                    if (!targetKey.isPinned) {
-                        if (isArabic) "تم تثبيت التطبيق في الأعلى 📌" else "App pinned to top 📌"
-                    } else {
-                        if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
-                    },
-                    Toast.LENGTH_SHORT
-                ).show()
             },
             onEdit = {
                 editingKey = targetKey
@@ -313,10 +303,9 @@ fun KeysScreen(
         )
     }
 
-    fun copyToClipboard(label: String, text: String, msg: String) {
+    fun copyToClipboard(label: String, text: String, @Suppress("UNUSED_PARAMETER") msg: String) {
         val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
     }
 
     LazyColumn(
@@ -608,15 +597,6 @@ fun KeysScreen(
                     onToggleReveal = { onToggleRevealKey(entry.id) },
                     onTogglePin = {
                         onTogglePinKey(entry.id)
-                        Toast.makeText(
-                            context,
-                            if (!entry.isPinned) {
-                                if (isArabic) "تم تثبيت التطبيق في الأعلى 📌" else "Pinned to top 📌"
-                            } else {
-                                if (isArabic) "تم إلغاء التثبيت" else "Unpinned"
-                            },
-                            Toast.LENGTH_SHORT
-                        ).show()
                     },
                     onHoldActions = {
                         holdActionTargetKey = entry

@@ -5,7 +5,6 @@ import android.app.DatePickerDialog
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -164,11 +163,7 @@ fun AddDebtDialog(
                     }
                 }
             } catch (_: Throwable) {
-                Toast.makeText(
-                    context,
-                    if (isArabic) "تعذّر قراءة جهة الاتصال" else "Unable to read contact",
-                    Toast.LENGTH_SHORT
-                ).show()
+                // Ignore unreadable contact
             }
         }
     }
@@ -179,11 +174,7 @@ fun AddDebtDialog(
         try {
             contactPickerLauncher.launch(null)
         } catch (_: Throwable) {
-            Toast.makeText(
-                context,
-                if (isArabic) "تطبيق جهات الاتصال غير متوفر" else "Contacts app unavailable",
-                Toast.LENGTH_SHORT
-            ).show()
+            // Contacts picker unavailable
         }
     }
 
@@ -343,11 +334,7 @@ fun AddDebtDialog(
                                     try {
                                         contactPickerLauncher.launch(null)
                                     } catch (_: Throwable) {
-                                        Toast.makeText(
-                                            context,
-                                            if (isArabic) "تطبيق جهات الاتصال غير متوفر" else "Contacts app unavailable",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        // Contacts picker unavailable
                                     }
                                 } else {
                                     readContactsPermLauncher.launch(Manifest.permission.READ_CONTACTS)

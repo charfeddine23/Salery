@@ -3,7 +3,6 @@ package com.example.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -59,8 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ripple
@@ -159,7 +156,6 @@ fun MainAppScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val snackbarHostState = remember { SnackbarHostState() }
 
     val userSettings by viewModel.settings.collectAsState()
     val isAppLocked by viewModel.isAppLocked.collectAsState()
@@ -254,14 +250,6 @@ fun MainAppScreen(
                 }
                 else -> Unit
             }
-        } else if (pending == "download" || pending == "install") {
-            val isArMsg = userSettings.language == "ar"
-            Toast.makeText(
-                context,
-                if (isArMsg) "يرجى تفعيل السماح بتثبيت التطبيقات غير المعروفة للمتابعة"
-                else "Please enable 'Install unknown apps' permission to continue",
-                Toast.LENGTH_LONG
-            ).show()
         }
     }
 
@@ -318,14 +306,6 @@ fun MainAppScreen(
     var showSalarySchedulerDialog by remember { mutableStateOf(false) }
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
     var showScreenshotShieldDialog by remember { mutableStateOf(false) }
-
-    // Toast Events collector
-    LaunchedEffect(viewModel) {
-        viewModel.toastEvent.collect { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            snackbarHostState.showSnackbar(msg)
-        }
-    }
 
     CompositionLocalProvider(
         LocalStrings provides activeStrings,
@@ -408,7 +388,6 @@ fun MainAppScreen(
                         GlassBackground {
                             Scaffold(
                         containerColor = Color.Transparent,
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
                             val isSubScreen = !isOnHubTabs
                             MainTopAppBar(
@@ -586,10 +565,14 @@ fun MainAppScreen(
                                 "square" -> SquareScreen(
                                     snapshot = squareSnapshot,
                                     lastSyncMillis = userSettings.squareLastPriceSyncMillis,
+                                    pinnedIdsJson = userSettings.squarePinnedIdsJson,
                                     isRefreshing = isRefreshingSquareMarket,
                                     errorMessage = squareMarketError,
                                     onRefresh = { force ->
                                         viewModel.refreshSquareMarketData(force = force, showFeedback = force)
+                                    },
+                                    onTogglePin = { tickerId ->
+                                        viewModel.toggleSquarePinnedId(tickerId)
                                     }
                                 )
                                 "baridimob_sync" -> BaridiMobSmsSyncScreen(

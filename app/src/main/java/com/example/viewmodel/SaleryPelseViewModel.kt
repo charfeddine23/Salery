@@ -2228,6 +2228,18 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
     }
+
+    fun toggleSquarePinnedId(tickerId: String) {
+        val cleanId = tickerId.trim()
+        if (cleanId.isEmpty()) return
+        prefsManager.updateSettings { current ->
+            val currentPins = SquareMarketCodec.parsePinnedIds(current.squarePinnedIdsJson).toMutableSet()
+            if (!currentPins.add(cleanId)) {
+                currentPins.remove(cleanId)
+            }
+            current.copy(squarePinnedIdsJson = SquareMarketCodec.encodePinnedIds(currentPins))
+        }
+    }
 }
 
 typealias SaleryPulseViewModel = SaleryPelseViewModel

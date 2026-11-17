@@ -1262,4 +1262,61 @@ class ExampleUnitTest {
     assertEquals(3, decoded.size)
     assertEquals(28500.0, decoded[1].previousBalance!!, 0.01)
   }
+
+  @Test
+  fun squareTicker_filteringSortingAndPinning_workAccurately() {
+    val defaultPins = com.example.market.SquareMarketCodec.parsePinnedIds("")
+    assertTrue(defaultPins.contains("XAU_SPOT"))
+    assertTrue(defaultPins.contains("EUR"))
+
+    val customPins = setOf("XAU_18K", "USD")
+    val encodedPins = com.example.market.SquareMarketCodec.encodePinnedIds(customPins)
+    assertEquals(customPins, com.example.market.SquareMarketCodec.parsePinnedIds(encodedPins))
+
+    val karats = com.example.market.SquareMarketCatalog.buildGoldKarats(
+      goldOzUsd = 3869.91,
+      usdBankDzd = 135.0,
+      usdParallelDzd = 240.0
+    )
+    val currencies = listOf(
+      com.example.market.CurrencySquareRate("EUR", "Euro", "اليورو", "🇪🇺", "€", 145.0, 260.0, 263.0, "DeviseSquare", 3),
+      com.example.market.CurrencySquareRate("USD", "US Dollar", "الدولار", "🇺🇸", "$", 135.0, 238.0, 240.0, "Binance P2P", 2)
+    )
+    val snapshot = com.example.market.SquareMarketSnapshot(
+      goldOzUsd = 3869.91,
+      gold24hChangePercent = 0.14,
+      goldSource = "GoldPrice",
+      goldSourceCount = 3,
+      bankSourceCount = 2,
+      parallelSourceCount = 3,
+      goldKarats = karats,
+      currencies = currencies
+    )
+
+    val allRows = com.example.ui.components.buildSquareTickerRows(
+      snapshot = snapshot,
+      primaryTab = com.example.ui.components.SquarePrimaryTab.ALL,
+      venueFilter = com.example.ui.components.SquareVenueFilter.ALL,
+      pinnedIds = customPins,
+      searchQuery = ""
+    )
+    assertEquals(1 + karats.size + currencies.size, allRows.size)
+
+    val favRows = com.example.ui.components.buildSquareTickerRows(
+      snapshot = snapshot,
+      primaryTab = com.example.ui.components.SquarePrimaryTab.FAVORITES,
+      venueFilter = com.example.ui.components.SquareVenueFilter.ALL,
+      pinnedIds = customPins,
+      searchQuery = ""
+    )
+    assertEquals(2, favRows.size)
+
+    val sortedDesc = com.example.ui.components.sortSquareTickerRows(
+      rows = allRows,
+      sortColumn = com.example.ui.components.SquareSortColumn.PRICE,
+      sortDirection = com.example.ui.components.SquareSortDirection.DESC,
+      pinnedIds = customPins
+    )
+    assertTrue(sortedDesc.first().primaryNumericPrice >= sortedDesc.last().primaryNumericPrice)
+  }
 }

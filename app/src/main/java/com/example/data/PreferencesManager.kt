@@ -48,6 +48,7 @@ data class UserSettings(
     val binanceLastPriceSyncMillis: Long = 0L,
     val squareMarketSnapshotJson: String = "",
     val squareLastPriceSyncMillis: Long = 0L,
+    val squarePinnedIdsJson: String = "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]",
     val baridiMobSmsSyncEnabled: Boolean = true,
     val pendingSmsSuggestionsJson: String = "[]",
     val processedSmsKeysJson: String = "[]",
@@ -201,6 +202,7 @@ class PreferencesManager(context: Context) {
             binanceLastPriceSyncMillis = safeLong("binance_last_price_sync_millis", 0L),
             squareMarketSnapshotJson = safeString("square_market_snapshot_json", ""),
             squareLastPriceSyncMillis = safeLong("square_last_price_sync_millis", 0L),
+            squarePinnedIdsJson = safeString("square_pinned_ids_json", "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]"),
             baridiMobSmsSyncEnabled = safeBoolean("baridimob_sms_sync_enabled", true),
             pendingSmsSuggestionsJson = safeString("pending_sms_suggestions_json", "[]"),
             processedSmsKeysJson = safeString("processed_sms_keys_json", "[]"),
@@ -267,6 +269,7 @@ class PreferencesManager(context: Context) {
                 .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
                 .putString("square_market_snapshot_json", finalUpdated.squareMarketSnapshotJson)
                 .putLong("square_last_price_sync_millis", finalUpdated.squareLastPriceSyncMillis)
+                .putString("square_pinned_ids_json", finalUpdated.squarePinnedIdsJson)
                 .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
                 .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
                 .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)
