@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,6 +77,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.update.AppUpdateManager
@@ -132,6 +135,7 @@ fun AccessPermissionsScreen(
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
@@ -195,121 +199,151 @@ fun AccessPermissionsScreen(
     val progress = permSummary.grantedCount.toFloat() / permSummary.totalCount.toFloat()
     val statusAccent = if (permSummary.allEssentialGranted) EmeraldNeon else AmberNeon
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPaddingH),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(dimens.spacingXs))
-
-            // Hero Readiness Overview Card
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("access_permissions_hero_card"),
-                backgroundColor = colors.glassCard,
-                borderColor = statusAccent.copy(alpha = 0.45f)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+    val readinessHeroCard: @Composable () -> Unit = {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("access_permissions_hero_card"),
+            backgroundColor = colors.glassCard,
+            borderColor = statusAccent.copy(alpha = 0.45f)
+        ) {
+            Column(modifier = Modifier.padding(dimens.cardPadding)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(statusAccent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(statusAccent.copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AdminPanelSettings,
-                                contentDescription = null,
-                                tint = statusAccent,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (isArabic) "صلاحيات الوصول والأمان" else "Access Permissions Center",
-                                color = colors.textPrimary,
-                                fontSize = typo.title,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Text(
-                                text = if (isArabic) {
-                                    "تفعيل كل الصلاحيات اللازمة لعمل الرسائل، جهات الاتصال، التحديثات والتنبيهات بسلاسة"
-                                } else {
-                                    "Manage all required permissions for SMS sync, contacts, alerts & updates"
-                                },
-                                color = colors.textMuted,
-                                fontSize = 11.5.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            tint = statusAccent,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) "جاهزية النظام والأذونات" else "System Readiness & Controls",
+                            color = colors.textPrimary,
+                            fontSize = typo.titleSm,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             text = if (isArabic) {
-                                "تم تفعيل ${permSummary.grantedCount} من ${permSummary.totalCount} صلاحيات أساسية"
+                                "تفعيل كل الصلاحيات اللازمة لعمل الرسائل، جهات الاتصال، التحديثات والتنبيهات بسلاسة"
                             } else {
-                                "${permSummary.grantedCount} of ${permSummary.totalCount} core permissions active"
+                                "Manage all required permissions for SMS sync, contacts, alerts & updates"
                             },
-                            color = statusAccent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${(progress * 100).toInt()}%",
-                            color = statusAccent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(7.dp)
-                            .clip(RoundedCornerShape(50)),
-                        color = statusAccent,
-                        trackColor = colors.glassSurface
-                    )
-
-                    if (!permSummary.smsGranted || !permSummary.contactsGranted || !permSummary.notificationsGranted) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        GlassButton(
-                            text = if (isArabic) "تفعيل جميع صلاحيات النظام دفعة واحدة" else "Grant All Runtime Permissions",
-                            icon = Icons.Default.VerifiedUser,
-                            containerColor = EmeraldNeon,
-                            contentColor = Color(0xFF041C24),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("grant_all_permissions_button"),
-                            onClick = {
-                                multiPermLauncher.launch(runtimePermissionsToRequest)
-                            }
+                            color = colors.textMuted,
+                            fontSize = typo.bodyXs
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isArabic) {
+                            "تم تفعيل ${permSummary.grantedCount} من ${permSummary.totalCount} صلاحيات أساسية"
+                        } else {
+                            "${permSummary.grantedCount} of ${permSummary.totalCount} core permissions active"
+                        },
+                        color = statusAccent,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        color = statusAccent,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(7.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = statusAccent,
+                    trackColor = colors.glassSurface
+                )
+
+                if (!permSummary.smsGranted || !permSummary.contactsGranted || !permSummary.notificationsGranted) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    GlassButton(
+                        text = if (isArabic) "تفعيل جميع صلاحيات النظام دفعة واحدة" else "Grant All Runtime Permissions",
+                        icon = Icons.Default.VerifiedUser,
+                        containerColor = EmeraldNeon,
+                        contentColor = Color(0xFF041C24),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("grant_all_permissions_button"),
+                        onClick = {
+                            multiPermLauncher.launch(runtimePermissionsToRequest)
+                        }
+                    )
+                }
             }
         }
+    }
 
-        // 1. SMS Permission Card (BaridiMob / ALG Poste)
-        item {
+    val systemSettingsCard: @Composable () -> Unit = {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = colors.glassCard
+        ) {
+            Column(
+                modifier = Modifier.padding(dimens.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                GlassButton(
+                    text = if (isArabic) "فتح صفحة أذونات التطبيق في إعدادات النظام" else "Open App Permissions in Android Settings",
+                    icon = Icons.Default.Settings,
+                    containerColor = CyanNeon.copy(alpha = 0.22f),
+                    contentColor = CyanNeon,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open_system_app_settings_button"),
+                    onClick = { openAppSystemSettings() }
+                )
+
+                GlassButton(
+                    text = if (isArabic) "عرض نافذة تفعيل الصلاحيات الترحيبية" else "Show Animated Security Setup Wizard",
+                    icon = Icons.Default.OpenInNew,
+                    containerColor = colors.glassSurface,
+                    contentColor = colors.textPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("replay_permissions_wizard_button"),
+                    onClick = onReplayOnboardingWizard
+                )
+            }
+        }
+    }
+
+    val permissionCards: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)) {
             PermissionControlCard(
                 icon = Icons.Default.Sms,
                 accent = Color(0xFF818CF8),
@@ -362,9 +396,11 @@ fun AccessPermissionsScreen(
                         Text(
                             text = if (isArabic) "تفعيل المزامنة التلقائية لبريدي موب" else "Auto-Sync BaridiMob SMS",
                             color = colors.textSecondary,
-                            fontSize = 12.sp,
+                            fontSize = typo.bodySm,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Switch(
                             checked = userSettings.baridiMobSmsSyncEnabled && permSummary.smsGranted,
@@ -388,10 +424,7 @@ fun AccessPermissionsScreen(
                     }
                 }
             )
-        }
 
-        // 2. Contacts Permission Card
-        item {
             PermissionControlCard(
                 icon = Icons.Default.ContactPhone,
                 accent = CyanNeon,
@@ -415,10 +448,7 @@ fun AccessPermissionsScreen(
                     }
                 }
             )
-        }
 
-        // 3. Notifications Permission Card
-        item {
             PermissionControlCard(
                 icon = Icons.Default.NotificationsActive,
                 accent = EmeraldNeon,
@@ -442,10 +472,7 @@ fun AccessPermissionsScreen(
                     }
                 }
             )
-        }
 
-        // 4. Install From Unknown Sources Permission Card
-        item {
             PermissionControlCard(
                 icon = Icons.Default.SystemUpdate,
                 accent = AmberNeon,
@@ -463,10 +490,7 @@ fun AccessPermissionsScreen(
                 },
                 onActionClick = onRequestInstallSourcesSettings
             )
-        }
 
-        // 5. Biometric Security Hardware Card
-        item {
             PermissionControlCard(
                 icon = Icons.Default.Fingerprint,
                 accent = Color(0xFFF472B6),
@@ -501,43 +525,52 @@ fun AccessPermissionsScreen(
                 }
             )
         }
+    }
 
-        // Direct System Settings & Re-open Onboarding Wizard Actions
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard
+    if (layoutInfo.columns >= 2) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    GlassButton(
-                        text = if (isArabic) "فتح صفحة أذونات التطبيق في إعدادات النظام" else "Open App Permissions in Android Settings",
-                        icon = Icons.Default.Settings,
-                        containerColor = CyanNeon.copy(alpha = 0.22f),
-                        contentColor = CyanNeon,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("open_system_app_settings_button"),
-                        onClick = { openAppSystemSettings() }
-                    )
-
-                    GlassButton(
-                        text = if (isArabic) "عرض نافذة تفعيل الصلاحيات الترحيبية" else "Show Animated Security Setup Wizard",
-                        icon = Icons.Default.OpenInNew,
-                        containerColor = colors.glassSurface,
-                        contentColor = colors.textPrimary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("replay_permissions_wizard_button"),
-                        onClick = onReplayOnboardingWizard
-                    )
-                }
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+                item { readinessHeroCard() }
+                item { systemSettingsCard() }
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+                item { permissionCards() }
+                item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
         }
-
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item {
+                Spacer(modifier = Modifier.height(dimens.spacingXs))
+                readinessHeroCard()
+            }
+            item { permissionCards() }
+            item { systemSettingsCard() }
+            item { Spacer(modifier = Modifier.height(80.dp)) }
+        }
     }
 }
 
@@ -554,6 +587,8 @@ private fun PermissionControlCard(
 ) {
     val colors = LiquidGlassTheme.colors
     val isArabic = AppStrings.current is ArabicStrings
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val statusColor = if (isGranted) EmeraldNeon else RoseNeon
 
     GlassCard(
@@ -561,7 +596,7 @@ private fun PermissionControlCard(
         backgroundColor = colors.glassCard,
         borderColor = if (isGranted) EmeraldNeon.copy(alpha = 0.42f) else accent.copy(alpha = 0.38f)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -590,7 +625,7 @@ private fun PermissionControlCard(
                         Text(
                             text = title,
                             color = colors.textPrimary,
-                            fontSize = 13.5.sp,
+                            fontSize = typo.body,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
@@ -618,8 +653,9 @@ private fun PermissionControlCard(
                                     if (isArabic) "غير مفعّلة" else "Needed"
                                 },
                                 color = statusColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -627,8 +663,7 @@ private fun PermissionControlCard(
                     Text(
                         text = description,
                         color = colors.textMuted,
-                        fontSize = 11.2.sp,
-                        lineHeight = 15.5.sp
+                        fontSize = typo.bodyXs
                     )
                 }
             }
@@ -643,7 +678,7 @@ private fun PermissionControlCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .defaultMinSize(minHeight = dimens.buttonHeight)
                     .clip(RoundedCornerShape(14.dp))
                     .background(
                         if (isGranted) colors.glassSurface else accent.copy(alpha = 0.20f)
@@ -653,14 +688,17 @@ private fun PermissionControlCard(
                         color = if (isGranted) colors.glassBorderSubtle else accent.copy(alpha = 0.55f),
                         shape = RoundedCornerShape(14.dp)
                     )
-                    .clickable(onClick = onActionClick),
+                    .clickable(onClick = onActionClick)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = actionLabel,
                     color = if (isGranted) colors.textPrimary else accent,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = typo.bodySm,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

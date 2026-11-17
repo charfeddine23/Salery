@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -130,6 +131,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import kotlinx.coroutines.delay
@@ -159,6 +161,7 @@ fun KeysScreen(
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
     val isStealth = LocalStealthMode.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
     val context = LocalContext.current
@@ -308,321 +311,417 @@ fun KeysScreen(
         cb.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPaddingH),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
-    ) {
-        // Header + Add Key Button
-        item(key = "keys_header") {
-            Spacer(modifier = Modifier.height(dimens.spacingSm))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Keys",
-                        color = colors.textPrimary,
-                        fontSize = typo.title,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = if (isArabic) "اضغط مطولاً 0.5 ث على أي حاوية للتعديل أو الحذف"
-                        else "Hold any app card 0.5s to edit or delete",
-                        color = colors.textMuted,
-                        fontSize = typo.caption
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                GlassButton(
-                    text = if (isArabic) "إضافة حساب" else "Add Account",
-                    icon = Icons.Default.Add,
-                    containerColor = AmberNeon,
-                    contentColor = Color(0xFF0F172A),
-                    onClick = {
-                        editingKey = null
-                        showAddOrEditDialog = true
-                    },
-                    modifier = Modifier.testTag("add_vault_key_button")
+    val keysHeader: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isArabic) "خزنة الحسابات • ${keys.size} محفوظ" else "Vault Accounts • ${keys.size} saved",
+                    color = colors.textPrimary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (isArabic) "اضغط مطولاً 0.5 ث على أي حاوية للتعديل أو الحذف"
+                    else "Hold any app card 0.5s to edit or delete",
+                    color = colors.textMuted,
+                    fontSize = typo.caption,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            GlassButton(
+                text = if (isArabic) "إضافة حساب" else "Add Account",
+                icon = Icons.Default.Add,
+                containerColor = AmberNeon,
+                contentColor = Color(0xFF0F172A),
+                onClick = {
+                    editingKey = null
+                    showAddOrEditDialog = true
+                },
+                modifier = Modifier.testTag("add_vault_key_button")
+            )
+        }
+    }
+
+    val auditSummaryCard: @Composable () -> Unit = {
+        val auditAccent = when {
+            keys.isEmpty() -> CyanNeon
+            averageScore >= 80 && weakCount == 0 -> EmeraldNeon
+            averageScore >= 55 -> AmberNeon
+            else -> RoseNeon
         }
 
-        // Smart Password Audit Summary Card
-        item(key = "keys_smart_audit") {
-            val auditAccent = when {
-                keys.isEmpty() -> CyanNeon
-                averageScore >= 80 && weakCount == 0 -> EmeraldNeon
-                averageScore >= 55 -> AmberNeon
-                else -> RoseNeon
-            }
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = colors.glassCard,
+            borderColor = auditAccent.copy(alpha = 0.42f)
+        ) {
+            Column(modifier = Modifier.padding(dimens.cardPadding)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(auditAccent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = auditAccent,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) "التحليل الذكي لأمان كلمات السر" else "Smart Password Security Audit",
+                            color = colors.textPrimary,
+                            fontSize = typo.bodyLg,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (keys.isEmpty()) {
+                                if (isArabic) "أضف حساباتك واختر التطبيق لتتحول البطاقة بألوانه وشعاره"
+                                else "Pick an app from the list to transform each vault card"
+                            } else {
+                                if (isArabic) "${keys.size} حساب محفوظ • معدل الأمان العام $averageScore%"
+                                else "${keys.size} saved accounts • Overall security score $averageScore%"
+                            },
+                            color = colors.textMuted,
+                            fontSize = typo.bodyXs
+                        )
+                    }
+                    if (keys.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(auditAccent.copy(alpha = 0.16f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "$averageScore%",
+                                color = auditAccent,
+                                fontSize = typo.bodySm,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
 
+                if (keys.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { (averageScore / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50)),
+                        color = auditAccent,
+                        trackColor = colors.glassSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AuditStatChip(
+                            label = if (isArabic) "قوية: $strongCount" else "Strong: $strongCount",
+                            color = EmeraldNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AuditStatChip(
+                            label = if (isArabic) "ضعيفة: $weakCount" else "Weak: $weakCount",
+                            color = RoseNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AuditStatChip(
+                            label = if (isArabic) "مكررة: $reusedCount" else "Reused: $reusedCount",
+                            color = AmberNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val searchAndFilterBlock: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
-                borderColor = auditAccent.copy(alpha = 0.42f)
+                borderColor = colors.glassBorderSubtle,
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(auditAccent.copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Security,
-                                contentDescription = null,
-                                tint = auditAccent,
-                                modifier = Modifier.size(23.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = AmberNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
                             Text(
-                                text = if (isArabic) "التحليل الذكي لأمان كلمات السر" else "Smart Password Security Audit",
-                                color = colors.textPrimary,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (keys.isEmpty()) {
-                                    if (isArabic) "أضف حساباتك واختر التطبيق لتتحول البطاقة بألوانه وشعاره"
-                                    else "Pick an app from the list to transform each vault card"
-                                } else {
-                                    if (isArabic) "${keys.size} حساب محفوظ • معدل الأمان العام $averageScore%"
-                                    else "${keys.size} saved accounts • Overall security score $averageScore%"
-                                },
+                                text = if (isArabic) "ابحث باسم التطبيق، اسم المستخدم أو الملاحظة..."
+                                else "Search app, username, or note...",
                                 color = colors.textMuted,
-                                fontSize = 11.5.sp
+                                fontSize = typo.bodySm,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        if (keys.isNotEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(auditAccent.copy(alpha = 0.16f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = "$averageScore%",
-                                    color = auditAccent,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-                    }
-
-                    if (keys.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        LinearProgressIndicator(
-                            progress = { (averageScore / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(50)),
-                            color = auditAccent,
-                            trackColor = colors.glassSurface
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = typo.body,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            cursorBrush = SolidColor(AmberNeon),
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            AuditStatChip(
-                                label = if (isArabic) "قوية: $strongCount" else "Strong: $strongCount",
-                                color = EmeraldNeon,
-                                modifier = Modifier.weight(1f)
-                            )
-                            AuditStatChip(
-                                label = if (isArabic) "ضعيفة: $weakCount" else "Weak: $weakCount",
-                                color = RoseNeon,
-                                modifier = Modifier.weight(1f)
-                            )
-                            AuditStatChip(
-                                label = if (isArabic) "مكررة: $reusedCount" else "Reused: $reusedCount",
-                                color = AmberNeon,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
                     }
-                }
-            }
-        }
-
-        // Search + Filter Chips
-        if (keys.isNotEmpty()) {
-            item(key = "keys_search_filter") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = colors.glassCard,
-                        borderColor = colors.glassBorderSubtle,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = AmberNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Box(modifier = Modifier.weight(1f)) {
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = if (isArabic) "ابحث باسم التطبيق، اسم المستخدم أو الملاحظة..."
-                                        else "Search app, username, or note...",
-                                        color = colors.textMuted,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                BasicTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    singleLine = true,
-                                    textStyle = TextStyle(
-                                        color = colors.textPrimary,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    cursorBrush = SolidColor(AmberNeon),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { searchQuery = "" },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = if (isArabic) "مسح" else "Clear",
-                                        tint = colors.textMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        GlassPill(
-                            text = if (isArabic) "الكل (${keys.size})" else "All (${keys.size})",
-                            isSelected = activeFilter == KeysFilter.ALL,
-                            onClick = { activeFilter = KeysFilter.ALL }
-                        )
-                        GlassPill(
-                            text = if (isArabic) "مثبتة ($pinnedCount)" else "Pinned ($pinnedCount)",
-                            isSelected = activeFilter == KeysFilter.PINNED,
-                            onClick = { activeFilter = KeysFilter.PINNED }
-                        )
-                        GlassPill(
-                            text = if (isArabic) "ضعيفة ومكررة ($weakCount)" else "Weak / Reused ($weakCount)",
-                            isSelected = activeFilter == KeysFilter.WEAK_OR_REUSED,
-                            onClick = { activeFilter = KeysFilter.WEAK_OR_REUSED }
-                        )
-                        GlassPill(
-                            text = if (isArabic) "قوية ($strongCount)" else "Strong ($strongCount)",
-                            isSelected = activeFilter == KeysFilter.STRONG,
-                            onClick = { activeFilter = KeysFilter.STRONG }
-                        )
-                        if (expandedKeyIds.isNotEmpty()) {
-                            GlassPill(
-                                text = if (isArabic) "طي الكل (${expandedKeyIds.size})" else "Collapse (${expandedKeyIds.size})",
-                                isSelected = false,
-                                onClick = onCollapseAllKeys
+                                imageVector = Icons.Default.Close,
+                                contentDescription = if (isArabic) "مسح" else "Clear",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
             }
-        }
 
-        if (filteredItems.isEmpty()) {
-            item(key = "keys_empty") {
-                LiquidEmptyStateCard(
-                    title = if (keys.isEmpty()) {
-                        if (isArabic) "لا توجد حسابات محفوظة بعد" else "No saved accounts yet"
-                    } else {
-                        if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
-                    },
-                    description = if (keys.isEmpty()) {
-                        if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
-                        else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
-                    } else {
-                        if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
-                        else "Adjust your search or filter to see more entries."
-                    },
-                    icon = Icons.Default.Key,
-                    iconColor = AmberNeon
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GlassPill(
+                    text = if (isArabic) "الكل (${keys.size})" else "All (${keys.size})",
+                    isSelected = activeFilter == KeysFilter.ALL,
+                    onClick = { activeFilter = KeysFilter.ALL }
                 )
+                GlassPill(
+                    text = if (isArabic) "مثبتة ($pinnedCount)" else "Pinned ($pinnedCount)",
+                    isSelected = activeFilter == KeysFilter.PINNED,
+                    onClick = { activeFilter = KeysFilter.PINNED }
+                )
+                GlassPill(
+                    text = if (isArabic) "ضعيفة ومكررة ($weakCount)" else "Weak / Reused ($weakCount)",
+                    isSelected = activeFilter == KeysFilter.WEAK_OR_REUSED,
+                    onClick = { activeFilter = KeysFilter.WEAK_OR_REUSED }
+                )
+                GlassPill(
+                    text = if (isArabic) "قوية ($strongCount)" else "Strong ($strongCount)",
+                    isSelected = activeFilter == KeysFilter.STRONG,
+                    onClick = { activeFilter = KeysFilter.STRONG }
+                )
+                if (expandedKeyIds.isNotEmpty()) {
+                    GlassPill(
+                        text = if (isArabic) "طي الكل (${expandedKeyIds.size})" else "Collapse (${expandedKeyIds.size})",
+                        isSelected = false,
+                        onClick = onCollapseAllKeys
+                    )
+                }
             }
-        } else {
-            items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
-                val isVisible = !isStealth && (entry.id in revealedKeyIds)
-                val isExpanded = entry.id in expandedKeyIds
-                VaultKeyRowCard(
-                    entry = entry,
-                    analysis = analysis,
-                    isVisible = isVisible,
-                    isExpanded = isExpanded,
-                    isStealth = isStealth,
-                    isArabic = isArabic,
-                    shimmerPhase = shimmerPhase,
-                    pulsePhase = pulsePhase,
-                    onToggleExpand = { onToggleExpandKey(entry.id) },
-                    onToggleReveal = { onToggleRevealKey(entry.id) },
-                    onTogglePin = {
-                        onTogglePinKey(entry.id)
-                    },
-                    onHoldActions = {
-                        holdActionTargetKey = entry
-                    },
-                    onCopyUsername = {
-                        if (entry.username.isNotBlank()) {
-                            copyToClipboard(
-                                label = "Username",
-                                text = entry.username,
-                                msg = if (isArabic) "تم نسخ اسم المستخدم ✓" else "Username copied ✓"
-                            )
-                        }
-                    },
-                    onCopySecret = {
-                        copyToClipboard(
-                            label = entry.label,
-                            text = entry.secretValue,
-                            msg = if (isArabic) "تم نسخ كلمة السر ✓" else "Password copied ✓"
+        }
+    }
+
+    if (layoutInfo.columns >= 2) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item(key = "keys_header_tablet") {
+                    Spacer(modifier = Modifier.height(dimens.spacingXs))
+                    keysHeader()
+                }
+                item(key = "keys_smart_audit_tablet") { auditSummaryCard() }
+                if (keys.isNotEmpty()) {
+                    item(key = "keys_search_filter_tablet") { searchAndFilterBlock() }
+                }
+                item(key = "keys_left_spacer") { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+                if (filteredItems.isEmpty()) {
+                    item(key = "keys_empty_tablet") {
+                        LiquidEmptyStateCard(
+                            title = if (keys.isEmpty()) {
+                                if (isArabic) "لا توجد حسابات محفوظة بعد" else "No saved accounts yet"
+                            } else {
+                                if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
+                            },
+                            description = if (keys.isEmpty()) {
+                                if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
+                                else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
+                            } else {
+                                if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
+                                else "Adjust your search or filter to see more entries."
+                            },
+                            icon = Icons.Default.Key,
+                            iconColor = AmberNeon
                         )
                     }
-                )
+                } else {
+                    items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
+                        val isVisible = !isStealth && (entry.id in revealedKeyIds)
+                        val isExpanded = entry.id in expandedKeyIds
+                        VaultKeyRowCard(
+                            entry = entry,
+                            analysis = analysis,
+                            isVisible = isVisible,
+                            isExpanded = isExpanded,
+                            isStealth = isStealth,
+                            isArabic = isArabic,
+                            shimmerPhase = shimmerPhase,
+                            pulsePhase = pulsePhase,
+                            onToggleExpand = { onToggleExpandKey(entry.id) },
+                            onToggleReveal = { onToggleRevealKey(entry.id) },
+                            onTogglePin = { onTogglePinKey(entry.id) },
+                            onHoldActions = { holdActionTargetKey = entry },
+                            onCopyUsername = {
+                                if (entry.username.isNotBlank()) {
+                                    copyToClipboard(
+                                        label = "Username",
+                                        text = entry.username,
+                                        msg = if (isArabic) "تم نسخ اسم المستخدم ✓" else "Username copied ✓"
+                                    )
+                                }
+                            },
+                            onCopySecret = {
+                                copyToClipboard(
+                                    label = entry.label,
+                                    text = entry.secretValue,
+                                    msg = if (isArabic) "تم نسخ كلمة السر ✓" else "Password copied ✓"
+                                )
+                            }
+                        )
+                    }
+                }
+                item(key = "keys_bottom_spacer_tablet") { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
         }
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item(key = "keys_header") {
+                Spacer(modifier = Modifier.height(dimens.spacingXs))
+                keysHeader()
+            }
+            item(key = "keys_smart_audit") { auditSummaryCard() }
+            if (keys.isNotEmpty()) {
+                item(key = "keys_search_filter") { searchAndFilterBlock() }
+            }
+            if (filteredItems.isEmpty()) {
+                item(key = "keys_empty") {
+                    LiquidEmptyStateCard(
+                        title = if (keys.isEmpty()) {
+                            if (isArabic) "لا توجد حسابات محفوظة بعد" else "No saved accounts yet"
+                        } else {
+                            if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
+                        },
+                        description = if (keys.isEmpty()) {
+                            if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
+                            else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
+                        } else {
+                            if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
+                            else "Adjust your search or filter to see more entries."
+                        },
+                        icon = Icons.Default.Key,
+                        iconColor = AmberNeon
+                    )
+                }
+            } else {
+                items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
+                    val isVisible = !isStealth && (entry.id in revealedKeyIds)
+                    val isExpanded = entry.id in expandedKeyIds
+                    VaultKeyRowCard(
+                        entry = entry,
+                        analysis = analysis,
+                        isVisible = isVisible,
+                        isExpanded = isExpanded,
+                        isStealth = isStealth,
+                        isArabic = isArabic,
+                        shimmerPhase = shimmerPhase,
+                        pulsePhase = pulsePhase,
+                        onToggleExpand = { onToggleExpandKey(entry.id) },
+                        onToggleReveal = { onToggleRevealKey(entry.id) },
+                        onTogglePin = { onTogglePinKey(entry.id) },
+                        onHoldActions = { holdActionTargetKey = entry },
+                        onCopyUsername = {
+                            if (entry.username.isNotBlank()) {
+                                copyToClipboard(
+                                    label = "Username",
+                                    text = entry.username,
+                                    msg = if (isArabic) "تم نسخ اسم المستخدم ✓" else "Username copied ✓"
+                                )
+                            }
+                        },
+                        onCopySecret = {
+                            copyToClipboard(
+                                label = entry.label,
+                                text = entry.secretValue,
+                                msg = if (isArabic) "تم نسخ كلمة السر ✓" else "Password copied ✓"
+                            )
+                        }
+                    )
+                }
+            }
 
-        item(key = "keys_bottom_spacer") {
-            Spacer(modifier = Modifier.height(84.dp))
+            item(key = "keys_bottom_spacer") {
+                Spacer(modifier = Modifier.height(84.dp))
+            }
         }
     }
 }
@@ -633,6 +732,7 @@ private fun AuditStatChip(
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    val typo = LocalAdaptiveTypography.current
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -644,7 +744,7 @@ private fun AuditStatChip(
         Text(
             text = label,
             color = color,
-            fontSize = 11.sp,
+            fontSize = typo.caption,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

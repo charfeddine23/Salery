@@ -162,25 +162,31 @@ fun TotalBalanceVaultCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = strings.totalBalance,
                         color = colors.textSecondary,
                         fontSize = typo.body,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Text(
                         text = if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense",
                         color = colors.textMuted,
                         fontSize = typo.caption,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.width(dimens.spacingSm))
+
                 // Cash Flow Phase Indicator Badge
                 val flowTagLabel = when {
-                    isSurplus -> if (isArabic) "تدفق مالي إيجابي ↗" else "Surplus Flow ↗"
-                    isDeficit -> if (isArabic) "حرق رصيد مرتفع ↘" else "High Burn ↘"
+                    isSurplus -> if (isArabic) "تدفق إيجابي ↗" else "Surplus Flow ↗"
+                    isDeficit -> if (isArabic) "حرق رصيد ↘" else "High Burn ↘"
                     else -> if (isArabic) "تدفق متوازن ⇄" else "Balanced Flow ⇄"
                 }
                 val flowTagColor = when {
@@ -194,13 +200,14 @@ fun TotalBalanceVaultCard(
                         .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                         .background(flowTagColor.copy(alpha = 0.16f))
                         .border(1.dp, flowTagColor.copy(alpha = 0.35f), RoundedCornerShape(dimens.cornerRadiusSm))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .padding(horizontal = dimens.spacingSm + 2.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = flowTagLabel,
                         color = flowTagColor,
                         fontSize = typo.bodyXs,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -213,7 +220,9 @@ fun TotalBalanceVaultCard(
                 color = colors.textPrimary,
                 fontSize = typo.hero,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.5.sp
+                letterSpacing = 0.5.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
 
             // If Safe Pocket has funds, show savings info chip (without altering Alg Post Balance)
@@ -221,7 +230,7 @@ fun TotalBalanceVaultCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
                         .background(colors.glassSurface)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -230,25 +239,27 @@ fun TotalBalanceVaultCard(
                         imageVector = Icons.Default.Savings,
                         contentDescription = null,
                         tint = AmberNeon,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(dimens.iconSizeXs)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
                             formatDzd(lockedAmount, strings.currencyCode, isStealth),
                         color = colors.textMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = typo.bodyXs,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(dimens.spacingMd))
 
             // Monthly Income vs Expense Mini Stats
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm + 2.dp)
             ) {
                 // Income
                 Box(
@@ -275,17 +286,21 @@ fun TotalBalanceVaultCard(
                             )
                         }
                         Spacer(modifier = Modifier.width(dimens.spacingSm))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = strings.monthlyIncome,
                                 color = colors.textMuted,
-                                fontSize = typo.caption
+                                fontSize = typo.caption,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                             Text(
                                 text = formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth),
                                 color = EmeraldNeon,
                                 fontSize = typo.body,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -316,17 +331,21 @@ fun TotalBalanceVaultCard(
                             )
                         }
                         Spacer(modifier = Modifier.width(dimens.spacingSm))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = strings.monthlyExpense,
                                 color = colors.textMuted,
-                                fontSize = typo.caption
+                                fontSize = typo.caption,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                             Text(
                                 text = formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth),
                                 color = RoseNeon,
                                 fontSize = typo.body,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
                     }

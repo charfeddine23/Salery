@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -110,6 +111,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.breathingGlow
@@ -140,6 +142,7 @@ fun CardsHubScreen(
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
     val isDark = colors.isDark
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
@@ -239,35 +242,234 @@ fun CardsHubScreen(
         )
     }
 
+    val primaryCardSection: @Composable (Modifier) -> Unit = { sectionMod ->
+        val bankSpec = AlgerianBankCardCatalog.findById(userSettings.classicCardBankStyle)
+        Column(modifier = sectionMod) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (bankSpec.id == "EDAHABIA") {
+                        strings.edahabiaCardTitle
+                    } else {
+                        if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCode})" else bankSpec.nameEn
+                    },
+                    color = colors.textPrimary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = strings.currentAccount,
+                    color = CyanNeon,
+                    fontSize = typo.caption,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            EdahabiaCardRealistic(
+                summary = summary,
+                userSettings = userSettings,
+                bankSpec = bankSpec,
+                isArabic = isArabic,
+                isDark = isDark,
+                onClick = onOpenDashboard,
+                onLongPressEdit = { showEditClassicCardDialog = true }
+            )
+        }
+    }
+
+    val secondaryCardSection: @Composable (Modifier) -> Unit = { sectionMod ->
+        val visaProvider = userSettings.visaCardProvider.uppercase()
+        val visaSectionTitle = when (visaProvider) {
+            "REDOTPAY" -> if (isArabic) "بطاقة RedotPay الدولية" else "RedotPay Visa Card"
+            "BYBIT" -> if (isArabic) "بطاقة Bybit الدولية" else "Bybit Card"
+            "BINANCE" -> if (isArabic) "بطاقة Binance الدولية" else "Binance Visa Card"
+            else -> strings.visaCardTitle
+        }
+        val visaBadgeColor = when (visaProvider) {
+            "REDOTPAY" -> Color(0xFFFB7185)
+            "BYBIT" -> Color(0xFFF7A600)
+            "BINANCE" -> Color(0xFFF0B90B)
+            else -> CyanNeon
+        }
+        val visaBadgeText = when (visaProvider) {
+            "REDOTPAY", "BYBIT", "BINANCE" -> if (isArabic) "مفعّلة" else "ACTIVE"
+            else -> strings.comingSoon
+        }
+
+        Column(modifier = sectionMod) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = visaSectionTitle,
+                    color = colors.textPrimary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(visaBadgeColor.copy(alpha = 0.15f))
+                        .border(1.dp, visaBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = visaBadgeText,
+                        color = visaBadgeColor,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            VisaCardRealistic(
+                provider = visaProvider,
+                holderName = userSettings.visaCardHolderName,
+                cardNumber = userSettings.visaCardNumber,
+                expiry = userSettings.visaCardExpiry,
+                cvc = userSettings.visaCardCvc,
+                cardTestTag = "visa_hub_card",
+                binancePortfolioTotalUsd = binancePortfolioTotalUsd,
+                binanceHoldingsCount = binanceHoldingsCount,
+                isArabic = isArabic,
+                isDark = isDark,
+                onClick = {
+                    if (visaProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
+                },
+                onLongPressEdit = { showEditVisaCardDialog = true }
+            )
+        }
+    }
+
+    val thirdCardSection: @Composable (Modifier) -> Unit = { sectionMod ->
+        if (userSettings.thirdCardEnabled) {
+            val thirdProvider = userSettings.thirdCardProvider.uppercase()
+            val thirdSectionTitle = when (thirdProvider) {
+                "REDOTPAY" -> if (isArabic) "البطاقة الثالثة • RedotPay" else "Third Card • RedotPay"
+                "BYBIT" -> if (isArabic) "البطاقة الثالثة • Bybit" else "Third Card • Bybit"
+                "BINANCE" -> if (isArabic) "البطاقة الثالثة • Binance" else "Third Card • Binance"
+                else -> if (isArabic) "البطاقة الثالثة • Visa" else "Third Card • Visa"
+            }
+            val thirdBadgeColor = when (thirdProvider) {
+                "REDOTPAY" -> Color(0xFFFB7185)
+                "BYBIT" -> Color(0xFFF7A600)
+                "BINANCE" -> Color(0xFFF0B90B)
+                else -> CyanNeon
+            }
+
+            Column(modifier = sectionMod) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = thirdSectionTitle,
+                        color = colors.textPrimary,
+                        fontSize = typo.body,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(thirdBadgeColor.copy(alpha = 0.15f))
+                            .border(1.dp, thirdBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                            .clickable { showEditThirdCardDialog = true }
+                            .testTag("edit_third_card_badge")
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (isArabic) "تعديل" else "EDIT",
+                            color = thirdBadgeColor,
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                VisaCardRealistic(
+                    provider = thirdProvider,
+                    holderName = userSettings.thirdCardHolderName,
+                    cardNumber = userSettings.thirdCardNumber,
+                    expiry = userSettings.thirdCardExpiry,
+                    cvc = userSettings.thirdCardCvc,
+                    cardTestTag = "third_hub_card",
+                    binancePortfolioTotalUsd = binancePortfolioTotalUsd,
+                    binanceHoldingsCount = binanceHoldingsCount,
+                    isArabic = isArabic,
+                    isDark = isDark,
+                    onClick = {
+                        if (thirdProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
+                    },
+                    onLongPressEdit = { showEditThirdCardDialog = true }
+                )
+            }
+        } else {
+            Box(modifier = sectionMod, contentAlignment = Alignment.Center) {
+                AddThirdCardSlotCard(
+                    isArabic = isArabic,
+                    onClick = { showEditThirdCardDialog = true }
+                )
+            }
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = dimens.screenPaddingH),
         verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
     ) {
-        // Section Header: Cards Hub Title & Active Badges
+        // Section Header: Contextual subtitle & Active Badges (TopAppBar already displays Cards Hub title)
         item {
-            Spacer(modifier = Modifier.height(dimens.spacingSm))
+            Spacer(modifier = Modifier.height(dimens.spacingXs))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = strings.cardsHubTitle,
-                        color = colors.textPrimary,
-                        fontSize = typo.title,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.2.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = strings.cardsHubSubtitle,
-                        color = colors.textMuted,
-                        fontSize = typo.caption
-                    )
-                }
+                Text(
+                    text = strings.cardsHubSubtitle,
+                    color = colors.textMuted,
+                    fontSize = typo.bodySm,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(dimens.spacingSm))
 
                 // Security & Status Badge
                 Box(
@@ -292,214 +494,37 @@ fun CardsHubScreen(
                                 strings.activeCardsCount
                             },
                             color = colors.textPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                     }
                 }
             }
         }
 
-        // 1. Primary Card: Algérie Poste - Edahabia OR Algerian CIB Bank Card
-        item {
-            val bankSpec = AlgerianBankCardCatalog.findById(userSettings.classicCardBankStyle)
-            Column(modifier = Modifier.fillMaxWidth()) {
+        if (layoutInfo.columns >= 2) {
+            item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = if (bankSpec.id == "EDAHABIA") {
-                            strings.edahabiaCardTitle
-                        } else {
-                            if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCode})" else bankSpec.nameEn
-                        },
-                        color = colors.textPrimary,
-                        fontSize = typo.body,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = strings.currentAccount,
-                        color = CyanNeon,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    primaryCardSection(Modifier.weight(1f))
+                    secondaryCardSection(Modifier.weight(1f))
                 }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                EdahabiaCardRealistic(
-                    summary = summary,
-                    userSettings = userSettings,
-                    bankSpec = bankSpec,
-                    isArabic = isArabic,
-                    isDark = isDark,
-                    onClick = onOpenDashboard,
-                    onLongPressEdit = { showEditClassicCardDialog = true }
-                )
             }
-        }
-
-        // 2. Secondary Card: Visa / RedotPay / Bybit / Binance Card
-        item {
-            val visaProvider = userSettings.visaCardProvider.uppercase()
-            val visaSectionTitle = when (visaProvider) {
-                "REDOTPAY" -> if (isArabic) "بطاقة RedotPay الدولية" else "RedotPay Visa Card"
-                "BYBIT" -> if (isArabic) "بطاقة Bybit الدولية" else "Bybit Card"
-                "BINANCE" -> if (isArabic) "بطاقة Binance الدولية" else "Binance Visa Card"
-                else -> strings.visaCardTitle
-            }
-            val visaBadgeColor = when (visaProvider) {
-                "REDOTPAY" -> Color(0xFFFB7185)
-                "BYBIT" -> Color(0xFFF7A600)
-                "BINANCE" -> Color(0xFFF0B90B)
-                else -> CyanNeon
-            }
-            val visaBadgeText = when (visaProvider) {
-                "REDOTPAY", "BYBIT", "BINANCE" -> if (isArabic) "مفعّلة" else "ACTIVE"
-                else -> strings.comingSoon
-            }
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
+            item {
+                thirdCardSection(
+                    Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = visaSectionTitle,
-                        color = colors.textPrimary,
-                        fontSize = typo.body,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(visaBadgeColor.copy(alpha = 0.15f))
-                            .border(1.dp, visaBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = visaBadgeText,
-                            color = visaBadgeColor,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                VisaCardRealistic(
-                    provider = visaProvider,
-                    holderName = userSettings.visaCardHolderName,
-                    cardNumber = userSettings.visaCardNumber,
-                    expiry = userSettings.visaCardExpiry,
-                    cvc = userSettings.visaCardCvc,
-                    cardTestTag = "visa_hub_card",
-                    binancePortfolioTotalUsd = binancePortfolioTotalUsd,
-                    binanceHoldingsCount = binanceHoldingsCount,
-                    isArabic = isArabic,
-                    isDark = isDark,
-                    onClick = {
-                        if (visaProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
-                    },
-                    onLongPressEdit = { showEditVisaCardDialog = true }
+                        .widthIn(max = 540.dp)
                 )
             }
-        }
-
-        // 3. Third Optional Card at the bottom in Card Hub
-        item {
-            if (userSettings.thirdCardEnabled) {
-                val thirdProvider = userSettings.thirdCardProvider.uppercase()
-                val thirdSectionTitle = when (thirdProvider) {
-                    "REDOTPAY" -> if (isArabic) "البطاقة الثالثة • RedotPay" else "Third Card • RedotPay"
-                    "BYBIT" -> if (isArabic) "البطاقة الثالثة • Bybit" else "Third Card • Bybit"
-                    "BINANCE" -> if (isArabic) "البطاقة الثالثة • Binance" else "Third Card • Binance"
-                    else -> if (isArabic) "البطاقة الثالثة • Visa" else "Third Card • Visa"
-                }
-                val thirdBadgeColor = when (thirdProvider) {
-                    "REDOTPAY" -> Color(0xFFFB7185)
-                    "BYBIT" -> Color(0xFFF7A600)
-                    "BINANCE" -> Color(0xFFF0B90B)
-                    else -> CyanNeon
-                }
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = thirdSectionTitle,
-                            color = colors.textPrimary,
-                            fontSize = typo.body,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(thirdBadgeColor.copy(alpha = 0.15f))
-                                    .border(1.dp, thirdBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                                    .clickable { showEditThirdCardDialog = true }
-                                    .testTag("edit_third_card_badge")
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = if (isArabic) "تعديل" else "EDIT",
-                                    color = thirdBadgeColor,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    VisaCardRealistic(
-                        provider = thirdProvider,
-                        holderName = userSettings.thirdCardHolderName,
-                        cardNumber = userSettings.thirdCardNumber,
-                        expiry = userSettings.thirdCardExpiry,
-                        cvc = userSettings.thirdCardCvc,
-                        cardTestTag = "third_hub_card",
-                        binancePortfolioTotalUsd = binancePortfolioTotalUsd,
-                        binanceHoldingsCount = binanceHoldingsCount,
-                        isArabic = isArabic,
-                        isDark = isDark,
-                        onClick = {
-                            if (thirdProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
-                        },
-                        onLongPressEdit = { showEditThirdCardDialog = true }
-                    )
-                }
-            } else {
-                AddThirdCardSlotCard(
-                    isArabic = isArabic,
-                    onClick = { showEditThirdCardDialog = true }
-                )
-            }
+        } else {
+            item { primaryCardSection(Modifier.fillMaxWidth()) }
+            item { secondaryCardSection(Modifier.fillMaxWidth()) }
+            item { thirdCardSection(Modifier.fillMaxWidth()) }
         }
 
         item {
@@ -560,12 +585,14 @@ private fun AddThirdCardSlotCard(
                     )
                 }
                 Spacer(modifier = Modifier.width(14.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isArabic) "إضافة بطاقة ثالثة" else "Add Third Card",
                         color = colors.textPrimary,
                         fontSize = typo.titleSm,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -582,6 +609,8 @@ private fun AddThirdCardSlotCard(
                 }
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
@@ -592,8 +621,9 @@ private fun AddThirdCardSlotCard(
                 Text(
                     text = if (isArabic) "+ إضافة" else "+ Add",
                     color = goldAccent,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontSize = typo.caption,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
                 )
             }
         }

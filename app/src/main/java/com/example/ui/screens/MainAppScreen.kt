@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,8 +35,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -331,7 +334,9 @@ fun MainAppScreen(
                     drawerContent = {
                         ModalDrawerSheet(
                             drawerContainerColor = Color.Transparent,
-                            modifier = Modifier.width(320.dp)
+                            modifier = Modifier
+                                .fillMaxWidth(0.84f)
+                                .widthIn(min = 272.dp, max = 336.dp)
                         ) {
                             SidebarDrawer(
                                 selectedRoute = currentRoute,
@@ -383,123 +388,137 @@ fun MainAppScreen(
                     // Main App Content adopts the chosen layoutDirection (RTL in Arabic, LTR in English)
                     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
                         val dimens = LocalAdaptiveDimens.current
-                        val typo = LocalAdaptiveTypography.current
+                        val layoutInfo = LocalAdaptiveLayoutInfo.current
+                        val showNavRail = layoutInfo.useNavRail && (isOnHubTabs || isInsideCard)
 
                         GlassBackground {
-                            Scaffold(
-                        containerColor = Color.Transparent,
-                        topBar = {
-                            val isSubScreen = !isOnHubTabs
-                            MainTopAppBar(
-                                title = when (currentRoute) {
-                                    "cards" -> activeStrings.cardsHubTitle
-                                    "keys" -> "Keys"
-                                    "ccps" -> "CCP's"
-                                    "square" -> "Square"
-                                    "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
-                                    "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
-                                    "theme_engine" -> "Theme Engine"
-                                    "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
-                                    "visa_coming_soon" -> activeStrings.visaCardTitle
-                                    "binance_wallet" -> if (isArabic) "محفظة Binance" else "Binance Wallet"
-                                    "income" -> activeStrings.navIncome
-                                    "expenses" -> activeStrings.navExpenses
-                                    "debts" -> activeStrings.navDebts
-                                    "insights" -> if (isArabic) "الادخار" else "Savings"
-                                    else -> APP_NAME
-                                },
-                                canGoBack = isSubScreen,
-                                onBackClick = {
-                                    currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
-                                        "dashboard_details"
-                                    } else {
-                                        "cards"
-                                    }
-                                },
-                                onMenuClick = {
-                                    scope.launch {
-                                        if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                                    }
-                                },
-                                totalBalance = summary.totalBalance,
-                                showMoneyBag = isInsideCard,
-                                onOpenInsights = { currentRoute = "insights" },
-                                showScreenshotShield = currentRoute == "cards",
-                                isScreenshotProtected = userSettings.screenshotProtectionEnabled,
-                                onShieldClick = { showScreenshotShieldDialog = true },
-                                isStealthMode = userSettings.stealthMode,
-                                onToggleStealth = { viewModel.toggleStealthMode() }
-                            )
-                        },
-                        bottomBar = {
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                AnimatedVisibility(
-                                    visible = isOnHubTabs,
-                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
-                                ) {
-                                    HubBottomBar(
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                if (showNavRail) {
+                                    LiquidGlassNavigationRail(
                                         currentRoute = currentRoute,
-                                        onRouteSelect = { currentRoute = it }
-                                    )
-                                }
-                                AnimatedVisibility(
-                                    visible = isInsideCard,
-                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
-                                ) {
-                                    LiquidGlassBottomBar(
-                                        currentRoute = currentRoute,
+                                        isInsideCard = isInsideCard,
                                         pendingSmsCount = pendingSmsSuggestions.size,
                                         onRouteSelect = { currentRoute = it }
                                     )
                                 }
-                            }
-                        },
-                        floatingActionButton = {
-                            if (isInsideCard && currentRoute != "baridimob_sync") {
-                                FloatingActionButton(
-                                    onClick = {
-                                        when (currentRoute) {
-                                            "income" -> {
-                                                addTransactionType = TransactionType.INCOME
-                                                showAddTransactionDialog = true
-                                            }
-                                            "expenses" -> {
-                                                addTransactionType = TransactionType.EXPENSE
-                                                showAddTransactionDialog = true
-                                            }
-                                            "debts" -> {
-                                                addDebtType = DebtType.OWED_BY_ME
-                                                showAddDebtDialog = true
-                                            }
-                                            else -> {
-                                                addTransactionType = TransactionType.EXPENSE
-                                                showAddTransactionDialog = true
+
+                                Scaffold(
+                                    modifier = Modifier.weight(1f),
+                                    containerColor = Color.Transparent,
+                                    topBar = {
+                                        val isSubScreen = !isOnHubTabs
+                                        MainTopAppBar(
+                                            title = when (currentRoute) {
+                                                "cards" -> activeStrings.cardsHubTitle
+                                                "keys" -> "Keys"
+                                                "ccps" -> "CCP's"
+                                                "square" -> "Square"
+                                                "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
+                                                "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
+                                                "theme_engine" -> "Theme Engine"
+                                                "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
+                                                "visa_coming_soon" -> activeStrings.visaCardTitle
+                                                "binance_wallet" -> if (isArabic) "محفظة Binance" else "Binance Wallet"
+                                                "income" -> activeStrings.navIncome
+                                                "expenses" -> activeStrings.navExpenses
+                                                "debts" -> activeStrings.navDebts
+                                                "insights" -> if (isArabic) "الادخار" else "Savings"
+                                                else -> APP_NAME
+                                            },
+                                            canGoBack = isSubScreen,
+                                            onBackClick = {
+                                                currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
+                                                    "dashboard_details"
+                                                } else {
+                                                    "cards"
+                                                }
+                                            },
+                                            onMenuClick = {
+                                                scope.launch {
+                                                    if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                                }
+                                            },
+                                            totalBalance = summary.totalBalance,
+                                            showMoneyBag = isInsideCard,
+                                            onOpenInsights = { currentRoute = "insights" },
+                                            showScreenshotShield = currentRoute == "cards",
+                                            isScreenshotProtected = userSettings.screenshotProtectionEnabled,
+                                            onShieldClick = { showScreenshotShieldDialog = true },
+                                            isStealthMode = userSettings.stealthMode,
+                                            onToggleStealth = { viewModel.toggleStealthMode() }
+                                        )
+                                    },
+                                    bottomBar = {
+                                        if (!showNavRail) {
+                                            Box(modifier = Modifier.fillMaxWidth()) {
+                                                androidx.compose.animation.AnimatedVisibility(
+                                                    visible = isOnHubTabs,
+                                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                                                ) {
+                                                    HubBottomBar(
+                                                        currentRoute = currentRoute,
+                                                        onRouteSelect = { currentRoute = it }
+                                                    )
+                                                }
+                                                androidx.compose.animation.AnimatedVisibility(
+                                                    visible = isInsideCard,
+                                                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
+                                                ) {
+                                                    LiquidGlassBottomBar(
+                                                        currentRoute = currentRoute,
+                                                        pendingSmsCount = pendingSmsSuggestions.size,
+                                                        onRouteSelect = { currentRoute = it }
+                                                    )
+                                                }
                                             }
                                         }
                                     },
-                                    containerColor = LiquidGlassTheme.colors.primaryNeon,
-                                    contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
-                                    shape = CircleShape,
-                                    modifier = Modifier.size(dimens.fabSize)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add",
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                            }
-                        }
-                    ) { innerPadding ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
-                                .adaptiveContentWidth(dimens.contentMaxWidth),
-                            contentAlignment = Alignment.TopCenter
-                        ) {
+                                    floatingActionButton = {
+                                        if (isInsideCard && currentRoute != "baridimob_sync") {
+                                            FloatingActionButton(
+                                                onClick = {
+                                                    when (currentRoute) {
+                                                        "income" -> {
+                                                            addTransactionType = TransactionType.INCOME
+                                                            showAddTransactionDialog = true
+                                                        }
+                                                        "expenses" -> {
+                                                            addTransactionType = TransactionType.EXPENSE
+                                                            showAddTransactionDialog = true
+                                                        }
+                                                        "debts" -> {
+                                                            addDebtType = DebtType.OWED_BY_ME
+                                                            showAddDebtDialog = true
+                                                        }
+                                                        else -> {
+                                                            addTransactionType = TransactionType.EXPENSE
+                                                            showAddTransactionDialog = true
+                                                        }
+                                                    }
+                                                },
+                                                containerColor = LiquidGlassTheme.colors.primaryNeon,
+                                                contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
+                                                shape = CircleShape,
+                                                modifier = Modifier.size(dimens.fabSize)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = "Add",
+                                                    modifier = Modifier.size(dimens.iconSizeLg)
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) { innerPadding ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(innerPadding)
+                                            .adaptiveContentWidth(dimens.contentMaxWidth),
+                                        contentAlignment = Alignment.TopCenter
+                                    ) {
                             when (currentRoute) {
                                 "cards" -> CardsHubScreen(
                                     summary = summary,
@@ -761,13 +780,14 @@ fun MainAppScreen(
                                         viewModel.spendFromSavings(amount, title, category, note)
                                     }
                                 )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-    }
 
             // Dialogs
             if (showAddTransactionDialog) {
@@ -935,13 +955,13 @@ fun MainTopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .adaptiveContentWidth(dimens.contentMaxWidth)
-                .padding(horizontal = dimens.screenPaddingH, vertical = 8.dp),
+                .padding(horizontal = dimens.screenPaddingH, vertical = dimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Menu / Back Button (min touch target 48dp)
             GlassCard(
-                modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
+                shape = RoundedCornerShape(dimens.cornerRadiusMd),
                 backgroundColor = colors.glassCard,
                 breathingGlow = false,
                 onClick = if (canGoBack) onBackClick else onMenuClick
@@ -951,34 +971,35 @@ fun MainTopAppBar(
                         imageVector = if (canGoBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
                         contentDescription = if (canGoBack) "Back" else "Menu",
                         tint = colors.textPrimary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(dimens.iconSizeMd)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(dimens.spacingSm + 2.dp))
 
-            // Screen Title
+            // Screen Title (weighted + ellipsis so it never overlaps right-side action buttons)
             Text(
                 text = title,
                 color = colors.textPrimary,
                 fontSize = typo.title,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.3.sp,
-                maxLines = 1
+                letterSpacing = 0.2.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             if (showMoneyBag) {
-                // Dynamic 90fps Money Bag (placed directly in front of the Stealth Mode eye icon inside the card)
                 DynamicMoneyBag(
                     totalBalance = totalBalance,
                     onClick = onOpenInsights,
-                    size = 44.dp
+                    size = (dimens.buttonHeight - 4.dp).coerceAtLeast(44.dp)
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(dimens.spacingXs + 2.dp))
             }
 
             if (showScreenshotShield) {
@@ -987,13 +1008,13 @@ fun MainTopAppBar(
                     onClick = onShieldClick
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(dimens.spacingXs + 2.dp))
             }
 
             // Stealth Mode / Privacy Toggle Action Button (min touch target 48dp)
             GlassCard(
-                modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
+                shape = RoundedCornerShape(dimens.cornerRadiusMd),
                 backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
                 breathingGlow = false,
                 onClick = onToggleStealth
@@ -1003,7 +1024,7 @@ fun MainTopAppBar(
                         imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = "Stealth Mode Toggle",
                         tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(dimens.iconSizeMd - 2.dp)
                     )
                 }
             }
@@ -1380,6 +1401,116 @@ fun HubBottomBar(
                             color = if (isSelected) activeColor else colors.textMuted,
                             fontSize = typo.caption,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiquidGlassNavigationRail(
+    currentRoute: String,
+    isInsideCard: Boolean,
+    pendingSmsCount: Int = 0,
+    onRouteSelect: (String) -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val strings = AppStrings.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+    val isArabic = strings is ArabicStrings
+
+    val items = if (isInsideCard) {
+        listOf(
+            NavigationItem("dashboard_details", if (isArabic) "لوحة التحكم" else "Dashboard", Icons.Default.Dashboard),
+            NavigationItem("income", strings.navIncome, Icons.Default.TrendingUp),
+            NavigationItem("expenses", strings.navExpenses, Icons.Default.TrendingDown),
+            NavigationItem("debts", strings.navDebts, Icons.Default.AccountBalanceWallet),
+            NavigationItem("baridimob_sync", if (isArabic) "الرسائل" else "SMS", Icons.Default.Sms)
+        )
+    } else {
+        listOf(
+            NavigationItem("cards", "Card Hub", Icons.Default.CreditCard),
+            NavigationItem("keys", "Keys", Icons.Default.VpnKey),
+            NavigationItem("ccps", "CCP's", Icons.Default.AccountBalance),
+            NavigationItem("square", "Square", Icons.Default.CurrencyExchange)
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(start = dimens.spacingMd, top = dimens.spacingSm, bottom = dimens.spacingSm),
+        contentAlignment = Alignment.Center
+    ) {
+        GlassCard(
+            modifier = Modifier
+                .width(88.dp)
+                .fillMaxHeight()
+                .testTag(if (isInsideCard) "card_nav_rail" else "hub_nav_rail"),
+            shape = RoundedCornerShape(dimens.cornerRadiusXl),
+            cornerRadius = dimens.cornerRadiusXl,
+            backgroundColor = colors.glassCard
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = dimens.spacingLg, horizontal = dimens.spacingXs),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingSm, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                items.forEach { item ->
+                    val isSelected = currentRoute == item.route
+                    val activeColor = when (item.route) {
+                        "income" -> EmeraldNeon
+                        "expenses" -> RoseNeon
+                        "debts" -> AmberNeon
+                        "baridimob_sync" -> Color(0xFF818CF8)
+                        "keys" -> AmberNeon
+                        "ccps" -> EmeraldNeon
+                        "square" -> AmberNeon
+                        else -> colors.primaryNeon
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+                            .background(if (isSelected) activeColor.copy(alpha = 0.16f) else Color.Transparent)
+                            .clickable { onRouteSelect(item.route) }
+                            .padding(horizontal = 4.dp, vertical = 12.dp)
+                            .testTag((if (isInsideCard) "card_tab_" else "hub_tab_") + item.route),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(contentAlignment = Alignment.TopEnd) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.label,
+                                tint = if (isSelected) activeColor else colors.textMuted,
+                                modifier = Modifier.size(dimens.iconSizeMd)
+                            )
+                            if (item.route == "baridimob_sync" && pendingSmsCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(RoseNeon)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = item.label,
+                            color = if (isSelected) activeColor else colors.textMuted,
+                            fontSize = typo.caption,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

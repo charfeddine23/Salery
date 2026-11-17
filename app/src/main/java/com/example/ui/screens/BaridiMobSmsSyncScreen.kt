@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,6 +92,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 
@@ -126,6 +128,7 @@ fun BaridiMobSmsSyncScreen(
     val isStealth = LocalStealthMode.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
 
     var hasReadSmsPerm by remember {
         mutableStateOf(
@@ -208,61 +211,321 @@ fun BaridiMobSmsSyncScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPaddingH),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // 1. Luxury Minimalist Hero Balance Card (with clean tucked controls drawer)
-        item {
-            Spacer(modifier = Modifier.height(dimens.spacingXs))
-            SmsHeroBalanceCard(
-                latestBalance = effectiveLatestBalance,
-                latestDelta = latestDelta,
-                updatedAtMillis = effectiveUpdatedAt,
-                currencyCode = strings.currencyCode,
-                isStealth = isStealth,
-                hasSmsPerm = hasReadSmsPerm,
-                autoSyncEnabled = userSettings.baridiMobSmsSyncEnabled,
-                hasFreshBaseline = hasFreshBaseline,
-                baselineMillis = userSettings.smsSyncBaselineTimestampMillis,
-                controlsExpanded = controlsExpanded,
-                isArabic = isArabic,
-                colors = colors,
-                onUnifiedSyncClick = {
-                    requestPermOrRun {
-                        onRefreshCurrentBalanceOnly(false)
-                        onScanInboxNow()
-                    }
-                },
-                onToggleControls = { controlsExpanded = !controlsExpanded },
-                onToggleAutoSync = { checked ->
-                    if (checked && !hasReadSmsPerm) {
-                        requestPermOrRun { onToggleSyncEnabled(true) }
-                    } else {
-                        onToggleSyncEnabled(checked)
-                    }
-                },
-                onSkipOldSms = onSkipOldSmsAndStartFresh,
-                onResetBaseline = onResetBaselineAndRescan
-            )
-        }
+    @Composable
+    fun HeroControlSection() {
+        SmsHeroBalanceCard(
+            latestBalance = effectiveLatestBalance,
+            latestDelta = latestDelta,
+            updatedAtMillis = effectiveUpdatedAt,
+            currencyCode = strings.currencyCode,
+            isStealth = isStealth,
+            hasSmsPerm = hasReadSmsPerm,
+            autoSyncEnabled = userSettings.baridiMobSmsSyncEnabled,
+            hasFreshBaseline = hasFreshBaseline,
+            baselineMillis = userSettings.smsSyncBaselineTimestampMillis,
+            controlsExpanded = controlsExpanded,
+            isArabic = isArabic,
+            colors = colors,
+            onUnifiedSyncClick = {
+                requestPermOrRun {
+                    onRefreshCurrentBalanceOnly(false)
+                    onScanInboxNow()
+                }
+            },
+            onToggleControls = { controlsExpanded = !controlsExpanded },
+            onToggleAutoSync = { checked ->
+                if (checked && !hasReadSmsPerm) {
+                    requestPermOrRun { onToggleSyncEnabled(true) }
+                } else {
+                    onToggleSyncEnabled(checked)
+                }
+            },
+            onSkipOldSms = onSkipOldSmsAndStartFresh,
+            onResetBaseline = onResetBaselineAndRescan
+        )
+    }
 
-        // 2. Clean 3-Tab Segmented Switcher (Activity / Balances / Archive)
-        item {
-            SmsWorkspaceSegmentedTabs(
-                selectedTab = activeTab,
-                activityCount = pendingSuggestions.size + detectedTaxes.size,
-                balancesCount = balanceHistory.size,
-                archiveCount = archiveStudyReport.totalArchived.takeIf { it > 0 } ?: archivedSmsList.size,
-                isArabic = isArabic,
-                colors = colors,
-                onSelectTab = { activeTab = it }
-            )
-        }
+    @Composable
+    fun SegmentedTabsSection() {
+        SmsWorkspaceSegmentedTabs(
+            selectedTab = activeTab,
+            activityCount = pendingSuggestions.size + detectedTaxes.size,
+            balancesCount = balanceHistory.size,
+            archiveCount = archiveStudyReport.totalArchived.takeIf { it > 0 } ?: archivedSmsList.size,
+            isArabic = isArabic,
+            colors = colors,
+            onSelectTab = { activeTab = it }
+        )
+    }
 
-        // 3. Active Tab Content (Calm, focused, zero clutter)
+    @Composable
+    fun BalanceTimelineCardSection() {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("sms_balance_history_card"),
+            backgroundColor = colors.glassCard,
+            borderColor = colors.glassBorderSubtle,
+            shape = RoundedCornerShape(dimens.cornerRadiusLg),
+            cornerRadius = dimens.cornerRadiusLg,
+            breathingGlow = false
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = dimens.cardPadding, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(dimens.iconSizeSm)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isArabic) "التسلسل الزمني للرصيد" else "Balance Timeline",
+                            color = colors.textPrimary,
+                            fontSize = typo.titleSm,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (balanceHistory.isNotEmpty()) {
+                        IconButton(
+                            onClick = onClearBalanceHistory,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = if (isArabic) "مسح السجل" else "Clear history",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(dimens.iconSizeSm)
+                            )
+                        }
+                    }
+                }
+
+                if (newestHistoryFirst.isEmpty()) {
+                    HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
+                    Text(
+                        text = if (isArabic) "لا توجد أرصدة مسجلة بعد — اضغط تحديث في الأعلى لقراءة رسائلك."
+                        else "No balances logged yet — tap Sync above to scan your inbox.",
+                        color = colors.textMuted,
+                        fontSize = typo.bodySm,
+                        modifier = Modifier.padding(dimens.cardPadding)
+                    )
+                } else {
+                    val visible = if (showAllBalanceHistory) newestHistoryFirst else newestHistoryFirst.take(8)
+                    visible.forEach { snap ->
+                        HorizontalDivider(
+                            color = colors.glassBorderSubtle.copy(alpha = 0.4f),
+                            thickness = 0.6.dp
+                        )
+                        SmsCleanBalanceTimelineRow(
+                            snapshot = snap,
+                            delta = deltaBySnapshotId[snap.id],
+                            isArabic = isArabic,
+                            isStealth = isStealth,
+                            currency = strings.currencyCode,
+                            colors = colors
+                        )
+                    }
+                    if (newestHistoryFirst.size > 8) {
+                        HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.4f))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAllBalanceHistory = !showAllBalanceHistory }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (showAllBalanceHistory) {
+                                    if (isArabic) "عرض أحدث 8 فقط" else "Show Latest 8"
+                                } else {
+                                    if (isArabic) "عرض الكل (${newestHistoryFirst.size})" else "Show All (${newestHistoryFirst.size})"
+                                },
+                                color = CyanNeon,
+                                fontSize = typo.bodySm,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ArchiveVaultCardSection() {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("permanent_alg_poste_archive_card"),
+            backgroundColor = colors.glassCard,
+            borderColor = colors.glassBorderSubtle,
+            shape = RoundedCornerShape(dimens.cornerRadiusLg),
+            cornerRadius = dimens.cornerRadiusLg,
+            breathingGlow = false
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = dimens.cardPadding, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(dimens.iconSizeSm)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = if (isArabic) "الخزنة الدائمة للرسائل" else "Permanent SMS Vault",
+                                    color = colors.textPrimary,
+                                    fontSize = typo.titleSm,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(EmeraldNeon.copy(alpha = 0.14f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = EmeraldNeon,
+                                            modifier = Modifier.size(9.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "${archivedSmsList.size}",
+                                            color = EmeraldNeon,
+                                            fontSize = typo.caption,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = if (isArabic) "محفوظة بأمان حتى لو حُذفت من الهاتف"
+                                else "Safely kept even if deleted from phone",
+                                color = colors.textMuted,
+                                fontSize = typo.bodyXs,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(CyanNeon.copy(alpha = 0.15f))
+                            .border(0.8.dp, CyanNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .clickable(onClick = onReanalyzePermanentArchive)
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                            .testTag("reanalyze_permanent_archive_btn"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = null,
+                                tint = CyanNeon,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isArabic) "تحليل" else "Re-study",
+                                color = CyanNeon,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                if (archivedSmsList.isEmpty()) {
+                    HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
+                    Text(
+                        text = if (isArabic) "سيتم حفظ رسائل ALG Poste هنا تلقائياً عند فحصها."
+                        else "Detected ALG Poste messages are securely archived here.",
+                        color = colors.textMuted,
+                        fontSize = typo.bodySm,
+                        modifier = Modifier.padding(dimens.cardPadding)
+                    )
+                } else {
+                    val visibleArchive = if (showAllPermanentArchive) archivedSmsList else archivedSmsList.take(8)
+                    visibleArchive.forEach { entity ->
+                        HorizontalDivider(
+                            color = colors.glassBorderSubtle.copy(alpha = 0.4f),
+                            thickness = 0.6.dp
+                        )
+                        SmsCleanArchiveRow(
+                            item = entity,
+                            isArabic = isArabic,
+                            isStealth = isStealth,
+                            currency = strings.currencyCode,
+                            colors = colors
+                        )
+                    }
+                    if (archivedSmsList.size > 8) {
+                        HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.4f))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAllPermanentArchive = !showAllPermanentArchive }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (showAllPermanentArchive) {
+                                    if (isArabic) "عرض أحدث 8 فقط" else "Show Latest 8"
+                                } else {
+                                    if (isArabic) "عرض الكل (${archivedSmsList.size})" else "Show All (${archivedSmsList.size})"
+                                },
+                                color = CyanNeon,
+                                fontSize = typo.bodySm,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun androidx.compose.foundation.lazy.LazyListScope.renderActiveTabItems() {
         when (activeTab) {
             SmsWorkspaceTab.ACTIVITY -> {
                 if (pendingSuggestions.isNotEmpty()) {
@@ -328,261 +591,45 @@ fun BaridiMobSmsSyncScreen(
             }
 
             SmsWorkspaceTab.BALANCES -> {
-                item {
-                    GlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("sms_balance_history_card"),
-                        backgroundColor = colors.glassCard,
-                        borderColor = colors.glassBorderSubtle,
-                        shape = RoundedCornerShape(20.dp),
-                        cornerRadius = 20.dp,
-                        breathingGlow = false
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = null,
-                                        tint = CyanNeon,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (isArabic) "التسلسل الزمني للرصيد" else "Balance Timeline",
-                                        color = colors.textPrimary,
-                                        fontSize = typo.titleSm,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                if (balanceHistory.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = onClearBalanceHistory,
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.DeleteSweep,
-                                            contentDescription = if (isArabic) "مسح السجل" else "Clear history",
-                                            tint = colors.textMuted,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (newestHistoryFirst.isEmpty()) {
-                                HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
-                                Text(
-                                    text = if (isArabic) "لا توجد أرصدة مسجلة بعد — اضغط تحديث في الأعلى لقراءة رسائلك."
-                                    else "No balances logged yet — tap Sync above to scan your inbox.",
-                                    color = colors.textMuted,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            } else {
-                                val visible = if (showAllBalanceHistory) newestHistoryFirst else newestHistoryFirst.take(8)
-                                visible.forEach { snap ->
-                                    HorizontalDivider(
-                                        color = colors.glassBorderSubtle.copy(alpha = 0.4f),
-                                        thickness = 0.6.dp
-                                    )
-                                    SmsCleanBalanceTimelineRow(
-                                        snapshot = snap,
-                                        delta = deltaBySnapshotId[snap.id],
-                                        isArabic = isArabic,
-                                        isStealth = isStealth,
-                                        currency = strings.currencyCode,
-                                        colors = colors
-                                    )
-                                }
-                                if (newestHistoryFirst.size > 8) {
-                                    HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.4f))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { showAllBalanceHistory = !showAllBalanceHistory }
-                                            .padding(vertical = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (showAllBalanceHistory) {
-                                                if (isArabic) "عرض أحدث 8 فقط" else "Show Latest 8"
-                                            } else {
-                                                if (isArabic) "عرض الكل (${newestHistoryFirst.size})" else "Show All (${newestHistoryFirst.size})"
-                                            },
-                                            color = CyanNeon,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                item { BalanceTimelineCardSection() }
             }
 
             SmsWorkspaceTab.ARCHIVE -> {
-                item {
-                    GlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("permanent_alg_poste_archive_card"),
-                        backgroundColor = colors.glassCard,
-                        borderColor = colors.glassBorderSubtle,
-                        shape = RoundedCornerShape(20.dp),
-                        cornerRadius = 20.dp,
-                        breathingGlow = false
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.VerifiedUser,
-                                        contentDescription = null,
-                                        tint = CyanNeon,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isArabic) "الخزنة الدائمة للرسائل" else "Permanent SMS Vault",
-                                                color = colors.textPrimary,
-                                                fontSize = typo.titleSm,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(EmeraldNeon.copy(alpha = 0.14f))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Lock,
-                                                        contentDescription = null,
-                                                        tint = EmeraldNeon,
-                                                        modifier = Modifier.size(9.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(3.dp))
-                                                    Text(
-                                                        text = "${archivedSmsList.size}",
-                                                        color = EmeraldNeon,
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Text(
-                                            text = if (isArabic) "محفوظة بأمان حتى لو حُذفت من الهاتف"
-                                            else "Safely kept even if deleted from phone",
-                                            color = colors.textMuted,
-                                            fontSize = 10.5.sp
-                                        )
-                                    }
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .defaultMinSize(minHeight = 38.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(CyanNeon.copy(alpha = 0.15f))
-                                        .border(0.8.dp, CyanNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                        .clickable(onClick = onReanalyzePermanentArchive)
-                                        .padding(horizontal = 10.dp, vertical = 7.dp)
-                                        .testTag("reanalyze_permanent_archive_btn"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Psychology,
-                                            contentDescription = null,
-                                            tint = CyanNeon,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (isArabic) "تحليل" else "Re-study",
-                                            color = CyanNeon,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (archivedSmsList.isEmpty()) {
-                                HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
-                                Text(
-                                    text = if (isArabic) "سيتم حفظ رسائل ALG Poste هنا تلقائياً عند فحصها."
-                                    else "Detected ALG Poste messages are securely archived here.",
-                                    color = colors.textMuted,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            } else {
-                                val visibleArchive = if (showAllPermanentArchive) archivedSmsList else archivedSmsList.take(8)
-                                visibleArchive.forEach { entity ->
-                                    HorizontalDivider(
-                                        color = colors.glassBorderSubtle.copy(alpha = 0.4f),
-                                        thickness = 0.6.dp
-                                    )
-                                    SmsCleanArchiveRow(
-                                        item = entity,
-                                        isArabic = isArabic,
-                                        isStealth = isStealth,
-                                        currency = strings.currencyCode,
-                                        colors = colors
-                                    )
-                                }
-                                if (archivedSmsList.size > 8) {
-                                    HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.4f))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { showAllPermanentArchive = !showAllPermanentArchive }
-                                            .padding(vertical = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (showAllPermanentArchive) {
-                                                if (isArabic) "عرض أحدث 8 فقط" else "Show Latest 8"
-                                            } else {
-                                                if (isArabic) "عرض الكل (${archivedSmsList.size})" else "Show All (${archivedSmsList.size})"
-                                            },
-                                            color = CyanNeon,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                item { ArchiveVaultCardSection() }
+                if (layoutInfo.columns < 2) {
+                    item {
+                        SmsManualTestAccordion(
+                            latestBalance = effectiveLatestBalance,
+                            manualSmsText = manualSmsText,
+                            onManualSmsTextChange = { manualSmsText = it },
+                            onAnalyzeManualSms = onAnalyzeManualSms,
+                            isArabic = isArabic,
+                            colors = colors
+                        )
                     }
                 }
+            }
+        }
+    }
 
-                // Manual SMS Test collapsed cleanly inside Archive & Tools tab
+    if (layoutInfo.columns >= 2) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.92f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(dimens.spacingXs))
+                    HeroControlSection()
+                }
+                item { SegmentedTabsSection() }
                 item {
                     SmsManualTestAccordion(
                         latestBalance = effectiveLatestBalance,
@@ -593,12 +640,38 @@ fun BaridiMobSmsSyncScreen(
                         colors = colors
                     )
                 }
+                item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.08f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+                renderActiveTabItems()
+                item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
             }
         }
-
-        item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item {
+                Spacer(modifier = Modifier.height(dimens.spacingXs))
+                HeroControlSection()
+            }
+            item { SegmentedTabsSection() }
+            renderActiveTabItems()
+            item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
+        }
     }
 }
+
 
 @Composable
 private fun SectionActionHeader(
@@ -608,6 +681,7 @@ private fun SectionActionHeader(
     onActionClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val typo = LocalAdaptiveTypography.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -618,9 +692,13 @@ private fun SectionActionHeader(
         Text(
             text = title,
             color = colors.textPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontSize = typo.bodyLg,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(9.dp))
@@ -631,8 +709,9 @@ private fun SectionActionHeader(
             Text(
                 text = actionLabel,
                 color = actionColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = typo.bodyXs,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
         }
     }

@@ -3,6 +3,8 @@ package com.example.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
@@ -47,6 +50,7 @@ import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun IncomeScreen(
     transactions: List<TransactionEntity>,
@@ -113,18 +117,17 @@ fun IncomeScreen(
                 }
 
                 item {
-                    LazyRow(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        item {
-                            GlassPill(
-                                text = strings.allFilter,
-                                isSelected = selectedCategoryFilter == null,
-                                onClick = { selectedCategoryFilter = null }
-                            )
-                        }
-                        items(availableCategories) { cat ->
+                        GlassPill(
+                            text = strings.allFilter,
+                            isSelected = selectedCategoryFilter == null,
+                            onClick = { selectedCategoryFilter = null }
+                        )
+                        availableCategories.forEach { cat ->
                             GlassPill(
                                 text = strings.categoryName(cat),
                                 isSelected = selectedCategoryFilter == cat,
@@ -285,7 +288,9 @@ private fun TotalIncomeHeroCard(
                 text = formatDzd(totalIncome, strings.currencyCode),
                 color = EmeraldNeon,
                 fontSize = typo.display,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(dimens.spacingMd))
             GlassButton(

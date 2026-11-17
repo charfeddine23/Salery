@@ -137,52 +137,25 @@ fun FinancialInsightsScreen(
         )
     }
 
-    GlassBackground(modifier = modifier) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-        ) {
-            // Top Bar with Back Button
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Subtle contextual summary strip (TopAppBar already displays Back & Screen Title)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = dimens.screenPaddingH, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = dimens.screenPaddingH, vertical = dimens.spacingXs),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                GlassCard(
-                    modifier = Modifier.size(dimens.buttonHeight),
-                    shape = RoundedCornerShape(dimens.cornerRadiusSm),
-                    backgroundColor = colors.glassCard,
-                    onClick = onBackClick
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.textPrimary,
-                            modifier = Modifier.size(dimens.iconSizeMd)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(dimens.spacingMd))
-
-                Column {
-                    Text(
-                        text = if (isArabic) "الادخار" else "Savings",
-                        color = colors.textPrimary,
-                        fontSize = typo.titleLg,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.3.sp
-                    )
-                    Text(
-                        text = if (isArabic) "إدارة المدخرات والمحفظة الاحتياطية" else "Savings & Reserve Management",
-                        color = colors.primaryNeon,
-                        fontSize = typo.bodySm,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = if (isArabic) "إدارة المدخرات والمحفظة الاحتياطية" else "Savings & Reserve Management",
+                    color = colors.primaryNeon,
+                    fontSize = typo.bodySm,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             if (layoutInfo.columns >= 2) {
@@ -572,19 +545,25 @@ fun SavingsWalletCard(
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
 
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
     GlassCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
         backgroundColor = colors.glassCard
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(dimens.cardPaddingLarge)) {
             // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(42.dp)
@@ -603,21 +582,27 @@ fun SavingsWalletCard(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = strings.savingsWalletTitle,
                             color = colors.textPrimary,
-                            fontSize = 17.sp,
+                            fontSize = typo.titleSm,
                             fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.3.sp
+                            letterSpacing = 0.3.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                         Text(
                             text = if (isArabic) "مدخراتك المحمية بمعزل عن الصرف اليومي" else "Segregated & protected reserve savings",
                             color = colors.textMuted,
-                            fontSize = 11.sp
+                            fontSize = typo.caption,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Security Shield Tag
                 Box(
@@ -630,36 +615,39 @@ fun SavingsWalletCard(
                     Text(
                         text = if (isArabic) "محمية 🛡️" else "Protected 🛡️",
                         color = AmberNeon,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(dimens.spacingMd))
 
             // Savings Balance display
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(dimens.cornerRadiusMd))
                     .background(colors.glassSurface)
-                    .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
-                    .padding(16.dp)
+                    .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusMd))
+                    .padding(dimens.cardPadding)
             ) {
                 Text(
                     text = if (isArabic) "رصيد محفظة الادخار الحالية" else "Current Savings Wallet Balance",
                     color = colors.textMuted,
-                    fontSize = 11.5.sp,
+                    fontSize = typo.bodyXs,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = formatDzd(savingsBalance, strings.currencyCode, isStealth),
                     color = AmberNeon,
-                    fontSize = 28.sp,
+                    fontSize = typo.hero,
                     fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -673,14 +661,20 @@ fun SavingsWalletCard(
                         text = (if (isArabic) "الرصيد المتاح للصرف: " else "Spendable: ") +
                                 formatDzd(availableBalance, strings.currencyCode, isStealth),
                         color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = (if (isArabic) "إجمالي الثروة: " else "Net Wealth: ") +
                                 formatDzd(grossBalance, strings.currencyCode, isStealth),
                         color = colors.textMuted,
-                        fontSize = 11.sp
+                        fontSize = typo.caption,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }

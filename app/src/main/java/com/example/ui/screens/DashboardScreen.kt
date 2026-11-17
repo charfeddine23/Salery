@@ -8,8 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -406,7 +409,10 @@ private fun ActiveDebtsBanner(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Icon(
                     imageVector = Icons.Default.CreditCard,
                     contentDescription = null,
@@ -418,16 +424,22 @@ private fun ActiveDebtsBanner(
                     text = strings.activeDebts,
                     color = colors.textPrimary,
                     fontSize = typo.body,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+
+            Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             val isArabic = strings is ArabicStrings
             Text(
                 text = (if (isArabic) "ديون عليّ: " else "I Owe: ") + formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode),
                 color = AmberNeon,
                 fontSize = typo.bodySm,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -450,14 +462,22 @@ private fun RecentTransactionsHeader(
             text = strings.recentTransactions,
             color = colors.textPrimary,
             fontSize = typo.title,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = strings.seeAll,
             color = colors.primaryNeon,
             fontSize = typo.body,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clickable { onSeeAllClick() }
+            maxLines = 1,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onSeeAllClick() }
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         )
     }
 }
@@ -512,36 +532,46 @@ fun TransactionRowItem(
                     text = transaction.title,
                     color = colors.textPrimary,
                     fontSize = typo.titleSm,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "${strings.categoryName(transaction.category)} • ${formatDate(transaction.dateMillis)}",
                     color = colors.textMuted,
-                    fontSize = typo.caption
+                    fontSize = typo.caption,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (transaction.note.isNotBlank()) {
                     Text(
                         text = transaction.note,
                         color = colors.textMuted.copy(alpha = 0.8f),
                         fontSize = typo.caption,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "$prefix ${formatDzd(transaction.amount, currencyCode)}",
                     color = amountColor,
                     fontSize = typo.body,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (transaction.isSalaryCredit) {
                     Text(
                         text = "Salary Credit",
                         color = colors.primaryNeon,
                         fontSize = typo.caption,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
                 }
                 if (transaction.isPaidFromSavings) {
@@ -564,15 +594,18 @@ fun TransactionRowItem(
                             text = strings.paidFromSavingsBadge,
                             color = AmberNeon,
                             fontSize = typo.caption,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.width(4.dp))
+
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
@@ -596,6 +629,8 @@ private fun BaridiMobSmsSuggestionBanner(
 ) {
     val latest = suggestions.firstOrNull() ?: return
     val isArabic = strings is ArabicStrings
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val isExpense = latest.isExpense
     val accent = if (isExpense) RoseNeon else EmeraldNeon
     val oppositeType = if (isExpense) TransactionType.INCOME else TransactionType.EXPENSE
@@ -608,7 +643,7 @@ private fun BaridiMobSmsSuggestionBanner(
         backgroundColor = colors.glassCard,
         borderColor = accent.copy(alpha = 0.5f)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -641,7 +676,7 @@ private fun BaridiMobSmsSuggestionBanner(
                                 "Alg Post Balance Operation (${suggestions.size})"
                             },
                             color = colors.textPrimary,
-                            fontSize = 12.5.sp,
+                            fontSize = typo.bodySm,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -649,26 +684,29 @@ private fun BaridiMobSmsSuggestionBanner(
                         Text(
                             text = if (isArabic) latest.suggestedTitleAr else latest.suggestedTitleEn,
                             color = colors.textMuted,
-                            fontSize = 11.sp,
+                            fontSize = typo.caption,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(colors.glassSurface)
                         .clickable(onClick = onOpenSync)
-                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = if (isArabic) "عرض الكل" else "All",
                         color = Color(0xFF818CF8),
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -688,7 +726,7 @@ private fun BaridiMobSmsSuggestionBanner(
                     Text(
                         text = latest.rawBody,
                         color = colors.textSecondary,
-                        fontSize = 11.sp,
+                        fontSize = typo.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -697,8 +735,10 @@ private fun BaridiMobSmsSuggestionBanner(
                         Text(
                             text = "${formatDzd(latest.previousBalance, strings.currencyCode)} → ${formatDzd(latest.extractedBalance, strings.currencyCode)}",
                             color = CyanNeon,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -706,8 +746,9 @@ private fun BaridiMobSmsSuggestionBanner(
                 Text(
                     text = (if (isExpense) "-" else "+") + formatDzd(latest.amount, strings.currencyCode),
                     color = accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
                 )
             }
 
@@ -722,11 +763,12 @@ private fun BaridiMobSmsSuggestionBanner(
                 Box(
                     modifier = Modifier
                         .weight(1.35f)
+                        .defaultMinSize(minHeight = 44.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(accent.copy(alpha = 0.2f))
                         .border(0.8.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
                         .clickable { onAccept(latest.id, latest.transactionType) }
-                        .padding(vertical = 10.dp, horizontal = 8.dp)
+                        .padding(vertical = 8.dp, horizontal = 8.dp)
                         .testTag("sms_suggestion_accept_btn"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -737,7 +779,7 @@ private fun BaridiMobSmsSuggestionBanner(
                             if (isArabic) "إضافة في الدخل" else "Add to Income"
                         },
                         color = accent,
-                        fontSize = 11.5.sp,
+                        fontSize = typo.bodyXs,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -748,11 +790,12 @@ private fun BaridiMobSmsSuggestionBanner(
                 Box(
                     modifier = Modifier
                         .weight(0.95f)
+                        .defaultMinSize(minHeight = 44.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(oppositeAccent.copy(alpha = 0.12f))
                         .border(0.8.dp, oppositeAccent.copy(alpha = 0.3f), RoundedCornerShape(11.dp))
                         .clickable { onAccept(latest.id, oppositeType) }
-                        .padding(vertical = 10.dp, horizontal = 6.dp)
+                        .padding(vertical = 8.dp, horizontal = 6.dp)
                         .testTag("sms_suggestion_switch_btn"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -763,7 +806,7 @@ private fun BaridiMobSmsSuggestionBanner(
                             if (isArabic) "أو مصروف" else "As Expense"
                         },
                         color = oppositeAccent,
-                        fontSize = 11.sp,
+                        fontSize = typo.caption,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -773,18 +816,19 @@ private fun BaridiMobSmsSuggestionBanner(
                 // Explicit Dismiss / Ignore button
                 Box(
                     modifier = Modifier
+                        .defaultMinSize(minHeight = 44.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(colors.glassSurface)
                         .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(11.dp))
                         .clickable { onDismiss(latest.id) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                         .testTag("sms_suggestion_dismiss_btn"),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = if (isArabic) "تجاهل" else "Dismiss",
                         color = colors.textMuted,
-                        fontSize = 11.5.sp,
+                        fontSize = typo.bodyXs,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
@@ -794,6 +838,7 @@ private fun BaridiMobSmsSuggestionBanner(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CcpBalanceCard(
     userSettings: UserSettings,
@@ -935,8 +980,10 @@ private fun CcpBalanceCard(
                     Text(
                         text = if (isArabic) "الرصيد الحالي في الحساب البريدي" else "Current ALG Poste Balance",
                         color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -950,12 +997,14 @@ private fun CcpBalanceCard(
                             if (isArabic) "--- دج • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS"
                         },
                         color = if (hasBalance) EmeraldNeon else posteGold,
-                        fontSize = if (hasBalance) 24.sp else 15.sp,
+                        fontSize = if (hasBalance) typo.titleLg else typo.body,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -967,10 +1016,10 @@ private fun CcpBalanceCard(
 
             if (totalTaxes > 0.0 || pendingCount > 0 || hasBaseline) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (totalTaxes > 0.0) {
                         Row(
@@ -996,8 +1045,9 @@ private fun CcpBalanceCard(
                                     "Taxes caught: $taxText"
                                 },
                                 color = RoseNeon,
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1012,8 +1062,9 @@ private fun CcpBalanceCard(
                             Text(
                                 text = if (isArabic) "$pendingCount رسائل جديدة" else "$pendingCount new SMS",
                                 color = Color(0xFF818CF8),
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1036,8 +1087,9 @@ private fun CcpBalanceCard(
                             Text(
                                 text = if (isArabic) "عدّ من الصفر" else "From 0",
                                 color = CyanNeon,
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1058,7 +1110,7 @@ private fun CcpBalanceCard(
                             userSettings.latestSmsBalanceRawSnippet.trim()
                         },
                         color = colors.textMuted,
-                        fontSize = 10.5.sp,
+                        fontSize = typo.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -1068,8 +1120,9 @@ private fun CcpBalanceCard(
                         Text(
                             text = updatedText,
                             color = CyanNeon,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                     }
                 }

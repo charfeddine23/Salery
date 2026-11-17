@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +78,9 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassColors
+import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
+import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.RoseNeon
 import java.text.NumberFormat
@@ -182,6 +186,8 @@ fun SquareCompactMarketHeader(
         label = "square_header_refresh_spin"
     )
     val breathingEnabled = LocalBreathingGlowEnabled.current
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     GlassCard(
         modifier = Modifier
@@ -189,11 +195,11 @@ fun SquareCompactMarketHeader(
             .testTag("square_hero_card"),
         backgroundColor = colors.glassCard,
         borderColor = SquareGoldAccent.copy(alpha = 0.38f),
-        shape = RoundedCornerShape(18.dp),
-        cornerRadius = 18.dp,
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        cornerRadius = dimens.cornerRadiusLg,
         breathingGlow = breathingEnabled
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) {
+        Column(modifier = Modifier.padding(horizontal = dimens.cardPadding, vertical = dimens.cardPaddingSmall)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -206,7 +212,7 @@ fun SquareCompactMarketHeader(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(11.dp))
+                            .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                             .background(Brush.linearGradient(listOf(SquareGoldAccent, SquareGoldDeep))),
                         contentAlignment = Alignment.Center
                     ) {
@@ -214,37 +220,39 @@ fun SquareCompactMarketHeader(
                             imageVector = Icons.Default.CurrencyExchange,
                             contentDescription = "Square Markets",
                             tint = Color(0xFF1F1600),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(dimens.iconSizeMd)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(dimens.spacingSm))
                     Column(modifier = Modifier.weight(1f)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = if (isArabic) "سكوار — الأسواق المباشرة" else "Square — Live Markets",
+                                text = if (isArabic) "الذهب والعملة الصعبة — بث حي" else "Live Gold & FX Feed",
                                 color = colors.textPrimary,
-                                fontSize = 15.sp,
+                                fontSize = typo.bodyLg,
                                 fontWeight = FontWeight.ExtraBold,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             if (snapshot != null) {
                                 val totalFeeds = snapshot.goldSourceCount + snapshot.bankSourceCount + snapshot.parallelSourceCount
                                 if (totalFeeds > 0) {
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(dimens.cornerRadiusXs))
                                             .background(EmeraldNeon.copy(alpha = 0.16f))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
                                             text = if (isArabic) "$totalFeeds مصادر" else "$totalFeeds feeds",
                                             color = EmeraldNeon,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontSize = typo.caption,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
                                         )
                                     }
                                 }
@@ -270,13 +278,14 @@ fun SquareCompactMarketHeader(
                             Text(
                                 text = syncStatus,
                                 color = colors.textMuted,
-                                fontSize = 10.5.sp,
+                                fontSize = typo.bodyXs,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
+                Spacer(modifier = Modifier.width(dimens.spacingSm))
 
                 IconButton(
                     onClick = onRefreshClick,
@@ -360,12 +369,13 @@ fun SquareCategoryTabStrip(
         Triple(SquarePrimaryTab.CALC, if (isArabic) "الحاسبة" else "Converter", "square_filter_calc")
     )
 
+    val typo = LocalAdaptiveTypography.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEach { (tab, label, tag) ->
@@ -386,7 +396,7 @@ fun SquareCategoryTabStrip(
                     Text(
                         text = label,
                         color = if (isSelected) colors.textPrimary else colors.textMuted,
-                        fontSize = 15.sp,
+                        fontSize = typo.bodyLg,
                         fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
                         maxLines = 1
                     )
@@ -453,10 +463,11 @@ fun SquareVenueSubFilterStrip(
                             .padding(horizontal = 4.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val typo = LocalAdaptiveTypography.current
                         Text(
                             text = label,
                             color = if (active) colors.textPrimary else colors.textMuted,
-                            fontSize = 13.sp,
+                            fontSize = typo.body,
                             fontWeight = if (active) FontWeight.ExtraBold else FontWeight.Medium,
                             maxLines = 1
                         )
@@ -592,7 +603,7 @@ fun SquareTableHeaderRow(
             active = sortColumn == SquareSortColumn.CHANGE,
             direction = if (sortColumn == SquareSortColumn.CHANGE) sortDirection else SquareSortDirection.NONE,
             alignment = Alignment.CenterEnd,
-            modifier = Modifier.width(84.dp),
+            modifier = Modifier.widthIn(min = 72.dp, max = 94.dp),
             colors = colors,
             onClick = { onToggleSort(SquareSortColumn.CHANGE) }
         )
@@ -609,6 +620,7 @@ private fun SortableHeaderCell(
     colors: LiquidGlassColors,
     onClick: () -> Unit
 ) {
+    val typo = LocalAdaptiveTypography.current
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 36.dp)
@@ -624,7 +636,7 @@ private fun SortableHeaderCell(
             Text(
                 text = text,
                 color = if (active) SquareGoldAccent else colors.textMuted,
-                fontSize = 11.sp,
+                fontSize = typo.bodyXs,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -680,6 +692,8 @@ fun SquareExchangeTickerRow(
     onTogglePin: () -> Unit,
     onOpenInCalculator: () -> Unit
 ) {
+    val typo = LocalAdaptiveTypography.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val tnumStyle = TextStyle(fontFeatureSettings = "tnum")
 
     Column(
@@ -690,7 +704,7 @@ fun SquareExchangeTickerRow(
                 indication = ripple(color = SquareGoldAccent),
                 onClick = onRowClick
             )
-            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .padding(horizontal = if (layoutInfo.isCompactPhone) 10.dp else 12.dp, vertical = 11.dp)
             .testTag(row.testTagId)
     ) {
         Row(
@@ -703,7 +717,7 @@ fun SquareExchangeTickerRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TickerLeadingEmblem(row = row, colors = colors)
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(if (layoutInfo.isCompactPhone) 8.dp else 10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -738,14 +752,14 @@ fun SquareExchangeTickerRow(
                         Text(
                             text = baseText,
                             color = colors.textPrimary,
-                            fontSize = 15.sp,
+                            fontSize = typo.bodyLg,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1
                         )
                         Text(
                             text = quoteText,
                             color = colors.textMuted,
-                            fontSize = 11.5.sp,
+                            fontSize = typo.bodyXs,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1
                         )
@@ -759,7 +773,7 @@ fun SquareExchangeTickerRow(
                             Text(
                                 text = tagText,
                                 color = colors.textSecondary,
-                                fontSize = 9.5.sp,
+                                fontSize = typo.caption,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
                             )
@@ -879,19 +893,21 @@ fun SquareExchangeTickerRow(
                 Text(
                     text = mainPriceText,
                     color = colors.textPrimary,
-                    fontSize = 15.sp,
+                    fontSize = typo.bodyLg,
                     fontWeight = FontWeight.ExtraBold,
                     style = tnumStyle,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subPriceText,
                     color = colors.textMuted,
-                    fontSize = 11.sp,
+                    fontSize = typo.bodyXs,
                     fontWeight = FontWeight.Medium,
                     style = tnumStyle,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -921,20 +937,22 @@ fun SquareExchangeTickerRow(
 
             Box(
                 modifier = Modifier
-                    .width(84.dp)
-                    .height(32.dp)
+                    .widthIn(min = 72.dp, max = 94.dp)
+                    .defaultMinSize(minHeight = 32.dp)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(pillColor),
+                    .background(pillColor)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = pillLabel,
                     color = if (hasValidMetric) Color.White else colors.textMuted,
-                    fontSize = 12.5.sp,
+                    fontSize = typo.bodySm,
                     fontWeight = FontWeight.Bold,
                     style = tnumStyle,
                     textAlign = TextAlign.Center,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1268,6 +1286,8 @@ fun SquareQuickConverterCard(
     val qty = amountInput.replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
     val unitDzd = if (isArabic) "دج" else "DZD"
     val parallelAccent = CyanNeon
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
 
     GlassCard(
         modifier = Modifier
@@ -1275,30 +1295,36 @@ fun SquareQuickConverterCard(
             .testTag("square_quick_converter"),
         backgroundColor = colors.glassCard,
         borderColor = SquareGoldAccent.copy(alpha = 0.35f),
-        shape = RoundedCornerShape(18.dp),
-        cornerRadius = 18.dp
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        cornerRadius = dimens.cornerRadiusLg
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(dimens.cardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Calculate,
                         contentDescription = null,
                         tint = SquareGoldAccent,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(dimens.iconSizeSm)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (isArabic) "حاسبة الذهب والعملات" else "Gold & FX Market Converter",
                         color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        fontSize = typo.bodyLg,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(

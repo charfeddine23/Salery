@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,6 +68,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.AppThemeSpec
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.ThemeCategory
 import com.example.ui.theme.ThemeEngineCatalog
@@ -84,6 +87,7 @@ fun ThemeEngineScreen(
     val colors = LiquidGlassTheme.colors
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
 
     var selectedCategory by remember { mutableStateOf(ThemeCategory.ALL) }
     var searchQuery by remember { mutableStateOf("") }
@@ -105,8 +109,9 @@ fun ThemeEngineScreen(
         }
     }
 
-    val chunkedRows = remember(filteredThemes) {
-        filteredThemes.chunked(2)
+    val gridCols = layoutInfo.gridColumns.coerceAtLeast(1)
+    val chunkedRows = remember(filteredThemes, gridCols) {
+        filteredThemes.chunked(gridCols)
     }
 
     LazyColumn(
@@ -225,81 +230,88 @@ fun ThemeEngineScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = if (isArabic) {
-                        "معرض الثيمات (${filteredThemes.size} من ${ThemeEngineCatalog.allThemes.size})"
-                    } else {
-                        "Theme Gallery (${filteredThemes.size} of ${ThemeEngineCatalog.allThemes.size})"
-                    },
-                    color = colors.textSecondary,
-                    fontSize = typo.bodySm,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = if (isArabic) "معاينة فورية" else "Instant Live Apply",
-                    color = colors.primaryNeon,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                    Text(
+                        text = if (isArabic) {
+                            "معرض الثيمات (${filteredThemes.size} من ${ThemeEngineCatalog.allThemes.size})"
+                        } else {
+                            "Theme Gallery (${filteredThemes.size} of ${ThemeEngineCatalog.allThemes.size})"
+                        },
+                        color = colors.textSecondary,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isArabic) "معاينة فورية" else "Instant Live Apply",
+                        color = colors.primaryNeon,
+                        fontSize = typo.bodyXs,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
             }
-        }
 
-        if (chunkedRows.isEmpty()) {
-            item {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+            if (chunkedRows.isEmpty()) {
+                item {
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimens.cornerRadiusLg)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(34.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (isArabic) "لم يتم العثور على ثيم مطابق" else "No matching themes found",
-                            color = colors.textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(dimens.cardPaddingLarge),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = null,
+                                tint = colors.primaryNeon,
+                                modifier = Modifier.size(dimens.iconSizeXl)
+                            )
+                            Spacer(modifier = Modifier.height(dimens.spacingSm))
+                            Text(
+                                text = if (isArabic) "لم يتم العثور على ثيم مطابق" else "No matching themes found",
+                                color = colors.textPrimary,
+                                fontSize = typo.bodyLg,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(
+                    items = chunkedRows,
+                    key = { row -> "${gridCols}_${row.joinToString("_") { it.id }}" }
+                ) { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                    ) {
+                        rowItems.forEach { spec ->
+                            ThemeEngineGridCard(
+                                spec = spec,
+                                isSelected = spec.id == activeSpec.id,
+                                isDarkPreview = colors.isDark,
+                                isArabic = isArabic,
+                                onSelect = { onSelectDesignStyle(spec.id) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        val emptySlots = (gridCols - rowItems.size).coerceAtLeast(0)
+                        repeat(emptySlots) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
-        } else {
-            items(
-                items = chunkedRows,
-                key = { row -> row.joinToString("_") { it.id } }
-            ) { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    rowItems.forEach { spec ->
-                        ThemeEngineGridCard(
-                            spec = spec,
-                            isSelected = spec.id == activeSpec.id,
-                            isDarkPreview = colors.isDark,
-                            isArabic = isArabic,
-                            onSelect = { onSelectDesignStyle(spec.id) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (rowItems.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveThemeHeroCard(
     activeSpec: AppThemeSpec,
@@ -309,19 +321,20 @@ private fun ActiveThemeHeroCard(
     onSelectThemeMode: (String) -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(dimens.cornerRadiusXl),
         borderColor = colors.primaryNeon.copy(alpha = 0.65f),
         backgroundColor = colors.glassCard
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -330,7 +343,7 @@ private fun ActiveThemeHeroCard(
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(colors.primaryNeon, colors.secondaryNeon)
@@ -343,10 +356,10 @@ private fun ActiveThemeHeroCard(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
                         tint = iconTint,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(dimens.iconSizeMd)
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(dimens.spacingMd))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isArabic) activeSpec.nameAr else activeSpec.nameEn,
@@ -359,24 +372,26 @@ private fun ActiveThemeHeroCard(
                     Text(
                         text = if (isArabic) activeSpec.nameEn else activeSpec.nameAr,
                         color = colors.primaryNeon,
-                        fontSize = 12.sp,
+                        fontSize = typo.bodySm,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.width(dimens.spacingSm))
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                         .background(colors.primaryNeon.copy(alpha = 0.18f))
-                        .border(1.dp, colors.primaryNeon.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .border(1.dp, colors.primaryNeon.copy(alpha = 0.5f), RoundedCornerShape(dimens.cornerRadiusSm))
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = "${ThemeEngineCatalog.allThemes.size} ${if (isArabic) "ثيم" else "Themes"}",
                         color = colors.primaryNeon,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = typo.bodyXs,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -384,14 +399,14 @@ private fun ActiveThemeHeroCard(
             Text(
                 text = if (isArabic) activeSpec.taglineAr else activeSpec.taglineEn,
                 color = colors.textSecondary,
-                fontSize = 12.5.sp
+                fontSize = typo.body
             )
 
-            // Palette & Quick Mode Switch Row
-            Row(
+            // Palette & Quick Mode Switch FlowRow (prevents overlap on compact phones)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -441,6 +456,7 @@ private fun ModeMiniChip(
     onClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val typo = LocalAdaptiveTypography.current
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
@@ -467,8 +483,9 @@ private fun ModeMiniChip(
         Text(
             text = label,
             color = if (isSelected) colors.primaryNeon else colors.textSecondary,
-            fontSize = 10.5.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            fontSize = typo.bodyXs,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1
         )
     }
 }
@@ -704,10 +721,11 @@ private fun ThemeEngineGridCard(
         Spacer(modifier = Modifier.height(9.dp))
 
         // Theme Title (Primary locale)
+        val typo = LocalAdaptiveTypography.current
         Text(
             text = if (isArabic) spec.nameAr else spec.nameEn,
             color = appColors.textPrimary,
-            fontSize = 13.sp,
+            fontSize = typo.body,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -724,7 +742,7 @@ private fun ThemeEngineGridCard(
             Text(
                 text = if (isArabic) spec.nameEn else spec.nameAr,
                 color = if (isSelected) appColors.primaryNeon else appColors.textMuted,
-                fontSize = 10.5.sp,
+                fontSize = typo.bodyXs,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

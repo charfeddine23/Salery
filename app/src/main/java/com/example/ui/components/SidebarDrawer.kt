@@ -107,10 +107,12 @@ fun SidebarDrawer(
     val context = LocalContext.current
     val permSummary = readAppPermissionsSummary(context)
 
+    val dimens = com.example.ui.theme.LocalAdaptiveDimens.current
+
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(320.dp)
+            .fillMaxWidth()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
@@ -120,7 +122,7 @@ fun SidebarDrawer(
                     )
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .padding(horizontal = dimens.cardPadding, vertical = dimens.cardPaddingLarge)
     ) {
         Column(
             modifier = Modifier

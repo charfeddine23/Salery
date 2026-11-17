@@ -1,6 +1,7 @@
 package com.example.ui.theme
 
 import android.content.res.Configuration
+import androidx.annotation.DimenRes
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
@@ -24,15 +25,18 @@ import com.example.R
 data class AdaptiveLayoutInfo(
     val screenWidthDp: Int,
     val screenHeightDp: Int,
+    val isCompactPhone: Boolean,
     val isTablet: Boolean,
     val isLargeTablet: Boolean,
     val isLandscape: Boolean,
     val columns: Int,
+    val gridColumns: Int,
     val useNavRail: Boolean
 )
 
 /**
- * Responsive dimension tokens automatically derived from dimens.xml (values, values-sw600dp, values-sw720dp).
+ * Responsive dimension tokens automatically derived from dimens.xml
+ * (values, values-sw360dp, values-sw600dp, values-sw720dp, values-sw840dp).
  */
 data class AdaptiveDimens(
     val screenPaddingH: Dp,
@@ -87,10 +91,12 @@ val LocalAdaptiveLayoutInfo = compositionLocalOf {
     AdaptiveLayoutInfo(
         screenWidthDp = 360,
         screenHeightDp = 640,
+        isCompactPhone = false,
         isTablet = false,
         isLargeTablet = false,
         isLandscape = false,
         columns = 1,
+        gridColumns = 2,
         useNavRail = false
     )
 }
@@ -149,6 +155,7 @@ fun rememberAdaptiveLayoutInfo(): AdaptiveLayoutInfo {
     val screenWidth = configuration.screenWidthDp
     val screenHeight = configuration.screenHeightDp
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isCompactPhone = screenWidth < 360
     val isTablet = configuration.smallestScreenWidthDp >= 600 || screenWidth >= 600
     val isLargeTablet = configuration.smallestScreenWidthDp >= 720 || screenWidth >= 840
 
@@ -158,16 +165,25 @@ fun rememberAdaptiveLayoutInfo(): AdaptiveLayoutInfo {
         else -> 1
     }
 
+    val gridColumns = when {
+        screenWidth >= 840 -> 3
+        columns >= 2 -> 2
+        isCompactPhone -> 1
+        else -> 2
+    }
+
     val useNavRail = isTablet && (isLandscape || screenWidth >= 720)
 
-    return remember(screenWidth, screenHeight, isLandscape, isTablet, isLargeTablet) {
+    return remember(screenWidth, screenHeight, isCompactPhone, isLandscape, isTablet, isLargeTablet) {
         AdaptiveLayoutInfo(
             screenWidthDp = screenWidth,
             screenHeightDp = screenHeight,
+            isCompactPhone = isCompactPhone,
             isTablet = isTablet,
             isLargeTablet = isLargeTablet,
             isLandscape = isLandscape,
             columns = columns,
+            gridColumns = gridColumns,
             useNavRail = useNavRail
         )
     }
@@ -206,20 +222,31 @@ fun rememberAdaptiveDimens(): AdaptiveDimens {
     )
 }
 
+/**
+ * Reads an `sp`-backed `<dimen>` without double-multiplying [LocalDensity.current.fontScale].
+ * `dimensionResource()` pre-multiplies sp by fontScale, so dividing out fontScale preserves the exact
+ * base sp value which Compose then scales once cleanly according to user accessibility settings.
+ */
+@Composable
+private fun scaledSp(@DimenRes id: Int): TextUnit {
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(0.5f)
+    return (dimensionResource(id).value / fontScale).sp
+}
+
 @Composable
 fun rememberAdaptiveTypography(): AdaptiveTypography {
     return AdaptiveTypography(
-        caption = dimensionResource(R.dimen.text_caption).value.sp,
-        bodyXs = dimensionResource(R.dimen.text_body_xs).value.sp,
-        bodySm = dimensionResource(R.dimen.text_body_sm).value.sp,
-        body = dimensionResource(R.dimen.text_body).value.sp,
-        bodyLg = dimensionResource(R.dimen.text_body_lg).value.sp,
-        titleSm = dimensionResource(R.dimen.text_title_sm).value.sp,
-        title = dimensionResource(R.dimen.text_title).value.sp,
-        titleLg = dimensionResource(R.dimen.text_title_lg).value.sp,
-        headline = dimensionResource(R.dimen.text_headline).value.sp,
-        display = dimensionResource(R.dimen.text_display).value.sp,
-        hero = dimensionResource(R.dimen.text_hero).value.sp
+        caption = scaledSp(R.dimen.text_caption),
+        bodyXs = scaledSp(R.dimen.text_body_xs),
+        bodySm = scaledSp(R.dimen.text_body_sm),
+        body = scaledSp(R.dimen.text_body),
+        bodyLg = scaledSp(R.dimen.text_body_lg),
+        titleSm = scaledSp(R.dimen.text_title_sm),
+        title = scaledSp(R.dimen.text_title),
+        titleLg = scaledSp(R.dimen.text_title_lg),
+        headline = scaledSp(R.dimen.text_headline),
+        display = scaledSp(R.dimen.text_display),
+        hero = scaledSp(R.dimen.text_hero)
     )
 }
 

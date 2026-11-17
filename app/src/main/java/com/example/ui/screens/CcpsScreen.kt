@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -193,6 +194,7 @@ fun CcpsScreen(
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
     val isStealth = LocalStealthMode.current
+    val layoutInfo = com.example.ui.theme.LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
     val context = LocalContext.current
@@ -316,358 +318,474 @@ fun CcpsScreen(
         cb.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPaddingH),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
-    ) {
-        // Header + Add Person Button + Capacity Counter (up to 1000)
-        item(key = "ccp_header") {
-            Spacer(modifier = Modifier.height(dimens.spacingSm))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "CCP's",
-                            color = colors.textPrimary,
-                            fontSize = typo.title,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(CyanNeon.copy(alpha = 0.14f))
-                                .border(1.dp, CyanNeon.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "${accounts.size} / ${HubVaultCodec.MAX_CCP_PROFILES}",
-                                color = CyanNeon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
+    val ccpHeader: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CyanNeon.copy(alpha = 0.14f))
+                        .border(1.dp, CyanNeon.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
                     Text(
-                        text = if (isArabic) "اضغط مطولاً 0.5 ث على أي بطاقة للتعديل أو الحذف"
-                        else "Hold any CCP card 0.5s to edit or delete",
-                        color = colors.textMuted,
-                        fontSize = typo.caption
+                        text = "${accounts.size} / ${HubVaultCodec.MAX_CCP_PROFILES}",
+                        color = CyanNeon,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
                     )
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                GlassButton(
-                    text = if (isArabic) "إضافة شخص" else "Add Person",
-                    icon = Icons.Default.Add,
-                    containerColor = CyanNeon,
-                    contentColor = Color(0xFF04202C),
-                    enabled = accounts.size < HubVaultCodec.MAX_CCP_PROFILES,
-                    onClick = {
-                        editingAccount = null
-                        showAddOrEditDialog = true
-                    },
-                    modifier = Modifier.testTag("add_ccp_button")
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (isArabic) "اضغط مطولاً 0.5 ث على أي بطاقة للتعديل أو الحذف"
+                    else "Hold any CCP card 0.5s to edit or delete",
+                    color = colors.textMuted,
+                    fontSize = typo.caption,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            GlassButton(
+                text = if (isArabic) "إضافة شخص" else "Add Person",
+                icon = Icons.Default.Add,
+                containerColor = CyanNeon,
+                contentColor = Color(0xFF04202C),
+                enabled = accounts.size < HubVaultCodec.MAX_CCP_PROFILES,
+                onClick = {
+                    editingAccount = null
+                    showAddOrEditDialog = true
+                },
+                modifier = Modifier.testTag("add_ccp_button")
+            )
         }
+    }
 
-        // Smart CCP Directory Summary Card (matching KeysScreen Audit Summary aesthetic)
-        item(key = "ccp_smart_summary") {
-            val dirAccent = when {
-                accounts.isEmpty() -> CyanNeon
-                pinnedCount > 0 -> AmberNeon
-                else -> EmeraldNeon
+    val ccpSummaryCard: @Composable () -> Unit = {
+        val dirAccent = when {
+            accounts.isEmpty() -> CyanNeon
+            pinnedCount > 0 -> AmberNeon
+            else -> EmeraldNeon
+        }
+        val ripRatio = if (accounts.isEmpty()) 0f else (withRipCount.toFloat() / accounts.size.toFloat()).coerceIn(0f, 1f)
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = colors.glassCard,
+            borderColor = dirAccent.copy(alpha = 0.42f)
+        ) {
+            Column(modifier = Modifier.padding(dimens.cardPadding)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(dirAccent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalance,
+                            contentDescription = null,
+                            tint = dirAccent,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) "دليل الحسابات البريدية التفاعلي" else "Smart CCP Vault & Profiles",
+                            color = colors.textPrimary,
+                            fontSize = typo.bodyLg,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (accounts.isEmpty()) {
+                                if (isArabic) "أضف حسابات CCP واختر نمط البطاقة لتتحول بأشكال وألوان متناسقة"
+                                else "Pick a card theme to transform each CCP container dynamically"
+                            } else {
+                                if (isArabic) "${accounts.size} ملف محفوظ • تغطية RIP الكاملة ${(ripRatio * 100).toInt()}%"
+                                else "${accounts.size} saved profiles • ${(ripRatio * 100).toInt()}% complete RIP"
+                            },
+                            color = colors.textMuted,
+                            fontSize = typo.bodyXs
+                        )
+                    }
+                }
+
+                if (accounts.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { ripRatio },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50)),
+                        color = dirAccent,
+                        trackColor = colors.glassSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CcpSummaryChip(
+                            label = if (isArabic) "مثبتة: $pinnedCount" else "Pinned: $pinnedCount",
+                            color = AmberNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                        CcpSummaryChip(
+                            label = if (isArabic) "جهات اتصال: $linkedCount" else "Contacts: $linkedCount",
+                            color = CyanNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                        CcpSummaryChip(
+                            label = if (isArabic) "مع RIP: $withRipCount" else "RIP: $withRipCount",
+                            color = EmeraldNeon,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
-            val ripRatio = if (accounts.isEmpty()) 0f else (withRipCount.toFloat() / accounts.size.toFloat()).coerceIn(0f, 1f)
+        }
+    }
 
+    val ccpSearchAndFilter: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassCard,
-                borderColor = dirAccent.copy(alpha = 0.42f)
+                borderColor = colors.glassBorderSubtle,
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(dirAccent.copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalance,
-                                contentDescription = null,
-                                tint = dirAccent,
-                                modifier = Modifier.size(23.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = CyanNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
                             Text(
-                                text = if (isArabic) "دليل الحسابات البريدية التفاعلي" else "Smart CCP Vault & Profiles",
-                                color = colors.textPrimary,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (accounts.isEmpty()) {
-                                    if (isArabic) "أضف حسابات CCP واختر نمط البطاقة لتتحول بأشكال وألوان متناسقة"
-                                    else "Pick a card theme to transform each CCP container dynamically"
-                                } else {
-                                    if (isArabic) "${accounts.size} ملف محفوظ • تغطية RIP الكاملة ${(ripRatio * 100).toInt()}%"
-                                    else "${accounts.size} saved profiles • ${(ripRatio * 100).toInt()}% complete RIP"
-                                },
+                                text = if (isArabic) "ابحث بالاسم، اللقب، CCP، RIP أو الملاحظة..."
+                                else "Search name, CCP, RIP, or note...",
                                 color = colors.textMuted,
-                                fontSize = 11.5.sp
+                                fontSize = typo.bodySm,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    }
-
-                    if (accounts.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        LinearProgressIndicator(
-                            progress = { ripRatio },
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = typo.body,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            cursorBrush = SolidColor(CyanNeon),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(50)),
-                            color = dirAccent,
-                            trackColor = colors.glassSurface
+                                .testTag("ccp_search_input")
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            CcpSummaryChip(
-                                label = if (isArabic) "مثبتة: $pinnedCount" else "Pinned: $pinnedCount",
-                                color = AmberNeon,
-                                modifier = Modifier.weight(1f)
-                            )
-                            CcpSummaryChip(
-                                label = if (isArabic) "جهات اتصال: $linkedCount" else "Contacts: $linkedCount",
-                                color = CyanNeon,
-                                modifier = Modifier.weight(1f)
-                            )
-                            CcpSummaryChip(
-                                label = if (isArabic) "مع RIP: $withRipCount" else "RIP: $withRipCount",
-                                color = EmeraldNeon,
-                                modifier = Modifier.weight(1f)
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = if (isArabic) "مسح البحث" else "Clear search",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
             }
-        }
 
-        // Search Bar + Filter Chips
-        if (accounts.isNotEmpty()) {
-            item(key = "ccp_search") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = colors.glassCard,
-                        borderColor = colors.glassBorderSubtle,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = CyanNeon,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Box(modifier = Modifier.weight(1f)) {
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = if (isArabic) "ابحث بالاسم، اللقب، CCP، RIP أو الملاحظة..."
-                                        else "Search name, CCP, RIP, or note...",
-                                        color = colors.textMuted,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GlassPill(
+                    text = if (isArabic) "الكل (${accounts.size})" else "All (${accounts.size})",
+                    isSelected = activeFilter == CcpFilter.ALL,
+                    onClick = { activeFilter = CcpFilter.ALL }
+                )
+                GlassPill(
+                    text = if (isArabic) "مثبتة ($pinnedCount)" else "Pinned ($pinnedCount)",
+                    isSelected = activeFilter == CcpFilter.PINNED,
+                    onClick = { activeFilter = CcpFilter.PINNED }
+                )
+                GlassPill(
+                    text = if (isArabic) "جهات اتصال ($linkedCount)" else "Contacts ($linkedCount)",
+                    isSelected = activeFilter == CcpFilter.LINKED_CONTACTS,
+                    onClick = { activeFilter = CcpFilter.LINKED_CONTACTS }
+                )
+                GlassPill(
+                    text = if (isArabic) "مع RIP ($withRipCount)" else "With RIP ($withRipCount)",
+                    isSelected = activeFilter == CcpFilter.WITH_RIP,
+                    onClick = { activeFilter = CcpFilter.WITH_RIP }
+                )
+                if (expandedCcpIds.isNotEmpty()) {
+                    GlassPill(
+                        text = if (isArabic) "طي الكل (${expandedCcpIds.size})" else "Collapse (${expandedCcpIds.size})",
+                        isSelected = false,
+                        onClick = onCollapseAllCcps
+                    )
+                }
+            }
+        }
+    }
+
+    if (layoutInfo.columns >= 2) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item(key = "ccp_header_tablet") {
+                    Spacer(modifier = Modifier.height(dimens.spacingXs))
+                    ccpHeader()
+                }
+                item(key = "ccp_smart_summary_tablet") { ccpSummaryCard() }
+                if (accounts.isNotEmpty()) {
+                    item(key = "ccp_search_tablet") { ccpSearchAndFilter() }
+                }
+                item(key = "ccp_left_spacer") { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+            ) {
+                item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
+                if (filteredAccounts.isEmpty()) {
+                    item(key = "ccp_empty_tablet") {
+                        LiquidEmptyStateCard(
+                            title = if (accounts.isEmpty()) {
+                                if (isArabic) "لا توجد ملفات CCP محفوظة" else "No saved CCP profiles"
+                            } else {
+                                if (isArabic) "لا توجد نتائج مطابقة" else "No matching profiles"
+                            },
+                            description = if (accounts.isEmpty()) {
+                                if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، CCP والمفتاح Clé، و RIP) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
+                                else "Store up to 1,000 CCP & RIP profiles with app-themed animated cards, linked contacts, and one-tap copy."
+                            } else {
+                                if (isArabic) "جرّب تغيير التصفية أو البحث باسم آخر."
+                                else "Adjust your filter or search terms."
+                            },
+                            icon = Icons.Default.AccountBalance,
+                            iconColor = CyanNeon
+                        )
+                    }
+                } else {
+                    items(filteredAccounts, key = { it.id }) { acc ->
+                        val isExpanded = acc.id in expandedCcpIds
+                        val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
+                        CcpAccountCard(
+                            account = acc,
+                            isExpanded = isExpanded,
+                            isDigitsVisible = isDigitsVisible,
+                            isStealth = isStealth,
+                            isArabic = isArabic,
+                            shimmerPhase = shimmerPhase,
+                            pulsePhase = pulsePhase,
+                            onToggleExpand = { onToggleExpandCcp(acc.id) },
+                            onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
+                            onTogglePin = { onTogglePinCcpAccount(acc.id) },
+                            onHoldActions = { holdActionTargetAccount = acc },
+                            onCopyName = {
+                                copyText(
+                                    label = "Name",
+                                    text = acc.displayFullName,
+                                    toastMessage = if (isArabic) "تم نسخ الاسم: ${acc.displayFullName}" else "Name copied ✓"
+                                )
+                            },
+                            onCopyCcp = {
+                                val value = if (acc.ccpKey.isNotBlank()) "${acc.ccpNumber} ${acc.ccpKey}" else acc.ccpNumber
+                                copyText(
+                                    label = "CCP",
+                                    text = value,
+                                    toastMessage = if (isArabic) "تم نسخ رقم CCP والمفتاح ✓" else "CCP & Clé copied ✓"
+                                )
+                            },
+                            onCopyRip = {
+                                copyText(
+                                    label = "RIP",
+                                    text = acc.ripFull,
+                                    toastMessage = if (isArabic) "تم نسخ رقم RIP ✓" else "RIP copied ✓"
+                                )
+                            },
+                            onCopyPhone = {
+                                if (acc.contactPhone.isNotBlank()) {
+                                    copyText(
+                                        label = "Phone",
+                                        text = acc.contactPhone,
+                                        toastMessage = if (isArabic) "تم نسخ رقم الهاتف ✓" else "Phone copied ✓"
                                     )
                                 }
-                                BasicTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    singleLine = true,
-                                    textStyle = TextStyle(
-                                        color = colors.textPrimary,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    cursorBrush = SolidColor(CyanNeon),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("ccp_search_input")
+                            },
+                            onCopyAll = {
+                                val fullBlock = buildString {
+                                    append(acc.displayFullName)
+                                    if (acc.ccpNumber.isNotBlank()) {
+                                        append("\nCCP: ${acc.ccpNumber}")
+                                        if (acc.ccpKey.isNotBlank()) append(" | Clé: ${acc.ccpKey}")
+                                    }
+                                    if (acc.ripFull.isNotBlank()) append("\nRIP: ${acc.ripFull}")
+                                    if (acc.contactPhone.isNotBlank()) append("\nTel: ${acc.contactPhone}")
+                                    if (acc.agencyNote.isNotBlank()) append("\nNote: ${acc.agencyNote}")
+                                }
+                                copyText(
+                                    label = "CCP Profile",
+                                    text = fullBlock,
+                                    toastMessage = if (isArabic) "تم نسخ جميع معطيات الملف ✓" else "All profile data copied ✓"
                                 )
                             }
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { searchQuery = "" },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = if (isArabic) "مسح البحث" else "Clear search",
-                                        tint = colors.textMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        GlassPill(
-                            text = if (isArabic) "الكل (${accounts.size})" else "All (${accounts.size})",
-                            isSelected = activeFilter == CcpFilter.ALL,
-                            onClick = { activeFilter = CcpFilter.ALL }
                         )
-                        GlassPill(
-                            text = if (isArabic) "مثبتة ($pinnedCount)" else "Pinned ($pinnedCount)",
-                            isSelected = activeFilter == CcpFilter.PINNED,
-                            onClick = { activeFilter = CcpFilter.PINNED }
-                        )
-                        GlassPill(
-                            text = if (isArabic) "جهات اتصال ($linkedCount)" else "Contacts ($linkedCount)",
-                            isSelected = activeFilter == CcpFilter.LINKED_CONTACTS,
-                            onClick = { activeFilter = CcpFilter.LINKED_CONTACTS }
-                        )
-                        GlassPill(
-                            text = if (isArabic) "مع RIP ($withRipCount)" else "With RIP ($withRipCount)",
-                            isSelected = activeFilter == CcpFilter.WITH_RIP,
-                            onClick = { activeFilter = CcpFilter.WITH_RIP }
-                        )
-                        if (expandedCcpIds.isNotEmpty()) {
-                            GlassPill(
-                                text = if (isArabic) "طي الكل (${expandedCcpIds.size})" else "Collapse (${expandedCcpIds.size})",
-                                isSelected = false,
-                                onClick = onCollapseAllCcps
-                            )
-                        }
                     }
                 }
+                item(key = "ccp_bottom_spacer_tablet") { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
         }
-
-        if (filteredAccounts.isEmpty()) {
-            item(key = "ccp_empty") {
-                LiquidEmptyStateCard(
-                    title = if (accounts.isEmpty()) {
-                        if (isArabic) "لا توجد ملفات CCP محفوظة" else "No saved CCP profiles"
-                    } else {
-                        if (isArabic) "لا توجد نتائج مطابقة" else "No matching profiles"
-                    },
-                    description = if (accounts.isEmpty()) {
-                        if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، CCP والمفتاح Clé، و RIP) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
-                        else "Store up to 1,000 CCP & RIP profiles with app-themed animated cards, linked contacts, and one-tap copy."
-                    } else {
-                        if (isArabic) "جرّب تغيير التصفية أو البحث باسم آخر."
-                        else "Adjust your filter or search terms."
-                    },
-                    icon = Icons.Default.AccountBalance,
-                    iconColor = CyanNeon
-                )
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = dimens.screenPaddingH),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+        ) {
+            item(key = "ccp_header") {
+                Spacer(modifier = Modifier.height(dimens.spacingXs))
+                ccpHeader()
             }
-        } else {
-            items(filteredAccounts, key = { it.id }) { acc ->
-                val isExpanded = acc.id in expandedCcpIds
-                val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
-                CcpAccountCard(
-                    account = acc,
-                    isExpanded = isExpanded,
-                    isDigitsVisible = isDigitsVisible,
-                    isStealth = isStealth,
-                    isArabic = isArabic,
-                    shimmerPhase = shimmerPhase,
-                    pulsePhase = pulsePhase,
-                    onToggleExpand = { onToggleExpandCcp(acc.id) },
-                    onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
-                    onTogglePin = {
-                        onTogglePinCcpAccount(acc.id)
-                    },
-                    onHoldActions = {
-                        holdActionTargetAccount = acc
-                    },
-                    onCopyName = {
-                        copyText(
-                            label = "Name",
-                            text = acc.displayFullName,
-                            toastMessage = if (isArabic) "تم نسخ الاسم: ${acc.displayFullName}" else "Name copied ✓"
-                        )
-                    },
-                    onCopyCcp = {
-                        val value = if (acc.ccpKey.isNotBlank()) "${acc.ccpNumber} ${acc.ccpKey}" else acc.ccpNumber
-                        copyText(
-                            label = "CCP",
-                            text = value,
-                            toastMessage = if (isArabic) "تم نسخ رقم CCP والمفتاح ✓" else "CCP & Clé copied ✓"
-                        )
-                    },
-                    onCopyRip = {
-                        copyText(
-                            label = "RIP",
-                            text = acc.ripFull,
-                            toastMessage = if (isArabic) "تم نسخ رقم RIP ✓" else "RIP copied ✓"
-                        )
-                    },
-                    onCopyPhone = {
-                        if (acc.contactPhone.isNotBlank()) {
+            item(key = "ccp_smart_summary") { ccpSummaryCard() }
+            if (accounts.isNotEmpty()) {
+                item(key = "ccp_search") { ccpSearchAndFilter() }
+            }
+            if (filteredAccounts.isEmpty()) {
+                item(key = "ccp_empty") {
+                    LiquidEmptyStateCard(
+                        title = if (accounts.isEmpty()) {
+                            if (isArabic) "لا توجد ملفات CCP محفوظة" else "No saved CCP profiles"
+                        } else {
+                            if (isArabic) "لا توجد نتائج مطابقة" else "No matching profiles"
+                        },
+                        description = if (accounts.isEmpty()) {
+                            if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، CCP والمفتاح Clé، و RIP) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
+                            else "Store up to 1,000 CCP & RIP profiles with app-themed animated cards, linked contacts, and one-tap copy."
+                        } else {
+                            if (isArabic) "جرّب تغيير التصفية أو البحث باسم آخر."
+                            else "Adjust your filter or search terms."
+                        },
+                        icon = Icons.Default.AccountBalance,
+                        iconColor = CyanNeon
+                    )
+                }
+            } else {
+                items(filteredAccounts, key = { it.id }) { acc ->
+                    val isExpanded = acc.id in expandedCcpIds
+                    val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
+                    CcpAccountCard(
+                        account = acc,
+                        isExpanded = isExpanded,
+                        isDigitsVisible = isDigitsVisible,
+                        isStealth = isStealth,
+                        isArabic = isArabic,
+                        shimmerPhase = shimmerPhase,
+                        pulsePhase = pulsePhase,
+                        onToggleExpand = { onToggleExpandCcp(acc.id) },
+                        onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
+                        onTogglePin = { onTogglePinCcpAccount(acc.id) },
+                        onHoldActions = { holdActionTargetAccount = acc },
+                        onCopyName = {
                             copyText(
-                                label = "Phone",
-                                text = acc.contactPhone,
-                                toastMessage = if (isArabic) "تم نسخ رقم الهاتف ✓" else "Phone copied ✓"
+                                label = "Name",
+                                text = acc.displayFullName,
+                                toastMessage = if (isArabic) "تم نسخ الاسم: ${acc.displayFullName}" else "Name copied ✓"
+                            )
+                        },
+                        onCopyCcp = {
+                            val value = if (acc.ccpKey.isNotBlank()) "${acc.ccpNumber} ${acc.ccpKey}" else acc.ccpNumber
+                            copyText(
+                                label = "CCP",
+                                text = value,
+                                toastMessage = if (isArabic) "تم نسخ رقم CCP والمفتاح ✓" else "CCP & Clé copied ✓"
+                            )
+                        },
+                        onCopyRip = {
+                            copyText(
+                                label = "RIP",
+                                text = acc.ripFull,
+                                toastMessage = if (isArabic) "تم نسخ رقم RIP ✓" else "RIP copied ✓"
+                            )
+                        },
+                        onCopyPhone = {
+                            if (acc.contactPhone.isNotBlank()) {
+                                copyText(
+                                    label = "Phone",
+                                    text = acc.contactPhone,
+                                    toastMessage = if (isArabic) "تم نسخ رقم الهاتف ✓" else "Phone copied ✓"
+                                )
+                            }
+                        },
+                        onCopyAll = {
+                            val fullBlock = buildString {
+                                append(acc.displayFullName)
+                                if (acc.ccpNumber.isNotBlank()) {
+                                    append("\nCCP: ${acc.ccpNumber}")
+                                    if (acc.ccpKey.isNotBlank()) append(" | Clé: ${acc.ccpKey}")
+                                }
+                                if (acc.ripFull.isNotBlank()) append("\nRIP: ${acc.ripFull}")
+                                if (acc.contactPhone.isNotBlank()) append("\nTel: ${acc.contactPhone}")
+                                if (acc.agencyNote.isNotBlank()) append("\nNote: ${acc.agencyNote}")
+                            }
+                            copyText(
+                                label = "CCP Profile",
+                                text = fullBlock,
+                                toastMessage = if (isArabic) "تم نسخ جميع معطيات الملف ✓" else "All profile data copied ✓"
                             )
                         }
-                    },
-                    onCopyAll = {
-                        val fullBlock = buildString {
-                            append(acc.displayFullName)
-                            if (acc.ccpNumber.isNotBlank()) {
-                                append("\nCCP: ${acc.ccpNumber}")
-                                if (acc.ccpKey.isNotBlank()) append(" | Clé: ${acc.ccpKey}")
-                            }
-                            if (acc.ripFull.isNotBlank()) append("\nRIP: ${acc.ripFull}")
-                            if (acc.contactPhone.isNotBlank()) append("\nTel: ${acc.contactPhone}")
-                            if (acc.agencyNote.isNotBlank()) append("\nNote: ${acc.agencyNote}")
-                        }
-                        copyText(
-                            label = "CCP Profile",
-                            text = fullBlock,
-                            toastMessage = if (isArabic) "تم نسخ جميع معطيات الملف ✓" else "All profile data copied ✓"
-                        )
-                    }
-                )
+                    )
+                }
             }
-        }
 
-        item(key = "ccp_bottom_spacer") {
-            Spacer(modifier = Modifier.height(84.dp))
+            item(key = "ccp_bottom_spacer") {
+                Spacer(modifier = Modifier.height(84.dp))
+            }
         }
     }
 }
@@ -678,6 +796,7 @@ private fun CcpSummaryChip(
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    val typo = LocalAdaptiveTypography.current
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -689,7 +808,7 @@ private fun CcpSummaryChip(
         Text(
             text = label,
             color = color,
-            fontSize = 11.sp,
+            fontSize = typo.caption,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

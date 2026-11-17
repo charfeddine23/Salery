@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,10 +43,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
@@ -424,7 +426,7 @@ fun GlassButton(
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
-                .height(dimens.buttonHeight)
+                .defaultMinSize(minHeight = dimens.buttonHeight)
                 .neumorphicDepth(
                     cornerRadius = dimens.cornerRadiusMd,
                     elevation = 4.dp,
@@ -438,11 +440,12 @@ fun GlassButton(
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = dimens.spacingLg),
+                .padding(horizontal = dimens.spacingMd, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
                 if (icon != null) {
                     Icon(
@@ -457,14 +460,17 @@ fun GlassButton(
                     text = text,
                     color = contentColor,
                     fontSize = typo.bodyLg,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
             }
         }
     } else {
         Box(
             modifier = modifier
-                .height(dimens.buttonHeight)
+                .defaultMinSize(minHeight = dimens.buttonHeight)
                 .clip(shape)
                 .background(
                     brush = Brush.horizontalGradient(
@@ -482,11 +488,12 @@ fun GlassButton(
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = dimens.spacingLg),
+                .padding(horizontal = dimens.spacingMd, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
                 if (icon != null) {
                     Icon(
@@ -501,7 +508,10 @@ fun GlassButton(
                     text = text,
                     color = contentColor,
                     fontSize = typo.bodyLg,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -525,7 +535,7 @@ fun QuickActionButton(
     if (colors.isNeumorphic) {
         Box(
             modifier = modifier
-                .height((dimens.buttonHeight - 4.dp).coerceAtLeast(44.dp))
+                .defaultMinSize(minHeight = dimens.buttonHeight)
                 .neumorphicDepth(
                     cornerRadius = dimens.cornerRadiusMd,
                     elevation = 3.dp,
@@ -538,7 +548,7 @@ fun QuickActionButton(
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = dimens.spacingSm, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -559,23 +569,24 @@ fun QuickActionButton(
                     color = contentColor,
                     fontSize = typo.bodyXs,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     } else {
         Box(
             modifier = modifier
-                .height(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(14.dp))
-                .background(brush, RoundedCornerShape(14.dp))
+                .defaultMinSize(minHeight = dimens.buttonHeight)
+                .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+                .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(dimens.cornerRadiusMd))
+                .background(brush, RoundedCornerShape(dimens.cornerRadiusMd))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
                     onClick = onClick
                 )
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = dimens.spacingSm, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -587,16 +598,17 @@ fun QuickActionButton(
                         imageVector = icon,
                         contentDescription = null,
                         tint = contentColor,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(dimens.iconSizeXs + 2.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(
                     text = text,
                     color = contentColor,
-                    fontSize = 11.5.sp,
+                    fontSize = typo.bodyXs,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -612,21 +624,24 @@ fun GlassPill(
     icon: ImageVector? = null
 ) {
     val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
     val bg = if (isSelected) colors.primaryNeon.copy(alpha = 0.25f) else colors.glassSurface
     val borderCol = if (isSelected) colors.primaryNeon else colors.glassBorderSubtle
     val txtCol = if (isSelected) colors.primaryNeon else colors.textSecondary
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .border(BorderStroke(1.dp, borderCol), RoundedCornerShape(24.dp))
+            .defaultMinSize(minHeight = 38.dp)
+            .clip(RoundedCornerShape(dimens.cornerRadiusXl))
+            .border(BorderStroke(1.dp, borderCol), RoundedCornerShape(dimens.cornerRadiusXl))
             .background(bg)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(color = colors.primaryNeon),
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = dimens.spacingMd + 2.dp, vertical = dimens.spacingSm),
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -635,15 +650,17 @@ fun GlassPill(
                     imageVector = icon,
                     contentDescription = null,
                     tint = txtCol,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(dimens.iconSizeSm)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
                 text = text,
                 color = txtCol,
-                fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                fontSize = typo.body,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
