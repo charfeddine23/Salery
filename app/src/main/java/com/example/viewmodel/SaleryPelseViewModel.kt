@@ -12,6 +12,9 @@ import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.data.HubVaultCodec
 import com.example.data.PreferencesManager
+import com.example.data.SavingsHistoryCodec
+import com.example.data.SavingsMovementEntry
+import com.example.data.SavingsMovementType
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
@@ -212,6 +215,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     val squareSnapshot: StateFlow<SquareMarketSnapshot?> = settings
         .map { SquareMarketCodec.parseSnapshot(it.squareMarketSnapshotJson) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Savings Wallet Movement History
+    val savingsHistory: StateFlow<List<SavingsMovementEntry>> = settings
+        .map { SavingsHistoryCodec.parse(it.savingsHistoryJson) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isRefreshingSquareMarket = MutableStateFlow(false)
     val isRefreshingSquareMarket: StateFlow<Boolean> = _isRefreshingSquareMarket.asStateFlow()
@@ -1162,27 +1170,33 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Savings Wallet (محفظة الادخار) Actions
-    fun transferToSavings(amount: Double) {
+    fun transferToSavings(amount: Double, note: String = "") {
         if (amount <= 0.0) return
+        val isAr = settings.value.language == "ar"
         val currentAvailable = financialSummary.value.totalBalance
         if (amount > currentAvailable && currentAvailable > 0) {
             viewModelScope.launch {
-                val isAr = settings.value.language == "ar"
                 _toastEvent.emit(
                     if (isAr) "تنبيه: المبلغ المراد تحويله أكبر من الرصيد المتاح (${formatDzdAmount(currentAvailable)} دج)"
                     else "Notice: Amount exceeds available balance (${formatDzdAmount(currentAvailable)} DZD)"
                 )
             }
         }
+        val entry = SavingsMovementEntry(
+            type = SavingsMovementType.DEPOSIT,
+            amount = amount,
+            title = if (isAr) "إيداع إلى الادخار" else "Deposit to Savings",
+            note = note
+        )
         prefsManager.updateSettings { current ->
             val updated = current.savingsWalletBalance + amount
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated
+                vaultLockedAmount = updated,
+                savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
         viewModelScope.launch {
-            val isAr = settings.value.language == "ar"
             _toastEvent.emit(
                 if (isAr) "تم تحويل ${formatDzdAmount(amount)} دج إلى محفظة الادخار بنجاح 💰"
                 else "Savings Wallet: ${formatDzdAmount(amount)} DZD transferred to savings 💰"
@@ -1190,20 +1204,30 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun withdrawFromSavings(amount: Double) {
+    fun withdrawFromSavings(amount: Double, note: String = "") {
         if (amount <= 0.0) return
+        val isAr = settings.value.language == "ar"
+        val currentSavings = settings.value.savingsWalletBalance
+        val actualWithdraw = amount.coerceAtMost(currentSavings)
+        if (actualWithdraw <= 0.0) return
+        val entry = SavingsMovementEntry(
+            type = SavingsMovementType.WITHDRAW,
+            amount = actualWithdraw,
+            title = if (isAr) "سحب إلى الرصيد المتاح" else "Withdraw to Available",
+            note = note
+        )
         prefsManager.updateSettings { current ->
-            val updated = (current.savingsWalletBalance - amount).coerceAtLeast(0.0)
+            val updated = (current.savingsWalletBalance - actualWithdraw).coerceAtLeast(0.0)
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated
+                vaultLockedAmount = updated,
+                savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
         viewModelScope.launch {
-            val isAr = settings.value.language == "ar"
             _toastEvent.emit(
-                if (isAr) "تم استرجاع ${formatDzdAmount(amount)} دج إلى الرصيد المتاح بنجاح 🔄"
-                else "Savings Wallet: ${formatDzdAmount(amount)} DZD withdrawn back to available balance 🔄"
+                if (isAr) "تم استرجاع ${formatDzdAmount(actualWithdraw)} دج إلى الرصيد المتاح بنجاح 🔄"
+                else "Savings Wallet: ${formatDzdAmount(actualWithdraw)} DZD withdrawn back to available balance 🔄"
             )
         }
     }
@@ -1222,18 +1246,27 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
-        // 1. Deduct directly from savings balance
+        val isAr = settings.value.language == "ar"
+        val resolvedTitle = title.ifBlank { if (isAr) "مصروف من محفظة الادخار" else "Savings Expense" }
+        val entry = SavingsMovementEntry(
+            type = SavingsMovementType.SPEND,
+            amount = amount,
+            title = resolvedTitle,
+            note = note
+        )
+
+        // 1. Deduct directly from savings balance & record in history
         prefsManager.updateSettings { current ->
             val updated = (current.savingsWalletBalance - amount).coerceAtLeast(0.0)
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated
+                vaultLockedAmount = updated,
+                savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
 
         // 2. Automatically record in Expenses page (صفحة المصاريف)
         viewModelScope.launch {
-            val isAr = settings.value.language == "ar"
             val savingsTagNote = if (isAr) {
                 if (note.isNotBlank()) "تم الصرف من محفظة الادخار • $note" else "تم الصرف مباشرة من محفظة الادخار"
             } else {
@@ -1245,7 +1278,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     type = TransactionType.EXPENSE,
                     amount = amount,
                     category = category.ifBlank { "savings_expense" },
-                    title = title.ifBlank { if (isAr) "مصروف من محفظة الادخار" else "Savings Expense" },
+                    title = resolvedTitle,
                     note = savingsTagNote,
                     dateMillis = System.currentTimeMillis(),
                     isPaidFromSavings = true
@@ -1257,6 +1290,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 else "Expense of ${formatDzdAmount(amount)} DZD recorded and deducted from Savings Wallet 💳"
             )
         }
+    }
+
+    fun setSavingsGoal(goalAmount: Double) {
+        val safe = goalAmount.coerceAtLeast(0.0)
+        prefsManager.updateSettings { it.copy(savingsGoalAmount = safe) }
+    }
+
+    fun clearSavingsHistory() {
+        prefsManager.updateSettings { it.copy(savingsHistoryJson = "[]") }
     }
 
     // Keep vault aliases for dashboard compatibility

@@ -23,6 +23,8 @@ data class UserSettings(
     val stealthMode: Boolean = false,
     val vaultLockedAmount: Double = 0.0,
     val savingsWalletBalance: Double = 0.0,
+    val savingsGoalAmount: Double = 0.0,
+    val savingsHistoryJson: String = "[]",
     val classicCardBankStyle: String = "EDAHABIA",
     val classicCardHolderName: String = "CHARFEDDINE KA",
     val classicCardNumber: String = "",
@@ -177,6 +179,8 @@ class PreferencesManager(context: Context) {
             stealthMode = safeBoolean("stealth_mode", false),
             vaultLockedAmount = savedSavings,
             savingsWalletBalance = savedSavings,
+            savingsGoalAmount = safeDouble("savings_goal_amount", 0.0),
+            savingsHistoryJson = safeString("savings_history_json", "[]"),
             classicCardBankStyle = safeString("classic_card_bank_style", "EDAHABIA"),
             classicCardHolderName = safeString("classic_card_holder", "CHARFEDDINE KA"),
             classicCardNumber = safeString("classic_card_number", ""),
@@ -244,6 +248,8 @@ class PreferencesManager(context: Context) {
                 .putBoolean("stealth_mode", finalUpdated.stealthMode)
                 .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
                 .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
+                .putString("savings_goal_amount", finalUpdated.savingsGoalAmount.toString())
+                .putString("savings_history_json", finalUpdated.savingsHistoryJson)
                 .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
                 .putString("classic_card_holder", finalUpdated.classicCardHolderName)
                 .putString("classic_card_number", finalUpdated.classicCardNumber)

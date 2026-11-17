@@ -172,4 +172,44 @@ class PermanentSmsArchiveRobolectricTest {
             collectJob.cancel()
         }
     }
+
+    @Test
+    fun savingsWallet_transfersGoalsAndHistory_persistAndClampAccurately() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val prefs = PreferencesManager(app)
+        prefs.updateSettings {
+            it.copy(
+                salaryAutoCredit = false,
+                savingsWalletBalance = 0.0,
+                savingsGoalAmount = 0.0,
+                savingsHistoryJson = "[]"
+            )
+        }
+
+        val vm = SaleryPelseViewModel(app)
+        vm.setSavingsGoal(100000.0)
+        assertEquals(100000.0, vm.settings.value.savingsGoalAmount, 0.01)
+
+        vm.transferToSavings(25000.0)
+        assertEquals(25000.0, vm.settings.value.savingsWalletBalance, 0.01)
+
+        vm.withdrawFromSavings(7500.0)
+        assertEquals(17500.0, vm.settings.value.savingsWalletBalance, 0.01)
+
+        // Withdrawing more than balance clamps cleanly without going negative
+        vm.withdrawFromSavings(50000.0)
+        assertEquals(0.0, vm.settings.value.savingsWalletBalance, 0.01)
+
+        val history = com.example.data.SavingsHistoryCodec.parse(vm.settings.value.savingsHistoryJson)
+        assertEquals(3, history.size)
+        assertEquals(com.example.data.SavingsMovementType.WITHDRAW, history[0].type)
+        assertEquals(17500.0, history[0].amount, 0.01)
+        assertEquals(com.example.data.SavingsMovementType.WITHDRAW, history[1].type)
+        assertEquals(7500.0, history[1].amount, 0.01)
+        assertEquals(com.example.data.SavingsMovementType.DEPOSIT, history[2].type)
+        assertEquals(25000.0, history[2].amount, 0.01)
+
+        vm.clearSavingsHistory()
+        assertEquals("[]", vm.settings.value.savingsHistoryJson)
+    }
 }

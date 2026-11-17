@@ -181,6 +181,7 @@ fun MainAppScreen(
     val isRefreshingCryptoPrices by viewModel.isRefreshingCryptoPrices.collectAsState()
     val cryptoPriceError by viewModel.cryptoPriceError.collectAsState()
     val squareSnapshot by viewModel.squareSnapshot.collectAsState()
+    val savingsHistory by viewModel.savingsHistory.collectAsState()
     val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
     val squareMarketError by viewModel.squareMarketError.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
@@ -773,12 +774,15 @@ fun MainAppScreen(
                                     transactions = transactions,
                                     debts = debts,
                                     userSettings = userSettings,
+                                    savingsHistory = savingsHistory,
                                     onBackClick = { currentRoute = "cards" },
                                     onTransferToSavings = { viewModel.transferToSavings(it) },
                                     onWithdrawFromSavings = { viewModel.withdrawFromSavings(it) },
                                     onSpendFromSavings = { amount, title, category, note ->
                                         viewModel.spendFromSavings(amount, title, category, note)
-                                    }
+                                    },
+                                    onSetSavingsGoal = { viewModel.setSavingsGoal(it) },
+                                    onClearSavingsHistory = { viewModel.clearSavingsHistory() }
                                 )
                                         }
                                     }
