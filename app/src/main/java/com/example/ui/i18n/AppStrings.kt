@@ -246,17 +246,6 @@ interface StringsBundle {
     val updateCheckFailed: String
     val updateInstallPermNote: String
 
-    // ALG Poste Auto Income / Expense & Auto Balance Mode Strings
-    val autoIncomeFromAlgPost: String
-    val autoIncomeFromAlgPostDesc: String
-    val autoExpensesFromAlgPost: String
-    val autoExpensesFromAlgPostDesc: String
-    val algPostBalanceModeLabel: String
-    val manualBalanceModeLabel: String
-    val algPostBalanceModeFormulaHint: String
-    val salarySchedulerPausedByAlgPost: String
-    val autoAlgPostBadge: String
-
     fun categoryName(cat: String): String
 }
 
@@ -485,16 +474,6 @@ object EnglishStrings : StringsBundle {
     override val alreadyUpToDate = "You are on the latest version"
     override val updateCheckFailed = "Could not connect to check for updates"
     override val updateInstallPermNote = "Allow installing apps from Vaultix to complete the update."
-
-    override val autoIncomeFromAlgPost = "Auto Income from ALG Post"
-    override val autoIncomeFromAlgPostDesc = "Automatically add incoming ALG Poste credits to Income"
-    override val autoExpensesFromAlgPost = "Auto Expenses from ALG Post"
-    override val autoExpensesFromAlgPostDesc = "Automatically add outgoing ALG Poste debits to Expenses"
-    override val algPostBalanceModeLabel = "ALG Post Balance"
-    override val manualBalanceModeLabel = "Manual Balance"
-    override val algPostBalanceModeFormulaHint = "ALG Post Balance + Manual (Income − Expense)"
-    override val salarySchedulerPausedByAlgPost = "Smart Salary Scheduler paused (settings saved)"
-    override val autoAlgPostBadge = "Auto ALG Post"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
@@ -748,16 +727,6 @@ object ArabicStrings : StringsBundle {
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
     override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
     override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
-
-    override val autoIncomeFromAlgPost = "الدخل التلقائي من ALG Post"
-    override val autoIncomeFromAlgPostDesc = "إضافة عمليات الإيداع والرواتب من رسائل ALG Post تلقائياً"
-    override val autoExpensesFromAlgPost = "المصاريف التلقائية من ALG Post"
-    override val autoExpensesFromAlgPostDesc = "إضافة عمليات السحب والدفع من رسائل ALG Post تلقائياً"
-    override val algPostBalanceModeLabel = "وضع رصيد ALG Post"
-    override val manualBalanceModeLabel = "الوضع اليدوي"
-    override val algPostBalanceModeFormulaHint = "رصيد ALG Post + فارق (الدخل − المصاريف اليدوية)"
-    override val salarySchedulerPausedByAlgPost = "مجدول الراتب متوقف تلقائياً (الإعدادات محفوظة)"
-    override val autoAlgPostBadge = "تلقائي ALG Post"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

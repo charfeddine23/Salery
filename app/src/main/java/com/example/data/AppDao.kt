@@ -32,9 +32,6 @@ interface AppDao {
     @Delete
     suspend fun deleteTransaction(transaction: TransactionEntity)
 
-    @Query("SELECT smsKey FROM transactions WHERE smsKey != ''")
-    suspend fun getExistingTransactionSmsKeys(): List<String>
-
     @Query("DELETE FROM transactions")
     suspend fun clearAllTransactions()
 

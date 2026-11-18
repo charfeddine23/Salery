@@ -83,10 +83,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 newlyExtractedSnapshots.add(snap)
             }
 
-            val shouldDetectOperations = currentSettings.baridiMobSmsSyncEnabled ||
-                currentSettings.autoIncomeFromAlgPostEnabled ||
-                currentSettings.autoExpenseFromAlgPostEnabled
-            if (shouldDetectOperations && allowSuggestionForTimestamp) {
+            if (currentSettings.baridiMobSmsSyncEnabled && allowSuggestionForTimestamp) {
                 val parsed = AlgPosteSmsAnalyzer.parseSms(
                     sender = sender,
                     body = rawText,
@@ -155,10 +152,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 }
 
                 // Suggest any new explicit SMS operation OR balance change (Income / Outcome) in Alg Post Balance
-                val shouldDetectOps = currentSettings.baridiMobSmsSyncEnabled ||
-                    currentSettings.autoIncomeFromAlgPostEnabled ||
-                    currentSettings.autoExpenseFromAlgPostEnabled
-                val newDeltaSuggestions = if (shouldDetectOps && allowSuggestionForTimestamp) {
+                val newDeltaSuggestions = if (currentSettings.baridiMobSmsSyncEnabled && allowSuggestionForTimestamp) {
                     AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
                         snapshots = mergedHistory,
                         minTimestampMillis = baselineMillis
@@ -178,35 +172,17 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 val combinedNewSuggestions = (newlyDetected + newDeltaSuggestions)
                     .distinctBy { it.id.removePrefix("bal_op_") }
 
-                val existingDbSmsKeys = runCatching { dao.getExistingTransactionSmsKeys().toSet() }
-                    .getOrDefault(emptySet())
-                val isAr = currentSettings.language == "ar"
-                val partition = AlgPosteAutoRecorder.partitionAutoRecordCandidates(
-                    candidates = combinedNewSuggestions,
-                    autoIncomeEnabled = currentSettings.autoIncomeFromAlgPostEnabled,
-                    autoExpenseEnabled = currentSettings.autoExpenseFromAlgPostEnabled,
-                    existingDbSmsKeys = existingDbSmsKeys,
-                    processedKeys = processedKeys,
-                    isArabic = isAr
-                )
-
-                if (partition.transactionsToInsert.isNotEmpty()) {
-                    dao.insertTransactions(partition.transactionsToInsert)
-                }
-
                 val pendingToAdd = if (currentSettings.baridiMobSmsSyncEnabled) {
-                    partition.remainingSuggestions
+                    combinedNewSuggestions
                 } else {
                     emptyList()
                 }
                 val updatedList = (pendingToAdd + existingPending)
                     .distinctBy { it.id.removePrefix("bal_op_") }
-                val updatedProcessedKeys = processedKeys + partition.newlyProcessedKeys
 
                 prefsManager.updateSettings {
                     it.copy(
                         pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
-                        processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(updatedProcessedKeys),
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
                         latestSmsBalanceAmount = latestSnap?.balance ?: it.latestSmsBalanceAmount,
@@ -215,6 +191,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                     )
                 }
 
+                val isAr = currentSettings.language == "ar"
                 val primarySuggestion = pendingToAdd.firstOrNull()
                 if (primarySuggestion != null) {
                     postSuggestionNotification(

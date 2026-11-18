@@ -59,7 +59,6 @@ fun SalarySchedulerDialog(
     currentPayday: Int,
     currentEmployer: String,
     currentAutoCredit: Boolean,
-    isAlgPostBalanceModeActive: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (amount: Double, payday: Int, employer: String, autoCredit: Boolean) -> Unit,
     onDepositNow: () -> Unit
@@ -291,12 +290,8 @@ fun SalarySchedulerDialog(
                             fontSize = 13.sp
                         )
                         Text(
-                            text = if (isAlgPostBalanceModeActive) {
-                                strings.salarySchedulerPausedByAlgPost
-                            } else {
-                                "Automatic deposit into wallet on payday"
-                            },
-                            color = if (isAlgPostBalanceModeActive) Color(0xFFF59E0B) else colors.textSecondary,
+                            text = "Automatic deposit into wallet on payday",
+                            color = colors.textSecondary,
                             fontSize = 11.sp
                         )
                     }

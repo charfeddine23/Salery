@@ -678,10 +678,7 @@ fun MainAppScreen(
                                     },
                                     onOpenBaridiMobSync = { currentRoute = "baridimob_sync" },
                                     onRefreshCcpBalanceFromSms = { showFeedback ->
-                                        if (userSettings.baridiMobSmsSyncEnabled ||
-                                            userSettings.autoIncomeFromAlgPostEnabled ||
-                                            userSettings.autoExpenseFromAlgPostEnabled
-                                        ) {
+                                        if (userSettings.baridiMobSmsSyncEnabled) {
                                             viewModel.scanAlgPosteSmsInbox(
                                                 context = context,
                                                 showFeedback = showFeedback
@@ -692,9 +689,6 @@ fun MainAppScreen(
                                                 showFeedback = showFeedback
                                             )
                                         }
-                                    },
-                                    onToggleAlgPostBalanceMode = { enabled ->
-                                        viewModel.setAlgPostBalanceModeEnabled(enabled)
                                     }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
@@ -809,7 +803,6 @@ fun MainAppScreen(
                     currentPayday = userSettings.salaryPayday,
                     currentEmployer = userSettings.salaryEmployer,
                     currentAutoCredit = userSettings.salaryAutoCredit,
-                    isAlgPostBalanceModeActive = userSettings.algPostBalanceModeEnabled,
                     onDismiss = { showSalarySchedulerDialog = false },
                     onSave = { amount, payday, employer, autoCredit ->
                         viewModel.updateSalarySettings(amount, payday, employer, autoCredit)

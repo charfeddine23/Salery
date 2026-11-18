@@ -119,7 +119,6 @@ fun DashboardScreen(
     onDismissSmsSuggestion: (String) -> Unit = {},
     onOpenBaridiMobSync: () -> Unit = {},
     onRefreshCcpBalanceFromSms: (showFeedback: Boolean) -> Unit = {},
-    onToggleAlgPostBalanceMode: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -173,8 +172,7 @@ fun DashboardScreen(
                         userSettings = userSettings,
                         onLockToVault = onLockToVault,
                         onUnlockFromVault = onUnlockFromVault,
-                        onOpenSalaryScheduler = onOpenSalaryScheduler,
-                        onToggleAlgPostBalanceMode = onToggleAlgPostBalanceMode
+                        onOpenSalaryScheduler = onOpenSalaryScheduler
                     )
                 }
 
@@ -283,8 +281,7 @@ fun DashboardScreen(
                     userSettings = userSettings,
                     onLockToVault = onLockToVault,
                     onUnlockFromVault = onUnlockFromVault,
-                    onOpenSalaryScheduler = onOpenSalaryScheduler,
-                    onToggleAlgPostBalanceMode = onToggleAlgPostBalanceMode
+                    onOpenSalaryScheduler = onOpenSalaryScheduler
                 )
             }
 
@@ -575,15 +572,6 @@ fun TransactionRowItem(
                     Text(
                         text = "Salary Credit",
                         color = colors.primaryNeon,
-                        fontSize = typo.caption,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-                if (transaction.isAutoAlgPoste) {
-                    Text(
-                        text = strings.autoAlgPostBadge,
-                        color = CyanNeon,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1

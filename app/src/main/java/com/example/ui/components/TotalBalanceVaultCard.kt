@@ -1,9 +1,5 @@
 package com.example.ui.components
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -12,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -29,11 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -48,7 +40,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +55,6 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
-import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
@@ -74,8 +64,7 @@ import com.example.viewmodel.FinancialSummary
  * Incorporates:
  * 1. Neumorphic Dual-Shadow & Surface Contrast matching Smart Salary Scheduler.
  * 2. Dynamic Cash Flow Ambient Glow shifting with recent spending/income ratio.
- * 3. Toggleable ALG Post Auto Balance Mode (ALG Post Balance + Manual In - Manual Out - Savings).
- * 4. Monthly Income vs Monthly Expense summary pillars.
+ * 3. Monthly Income vs Monthly Expense summary pillars.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -85,12 +74,9 @@ fun TotalBalanceVaultCard(
     onLockToVault: (Double) -> Unit = {},
     onUnlockFromVault: (Double) -> Unit = {},
     onOpenSalaryScheduler: () -> Unit = {},
-    onToggleAlgPostBalanceMode: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
-    val context = LocalContext.current
-    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
     val strings = AppStrings.current
@@ -98,28 +84,19 @@ fun TotalBalanceVaultCard(
     val isStealth = LocalStealthMode.current
     val haptic = LocalHapticFeedback.current
 
-    val smsPermLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        onToggleAlgPostBalanceMode(true)
-    }
-
     val lockedAmount = summary.savingsBalance
     val spendableBalance = summary.totalBalance
-    val isAlgPostMode = summary.isAlgPostBalanceMode
 
     // Cash flow ratio calculations for ambient dynamic glow
     val isSurplus = summary.monthlyIncome > summary.monthlyExpenses * 1.20
     val isDeficit = summary.monthlyExpenses > summary.monthlyIncome && summary.monthlyExpenses > 0
 
     val glowColor1 = when {
-        isAlgPostMode -> CyanNeon
         isSurplus -> EmeraldNeon
         isDeficit -> RoseNeon
         else -> CyanNeon
     }
     val glowColor2 = when {
-        isAlgPostMode -> EmeraldNeon
         isSurplus -> CyanNeon
         isDeficit -> AmberNeon
         else -> Color(0xFF6366F1) // Indigo/Violet
@@ -180,101 +157,28 @@ fun TotalBalanceVaultCard(
         Column(
             modifier = Modifier.padding(dimens.cardPadding)
         ) {
-            // Top Header Row with Cash Flow Status Badge + ALG Post Balance Mode Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = strings.totalBalance,
-                        color = colors.textSecondary,
-                        fontSize = typo.body,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = when {
-                            isAlgPostMode -> {
-                                val manualDiff = summary.manualNetDiffComponent
-                                val diffSign = if (manualDiff >= 0.0) "+" else ""
-                                "ALG Post: ${formatDzd(summary.algPostBalanceComponent, strings.currencyCode, isStealth)} • " +
-                                    "${if (isArabic) "يدوي" else "Manual"}: $diffSign${formatDzd(manualDiff, strings.currencyCode, isStealth)}"
-                            }
-                            lockedAmount > 0 -> if (isArabic) "الرصيد المتاح (بعد الادخار)" else "Available (After Savings)"
-                            else -> if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense"
-                        },
-                        color = if (isAlgPostMode) CyanNeon else colors.textMuted,
-                        fontSize = typo.caption,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(dimens.spacingSm))
-
-                // Mode Switch Button inside the Balance Container (identical fixed size for both modes)
-                val toggleWidth = if (layoutInfo.isTablet) 172.dp else 154.dp
-                Box(
-                    modifier = Modifier
-                        .width(toggleWidth)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                        .background(
-                            if (isAlgPostMode) CyanNeon.copy(alpha = 0.22f)
-                            else colors.glassSurface
-                        )
-                        .border(
-                            1.dp,
-                            if (isAlgPostMode) CyanNeon.copy(alpha = 0.65f) else colors.glassBorderSubtle,
-                            RoundedCornerShape(dimens.cornerRadiusMd)
-                        )
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            if (isAlgPostMode) {
-                                onToggleAlgPostBalanceMode(false)
-                            } else {
-                                val hasSmsPerm = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.READ_SMS
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (hasSmsPerm) {
-                                    onToggleAlgPostBalanceMode(true)
-                                } else {
-                                    smsPermLauncher.launch(
-                                        arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)
-                                    )
-                                }
-                            }
-                        }
-                        .padding(horizontal = 10.dp)
-                        .testTag("toggle_alg_post_balance_mode_btn"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isAlgPostMode) Icons.Default.AccountBalance else Icons.Default.AutoAwesome,
-                            contentDescription = strings.algPostBalanceModeLabel,
-                            tint = if (isAlgPostMode) CyanNeon else colors.textSecondary,
-                            modifier = Modifier.size(dimens.iconSizeXs + 2.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isAlgPostMode) strings.algPostBalanceModeLabel else strings.manualBalanceModeLabel,
-                            color = if (isAlgPostMode) CyanNeon else colors.textPrimary,
-                            fontSize = typo.bodyXs,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+            // Top Header Row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = strings.totalBalance,
+                    color = colors.textSecondary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (lockedAmount > 0) {
+                        if (isArabic) "الرصيد المتاح (بعد الادخار)" else "Available (After Savings)"
+                    } else {
+                        if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense"
+                    },
+                    color = colors.textMuted,
+                    fontSize = typo.caption,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(modifier = Modifier.height(dimens.spacingSm))

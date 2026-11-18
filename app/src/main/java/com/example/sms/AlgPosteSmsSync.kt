@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
 import com.example.data.ArchivedAlgPosteSmsEntity
-import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -1293,98 +1292,5 @@ object AlgPosteSmsInboxScanner {
 
     fun scanLatestBalanceSnapshot(context: Context, maxRowsToInspect: Int = 500): SmsBalanceSnapshot? {
         return scanAllBalanceSnapshots(context, maxRowsToInspect).maxByOrNull { it.timestampMillis }
-    }
-}
-
-object AlgPosteAutoRecorder {
-    data class PartitionResult(
-        val transactionsToInsert: List<TransactionEntity>,
-        val remainingSuggestions: List<SmsSuggestionEntry>,
-        val newlyProcessedKeys: List<String>
-    )
-
-    fun toTransactionEntity(
-        suggestion: SmsSuggestionEntry,
-        isArabic: Boolean,
-        overrideType: TransactionType? = null
-    ): TransactionEntity {
-        val baseKey = suggestion.id.removePrefix("bal_op_")
-        val finalType = overrideType ?: suggestion.transactionType
-        val resolvedCategory = when {
-            overrideType != null && overrideType != suggestion.transactionType -> {
-                if (finalType == TransactionType.EXPENSE) "other" else "transfer"
-            }
-            else -> suggestion.suggestedCategory
-        }
-        val title = if (isArabic) {
-            if (finalType == TransactionType.EXPENSE) {
-                suggestion.suggestedTitleAr.ifBlank { "مصروف بريدي موب (ALG Poste)" }
-            } else {
-                suggestion.suggestedTitleAr.ifBlank { "دخل بريدي موب (ALG Poste)" }
-            }
-        } else {
-            if (finalType == TransactionType.EXPENSE) {
-                suggestion.suggestedTitleEn.ifBlank { "BaridiMob Expense (ALG Poste)" }
-            } else {
-                suggestion.suggestedTitleEn.ifBlank { "BaridiMob Income (ALG Poste)" }
-            }
-        }
-        return TransactionEntity(
-            type = finalType,
-            amount = suggestion.amount,
-            category = resolvedCategory,
-            title = title,
-            note = "${suggestion.sender}: ${suggestion.rawBody}".take(240),
-            dateMillis = suggestion.receivedAtMillis,
-            isAutoAlgPoste = true,
-            smsKey = baseKey
-        )
-    }
-
-    fun partitionAutoRecordCandidates(
-        candidates: List<SmsSuggestionEntry>,
-        autoIncomeEnabled: Boolean,
-        autoExpenseEnabled: Boolean,
-        existingDbSmsKeys: Set<String>,
-        processedKeys: Set<String>,
-        isArabic: Boolean
-    ): PartitionResult {
-        val toInsert = mutableListOf<TransactionEntity>()
-        val remaining = mutableListOf<SmsSuggestionEntry>()
-        val newKeys = mutableListOf<String>()
-        val seenBaseKeys = HashSet<String>()
-
-        for (candidate in candidates) {
-            if (candidate.amount <= 0.0 || candidate.id.isBlank()) continue
-            val baseKey = candidate.id.removePrefix("bal_op_")
-            if (!seenBaseKeys.add(baseKey)) continue
-
-            val alreadyHandled = candidate.id in processedKeys ||
-                baseKey in processedKeys ||
-                "bal_op_$baseKey" in processedKeys ||
-                candidate.id in existingDbSmsKeys ||
-                baseKey in existingDbSmsKeys ||
-                "bal_op_$baseKey" in existingDbSmsKeys
-
-            if (alreadyHandled) continue
-
-            val shouldAutoRecord = (!candidate.isExpense && autoIncomeEnabled) ||
-                (candidate.isExpense && autoExpenseEnabled)
-
-            if (shouldAutoRecord) {
-                toInsert.add(toTransactionEntity(candidate, isArabic = isArabic))
-                newKeys.add(candidate.id)
-                newKeys.add(baseKey)
-                newKeys.add("bal_op_$baseKey")
-            } else {
-                remaining.add(candidate)
-            }
-        }
-
-        return PartitionResult(
-            transactionsToInsert = toInsert,
-            remainingSuggestions = remaining,
-            newlyProcessedKeys = newKeys
-        )
     }
 }

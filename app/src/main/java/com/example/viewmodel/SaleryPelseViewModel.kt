@@ -66,8 +66,6 @@ import com.example.market.SquareMarketSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
-import com.example.sms.AlgPosteAutoRecorder
-
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
     val grossBalance: Double = 0.0,
@@ -75,11 +73,7 @@ data class FinancialSummary(
     val monthlyIncome: Double = 0.0,
     val monthlyExpenses: Double = 0.0,
     val pendingDebtsOwedByMe: Double = 0.0,
-    val pendingDebtsOwedToMe: Double = 0.0,
-    val isAlgPostBalanceMode: Boolean = false,
-    val algPostBalanceComponent: Double = 0.0,
-    val manualNetDiffComponent: Double = 0.0,
-    val hasAlgPostBalanceSnapshot: Boolean = false
+    val pendingDebtsOwedToMe: Double = 0.0
 )
 
 class SaleryPelseViewModel(application: Application) : AndroidViewModel(application) {
@@ -95,7 +89,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     val allDebts: StateFlow<List<DebtEntity>> = dao.getAllDebts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Financial calculations: Supports both Manual Mode and ALG Post Auto Balance Mode
+    // Live financial calculations: Balance = Total Income - Total Expenses - Savings Wallet
     val financialSummary: StateFlow<FinancialSummary> = combine(
         allTransactions,
         allDebts,
@@ -109,8 +103,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         var totalExp = 0.0
         var monthInc = 0.0
         var monthExp = 0.0
-        var manualInc = 0.0
-        var manualExp = 0.0
 
         for (t in transactions) {
             val transCal = Calendar.getInstance().apply { timeInMillis = t.dateMillis }
@@ -120,15 +112,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (t.type == TransactionType.INCOME) {
                 totalInc += t.amount
                 if (isCurrentMonth) monthInc += t.amount
-                if (!t.isAutoAlgPoste && !t.isSalaryCredit) {
-                    manualInc += t.amount
-                }
             } else {
                 totalExp += t.amount
                 if (isCurrentMonth) monthExp += t.amount
-                if (!t.isAutoAlgPoste && !t.isPaidFromSavings) {
-                    manualExp += t.amount
-                }
             }
         }
 
@@ -143,17 +129,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         val savings = userSettings.savingsWalletBalance
-        val hasAlgPostSnapshot = userSettings.latestSmsBalanceUpdatedAt > 0L ||
-            userSettings.latestSmsBalanceAmount >= 0.0
-        val algPostBalance = if (hasAlgPostSnapshot) userSettings.latestSmsBalanceAmount else 0.0
-        val manualNetDiff = manualInc - manualExp
-
-        val isAlgPostMode = userSettings.algPostBalanceModeEnabled
-        val grossBalance = if (isAlgPostMode) {
-            algPostBalance + manualNetDiff
-        } else {
-            totalInc - totalExp
-        }
+        val grossBalance = totalInc - totalExp
         // Dashboard Balance reflects available spendable funds after Savings Wallet
         val availableBalance = grossBalance - savings
 
@@ -164,11 +140,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             monthlyIncome = monthInc,
             monthlyExpenses = monthExp,
             pendingDebtsOwedByMe = owedByMe,
-            pendingDebtsOwedToMe = owedToMe,
-            isAlgPostBalanceMode = isAlgPostMode,
-            algPostBalanceComponent = algPostBalance,
-            manualNetDiffComponent = manualNetDiff,
-            hasAlgPostBalanceSnapshot = hasAlgPostSnapshot
+            pendingDebtsOwedToMe = owedToMe
         )
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummary())
@@ -294,7 +266,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
             if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
                 val cfg = settings.value
-                if (cfg.baridiMobSmsSyncEnabled || cfg.autoIncomeFromAlgPostEnabled || cfg.autoExpenseFromAlgPostEnabled) {
+                if (cfg.baridiMobSmsSyncEnabled) {
                     scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
                 } else {
                     refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
@@ -674,191 +646,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Salary Settings Actions
     fun updateSalarySettings(amount: Double, payday: Int, employer: String, autoCredit: Boolean) {
         prefsManager.updateSettings { current ->
-            val exitAlgPostMode = autoCredit && current.algPostBalanceModeEnabled
             current.copy(
                 salaryAmount = amount,
                 salaryPayday = payday.coerceIn(1, 31),
                 salaryEmployer = employer,
-                salaryAutoCredit = autoCredit,
-                algPostBalanceModeEnabled = if (exitAlgPostMode) false else current.algPostBalanceModeEnabled,
-                savedSalaryAutoCreditBeforeAlgPostMode = if (autoCredit) true else current.savedSalaryAutoCreditBeforeAlgPostMode
+                salaryAutoCredit = autoCredit
             )
         }
         viewModelScope.launch {
             checkAndApplySalaryScheduler()
         }
-    }
-
-    /**
-     * Enables or disables ALG Post Auto Balance Mode on Dashboard:
-     * - When enabled: activates ALG Post Balance mode, automatically enables Auto Income and
-     *   Auto Expenses from ALG Post, converts pending SMS suggestions, scans inbox, and
-     *   automatically pauses Smart Salary Scheduler while preserving all its saved configuration.
-     * - When disabled: turns off Auto Income and Auto Expenses from ALG Post, returns cleanly to
-     *   Manual Mode, and restores Smart Salary Scheduler state.
-     */
-    fun setAlgPostBalanceModeEnabled(enabled: Boolean) {
-        val previous = settings.value
-        if (previous.algPostBalanceModeEnabled == enabled &&
-            previous.autoIncomeFromAlgPostEnabled == enabled &&
-            previous.autoExpenseFromAlgPostEnabled == enabled
-        ) return
-        val isAr = previous.language == "ar"
-
-        prefsManager.updateSettings { current ->
-            if (enabled) {
-                val savedSchedulerState = if (current.algPostBalanceModeEnabled) {
-                    current.savedSalaryAutoCreditBeforeAlgPostMode
-                } else {
-                    current.salaryAutoCredit
-                }
-                current.copy(
-                    algPostBalanceModeEnabled = true,
-                    autoIncomeFromAlgPostEnabled = true,
-                    autoExpenseFromAlgPostEnabled = true,
-                    savedSalaryAutoCreditBeforeAlgPostMode = savedSchedulerState,
-                    salaryAutoCredit = false
-                )
-            } else {
-                val restoredSchedulerState = if (current.algPostBalanceModeEnabled) {
-                    current.savedSalaryAutoCreditBeforeAlgPostMode
-                } else {
-                    current.salaryAutoCredit
-                }
-                current.copy(
-                    algPostBalanceModeEnabled = false,
-                    autoIncomeFromAlgPostEnabled = false,
-                    autoExpenseFromAlgPostEnabled = false,
-                    salaryAutoCredit = restoredSchedulerState
-                )
-            }
-        }
-
-        viewModelScope.launch {
-            if (enabled) {
-                val converted = convertPendingSmsSuggestionsForAutoModes()
-                if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
-                }
-                _toastEvent.emit(
-                    if (isAr) {
-                        if (converted > 0) {
-                            "تم تفعيل وضع ALG Post (الدخل والمصاريف التلقائية) وتسجيل $converted عملية ✓"
-                        } else {
-                            "تم تفعيل وضع رصيد ALG Post التلقائي (مع الدخل والمصاريف التلقائية) ✓"
-                        }
-                    } else {
-                        if (converted > 0) {
-                            "ALG Post Balance active (Auto Income & Expenses on; $converted recorded) ✓"
-                        } else {
-                            "ALG Post Balance active (Auto Income & Expenses enabled; Salary Scheduler paused) ✓"
-                        }
-                    }
-                )
-            } else {
-                checkAndApplySalaryScheduler()
-                _toastEvent.emit(
-                    if (isAr) "تمت العودة إلى الوضع اليدوي وإيقاف التسجيل التلقائي مع استعادة مجدول الراتب ✓"
-                    else "Returned to Manual Balance mode & restored Smart Salary Scheduler settings ✓"
-                )
-            }
-        }
-    }
-
-    fun setAutoIncomeFromAlgPostEnabled(enabled: Boolean) {
-        val isAr = settings.value.language == "ar"
-        prefsManager.updateSettings { it.copy(autoIncomeFromAlgPostEnabled = enabled) }
-        viewModelScope.launch {
-            if (enabled) {
-                val converted = convertPendingSmsSuggestionsForAutoModes()
-                if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
-                }
-                _toastEvent.emit(
-                    if (isAr) {
-                        if (converted > 0) "تم تفعيل الدخل التلقائي من ALG Post وتسجيل $converted عملية ✓"
-                        else "تم تفعيل الدخل التلقائي من ALG Post ✓"
-                    } else {
-                        if (converted > 0) "Auto Income from ALG Post enabled ($converted recorded) ✓"
-                        else "Auto Income from ALG Post enabled ✓"
-                    }
-                )
-            } else {
-                _toastEvent.emit(
-                    if (isAr) "تم إيقاف الدخل التلقائي من ALG Post"
-                    else "Auto Income from ALG Post disabled"
-                )
-            }
-        }
-    }
-
-    fun setAutoExpenseFromAlgPostEnabled(enabled: Boolean) {
-        val isAr = settings.value.language == "ar"
-        prefsManager.updateSettings { it.copy(autoExpenseFromAlgPostEnabled = enabled) }
-        viewModelScope.launch {
-            if (enabled) {
-                val converted = convertPendingSmsSuggestionsForAutoModes()
-                if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
-                }
-                _toastEvent.emit(
-                    if (isAr) {
-                        if (converted > 0) "تم تفعيل المصاريف التلقائية من ALG Post وتسجيل $converted عملية ✓"
-                        else "تم تفعيل المصاريف التلقائية من ALG Post ✓"
-                    } else {
-                        if (converted > 0) "Auto Expenses from ALG Post enabled ($converted recorded) ✓"
-                        else "Auto Expenses from ALG Post enabled ✓"
-                    }
-                )
-            } else {
-                _toastEvent.emit(
-                    if (isAr) "تم إيقاف المصاريف التلقائية من ALG Post"
-                    else "Auto Expenses from ALG Post disabled"
-                )
-            }
-        }
-    }
-
-    private suspend fun convertPendingSmsSuggestionsForAutoModes(): Int = withContext(Dispatchers.IO) {
-        val existingDbKeys = runCatching { dao.getExistingTransactionSmsKeys().toSet() }
-            .getOrDefault(emptySet())
-        var toInsert: List<TransactionEntity> = emptyList()
-        prefsManager.updateSettings { current ->
-            if (!current.autoIncomeFromAlgPostEnabled && !current.autoExpenseFromAlgPostEnabled) {
-                return@updateSettings current
-            }
-            val pending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-            if (pending.isEmpty()) return@updateSettings current
-            val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
-            val isAr = current.language == "ar"
-
-            val autoEligible = pending.filter {
-                (!it.isExpense && current.autoIncomeFromAlgPostEnabled) ||
-                    (it.isExpense && current.autoExpenseFromAlgPostEnabled)
-            }
-            val keptPending = pending.filterNot {
-                (!it.isExpense && current.autoIncomeFromAlgPostEnabled) ||
-                    (it.isExpense && current.autoExpenseFromAlgPostEnabled)
-            }
-            val partition = AlgPosteAutoRecorder.partitionAutoRecordCandidates(
-                candidates = autoEligible,
-                autoIncomeEnabled = current.autoIncomeFromAlgPostEnabled,
-                autoExpenseEnabled = current.autoExpenseFromAlgPostEnabled,
-                existingDbSmsKeys = existingDbKeys,
-                processedKeys = processed,
-                isArabic = isAr
-            )
-            toInsert = partition.transactionsToInsert
-            val updatedProcessed = processed + partition.newlyProcessedKeys
-            current.copy(
-                pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(keptPending),
-                processedSmsKeysJson = AlgPosteSmsCodec.encodeProcessedKeys(updatedProcessed)
-            )
-        }
-        if (toInsert.isNotEmpty()) {
-            dao.insertTransactions(toInsert)
-        }
-        toInsert.size
     }
 
     fun depositSalaryNowManually() {
@@ -1862,9 +1659,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var totalHistoryCount = 0
             var latestBalance: Double? = null
             withContext(Dispatchers.IO) {
-                val existingDbKeys = runCatching { dao.getExistingTransactionSmsKeys().toSet() }
-                    .getOrDefault(emptySet())
-                var autoTransactionsToInsert: List<TransactionEntity> = emptyList()
                 prefsManager.updateSettings { current ->
                     val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                     val mergedHistory = (existingHistory + archivedSnapshots + snapshots)
@@ -1882,17 +1676,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         existingAnomalies = existingTaxes
                     )
 
-                    val shouldDetectOps = current.baridiMobSmsSyncEnabled ||
-                        current.autoIncomeFromAlgPostEnabled ||
-                        current.autoExpenseFromAlgPostEnabled
-                    val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
-                    val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                    val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
-
-                    var updatedPendingJson = current.pendingSmsSuggestionsJson
-                    var updatedProcessedJson = current.processedSmsKeysJson
-
-                    if (shouldDetectOps) {
+                    val updatedPendingJson = if (current.baridiMobSmsSyncEnabled) {
+                        val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
+                        val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                        val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
                         val deltaOps = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
                             snapshots = mergedHistory,
                             minTimestampMillis = current.smsSyncBaselineTimestampMillis
@@ -1901,43 +1688,27 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             op.id !in processed &&
                                 baseKey !in processed &&
                                 "bal_op_$baseKey" !in processed &&
-                                baseKey !in existingBaseIds &&
-                                baseKey !in existingDbKeys
+                                baseKey !in existingBaseIds
                         }
-                        val partition = AlgPosteAutoRecorder.partitionAutoRecordCandidates(
-                            candidates = deltaOps,
-                            autoIncomeEnabled = current.autoIncomeFromAlgPostEnabled,
-                            autoExpenseEnabled = current.autoExpenseFromAlgPostEnabled,
-                            existingDbSmsKeys = existingDbKeys,
-                            processedKeys = processed,
-                            isArabic = current.language == "ar"
-                        )
-                        autoTransactionsToInsert = partition.transactionsToInsert
-                        if (partition.newlyProcessedKeys.isNotEmpty()) {
-                            updatedProcessedJson = AlgPosteSmsCodec.encodeProcessedKeys(
-                                processed + partition.newlyProcessedKeys
+                        if (deltaOps.isEmpty()) {
+                            current.pendingSmsSuggestionsJson
+                        } else {
+                            AlgPosteSmsCodec.encodeSuggestions(
+                                (deltaOps + existingPending).distinctBy { it.id.removePrefix("bal_op_") }
                             )
                         }
-                        if (current.baridiMobSmsSyncEnabled && partition.remainingSuggestions.isNotEmpty()) {
-                            updatedPendingJson = AlgPosteSmsCodec.encodeSuggestions(
-                                (partition.remainingSuggestions + existingPending)
-                                    .distinctBy { it.id.removePrefix("bal_op_") }
-                            )
-                        }
+                    } else {
+                        current.pendingSmsSuggestionsJson
                     }
 
                     current.copy(
                         pendingSmsSuggestionsJson = updatedPendingJson,
-                        processedSmsKeysJson = updatedProcessedJson,
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
                     )
-                }
-                if (autoTransactionsToInsert.isNotEmpty()) {
-                    dao.insertTransactions(autoTransactionsToInsert)
                 }
             }
             val extractedBal = latestBalance
@@ -2061,11 +1832,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var addedCount = 0
             var newTaxCount = 0
             var newSnapshotCount = 0
-            var autoRecordedCount = 0
             withContext(Dispatchers.IO) {
-                val existingDbKeys = runCatching { dao.getExistingTransactionSmsKeys().toSet() }
-                    .getOrDefault(emptySet())
-                var autoTransactionsToInsert: List<TransactionEntity> = emptyList()
                 prefsManager.updateSettings { current ->
                     val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
@@ -2078,37 +1845,24 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
                     val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
-                    val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
-                        snapshots = mergedHistory,
-                        minTimestampMillis = current.smsSyncBaselineTimestampMillis
-                    )
-                    val combinedCandidates = (scanResult.suggestions + deltaOperations)
-                        .distinctBy { it.id.removePrefix("bal_op_") }
-                    val unhandledCandidates = combinedCandidates.filter { candidate ->
-                        val baseKey = candidate.id.removePrefix("bal_op_")
-                        candidate.id !in processed &&
-                            baseKey !in processed &&
-                            "bal_op_$baseKey" !in processed &&
-                            baseKey !in existingBaseIds &&
-                            baseKey !in existingDbKeys
-                    }
-
-                    val partition = AlgPosteAutoRecorder.partitionAutoRecordCandidates(
-                        candidates = unhandledCandidates,
-                        autoIncomeEnabled = current.autoIncomeFromAlgPostEnabled,
-                        autoExpenseEnabled = current.autoExpenseFromAlgPostEnabled,
-                        existingDbSmsKeys = existingDbKeys,
-                        processedKeys = processed,
-                        isArabic = current.language == "ar"
-                    )
-                    autoTransactionsToInsert = partition.transactionsToInsert
-                    autoRecordedCount = autoTransactionsToInsert.size
-                    val remainingNewPending = if (current.baridiMobSmsSyncEnabled) {
-                        partition.remainingSuggestions
+                    val newPending = if (current.baridiMobSmsSyncEnabled) {
+                        val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                            snapshots = mergedHistory,
+                            minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                        )
+                        (scanResult.suggestions + deltaOperations)
+                            .distinctBy { it.id.removePrefix("bal_op_") }
+                            .filter { candidate ->
+                                val baseKey = candidate.id.removePrefix("bal_op_")
+                                candidate.id !in processed &&
+                                    baseKey !in processed &&
+                                    "bal_op_$baseKey" !in processed &&
+                                    baseKey !in existingBaseIds
+                            }
                     } else {
                         emptyList()
                     }
-                    addedCount = remainingNewPending.size
+                    addedCount = newPending.size
 
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
@@ -2116,18 +1870,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         existingAnomalies = existingTaxes
                     )
                     newTaxCount = (updatedTaxes.size - existingTaxes.size).coerceAtLeast(0)
-                    val updatedProcessed = if (partition.newlyProcessedKeys.isEmpty()) {
-                        current.processedSmsKeysJson
-                    } else {
-                        AlgPosteSmsCodec.encodeProcessedKeys(processed + partition.newlyProcessedKeys)
-                    }
 
                     current.copy(
-                        pendingSmsSuggestionsJson = if (remainingNewPending.isEmpty()) current.pendingSmsSuggestionsJson
+                        pendingSmsSuggestionsJson = if (newPending.isEmpty()) current.pendingSmsSuggestionsJson
                         else AlgPosteSmsCodec.encodeSuggestions(
-                            (remainingNewPending + existing).distinctBy { it.id.removePrefix("bal_op_") }
+                            (newPending + existing).distinctBy { it.id.removePrefix("bal_op_") }
                         ),
-                        processedSmsKeysJson = updatedProcessed,
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
@@ -2135,23 +1883,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                     )
                 }
-                if (autoTransactionsToInsert.isNotEmpty()) {
-                    dao.insertTransactions(autoTransactionsToInsert)
-                }
             }
 
             if (showFeedback) {
                 val msg = when {
-                    autoRecordedCount > 0 && addedCount > 0 -> if (isAr) {
-                        "تم تسجيل $autoRecordedCount عملية تلقائياً واكتشاف $addedCount اقتراحاً جديداً ✓"
-                    } else {
-                        "Auto-recorded $autoRecordedCount transactions & found $addedCount suggestions ✓"
-                    }
-                    autoRecordedCount > 0 -> if (isAr) {
-                        "تم تسجيل $autoRecordedCount معاملة تلقائياً من رسائل ALG Poste ✓"
-                    } else {
-                        "Auto-recorded $autoRecordedCount transactions from ALG Poste SMS ✓"
-                    }
                     addedCount > 0 && newTaxCount > 0 -> if (isAr) {
                         "تم اكتشاف $addedCount معاملة و $newTaxCount فارق ضرائب/رسوم!"
                     } else {
@@ -2231,12 +1966,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
             val caughtNewTaxAmount = withContext(Dispatchers.IO) {
                 var taxAmt = 0.0
-                val existingDbKeys = runCatching { dao.getExistingTransactionSmsKeys().toSet() }
-                    .getOrDefault(emptySet())
-                var autoTransactionsToInsert: List<TransactionEntity> = emptyList()
                 prefsManager.updateSettings { current ->
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                    val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                     val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                     val mergedHistory = if (snapshot != null) {
                         (existingHistory + snapshot).distinctBy { it.id }.sortedBy { it.timestampMillis }
@@ -2249,30 +1980,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     } else null
                     val effectiveSuggestion = parsed ?: manualDeltaSuggestion
 
-                    val partition = if (effectiveSuggestion != null) {
-                        AlgPosteAutoRecorder.partitionAutoRecordCandidates(
-                            candidates = listOf(effectiveSuggestion),
-                            autoIncomeEnabled = current.autoIncomeFromAlgPostEnabled,
-                            autoExpenseEnabled = current.autoExpenseFromAlgPostEnabled,
-                            existingDbSmsKeys = existingDbKeys,
-                            processedKeys = processed,
-                            isArabic = current.language == "ar"
-                        )
-                    } else {
-                        AlgPosteAutoRecorder.PartitionResult(emptyList(), emptyList(), emptyList())
-                    }
-                    autoTransactionsToInsert = partition.transactionsToInsert
-
-                    val updatedPending = if (partition.remainingSuggestions.isNotEmpty()) {
-                        val rem = partition.remainingSuggestions.first()
-                        val base = rem.id.removePrefix("bal_op_")
-                        listOf(rem) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
+                    val updatedPending = if (effectiveSuggestion != null) {
+                        val base = effectiveSuggestion.id.removePrefix("bal_op_")
+                        listOf(effectiveSuggestion) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
                     } else existing
-                    val updatedProcessed = if (partition.newlyProcessedKeys.isEmpty()) {
-                        current.processedSmsKeysJson
-                    } else {
-                        AlgPosteSmsCodec.encodeProcessedKeys(processed + partition.newlyProcessedKeys)
-                    }
 
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
@@ -2284,16 +1995,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
                     current.copy(
                         pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedPending),
-                        processedSmsKeysJson = updatedProcessed,
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                     )
-                }
-                if (autoTransactionsToInsert.isNotEmpty()) {
-                    dao.insertTransactions(autoTransactionsToInsert)
                 }
                 taxAmt
             }
@@ -2374,13 +2081,36 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val pending = AlgPosteSmsCodec.parseSuggestions(currentSettings.pendingSmsSuggestionsJson)
             val target = pending.firstOrNull { it.id == suggestionId } ?: return@launch
 
-            val entityToInsert = AlgPosteAutoRecorder.toTransactionEntity(
-                suggestion = target,
-                isArabic = isAr,
-                overrideType = overrideType
+            val finalType = overrideType ?: target.transactionType
+            val resolvedCategory = when {
+                overrideType != null && overrideType != target.transactionType -> {
+                    if (finalType == TransactionType.EXPENSE) "other" else "transfer"
+                }
+                else -> target.suggestedCategory
+            }
+            val title = if (isAr) {
+                if (finalType == TransactionType.EXPENSE) {
+                    target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (ALG Poste)" }
+                } else {
+                    target.suggestedTitleAr.ifBlank { "دخل بريدي موب (ALG Poste)" }
+                }
+            } else {
+                if (finalType == TransactionType.EXPENSE) {
+                    target.suggestedTitleEn.ifBlank { "BaridiMob Expense (ALG Poste)" }
+                } else {
+                    target.suggestedTitleEn.ifBlank { "BaridiMob Income (ALG Poste)" }
+                }
+            }
+            dao.insertTransaction(
+                TransactionEntity(
+                    type = finalType,
+                    amount = target.amount,
+                    category = resolvedCategory,
+                    title = title,
+                    note = "${target.sender}: ${target.rawBody}".take(240),
+                    dateMillis = target.receivedAtMillis
+                )
             )
-            val finalType = entityToInsert.type
-            dao.insertTransaction(entityToInsert)
 
             prefsManager.updateSettings { current ->
                 val baseKey = suggestionId.removePrefix("bal_op_")

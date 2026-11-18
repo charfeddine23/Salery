@@ -90,9 +90,37 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `transactions_new` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `type` TEXT NOT NULL,
+                `amount` REAL NOT NULL,
+                `category` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `note` TEXT NOT NULL,
+                `dateMillis` INTEGER NOT NULL,
+                `isSalaryCredit` INTEGER NOT NULL,
+                `isPaidFromSavings` INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO `transactions_new` (`id`, `type`, `amount`, `category`, `title`, `note`, `dateMillis`, `isSalaryCredit`, `isPaidFromSavings`)
+            SELECT `id`, `type`, `amount`, `category`, `title`, `note`, `dateMillis`, `isSalaryCredit`, `isPaidFromSavings` FROM `transactions`
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE `transactions`")
+        db.execSQL("ALTER TABLE `transactions_new` RENAME TO `transactions`")
+    }
+}
+
 @Database(
     entities = [TransactionEntity::class, DebtEntity::class, ArchivedAlgPosteSmsEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -110,7 +138,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "salerypelse_database"
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
