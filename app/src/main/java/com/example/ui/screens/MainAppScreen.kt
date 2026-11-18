@@ -648,7 +648,6 @@ fun MainAppScreen(
                                     debts = debts,
                                     userSettings = userSettings,
                                     pendingSmsSuggestions = pendingSmsSuggestions,
-                                    detectedSmsTaxes = detectedSmsTaxes,
                                     onAddIncomeClick = {
                                         addTransactionType = TransactionType.INCOME
                                         showAddTransactionDialog = true

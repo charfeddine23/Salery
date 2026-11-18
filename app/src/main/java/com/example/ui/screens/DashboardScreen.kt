@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HistoryToggleOff
-import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
@@ -68,7 +67,6 @@ import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.sms.AlgPosteSmsInboxScanner
 import com.example.sms.SmsSuggestionEntry
-import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.QuickActionButton
@@ -105,7 +103,6 @@ fun DashboardScreen(
     debts: List<DebtEntity> = emptyList(),
     userSettings: UserSettings,
     pendingSmsSuggestions: List<SmsSuggestionEntry> = emptyList(),
-    detectedSmsTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
     onAddIncomeClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onAddDebtClick: () -> Unit,
@@ -180,7 +177,6 @@ fun DashboardScreen(
                     CcpBalanceCard(
                         userSettings = userSettings,
                         pendingCount = pendingSmsSuggestions.size,
-                        detectedTaxes = detectedSmsTaxes,
                         isStealth = isStealth,
                         strings = strings,
                         colors = colors,
@@ -289,7 +285,6 @@ fun DashboardScreen(
                 CcpBalanceCard(
                     userSettings = userSettings,
                     pendingCount = pendingSmsSuggestions.size,
-                    detectedTaxes = detectedSmsTaxes,
                     isStealth = isStealth,
                     strings = strings,
                     colors = colors,
@@ -846,7 +841,6 @@ private fun BaridiMobSmsSuggestionBanner(
 private fun CcpBalanceCard(
     userSettings: UserSettings,
     pendingCount: Int,
-    detectedTaxes: List<SmsTaxAnomalyEntry>,
     isStealth: Boolean,
     strings: StringsBundle,
     colors: LiquidGlassColors,
@@ -864,8 +858,6 @@ private fun CcpBalanceCard(
         else -> Color(0xFFFACC15)
     }
     val hasBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
-    val totalTaxes = detectedTaxes.sumOf { it.taxAmount }
-    val unrecordedTaxes = detectedTaxes.count { !it.isRecordedAsExpense }
 
     val posteGold = Color(0xFFFACC15)
     val posteNavy = Color(0xFF1E3A8A)
@@ -1032,44 +1024,13 @@ private fun CcpBalanceCard(
                 )
             }
 
-            if (totalTaxes > 0.0 || pendingCount > 0 || hasBaseline) {
+            if (pendingCount > 0 || hasBaseline) {
                 Spacer(modifier = Modifier.height(10.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (totalTaxes > 0.0) {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(RoseNeon.copy(alpha = 0.14f))
-                                .border(0.8.dp, RoseNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Policy,
-                                contentDescription = null,
-                                tint = RoseNeon,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            val taxText = formatDzdAmount(totalTaxes, strings.currencyCode, isStealth = isStealth)
-                            Text(
-                                text = if (isArabic) {
-                                    "ضرائب متصيدة: $taxText" + if (unrecordedTaxes > 0) " ($unrecordedTaxes)" else ""
-                                } else {
-                                    "Taxes caught: $taxText"
-                                },
-                                color = RoseNeon,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
                     if (pendingCount > 0) {
                         Box(
                             modifier = Modifier
@@ -1114,35 +1075,20 @@ private fun CcpBalanceCard(
                 }
             }
 
-            if (hasBalance && (updatedText.isNotEmpty() || userSettings.latestSmsBalanceRawSnippet.isNotBlank())) {
+            if (hasBalance && updatedText.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isStealth) {
-                            if (isArabic) "نص الرسالة مخفي (الوضع الخفي)" else "SMS preview hidden (Stealth)"
-                        } else {
-                            userSettings.latestSmsBalanceRawSnippet.trim()
-                        },
-                        color = colors.textMuted,
+                        text = updatedText,
+                        color = CyanNeon,
                         fontSize = typo.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
-                    if (updatedText.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = updatedText,
-                            color = CyanNeon,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
                 }
             }
         }
