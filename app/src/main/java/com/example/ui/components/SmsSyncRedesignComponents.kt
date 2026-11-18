@@ -112,7 +112,8 @@ fun SmsHeroBalanceCard(
     onSkipOldSms: () -> Unit,
     onResetBaseline: () -> Unit
 ) {
-    val hasBalance = latestBalance >= 0.0
+    val hasBalance = updatedAtMillis > 0L || latestBalance >= 0.0
+    val isNegativeBalance = hasBalance && latestBalance < 0.0
     val breathing = LocalBreathingGlowEnabled.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
@@ -123,7 +124,7 @@ fun SmsHeroBalanceCard(
             .fillMaxWidth()
             .testTag("sms_extracted_balance_card"),
         backgroundColor = colors.glassCard,
-        borderColor = EmeraldNeon.copy(alpha = 0.42f),
+        borderColor = if (isNegativeBalance) RoseNeon.copy(alpha = 0.48f) else EmeraldNeon.copy(alpha = 0.42f),
         shape = RoundedCornerShape(dimens.cornerRadiusXl),
         cornerRadius = dimens.cornerRadiusXl,
         breathingGlow = breathing
@@ -221,7 +222,11 @@ fun SmsHeroBalanceCard(
                     } else {
                         "--- $currencyCode"
                     },
-                    color = if (hasBalance) colors.textPrimary else colors.textMuted,
+                    color = when {
+                        !hasBalance -> colors.textMuted
+                        isNegativeBalance -> RoseNeon
+                        else -> colors.textPrimary
+                    },
                     fontSize = typo.display,
                     fontWeight = FontWeight.ExtraBold,
                     style = tnum,
@@ -714,7 +719,7 @@ fun SmsCleanBalanceTimelineRow(
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Text(
                         text = formatDzdAmount(snapshot.balance, currency, isStealth),
-                        color = colors.textPrimary,
+                        color = if (snapshot.balance < 0.0) RoseNeon else colors.textPrimary,
                         fontSize = typo.titleSm,
                         fontWeight = FontWeight.ExtraBold,
                         style = TextStyle(fontFeatureSettings = "tnum"),
@@ -840,7 +845,7 @@ fun SmsCleanArchiveRow(
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Text(
                             text = if (isStealth) "••••" else "${if (isArabic) "رصيد:" else "Solde:"} ${formatDzdAmount(bal, currency)}",
-                            color = colors.textMuted,
+                            color = if (bal < 0.0) RoseNeon else colors.textMuted,
                             fontSize = typo.bodyXs,
                             style = TextStyle(fontFeatureSettings = "tnum"),
                             maxLines = 1

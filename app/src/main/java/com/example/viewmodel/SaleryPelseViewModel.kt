@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,11 +129,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         val savings = userSettings.savingsWalletBalance
-        // Dashboard Balance strictly computes the difference between Income and Expense (unlinked from Alg Post Balance)
+        // Dashboard Balance reflects available spendable funds: (Income - Expense) - Savings Wallet
+        // So depositing to Savings deducts from Dashboard Balance and withdrawing from Savings adds back to it.
         val netIncomeExpenseBalance = totalInc - totalExp
+        val availableBalance = netIncomeExpenseBalance - savings
 
         FinancialSummary(
-            totalBalance = netIncomeExpenseBalance,
+            totalBalance = availableBalance,
             grossBalance = netIncomeExpenseBalance,
             savingsBalance = savings,
             monthlyIncome = monthInc,
@@ -140,7 +143,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             pendingDebtsOwedByMe = owedByMe,
             pendingDebtsOwedToMe = owedToMe
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummary())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummary())
 
     // App lock state
     private val _isAppLocked = MutableStateFlow(false)
@@ -172,16 +176,19 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Pending BaridiMob / ALG Poste SMS transaction suggestions
     val pendingSmsSuggestions: StateFlow<List<SmsSuggestionEntry>> = settings
         .map { AlgPosteSmsCodec.parseSuggestions(it.pendingSmsSuggestionsJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Caught hidden bank fees / tax discrepancies from ALG Poste SMS balance diffs
     val detectedSmsTaxes: StateFlow<List<SmsTaxAnomalyEntry>> = settings
         .map { AlgPosteSmsCodec.parseTaxAnomalies(it.detectedSmsTaxesJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Extracted balance history timeline from ALG Poste / BaridiMob SMS messages
     val smsBalanceHistory: StateFlow<List<SmsBalanceSnapshot>> = settings
         .map { AlgPosteSmsCodec.parseBalanceHistory(it.smsBalanceHistoryJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Permanent non-deletable archive of every ALG Poste SMS (survives phone SMS deletion)
@@ -194,15 +201,18 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         detectedSmsTaxes
     ) { archived, taxes ->
         AlgPosteSmsAnalyzer.buildStudyReport(archived, taxes)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArchivedSmsStudyReport())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArchivedSmsStudyReport())
 
     // Binance Card Crypto Portfolio & Live Hourly Market Prices
     val binanceHoldings: StateFlow<List<CryptoHoldingEntry>> = settings
         .map { BinanceCryptoCodec.parseHoldings(it.binanceHoldingsJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val binancePrices: StateFlow<Map<String, CryptoMarketPriceEntry>> = settings
         .map { BinanceCryptoCodec.parsePrices(it.binancePricesJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val _isRefreshingCryptoPrices = MutableStateFlow(false)
@@ -214,11 +224,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Square Market (Gold All Karats in DZD & USD + Hard Currencies Bank vs Parallel)
     val squareSnapshot: StateFlow<SquareMarketSnapshot?> = settings
         .map { SquareMarketCodec.parseSnapshot(it.squareMarketSnapshotJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Savings Wallet Movement History
     val savingsHistory: StateFlow<List<SavingsMovementEntry>> = settings
         .map { SavingsHistoryCodec.parse(it.savingsHistoryJson) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isRefreshingSquareMarket = MutableStateFlow(false)
@@ -238,7 +250,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         // Check Smart Salary Scheduler, Debt Auto-Payments, clean obsolete update APKs, and scan ALG Poste SMS
-        viewModelScope.launch {
+        // off the Main Thread after a brief yield so Frame 1 completes within the SurfaceSyncGroup budget.
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(250L)
             try {
                 AppUpdateManager.cleanupObsoleteUpdates(getApplication())
             } catch (_: Throwable) {
@@ -258,13 +272,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
                 }
             }
+            delay(900L)
+            // Silent background check for newer release on GitHub
+            checkForUpdates(manual = false)
         }
 
-        // Silent background check for newer release on GitHub
-        checkForUpdates(manual = false)
-
         // Hourly market price synchronization loop for Binance Crypto Card
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(800L)
             while (isActive) {
                 val cfg = settings.value
                 val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
@@ -1642,55 +1657,60 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             var totalHistoryCount = 0
-            var latestBalance = -1.0
-            prefsManager.updateSettings { current ->
-                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = (existingHistory + archivedSnapshots + snapshots)
-                    .distinctBy { it.id }
-                    .sortedBy { it.timestampMillis }
-                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
-                totalHistoryCount = mergedHistory.size
-                latestBalance = latestSnap?.balance ?: current.latestSmsBalanceAmount
-
-                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
-                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-                    snapshots = mergedHistory,
-                    existingAnomalies = existingTaxes
-                )
-
-                val updatedSuggestions = if (current.baridiMobSmsSyncEnabled) {
-                    val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
-                    val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                    val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
-                    val deltaOps = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
-                        snapshots = mergedHistory,
-                        minTimestampMillis = current.smsSyncBaselineTimestampMillis
-                    ).filter { op ->
-                        val baseKey = op.id.removePrefix("bal_op_")
-                        op.id !in processed &&
-                            baseKey !in processed &&
-                            "bal_op_$baseKey" !in processed &&
-                            baseKey !in existingBaseIds
+            var latestBalance: Double? = null
+            withContext(Dispatchers.IO) {
+                prefsManager.updateSettings { current ->
+                    val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                    val mergedHistory = (existingHistory + archivedSnapshots + snapshots)
+                        .distinctBy { it.id }
+                        .sortedBy { it.timestampMillis }
+                    val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                    totalHistoryCount = mergedHistory.size
+                    latestBalance = latestSnap?.balance ?: current.latestSmsBalanceAmount.takeIf {
+                        current.latestSmsBalanceUpdatedAt > 0L || it >= 0.0
                     }
-                    if (deltaOps.isEmpty()) current.pendingSmsSuggestionsJson
-                    else AlgPosteSmsCodec.encodeSuggestions(
-                        (deltaOps + existingPending).distinctBy { it.id.removePrefix("bal_op_") }
-                    )
-                } else {
-                    current.pendingSmsSuggestionsJson
-                }
 
-                current.copy(
-                    pendingSmsSuggestionsJson = updatedSuggestions,
-                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
-                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
-                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
-                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
-                )
+                    val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                    val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                        snapshots = mergedHistory,
+                        existingAnomalies = existingTaxes
+                    )
+
+                    val updatedSuggestions = if (current.baridiMobSmsSyncEnabled) {
+                        val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
+                        val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                        val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
+                        val deltaOps = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                            snapshots = mergedHistory,
+                            minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                        ).filter { op ->
+                            val baseKey = op.id.removePrefix("bal_op_")
+                            op.id !in processed &&
+                                baseKey !in processed &&
+                                "bal_op_$baseKey" !in processed &&
+                                baseKey !in existingBaseIds
+                        }
+                        if (deltaOps.isEmpty()) current.pendingSmsSuggestionsJson
+                        else AlgPosteSmsCodec.encodeSuggestions(
+                            (deltaOps + existingPending).distinctBy { it.id.removePrefix("bal_op_") }
+                        )
+                    } else {
+                        current.pendingSmsSuggestionsJson
+                    }
+
+                    current.copy(
+                        pendingSmsSuggestionsJson = updatedSuggestions,
+                        latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                        latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                        latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
+                        smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
+                    )
+                }
             }
-            if (showFeedback && latestBalance >= 0.0) {
-                val formatted = formatDzdAmount(latestBalance, if (isAr) "دج" else "DA")
+            val extractedBal = latestBalance
+            if (showFeedback && extractedBal != null) {
+                val formatted = formatDzdAmount(extractedBal, if (isAr) "دج" else "DA")
                 _toastEvent.emit(
                     if (isAr) "تم استخراج $totalHistoryCount أرصدة • الحالي: $formatted"
                     else "Extracted $totalHistoryCount balances • Latest: $formatted"
@@ -1732,28 +1752,31 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            val reconstructedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(reanalyzed)
-            var totalTaxes = 0
-            prefsManager.updateSettings { current ->
-                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = (existingHistory + reconstructedSnaps)
-                    .distinctBy { it.id }
-                    .sortedBy { it.timestampMillis }
-                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
-                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
-                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-                    snapshots = mergedHistory,
-                    existingAnomalies = existingTaxes
-                )
-                totalTaxes = updatedTaxes.size
+            val totalTaxes = withContext(Dispatchers.IO) {
+                val reconstructedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(reanalyzed)
+                var taxesCount = 0
+                prefsManager.updateSettings { current ->
+                    val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                    val mergedHistory = (existingHistory + reconstructedSnaps)
+                        .distinctBy { it.id }
+                        .sortedBy { it.timestampMillis }
+                    val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                    val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                    val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                        snapshots = mergedHistory,
+                        existingAnomalies = existingTaxes
+                    )
+                    taxesCount = updatedTaxes.size
 
-                current.copy(
-                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
-                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
-                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
-                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
-                )
+                    current.copy(
+                        smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                        latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                        latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                    )
+                }
+                taxesCount
             }
 
             if (showFeedback) {
@@ -1806,51 +1829,53 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var addedCount = 0
             var newTaxCount = 0
             var newSnapshotCount = 0
-            prefsManager.updateSettings { current ->
-                val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
-                val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                val existingBaseIds = existing.map { it.id.removePrefix("bal_op_") }.toSet()
+            withContext(Dispatchers.IO) {
+                prefsManager.updateSettings { current ->
+                    val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
+                    val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                    val existingBaseIds = existing.map { it.id.removePrefix("bal_op_") }.toSet()
 
-                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = (existingHistory + archivedSnapshots + scanResult.snapshots)
-                    .distinctBy { it.id }
-                    .sortedBy { it.timestampMillis }
-                newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
-                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                    val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                    val mergedHistory = (existingHistory + archivedSnapshots + scanResult.snapshots)
+                        .distinctBy { it.id }
+                        .sortedBy { it.timestampMillis }
+                    newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
+                    val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
-                val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
-                    snapshots = mergedHistory,
-                    minTimestampMillis = current.smsSyncBaselineTimestampMillis
-                )
-                val combinedCandidates = (scanResult.suggestions + deltaOperations)
-                    .distinctBy { it.id.removePrefix("bal_op_") }
-                val newOnes = combinedCandidates.filter { candidate ->
-                    val baseKey = candidate.id.removePrefix("bal_op_")
-                    candidate.id !in processed &&
-                        baseKey !in processed &&
-                        "bal_op_$baseKey" !in processed &&
-                        baseKey !in existingBaseIds
+                    val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                        snapshots = mergedHistory,
+                        minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                    )
+                    val combinedCandidates = (scanResult.suggestions + deltaOperations)
+                        .distinctBy { it.id.removePrefix("bal_op_") }
+                    val newOnes = combinedCandidates.filter { candidate ->
+                        val baseKey = candidate.id.removePrefix("bal_op_")
+                        candidate.id !in processed &&
+                            baseKey !in processed &&
+                            "bal_op_$baseKey" !in processed &&
+                            baseKey !in existingBaseIds
+                    }
+                    addedCount = newOnes.size
+
+                    val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                    val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                        snapshots = mergedHistory,
+                        existingAnomalies = existingTaxes
+                    )
+                    newTaxCount = (updatedTaxes.size - existingTaxes.size).coerceAtLeast(0)
+
+                    current.copy(
+                        pendingSmsSuggestionsJson = if (newOnes.isEmpty()) current.pendingSmsSuggestionsJson
+                        else AlgPosteSmsCodec.encodeSuggestions(
+                            (newOnes + existing).distinctBy { it.id.removePrefix("bal_op_") }
+                        ),
+                        smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                        latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                        latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                    )
                 }
-                addedCount = newOnes.size
-
-                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
-                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-                    snapshots = mergedHistory,
-                    existingAnomalies = existingTaxes
-                )
-                newTaxCount = (updatedTaxes.size - existingTaxes.size).coerceAtLeast(0)
-
-                current.copy(
-                    pendingSmsSuggestionsJson = if (newOnes.isEmpty()) current.pendingSmsSuggestionsJson
-                    else AlgPosteSmsCodec.encodeSuggestions(
-                        (newOnes + existing).distinctBy { it.id.removePrefix("bal_op_") }
-                    ),
-                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
-                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
-                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
-                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
-                )
             }
 
             if (showFeedback) {
@@ -1898,30 +1923,31 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val isAr = settings.value.language == "ar"
             val now = System.currentTimeMillis()
             val effectiveSender = sender.ifBlank { "ALG Poste" }
-            val parsed = AlgPosteSmsAnalyzer.parseSms(
-                sender = effectiveSender,
-                body = body,
-                timestampMillis = now,
-                allowAnySenderForManualTest = true
-            )
-            val snapshot = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
-                sender = effectiveSender,
-                body = body,
-                timestampMillis = now,
-                allowAnySenderForManualTest = true
-            )
-            // Always archive into the permanent study log even if unrecognized so algorithm can learn it
-            val archivedEntity = AlgPosteSmsAnalyzer.toArchivedEntity(
-                sender = effectiveSender,
-                body = body,
-                timestampMillis = now,
-                captureSource = "MANUAL",
-                allowAnySenderForManualTest = true
-            )
-            if (archivedEntity != null) {
-                withContext(Dispatchers.IO) {
+            val (parsed, snapshot) = withContext(Dispatchers.IO) {
+                val p = AlgPosteSmsAnalyzer.parseSms(
+                    sender = effectiveSender,
+                    body = body,
+                    timestampMillis = now,
+                    allowAnySenderForManualTest = true
+                )
+                val s = AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+                    sender = effectiveSender,
+                    body = body,
+                    timestampMillis = now,
+                    allowAnySenderForManualTest = true
+                )
+                // Always archive into the permanent study log even if unrecognized so algorithm can learn it
+                val archivedEntity = AlgPosteSmsAnalyzer.toArchivedEntity(
+                    sender = effectiveSender,
+                    body = body,
+                    timestampMillis = now,
+                    captureSource = "MANUAL",
+                    allowAnySenderForManualTest = true
+                )
+                if (archivedEntity != null) {
                     dao.insertArchivedSmsIfMissing(listOf(archivedEntity))
                 }
+                p to s
             }
             if (parsed == null && snapshot == null) {
                 _toastEvent.emit(
@@ -1931,42 +1957,45 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            var caughtNewTaxAmount = 0.0
-            prefsManager.updateSettings { current ->
-                val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                val mergedHistory = if (snapshot != null) {
-                    (existingHistory + snapshot).distinctBy { it.id }.sortedBy { it.timestampMillis }
-                } else existingHistory
-                val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+            val caughtNewTaxAmount = withContext(Dispatchers.IO) {
+                var taxAmt = 0.0
+                prefsManager.updateSettings { current ->
+                    val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                    val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                    val mergedHistory = if (snapshot != null) {
+                        (existingHistory + snapshot).distinctBy { it.id }.sortedBy { it.timestampMillis }
+                    } else existingHistory
+                    val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
-                val manualDeltaSuggestion = if (parsed == null && snapshot != null) {
-                    AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(mergedHistory)
-                        .firstOrNull { it.id.removePrefix("bal_op_") == snapshot.id }
-                } else null
-                val effectiveSuggestion = parsed ?: manualDeltaSuggestion
+                    val manualDeltaSuggestion = if (parsed == null && snapshot != null) {
+                        AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(mergedHistory)
+                            .firstOrNull { it.id.removePrefix("bal_op_") == snapshot.id }
+                    } else null
+                    val effectiveSuggestion = parsed ?: manualDeltaSuggestion
 
-                val updatedPending = if (effectiveSuggestion != null) {
-                    val base = effectiveSuggestion.id.removePrefix("bal_op_")
-                    listOf(effectiveSuggestion) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
-                } else existing
+                    val updatedPending = if (effectiveSuggestion != null) {
+                        val base = effectiveSuggestion.id.removePrefix("bal_op_")
+                        listOf(effectiveSuggestion) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
+                    } else existing
 
-                val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
-                val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-                    snapshots = mergedHistory,
-                    existingAnomalies = existingTaxes
-                )
-                val prevTaxIds = existingTaxes.map { it.id }.toSet()
-                caughtNewTaxAmount = updatedTaxes.firstOrNull { it.id !in prevTaxIds }?.taxAmount ?: 0.0
+                    val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                    val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                        snapshots = mergedHistory,
+                        existingAnomalies = existingTaxes
+                    )
+                    val prevTaxIds = existingTaxes.map { it.id }.toSet()
+                    taxAmt = updatedTaxes.firstOrNull { it.id !in prevTaxIds }?.taxAmount ?: 0.0
 
-                current.copy(
-                    pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedPending),
-                    smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                    detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
-                    latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
-                    latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
-                    latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
-                )
+                    current.copy(
+                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedPending),
+                        smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                        latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                        latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                    )
+                }
+                taxAmt
             }
 
             val msg = buildString {
@@ -2226,10 +2255,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun refreshSquareMarketData(force: Boolean = false, showFeedback: Boolean = false) {
         if (_isRefreshingSquareMarket.value) return
-        val lastSync = settings.value.squareLastPriceSyncMillis
-        val cachedSnapshot = SquareMarketCodec.parseSnapshot(settings.value.squareMarketSnapshotJson)
+        val currentSettings = settings.value
+        val lastSync = currentSettings.squareLastPriceSyncMillis
+        val cachedSnapshot = SquareMarketCodec.parseSnapshot(currentSettings.squareMarketSnapshotJson)
         val hasCurrentVersionCache = cachedSnapshot != null && cachedSnapshot.version >= SQUARE_SNAPSHOT_VERSION
-        if (!force && hasCurrentVersionCache && !SquareMarketCatalog.shouldRefresh(lastSync)) {
+        val needsDailyRollover = SquareMarketCatalog.needsDailyRollover(
+            storedBaselineJson = currentSettings.squareDailyBaselineJson
+        )
+        if (!force && hasCurrentVersionCache && !needsDailyRollover && !SquareMarketCatalog.shouldRefresh(lastSync)) {
             return
         }
 
@@ -2240,15 +2273,25 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _isRefreshingSquareMarket.value = false
 
             val isAr = settings.value.language == "ar"
-            result.onSuccess { snapshot ->
-                val encoded = SquareMarketCodec.encodeSnapshot(snapshot)
-                val now = snapshot.updatedAtMillis
-                if (encoded.isNotBlank()) {
+            result.onSuccess { rawSnapshot ->
+                val now = rawSnapshot.updatedAtMillis
+                withContext(Dispatchers.IO) {
                     prefsManager.updateSettings { current ->
-                        current.copy(
-                            squareMarketSnapshotJson = encoded,
-                            squareLastPriceSyncMillis = now
+                        val (comparedSnapshot, nextBaselineJson) = SquareMarketCatalog.apply24hPriceComparison(
+                            fetched = rawSnapshot,
+                            storedBaselineJson = current.squareDailyBaselineJson,
+                            nowMillis = now
                         )
+                        val encoded = SquareMarketCodec.encodeSnapshot(comparedSnapshot)
+                        if (encoded.isNotBlank()) {
+                            current.copy(
+                                squareMarketSnapshotJson = encoded,
+                                squareDailyBaselineJson = nextBaselineJson,
+                                squareLastPriceSyncMillis = now
+                            )
+                        } else {
+                            current
+                        }
                     }
                 }
                 if (showFeedback) {

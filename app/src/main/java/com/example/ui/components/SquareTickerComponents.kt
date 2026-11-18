@@ -126,6 +126,8 @@ sealed interface SquareTickerRowModel {
         override val id: String = "XAU_SPOT",
         val goldOzUsd: Double,
         val change24hPct: Double,
+        val previousGoldOzUsd: Double = 0.0,
+        val hasBaseline: Boolean = false,
         val usdPerGram24K: Double,
         val dzdPerGram24KParallel: Double,
         val dzdPerGram24KBank: Double,
@@ -141,6 +143,8 @@ sealed interface SquareTickerRowModel {
         override val id: String,
         val item: GoldKaratPrice,
         val change24hPct: Double,
+        val previousPrice: Double = 0.0,
+        val hasBaseline: Boolean = false,
         val sourceName: String,
         override val primaryNumericPrice: Double,
         override val changeOrSpreadValue: Double,
@@ -153,6 +157,9 @@ sealed interface SquareTickerRowModel {
         val rate: CurrencySquareRate,
         val spreadPct: Double,
         val spreadDzd: Double,
+        val change24hPct: Double = 0.0,
+        val previousPriceDzd: Double = 0.0,
+        val hasBaseline: Boolean = false,
         val accentColor: Color,
         override val primaryNumericPrice: Double,
         override val changeOrSpreadValue: Double,
@@ -165,6 +172,7 @@ val SquareGoldAccent = Color(0xFFF5B700)
 private val SquareGoldDeep = Color(0xFFD97706)
 private val TickerGreenPill = Color(0xFF2EBD85)
 private val TickerRedPill = Color(0xFFF6465D)
+private val TickerNeutralPill = Color(0xFF475569)
 private val PinHighlightColor = Color(0xFFF97316)
 
 @Composable
@@ -568,10 +576,7 @@ fun SquareTableHeaderRow(
         SquareVenueFilter.USD -> if (isArabic) "السعر $" else "Price USD"
         else -> if (isArabic) "آخر سعر" else "Last Price"
     }
-    val changeLabel = when (selectedVenue) {
-        SquareVenueFilter.BANK -> if (isArabic) "24س / الفارق" else "24h / Gap"
-        else -> if (isArabic) "التغير / الفارق" else "Change(%)"
-    }
+    val changeLabel = if (isArabic) "التغير (24س)" else "Change(%)"
 
     Row(
         modifier = Modifier
@@ -913,24 +918,28 @@ fun SquareExchangeTickerRow(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Far-right: Change% / Spread% saturated rounded pill
+            // Far-right: 24h % price change vs previous day's closing price
             val pillValue = row.changeOrSpreadValue
-            val isGoldRow = row is SquareTickerRowModel.SpotGold || row is SquareTickerRowModel.GoldKarat
             val hasValidMetric = when (row) {
-                is SquareTickerRowModel.CurrencyFx -> row.rate.parallelSellDzd > 0.0 && row.rate.bankRateDzd > 0.0
-                else -> row.primaryNumericPrice > 0.0
+                is SquareTickerRowModel.SpotGold -> row.goldOzUsd > 0.0
+                is SquareTickerRowModel.GoldKarat -> row.primaryNumericPrice > 0.0
+                is SquareTickerRowModel.CurrencyFx -> row.primaryNumericPrice > 0.0 && (row.hasBaseline || abs(pillValue) > 0.0001)
             }
 
+            val isPositive = pillValue > 0.005
+            val isNegative = pillValue < -0.005
             val pillColor = when {
                 !hasValidMetric -> colors.glassSurface
-                isGoldRow -> if (pillValue >= 0.0) TickerGreenPill else TickerRedPill
-                else -> if (pillValue >= 0.0) TickerGreenPill else TickerRedPill
+                isPositive -> TickerGreenPill
+                isNegative -> TickerRedPill
+                else -> TickerNeutralPill
             }
             val pillLabel = when {
                 !hasValidMetric -> "--"
+                !isPositive && !isNegative -> "0.00%"
                 else -> {
-                    val sign = if (pillValue >= 0.0) "+" else ""
-                    val decimals = if (abs(pillValue) >= 100.0) 0 else if (isGoldRow) 2 else 1
+                    val sign = if (isPositive) "+" else ""
+                    val decimals = if (abs(pillValue) >= 100.0) 1 else 2
                     "$sign${String.format(Locale.US, "%.${decimals}f", pillValue)}%"
                 }
             }
@@ -1077,16 +1086,16 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "24K سكوار/غ" else "24K Square/g",
-                        value = "${formatTickerCompact(row.dzdPerGram24KParallel)} $unitDzd",
-                        valueColor = EmeraldNeon,
+                        label = if (isArabic) "إغلاق الأمس $" else "Prev Close $",
+                        value = if (row.previousGoldOzUsd > 0.0) "$${formatTickerPrice(row.previousGoldOzUsd)}" else "---",
+                        valueColor = CyanNeon,
                         modifier = Modifier.weight(1f),
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "24K بنك/غ" else "24K Bank/g",
-                        value = "${formatTickerCompact(row.dzdPerGram24KBank)} $unitDzd",
-                        valueColor = colors.textPrimary,
+                        label = if (isArabic) "24K سكوار/غ" else "24K Square/g",
+                        value = "${formatTickerCompact(row.dzdPerGram24KParallel)} $unitDzd",
+                        valueColor = EmeraldNeon,
                         modifier = Modifier.weight(1f),
                         colors = colors
                     )
@@ -1105,16 +1114,16 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "غرام (البنك)" else "1g Bank",
-                        value = "${formatTickerCompact(row.item.pricePerGramDzdBank)} $unitDzd",
-                        valueColor = colors.textPrimary,
+                        label = if (isArabic) "إغلاق الأمس" else "Prev Close",
+                        value = if (row.previousPrice > 0.0) "${formatTickerCompact(row.previousPrice)} $unitDzd" else "---",
+                        valueColor = CyanNeon,
                         modifier = Modifier.weight(1f),
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "10 غرام (سكوار)" else "10g Square",
-                        value = "${formatTickerCompact(row.item.pricePerGramDzdParallel * 10.0)} $unitDzd",
-                        valueColor = EmeraldNeon,
+                        label = if (isArabic) "غرام (البنك)" else "1g Bank",
+                        value = "${formatTickerCompact(row.item.pricePerGramDzdBank)} $unitDzd",
+                        valueColor = colors.textPrimary,
                         modifier = Modifier.weight(1f),
                         colors = colors
                     )
@@ -1133,8 +1142,8 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "بيع سكوار" else "Square Sell",
-                        value = if (row.rate.parallelSellDzd > 0.0) "${formatTickerPrice(row.rate.parallelSellDzd)} $unitDzd" else "---",
+                        label = if (isArabic) "إغلاق الأمس" else "Prev Close",
+                        value = if (row.previousPriceDzd > 0.0) "${formatTickerPrice(row.previousPriceDzd)} $unitDzd" else "---",
                         valueColor = CyanNeon,
                         modifier = Modifier.weight(1f),
                         colors = colors
@@ -1147,10 +1156,19 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                 }
-                if (row.rate.parallelSource.isNotBlank()) {
+                val gapText = if (row.rate.parallelSellDzd > 0.0 && row.rate.bankRateDzd > 0.0) {
+                    val gapSign = if (row.spreadPct >= 0.0) "+" else ""
+                    val gapPctStr = "$gapSign${String.format(Locale.US, "%.1f", row.spreadPct)}%"
+                    if (isArabic) "فارق السكوار عن البنك: $gapPctStr" else "Square-Bank Gap: $gapPctStr"
+                } else ""
+                val srcText = if (row.rate.parallelSource.isNotBlank()) {
+                    (if (isArabic) "المصادر: " else "Sources: ") + row.rate.parallelSource
+                } else ""
+                val footerLine = listOf(gapText, srcText).filter { it.isNotBlank() }.joinToString(" • ")
+                if (footerLine.isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = (if (isArabic) "المصادر: " else "Sources: ") + row.rate.parallelSource,
+                        text = footerLine,
                         color = colors.textMuted,
                         fontSize = 10.sp,
                         maxLines = 1,
@@ -1582,6 +1600,8 @@ fun buildSquareTickerRows(
             SquareTickerRowModel.SpotGold(
                 goldOzUsd = goldOz,
                 change24hPct = snapshot.gold24hChangePercent,
+                previousGoldOzUsd = snapshot.previousGoldOzUsd,
+                hasBaseline = snapshot.hasGold24hBaseline,
                 usdPerGram24K = usdPerGram,
                 dzdPerGram24KParallel = pure24?.pricePerGramDzdParallel ?: 0.0,
                 dzdPerGram24KBank = pure24?.pricePerGramDzdBank ?: 0.0,
@@ -1600,14 +1620,35 @@ fun buildSquareTickerRows(
                 SquareVenueFilter.USD -> k.pricePerGramUsd
                 else -> if (k.pricePerGramDzdParallel > 0.0) k.pricePerGramDzdParallel else k.pricePerGramDzdBank
             }
+            val (changePct, prevKaratPrice, hasKaratBase) = when (venueFilter) {
+                SquareVenueFilter.BANK -> if (k.has24hBaseline && k.previousGramDzdBank > 0.0) {
+                    Triple(k.change24hBankPercent, k.previousGramDzdBank, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+                SquareVenueFilter.USD -> if (k.has24hBaseline && k.previousGramUsd > 0.0) {
+                    Triple(k.change24hUsdPercent, k.previousGramUsd, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+                else -> if (k.has24hBaseline && k.previousGramDzdParallel > 0.0 && k.pricePerGramDzdParallel > 0.0) {
+                    Triple(k.change24hParallelPercent, k.previousGramDzdParallel, true)
+                } else if (k.has24hBaseline && k.previousGramDzdBank > 0.0) {
+                    Triple(k.change24hBankPercent, k.previousGramDzdBank, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+            }
             rows.add(
                 SquareTickerRowModel.GoldKarat(
                     id = "XAU_${k.karat}K",
                     item = k,
-                    change24hPct = snapshot.gold24hChangePercent,
+                    change24hPct = changePct,
+                    previousPrice = prevKaratPrice,
+                    hasBaseline = hasKaratBase,
                     sourceName = snapshot.goldSource,
                     primaryNumericPrice = numericPrice,
-                    changeOrSpreadValue = snapshot.gold24hChangePercent,
+                    changeOrSpreadValue = changePct,
                     sortName = "XAU${k.karat.toString().padStart(2, '0')}K"
                 )
             )
@@ -1619,10 +1660,18 @@ fun buildSquareTickerRows(
             val hasBoth = fx.parallelSellDzd > 0.0 && fx.bankRateDzd > 0.0
             val spreadDzd = if (hasBoth) fx.parallelSellDzd - fx.bankRateDzd else 0.0
             val spreadPct = if (hasBoth && fx.bankRateDzd > 0.0) (spreadDzd / fx.bankRateDzd) * 100.0 else 0.0
-            val numericPrice = when (venueFilter) {
-                SquareVenueFilter.BANK -> fx.bankRateDzd
-                else -> if (fx.parallelSellDzd > 0.0) fx.parallelSellDzd else fx.bankRateDzd
+            val isBankVenue = venueFilter == SquareVenueFilter.BANK
+            val numericPrice = if (isBankVenue) {
+                fx.bankRateDzd
+            } else {
+                if (fx.parallelSellDzd > 0.0) fx.parallelSellDzd else fx.bankRateDzd
             }
+            val (changePct, prevFxPrice) = when {
+                isBankVenue -> fx.change24hBankPercent to fx.previousBankRateDzd
+                fx.parallelSellDzd > 0.0 -> fx.change24hParallelPercent to fx.previousParallelSellDzd
+                else -> fx.change24hBankPercent to fx.previousBankRateDzd
+            }
+            val hasFxBaseline = fx.has24hBaseline && prevFxPrice > 0.0
             val accentHex = SquareMarketCatalog.findCurrencySpec(fx.code)?.accentHex ?: 0xFF38BDF8
             rows.add(
                 SquareTickerRowModel.CurrencyFx(
@@ -1630,9 +1679,12 @@ fun buildSquareTickerRows(
                     rate = fx,
                     spreadPct = spreadPct,
                     spreadDzd = spreadDzd,
+                    change24hPct = changePct,
+                    previousPriceDzd = prevFxPrice,
+                    hasBaseline = hasFxBaseline,
                     accentColor = Color(accentHex),
                     primaryNumericPrice = numericPrice,
-                    changeOrSpreadValue = spreadPct
+                    changeOrSpreadValue = changePct
                 )
             )
         }

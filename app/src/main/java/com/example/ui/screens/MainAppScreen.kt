@@ -44,7 +44,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
@@ -55,7 +54,6 @@ import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalDrawerSheet
@@ -195,9 +193,15 @@ fun MainAppScreen(
     var lastAutoRequestedInstallPermApkPath by remember { mutableStateOf<String?>(null) }
     var pendingActionAfterInstallPerm by remember { mutableStateOf<String?>(null) }
     var forceShowPermissionsOnboarding by remember { mutableStateOf(false) }
+    var allowOnboardingWindow by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(180L)
+        allowOnboardingWindow = true
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context, userSettings.baridiMobSmsSyncEnabled) {
+        var isInitialResume = true
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
                 if (!context.isHostActivityChangingConfigurations()) {
@@ -220,6 +224,10 @@ fun MainAppScreen(
                             pendingActionAfterInstallPerm = null
                         }
                     }
+                }
+                if (isInitialResume) {
+                    isInitialResume = false
+                    return@LifecycleEventObserver
                 }
                 if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
                     if (userSettings.baridiMobSmsSyncEnabled) {
@@ -473,42 +481,6 @@ fun MainAppScreen(
                                                         onRouteSelect = { currentRoute = it }
                                                     )
                                                 }
-                                            }
-                                        }
-                                    },
-                                    floatingActionButton = {
-                                        if (isInsideCard && currentRoute != "baridimob_sync") {
-                                            FloatingActionButton(
-                                                onClick = {
-                                                    when (currentRoute) {
-                                                        "income" -> {
-                                                            addTransactionType = TransactionType.INCOME
-                                                            showAddTransactionDialog = true
-                                                        }
-                                                        "expenses" -> {
-                                                            addTransactionType = TransactionType.EXPENSE
-                                                            showAddTransactionDialog = true
-                                                        }
-                                                        "debts" -> {
-                                                            addDebtType = DebtType.OWED_BY_ME
-                                                            showAddDebtDialog = true
-                                                        }
-                                                        else -> {
-                                                            addTransactionType = TransactionType.EXPENSE
-                                                            showAddTransactionDialog = true
-                                                        }
-                                                    }
-                                                },
-                                                containerColor = LiquidGlassTheme.colors.primaryNeon,
-                                                contentColor = if (LiquidGlassTheme.colors.isDark) Color(0xFF0D1B2A) else Color.White,
-                                                shape = CircleShape,
-                                                modifier = Modifier.size(dimens.fabSize)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Add,
-                                                    contentDescription = "Add",
-                                                    modifier = Modifier.size(dimens.iconSizeLg)
-                                                )
                                             }
                                         }
                                     }
@@ -908,7 +880,8 @@ fun MainAppScreen(
                 )
             }
 
-            if (!isAppLocked &&
+            if (allowOnboardingWindow &&
+                !isAppLocked &&
                 !updateDialogVisible &&
                 (!userSettings.hasCompletedPermissionsOnboarding || forceShowPermissionsOnboarding)
             ) {

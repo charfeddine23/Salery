@@ -156,7 +156,7 @@ class PermanentSmsArchiveRobolectricTest {
             while (System.currentTimeMillis() < deadline) {
                 org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
                 val cur = vm.financialSummary.value
-                if (kotlin.math.abs(cur.totalBalance - 49500.0) < 0.01 &&
+                if (kotlin.math.abs(cur.totalBalance - 37500.0) < 0.01 &&
                     kotlin.math.abs(cur.savingsBalance - 12000.0) < 0.01
                 ) {
                     break
@@ -164,13 +164,63 @@ class PermanentSmsArchiveRobolectricTest {
                 kotlinx.coroutines.delay(50)
             }
             val syncedSummary = vm.financialSummary.value
-            assertEquals(49500.0, syncedSummary.totalBalance, 0.01)
+            assertEquals(37500.0, syncedSummary.totalBalance, 0.01)
             assertEquals(49500.0, syncedSummary.grossBalance, 0.01)
             assertEquals(12000.0, syncedSummary.savingsBalance, 0.01)
             assertEquals(99999.75, externalPrefs.settingsFlow.value.latestSmsBalanceAmount, 0.01)
+
+            // Withdraw from savings adds back to Dashboard totalBalance
+            vm.withdrawFromSavings(5000.0)
+            val withdrawDeadline = System.currentTimeMillis() + 3000L
+            while (System.currentTimeMillis() < withdrawDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                if (kotlin.math.abs(vm.financialSummary.value.totalBalance - 42500.0) < 0.01) break
+                kotlinx.coroutines.delay(25)
+            }
+            assertEquals(42500.0, vm.financialSummary.value.totalBalance, 0.01)
+            assertEquals(7000.0, vm.financialSummary.value.savingsBalance, 0.01)
+            assertEquals(49500.0, vm.financialSummary.value.grossBalance, 0.01)
+
+            // Deposit to savings deducts from Dashboard totalBalance
+            vm.transferToSavings(10000.0)
+            val depositDeadline = System.currentTimeMillis() + 3000L
+            while (System.currentTimeMillis() < depositDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                if (kotlin.math.abs(vm.financialSummary.value.totalBalance - 32500.0) < 0.01) break
+                kotlinx.coroutines.delay(25)
+            }
+            assertEquals(32500.0, vm.financialSummary.value.totalBalance, 0.01)
+            assertEquals(17000.0, vm.financialSummary.value.savingsBalance, 0.01)
+            assertEquals(49500.0, vm.financialSummary.value.grossBalance, 0.01)
         } finally {
             collectJob.cancel()
         }
+    }
+
+    @Test
+    fun algPosteManualSms_preservesNegativeBalanceInSettingsAndHistory() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val prefs = PreferencesManager(app)
+        prefs.updateSettings {
+            it.copy(
+                salaryAutoCredit = false,
+                latestSmsBalanceAmount = -1.0,
+                latestSmsBalanceUpdatedAt = 0L,
+                smsBalanceHistoryJson = "[]"
+            )
+        }
+
+        val vm = SaleryPelseViewModel(app)
+        vm.analyzeManualSmsSample("ALG Poste", "Frais -500.00 DA. Nouveau solde: -1 250,00 DA")
+
+        val deadline = System.currentTimeMillis() + 4000L
+        while (System.currentTimeMillis() < deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (vm.settings.value.latestSmsBalanceUpdatedAt > 0L) break
+            kotlinx.coroutines.delay(25)
+        }
+        assertTrue(vm.settings.value.latestSmsBalanceUpdatedAt > 0L)
+        assertEquals(-1250.0, vm.settings.value.latestSmsBalanceAmount, 0.01)
     }
 
     @Test

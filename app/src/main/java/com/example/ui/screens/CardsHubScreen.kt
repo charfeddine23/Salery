@@ -849,19 +849,22 @@ private fun EdahabiaCardRealistic(
                                     fontWeight = FontWeight.SemiBold,
                                     lineHeight = 10.sp
                                 )
-                                val hubCardBalance = if (userSettings.latestSmsBalanceAmount >= 0.0) {
+                                val hasSmsBal = userSettings.latestSmsBalanceUpdatedAt > 0L || userSettings.latestSmsBalanceAmount >= 0.0
+                                val hubCardBalance = if (hasSmsBal) {
                                     userSettings.latestSmsBalanceAmount
                                 } else {
                                     summary.totalBalance
                                 }
-                                Text(
-                                    text = formatDzd(hubCardBalance),
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.3.sp,
-                                    lineHeight = 15.sp
-                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = formatDzd(hubCardBalance),
+                                        color = if (hasSmsBal && hubCardBalance < 0.0) Color(0xFFFDA4AF) else Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.3.sp,
+                                        lineHeight = 15.sp
+                                    )
+                                }
                             }
                         }
                     }

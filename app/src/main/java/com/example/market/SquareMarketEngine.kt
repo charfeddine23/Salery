@@ -13,12 +13,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 const val SQUARE_REFRESH_INTERVAL_MILLIS = 3_600_000L // 1 hour
-const val SQUARE_SNAPSHOT_VERSION = 2
+const val SQUARE_SNAPSHOT_VERSION = 3
 const val TROY_OUNCE_IN_GRAMS = 31.1034768
 
 data class HardCurrencySpec(
@@ -38,7 +40,14 @@ data class GoldKaratPrice(
     val titleAr: String,
     val pricePerGramUsd: Double,
     val pricePerGramDzdParallel: Double,
-    val pricePerGramDzdBank: Double
+    val pricePerGramDzdBank: Double,
+    val change24hParallelPercent: Double = 0.0,
+    val change24hBankPercent: Double = 0.0,
+    val change24hUsdPercent: Double = 0.0,
+    val previousGramDzdParallel: Double = 0.0,
+    val previousGramDzdBank: Double = 0.0,
+    val previousGramUsd: Double = 0.0,
+    val has24hBaseline: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -52,7 +61,12 @@ data class CurrencySquareRate(
     val parallelBuyDzd: Double,
     val parallelSellDzd: Double,
     val parallelSource: String = "",
-    val sourceCount: Int = 0
+    val sourceCount: Int = 0,
+    val change24hParallelPercent: Double = 0.0,
+    val change24hBankPercent: Double = 0.0,
+    val previousParallelSellDzd: Double = 0.0,
+    val previousBankRateDzd: Double = 0.0,
+    val has24hBaseline: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -68,7 +82,27 @@ data class SquareMarketSnapshot(
     val parallelSourceCount: Int = 0,
     val goldKarats: List<GoldKaratPrice> = emptyList(),
     val currencies: List<CurrencySquareRate> = emptyList(),
-    val updatedAtMillis: Long = System.currentTimeMillis()
+    val updatedAtMillis: Long = System.currentTimeMillis(),
+    val previousGoldOzUsd: Double = 0.0,
+    val hasGold24hBaseline: Boolean = false,
+    val baselinePreviousDateKey: String = ""
+)
+
+@JsonClass(generateAdapter = true)
+data class SquareAssetPricePoint(
+    val primaryPrice: Double = 0.0,
+    val secondaryPrice: Double = 0.0,
+    val usdPrice: Double = 0.0
+)
+
+@JsonClass(generateAdapter = true)
+data class SquareDailyBaselineState(
+    val previousDayDate: String = "",
+    val previousDayPrices: Map<String, SquareAssetPricePoint> = emptyMap(),
+    val isPreviousDayFromPriorDate: Boolean = false,
+    val currentDayDate: String = "",
+    val currentDayLatestPrices: Map<String, SquareAssetPricePoint> = emptyMap(),
+    val currentDayUpdatedAtMillis: Long = 0L
 )
 
 data class GoldSpotQuote(
@@ -115,6 +149,216 @@ object SquareMarketCatalog {
     ): Boolean {
         if (lastSyncMillis <= 0L) return true
         return (nowMillis - lastSyncMillis) >= SQUARE_REFRESH_INTERVAL_MILLIS
+    }
+
+    fun dayKeyForMillis(
+        millis: Long,
+        timeZone: TimeZone = TimeZone.getDefault()
+    ): String {
+        val cal = Calendar.getInstance(timeZone).apply { timeInMillis = millis }
+        val y = cal.get(Calendar.YEAR)
+        val m = cal.get(Calendar.MONTH) + 1
+        val d = cal.get(Calendar.DAY_OF_MONTH)
+        return String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+    }
+
+    fun needsDailyRollover(
+        storedBaselineJson: String,
+        nowMillis: Long = System.currentTimeMillis(),
+        timeZone: TimeZone = TimeZone.getDefault()
+    ): Boolean {
+        if (storedBaselineJson.isBlank()) return true
+        val state = SquareMarketCodec.parseBaselineState(storedBaselineJson) ?: return true
+        if (state.currentDayDate.isBlank()) return true
+        val todayKey = dayKeyForMillis(nowMillis, timeZone)
+        return todayKey > state.currentDayDate
+    }
+
+    private fun mergeAssetPricePoint(
+        older: SquareAssetPricePoint?,
+        newer: SquareAssetPricePoint
+    ): SquareAssetPricePoint {
+        if (older == null) return newer
+        return SquareAssetPricePoint(
+            primaryPrice = if (newer.primaryPrice > 0.0) newer.primaryPrice else older.primaryPrice,
+            secondaryPrice = if (newer.secondaryPrice > 0.0) newer.secondaryPrice else older.secondaryPrice,
+            usdPrice = if (newer.usdPrice > 0.0) newer.usdPrice else older.usdPrice
+        )
+    }
+
+    private fun mergePriceMaps(
+        older: Map<String, SquareAssetPricePoint>,
+        newer: Map<String, SquareAssetPricePoint>
+    ): Map<String, SquareAssetPricePoint> {
+        val merged = LinkedHashMap<String, SquareAssetPricePoint>(older)
+        newer.forEach { (key, point) ->
+            merged[key] = mergeAssetPricePoint(merged[key], point)
+        }
+        return merged
+    }
+
+    private fun pctChange(currentPrice: Double, previousPrice: Double): Double {
+        if (currentPrice <= 0.0 || previousPrice <= 0.0) return 0.0
+        val raw = ((currentPrice - previousPrice) / previousPrice) * 100.0
+        return if (!raw.isFinite() || abs(raw) < 1e-6) 0.0 else raw
+    }
+
+    /**
+     * Compares today's live Square / Bank / Gold prices against each asset's stored closing price
+     * from the previous day, rolling over the latest price of the finished day at midnight so every
+     * 24h cycle reflects the true rise/drop percentage.
+     */
+    fun apply24hPriceComparison(
+        fetched: SquareMarketSnapshot,
+        storedBaselineJson: String,
+        nowMillis: Long = fetched.updatedAtMillis.takeIf { it > 0L } ?: System.currentTimeMillis(),
+        timeZone: TimeZone = TimeZone.getDefault()
+    ): Pair<SquareMarketSnapshot, String> {
+        val todayKey = dayKeyForMillis(nowMillis, timeZone)
+        val extractedToday = LinkedHashMap<String, SquareAssetPricePoint>()
+        if (fetched.goldOzUsd > 0.0) {
+            extractedToday["XAU_SPOT"] = SquareAssetPricePoint(
+                primaryPrice = fetched.goldOzUsd,
+                usdPrice = fetched.goldOzUsd
+            )
+        }
+        fetched.goldKarats.forEach { k ->
+            extractedToday["XAU_${k.karat}K"] = SquareAssetPricePoint(
+                primaryPrice = k.pricePerGramDzdParallel,
+                secondaryPrice = k.pricePerGramDzdBank,
+                usdPrice = k.pricePerGramUsd
+            )
+        }
+        fetched.currencies.forEach { fx ->
+            extractedToday[fx.code] = SquareAssetPricePoint(
+                primaryPrice = fx.parallelSellDzd,
+                secondaryPrice = fx.bankRateDzd
+            )
+        }
+
+        val existing = SquareMarketCodec.parseBaselineState(storedBaselineJson)
+        val nextState: SquareDailyBaselineState = when {
+            existing == null || existing.currentDayDate.isBlank() -> {
+                // Seed initial Day-1 baseline; if upstream Spot Gold reported 24h %, preserve implied previous USD spot.
+                val seededInitialPrev = LinkedHashMap<String, SquareAssetPricePoint>(extractedToday)
+                val goldChg = fetched.gold24hChangePercent
+                if (fetched.goldOzUsd > 0.0 && abs(goldChg) > 0.0001 && (1.0 + goldChg / 100.0) > 0.05) {
+                    val divisor = 1.0 + goldChg / 100.0
+                    val impliedPrevSpot = fetched.goldOzUsd / divisor
+                    seededInitialPrev["XAU_SPOT"] = SquareAssetPricePoint(
+                        primaryPrice = impliedPrevSpot,
+                        usdPrice = impliedPrevSpot
+                    )
+                    fetched.goldKarats.forEach { k ->
+                        val key = "XAU_${k.karat}K"
+                        val existingPt = seededInitialPrev[key] ?: SquareAssetPricePoint()
+                        seededInitialPrev[key] = existingPt.copy(
+                            usdPrice = if (k.pricePerGramUsd > 0.0) k.pricePerGramUsd / divisor else existingPt.usdPrice
+                        )
+                    }
+                }
+                SquareDailyBaselineState(
+                    previousDayDate = todayKey,
+                    previousDayPrices = seededInitialPrev,
+                    isPreviousDayFromPriorDate = false,
+                    currentDayDate = todayKey,
+                    currentDayLatestPrices = extractedToday,
+                    currentDayUpdatedAtMillis = nowMillis
+                )
+            }
+            todayKey > existing.currentDayDate -> {
+                // New calendar day: yesterday's last closing prices become the active 24h comparison baseline.
+                val rolledPrev = mergePriceMaps(existing.previousDayPrices, existing.currentDayLatestPrices)
+                val completePrev = LinkedHashMap<String, SquareAssetPricePoint>(rolledPrev)
+                extractedToday.forEach { (key, pt) ->
+                    val prevPt = completePrev[key]
+                    completePrev[key] = SquareAssetPricePoint(
+                        primaryPrice = if ((prevPt?.primaryPrice ?: 0.0) > 0.0) prevPt!!.primaryPrice else pt.primaryPrice,
+                        secondaryPrice = if ((prevPt?.secondaryPrice ?: 0.0) > 0.0) prevPt!!.secondaryPrice else pt.secondaryPrice,
+                        usdPrice = if ((prevPt?.usdPrice ?: 0.0) > 0.0) prevPt!!.usdPrice else pt.usdPrice
+                    )
+                }
+                SquareDailyBaselineState(
+                    previousDayDate = existing.currentDayDate,
+                    previousDayPrices = completePrev,
+                    isPreviousDayFromPriorDate = true,
+                    currentDayDate = todayKey,
+                    currentDayLatestPrices = extractedToday,
+                    currentDayUpdatedAtMillis = nowMillis
+                )
+            }
+            else -> {
+                // Same day (or backwards clock): keep yesterday's closing baseline frozen, update today's closing candidate.
+                val updatedPrev = LinkedHashMap<String, SquareAssetPricePoint>(existing.previousDayPrices)
+                extractedToday.forEach { (key, pt) ->
+                    val oldPt = updatedPrev[key]
+                    updatedPrev[key] = SquareAssetPricePoint(
+                        primaryPrice = if ((oldPt?.primaryPrice ?: 0.0) > 0.0) oldPt!!.primaryPrice else pt.primaryPrice,
+                        secondaryPrice = if ((oldPt?.secondaryPrice ?: 0.0) > 0.0) oldPt!!.secondaryPrice else pt.secondaryPrice,
+                        usdPrice = if ((oldPt?.usdPrice ?: 0.0) > 0.0) oldPt!!.usdPrice else pt.usdPrice
+                    )
+                }
+                SquareDailyBaselineState(
+                    previousDayDate = existing.previousDayDate.ifBlank { todayKey },
+                    previousDayPrices = updatedPrev,
+                    isPreviousDayFromPriorDate = existing.isPreviousDayFromPriorDate,
+                    currentDayDate = existing.currentDayDate,
+                    currentDayLatestPrices = mergePriceMaps(existing.currentDayLatestPrices, extractedToday),
+                    currentDayUpdatedAtMillis = nowMillis
+                )
+            }
+        }
+
+        val prevSpotUsd = nextState.previousDayPrices["XAU_SPOT"]?.usdPrice ?: 0.0
+        val spotHasBaseline = fetched.goldOzUsd > 0.0 && prevSpotUsd > 0.0
+        val computedSpotChange = if (spotHasBaseline) {
+            pctChange(fetched.goldOzUsd, prevSpotUsd)
+        } else {
+            fetched.gold24hChangePercent
+        }
+
+        val updatedKarats = fetched.goldKarats.map { k ->
+            val prevK = nextState.previousDayPrices["XAU_${k.karat}K"]
+            val prevPar = prevK?.primaryPrice ?: 0.0
+            val prevBnk = prevK?.secondaryPrice ?: 0.0
+            val prevUsd = prevK?.usdPrice ?: 0.0
+            k.copy(
+                change24hParallelPercent = pctChange(k.pricePerGramDzdParallel, prevPar),
+                change24hBankPercent = pctChange(k.pricePerGramDzdBank, prevBnk),
+                change24hUsdPercent = pctChange(k.pricePerGramUsd, prevUsd),
+                previousGramDzdParallel = prevPar,
+                previousGramDzdBank = prevBnk,
+                previousGramUsd = prevUsd,
+                has24hBaseline = (k.pricePerGramDzdParallel > 0.0 && prevPar > 0.0) ||
+                    (k.pricePerGramDzdBank > 0.0 && prevBnk > 0.0) ||
+                    (k.pricePerGramUsd > 0.0 && prevUsd > 0.0)
+            )
+        }
+
+        val updatedCurrencies = fetched.currencies.map { fx ->
+            val prevFx = nextState.previousDayPrices[fx.code]
+            val prevPar = prevFx?.primaryPrice ?: 0.0
+            val prevBnk = prevFx?.secondaryPrice ?: 0.0
+            fx.copy(
+                change24hParallelPercent = pctChange(fx.parallelSellDzd, prevPar),
+                change24hBankPercent = pctChange(fx.bankRateDzd, prevBnk),
+                previousParallelSellDzd = prevPar,
+                previousBankRateDzd = prevBnk,
+                has24hBaseline = (fx.parallelSellDzd > 0.0 && prevPar > 0.0) ||
+                    (fx.bankRateDzd > 0.0 && prevBnk > 0.0)
+            )
+        }
+
+        val enrichedSnapshot = fetched.copy(
+            version = SQUARE_SNAPSHOT_VERSION,
+            gold24hChangePercent = computedSpotChange,
+            goldKarats = updatedKarats,
+            currencies = updatedCurrencies,
+            previousGoldOzUsd = prevSpotUsd,
+            hasGold24hBaseline = spotHasBaseline,
+            baselinePreviousDateKey = if (nextState.isPreviousDayFromPriorDate) nextState.previousDayDate else ""
+        )
+        return enrichedSnapshot to SquareMarketCodec.encodeBaselineState(nextState)
     }
 
     fun buildGoldKarats(
@@ -525,6 +769,10 @@ object SquareMarketCodec {
         moshi.adapter(SquareMarketSnapshot::class.java)
     }
 
+    private val baselineAdapter by lazy {
+        moshi.adapter(SquareDailyBaselineState::class.java)
+    }
+
     private val stringSetType = Types.newParameterizedType(List::class.java, String::class.java)
     private val stringListAdapter by lazy { moshi.adapter<List<String>>(stringSetType) }
 
@@ -565,6 +813,23 @@ object SquareMarketCodec {
         return try {
             val parsed = snapshotAdapter.fromJson(json) ?: return null
             if (parsed.goldKarats.isEmpty() && parsed.currencies.isEmpty()) null else parsed
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun encodeBaselineState(state: SquareDailyBaselineState): String {
+        return try {
+            baselineAdapter.toJson(state)
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
+    fun parseBaselineState(json: String): SquareDailyBaselineState? {
+        if (json.isBlank()) return null
+        return try {
+            baselineAdapter.fromJson(json)
         } catch (_: Throwable) {
             null
         }

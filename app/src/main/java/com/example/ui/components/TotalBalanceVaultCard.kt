@@ -172,7 +172,10 @@ fun TotalBalanceVaultCard(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense",
+                        text = when {
+                            lockedAmount > 0 -> if (isArabic) "الرصيد المتاح (بعد الادخار)" else "Available (After Savings)"
+                            else -> if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense"
+                        },
                         color = colors.textMuted,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.Medium,

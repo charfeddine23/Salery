@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -53,9 +54,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DebtEntity
@@ -853,7 +856,13 @@ private fun CcpBalanceCard(
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
-    val hasBalance = userSettings.latestSmsBalanceAmount >= 0.0
+    val hasBalance = userSettings.latestSmsBalanceUpdatedAt > 0L || userSettings.latestSmsBalanceAmount >= 0.0
+    val isNegativeBalance = hasBalance && userSettings.latestSmsBalanceAmount < 0.0
+    val balanceAccentColor = when {
+        isNegativeBalance -> RoseNeon
+        hasBalance -> EmeraldNeon
+        else -> Color(0xFFFACC15)
+    }
     val hasBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
     val totalTaxes = detectedTaxes.sumOf { it.taxAmount }
     val unrecordedTaxes = detectedTaxes.count { !it.isRecordedAsExpense }
@@ -941,7 +950,7 @@ private fun CcpBalanceCard(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(if (hasBalance) EmeraldNeon else posteGold)
+                                .background(balanceAccentColor)
                         )
                     }
                     Spacer(modifier = Modifier.height(2.dp))
@@ -969,7 +978,7 @@ private fun CcpBalanceCard(
                     .background(colors.glassSurface.copy(alpha = 0.72f))
                     .border(
                         width = 0.8.dp,
-                        color = if (hasBalance) EmeraldNeon.copy(alpha = 0.28f) else colors.glassBorder,
+                        color = if (hasBalance) balanceAccentColor.copy(alpha = 0.34f) else colors.glassBorder,
                         shape = RoundedCornerShape(14.dp)
                     )
                     .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -986,22 +995,31 @@ private fun CcpBalanceCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (hasBalance) {
-                            formatDzdAmount(
-                                amount = userSettings.latestSmsBalanceAmount,
-                                currencyText = strings.currencyCode,
-                                isStealth = isStealth
+                    if (hasBalance) {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Text(
+                                text = formatDzdAmount(
+                                    amount = userSettings.latestSmsBalanceAmount,
+                                    currencyText = strings.currencyCode,
+                                    isStealth = isStealth
+                                ),
+                                color = balanceAccentColor,
+                                fontSize = typo.titleLg,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        } else {
-                            if (isArabic) "--- دج • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS"
-                        },
-                        color = if (hasBalance) EmeraldNeon else posteGold,
-                        fontSize = if (hasBalance) typo.titleLg else typo.body,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        }
+                    } else {
+                        Text(
+                            text = if (isArabic) "--- دج • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS",
+                            color = posteGold,
+                            fontSize = typo.body,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))

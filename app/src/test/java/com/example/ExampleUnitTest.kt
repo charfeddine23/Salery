@@ -1319,4 +1319,146 @@ class ExampleUnitTest {
     )
     assertTrue(sortedDesc.first().primaryNumericPrice >= sortedDesc.last().primaryNumericPrice)
   }
+
+  @Test
+  fun algPosteNegativeBalance_extractsStoresAndPreservesSign() {
+    val frNeg = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "Retrait GAB -5 000,00 DA. Nouveau solde: -1 500,00 DA"
+    )
+    assertNotNull(frNeg)
+    assertEquals(-1500.0, frNeg!!, 0.01)
+
+    val frGlued = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "Solde:-250.50 DA"
+    )
+    assertNotNull(frGlued)
+    assertEquals(-250.50, frGlued!!, 0.01)
+
+    val arBidiNeg = com.example.sms.AlgPosteSmsAnalyzer.extractBalanceFromBody(
+      "الرصيد الجديد: \u200E-\u200F500.00 دج"
+    )
+    assertNotNull(arBidiNeg)
+    assertEquals(-500.0, arBidiNeg!!, 0.01)
+
+    // Balance-only negative SMS must NOT be misparsed as an expense transaction
+    val negBalanceOnly = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Votre nouveau solde est de -1 500,00 DA",
+      timestampMillis = 1_000_000L
+    )
+    org.junit.Assert.assertNull(negBalanceOnly)
+
+    val snapPos = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 500,00 DA",
+      timestampMillis = 1_000_000L
+    )!!
+    val snapNeg = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -2 000,00 DA. Nouveau solde: -1 520,00 DA",
+      timestampMillis = 2_000_000L
+    )!!
+    assertEquals(-1520.0, snapNeg.balance, 0.01)
+
+    // Codec must preserve negative balances in history
+    val encoded = com.example.sms.AlgPosteSmsCodec.encodeBalanceHistory(listOf(snapPos, snapNeg))
+    val decoded = com.example.sms.AlgPosteSmsCodec.parseBalanceHistory(encoded)
+    assertEquals(2, decoded.size)
+    assertEquals(-1520.0, decoded[1].balance, 0.01)
+
+    // Tax anomaly detection still catches 20 DA discrepancy across positive -> negative transition
+    val taxes = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(decoded)
+    assertEquals(1, taxes.size)
+    assertEquals(20.0, taxes[0].taxAmount, 0.01)
+  }
+
+  @Test
+  fun square24hChange_storesPreviousDayCloseAndComputesRiseDropPercent() {
+    val utc = java.util.TimeZone.getTimeZone("UTC")
+    val cal = java.util.Calendar.getInstance(utc).apply {
+      set(2026, java.util.Calendar.NOVEMBER, 17, 10, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val day1Morning = cal.timeInMillis
+    val day1Evening = day1Morning + 11 * 3_600_000L // 21:00 Nov 17
+    val day2Morning = day1Morning + 24 * 3_600_000L // 10:00 Nov 18
+    val day2Afternoon = day2Morning + 4 * 3_600_000L // 14:00 Nov 18
+    val day3Morning = day1Morning + 48 * 3_600_000L // 10:00 Nov 19
+
+    fun makeSnapshot(goldOz: Double, eurSell: Double, eurBank: Double, usdSell: Double, usdBank: Double, ts: Long): com.example.market.SquareMarketSnapshot {
+      return com.example.market.SquareMarketSnapshot(
+        goldOzUsd = goldOz,
+        gold24hChangePercent = 0.0,
+        goldKarats = com.example.market.SquareMarketCatalog.buildGoldKarats(goldOz, usdBank, usdSell),
+        currencies = listOf(
+          com.example.market.CurrencySquareRate("EUR", "Euro", "اليورو", "🇪🇺", "€", eurBank, eurSell - 2.0, eurSell, "Test", 1),
+          com.example.market.CurrencySquareRate("USD", "US Dollar", "الدولار", "🇺🇸", "$", usdBank, usdSell - 2.0, usdSell, "Test", 1)
+        ),
+        updatedAtMillis = ts
+      )
+    }
+
+    // Day 1 Morning: EUR=250.0, GoldOz=3000.0
+    val (s1m, base1m) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = makeSnapshot(3000.0, 250.0, 140.0, 230.0, 134.0, day1Morning),
+      storedBaselineJson = "",
+      nowMillis = day1Morning,
+      timeZone = utc
+    )
+    assertEquals(0.0, s1m.currencies[0].change24hParallelPercent, 0.001)
+
+    // Day 1 Evening closing price: EUR exits Day 1 at 252.0, GoldOz exits at 3060.0
+    val (_, base1e) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = makeSnapshot(3060.0, 252.0, 142.0, 232.0, 134.0, day1Evening),
+      storedBaselineJson = base1m,
+      nowMillis = day1Evening,
+      timeZone = utc
+    )
+
+    // Day 2 Morning: EUR rises to 258.3 vs Day 1 closing price 252.0 => +2.50%
+    // Bank EUR drops to 139.16 vs Day 1 closing 142.0 => -2.00%
+    val (s2m, base2m) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = makeSnapshot(3090.6, 258.3, 139.16, 234.0, 134.0, day2Morning),
+      storedBaselineJson = base1e,
+      nowMillis = day2Morning,
+      timeZone = utc
+    )
+    assertEquals("2026-11-17", s2m.baselinePreviousDateKey)
+    assertEquals(252.0, s2m.currencies.first { it.code == "EUR" }.previousParallelSellDzd, 0.01)
+    assertEquals(2.50, s2m.currencies.first { it.code == "EUR" }.change24hParallelPercent, 0.01)
+    assertEquals(-2.00, s2m.currencies.first { it.code == "EUR" }.change24hBankPercent, 0.01)
+    assertEquals(1.00, s2m.gold24hChangePercent, 0.01)
+    assertTrue(s2m.goldKarats.first { it.karat == 18 }.change24hParallelPercent > 0.0)
+
+    // Day 2 Afternoon (same day): EUR drops to 249.48 -> MUST still compare vs Day 1 close (252.0) => -1.00%
+    val (s2a, base2a) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = makeSnapshot(3029.4, 249.48, 140.0, 230.0, 134.0, day2Afternoon),
+      storedBaselineJson = base2m,
+      nowMillis = day2Afternoon,
+      timeZone = utc
+    )
+    assertEquals(-1.00, s2a.currencies.first { it.code == "EUR" }.change24hParallelPercent, 0.01)
+    assertEquals(-1.00, s2a.gold24hChangePercent, 0.01)
+
+    // Check UI ticker rows reflect true 24h change (NOT spread) for both Parallel and Bank venues
+    val parallelRows = com.example.ui.components.buildSquareTickerRows(
+      snapshot = s2a,
+      primaryTab = com.example.ui.components.SquarePrimaryTab.CURRENCIES,
+      venueFilter = com.example.ui.components.SquareVenueFilter.SQUARE,
+      pinnedIds = emptySet(),
+      searchQuery = ""
+    )
+    assertEquals(-1.00, parallelRows.first { it.id == "EUR" }.changeOrSpreadValue, 0.01)
+
+    // Day 3 Morning: compares against Day 2's final exit price (EUR=249.48)
+    val (s3m, _) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = makeSnapshot(3059.694, 254.4696, 140.0, 230.0, 134.0, day3Morning),
+      storedBaselineJson = base2a,
+      nowMillis = day3Morning,
+      timeZone = utc
+    )
+    assertEquals("2026-11-18", s3m.baselinePreviousDateKey)
+    assertEquals(249.48, s3m.currencies.first { it.code == "EUR" }.previousParallelSellDzd, 0.01)
+    assertEquals(2.00, s3m.currencies.first { it.code == "EUR" }.change24hParallelPercent, 0.02)
+  }
 }

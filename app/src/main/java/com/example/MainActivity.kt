@@ -27,13 +27,21 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialize 24-hour debt due date reminder notification channel
-        DebtReminderScheduler.createNotificationChannel(this)
-
-        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+        // Defer notification channel & permission prompt until after Frame 1 commits
+        // so MainActivity's SurfaceSyncGroup never contends with a permission dialog window.
+        window.decorView.post {
+            if (isFinishing || isDestroyed) return@post
+            DebtReminderScheduler.createNotificationChannel(applicationContext)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                window.decorView.postDelayed({
+                    if (!isFinishing && !isDestroyed &&
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+                    }
+                }, 650L)
             }
         }
 

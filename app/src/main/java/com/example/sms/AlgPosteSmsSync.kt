@@ -140,6 +140,9 @@ object AlgPosteSmsAnalyzer {
     private const val CURRENCY_PATTERN = """(?:DA|DZD|DZ|د\.?\s*ج|دج|دينار)"""
     private const val NUMBER_PATTERN =
         """([0-9]+(?:[ \t\u00A0.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)"""
+    private const val SIGN_PREFIX = """(?:(-)[ \t\u00A0]*)?"""
+    private const val TRAILING_SIGN_SUFFIX = """(?<![ \t\u00A0])(-)?(?![0-9])"""
+    private const val BALANCE_NUM_BOUNDARY = """(?<![0-9])(?<![0-9][:/\-])"""
     private const val PRIORITIZED_BALANCE_LABELS =
         """(?:nouveau\s+solde|solde\s+(?:disponible|actuel|comptable|courant|final|net|restant|apr[eè]s\s+op[eé]ration)|n\.?\s*solde|الرصيد\s+(?:الجديد|الحالي|المتاح|المتوفر|المتبقي|البريدي|النهائي)|رصيدك\s+(?:الحالي|الجديد|المتاح)|رصيد\s+(?:الحساب|حسابك|حسابكم|البطاقة))"""
     private const val GENERIC_BALANCE_LABELS =
@@ -147,40 +150,40 @@ object AlgPosteSmsAnalyzer {
     private const val PREVIOUS_BALANCE_LABELS =
         """(?:ancien\s+solde|solde\s+(?:pr[eé]c[eé]dent|precedent|initial|avant|ant[eé]rieur|anterieur)|الرصيد\s+(?:السابق|القديم)|رصيدك\s+السابق)"""
     private const val IMMEDIATE_CONNECTORS =
-        """(?:\s*(?:est\s+de|est|de|du|au|le|à|a|هو|الحالي|الجديد|السابق|المتاح|بـ|ب|:|=|-|،)\s*){0,4}"""
+        """(?:\s*(?:est\s+de|est|de|du|au|le|à|a|هو|الحالي|الجديد|السابق|المتاح|بـ|ب|:|=|،)\s*){0,4}"""
 
     private val prioritizedBalanceCurrencyRegex = Regex(
-        """$PRIORITIZED_BALANCE_LABELS[^\r\n]{0,60}?(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
+        """$PRIORITIZED_BALANCE_LABELS[^\r\n]{0,60}?$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
         RegexOption.IGNORE_CASE
     )
 
     private val prioritizedBalanceNoCurrencyRegex = Regex(
-        """$PRIORITIZED_BALANCE_LABELS$IMMEDIATE_CONNECTORS(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
+        """$PRIORITIZED_BALANCE_LABELS$IMMEDIATE_CONNECTORS$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
         RegexOption.IGNORE_CASE
     )
 
     private val genericBalanceCurrencyRegex = Regex(
-        """$GENERIC_BALANCE_LABELS[^\r\n]{0,60}?(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
+        """$GENERIC_BALANCE_LABELS[^\r\n]{0,60}?$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
         RegexOption.IGNORE_CASE
     )
 
     private val genericBalanceNoCurrencyRegex = Regex(
-        """$GENERIC_BALANCE_LABELS$IMMEDIATE_CONNECTORS(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
+        """$GENERIC_BALANCE_LABELS$IMMEDIATE_CONNECTORS$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
         RegexOption.IGNORE_CASE
     )
 
     private val reversedBalanceRegex = Regex(
-        """(?<![0-9/:\-])$NUMBER_PATTERN\s*$CURRENCY_PATTERN\s*(?:est\s+(?:votre\s+)?(?:nouveau\s+)?solde|هو\s*رصيدك)""",
+        """$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX\s*$CURRENCY_PATTERN\s*(?:est\s+(?:votre\s+)?(?:nouveau\s+)?solde|هو\s*رصيدك)""",
         RegexOption.IGNORE_CASE
     )
 
     private val previousBalanceCurrencyRegex = Regex(
-        """$PREVIOUS_BALANCE_LABELS[^\r\n]{0,50}?(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
+        """$PREVIOUS_BALANCE_LABELS[^\r\n]{0,50}?$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)\s*$CURRENCY_PATTERN(?![\p{L}])""",
         RegexOption.IGNORE_CASE
     )
 
     private val previousBalanceNoCurrencyRegex = Regex(
-        """$PREVIOUS_BALANCE_LABELS$IMMEDIATE_CONNECTORS(?<![0-9/:\-])$NUMBER_PATTERN(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
+        """$PREVIOUS_BALANCE_LABELS$IMMEDIATE_CONNECTORS$BALANCE_NUM_BOUNDARY$SIGN_PREFIX$NUMBER_PATTERN$TRAILING_SIGN_SUFFIX(?![ \t]*[/:\-]\d)(?:\s*$CURRENCY_PATTERN)?""",
         RegexOption.IGNORE_CASE
     )
 
@@ -291,9 +294,13 @@ object AlgPosteSmsAnalyzer {
         for (regex in patterns) {
             val match = regex.findAll(normalizedBody)
                 .mapNotNull { res ->
-                    val parsed = parseFlexibleAmount(res.groupValues[1]) ?: return@mapNotNull null
-                    if (parsed < 0.0) return@mapNotNull null
-                    ExtractedBalanceMatch(roundTwoDecimals(parsed), res.range)
+                    val isNegative = res.groupValues[1] == "-" || res.groupValues.getOrNull(3) == "-"
+                    val mag = parseFlexibleAmount(res.groupValues[2]) ?: return@mapNotNull null
+                    val signed = if (isNegative) -mag else mag
+                    val rounded = roundTwoDecimals(signed).let {
+                        if (kotlin.math.abs(it) < 0.005) 0.0 else it
+                    }
+                    ExtractedBalanceMatch(rounded, res.range)
                 }
                 .lastOrNull()
             if (match != null) return match
@@ -305,9 +312,13 @@ object AlgPosteSmsAnalyzer {
         for (regex in listOf(previousBalanceCurrencyRegex, previousBalanceNoCurrencyRegex)) {
             val match = regex.findAll(normalizedBody)
                 .mapNotNull { res ->
-                    val parsed = parseFlexibleAmount(res.groupValues[1]) ?: return@mapNotNull null
-                    if (parsed < 0.0) return@mapNotNull null
-                    ExtractedBalanceMatch(roundTwoDecimals(parsed), res.range)
+                    val isNegative = res.groupValues[1] == "-" || res.groupValues.getOrNull(3) == "-"
+                    val mag = parseFlexibleAmount(res.groupValues[2]) ?: return@mapNotNull null
+                    val signed = if (isNegative) -mag else mag
+                    val rounded = roundTwoDecimals(signed).let {
+                        if (kotlin.math.abs(it) < 0.005) 0.0 else it
+                    }
+                    ExtractedBalanceMatch(rounded, res.range)
                 }
                 .firstOrNull()
             if (match != null) return match
@@ -983,6 +994,11 @@ object AlgPosteSmsAnalyzer {
     private fun normalizeArabicDigits(input: String): String {
         val sb = StringBuilder(input.length)
         for (ch in input) {
+            if (ch == '\u200E' || ch == '\u200F' || ch == '\u061C' ||
+                ch in '\u202A'..'\u202E' || ch in '\u2066'..'\u2069'
+            ) {
+                continue
+            }
             val mapped = when (ch) {
                 in '٠'..'٩' -> ('0'.code + (ch.code - '٠'.code)).toChar()
                 in '۰'..'۹' -> ('0'.code + (ch.code - '۰'.code)).toChar()
@@ -1058,7 +1074,7 @@ object AlgPosteSmsCodec {
         if (json.isBlank()) return emptyList()
         return try {
             snapshotListAdapter.fromJson(json)
-                ?.filter { it.id.isNotBlank() && it.balance >= 0.0 }
+                ?.filter { it.id.isNotBlank() && it.balance.isFinite() }
                 ?.sortedBy { it.timestampMillis }
                 ?.takeLast(MAX_SNAPSHOT_ITEMS)
                 ?: emptyList()

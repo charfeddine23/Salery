@@ -17,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
@@ -79,26 +78,15 @@ fun BreathingSpLogo(
         label = "AuraRotation"
     )
 
-    // Ambient glow gradient adapted to theme
-    val glowBrush = if (isDark) {
-        Brush.sweepGradient(
-            listOf(
-                CyanNeon.copy(alpha = 0.8f),
-                Color(0xFF38BDF8).copy(alpha = 0.7f),
-                EmeraldNeon.copy(alpha = 0.75f),
-                CyanNeon.copy(alpha = 0.8f)
-            )
-        )
-    } else {
-        Brush.sweepGradient(
-            listOf(
-                Color(0xFF0284C7).copy(alpha = 0.7f),
-                Color(0xFFF59E0B).copy(alpha = 0.65f), // Golden accent matching the 'P'
-                Color(0xFF38BDF8).copy(alpha = 0.7f),
-                Color(0xFF0284C7).copy(alpha = 0.7f)
-            )
-        )
-    }
+    // Soft diffused radial ambient glow adapted to theme (avoids RenderEffect offscreen stalls)
+    val haloColorA = if (isDark) CyanNeon else Color(0xFF0284C7)
+    val haloColorB = if (isDark) EmeraldNeon else Color(0xFFF59E0B)
+    val glowBrush = Brush.radialGradient(
+        0.0f to haloColorA.copy(alpha = 0.72f),
+        0.52f to haloColorB.copy(alpha = 0.42f),
+        0.82f to haloColorA.copy(alpha = 0.14f),
+        1.0f to Color.Transparent
+    )
 
     // Fixed bounding box container (strictly fixed footprint prevents any jitter)
     Box(
@@ -108,13 +96,12 @@ fun BreathingSpLogo(
         // Living Ambient Glow Background Layer
         Box(
             modifier = Modifier
-                .size(size + 4.dp)
+                .size(size + 8.dp)
                 .scale(pulseScale)
                 .alpha(glowAlpha)
                 .rotate(auraRotation)
                 .clip(CircleShape)
                 .background(glowBrush)
-                .blur(8.dp)
         )
 
         // Center SP Logo Container (Crisp, high contrast emblem)
