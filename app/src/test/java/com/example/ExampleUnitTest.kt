@@ -25,7 +25,7 @@ class ExampleUnitTest {
 
   @Test
   fun appIdentity_andDeveloper_areCorrect() {
-    assertEquals("SaleryPulse", APP_NAME)
+    assertEquals("Vaultix", APP_NAME)
     assertEquals("Charfeddine Ka", DEVELOPER_NAME)
     assertTrue(APP_VERSION.isNotBlank())
   }
@@ -1460,5 +1460,55 @@ class ExampleUnitTest {
     assertEquals("2026-11-18", s3m.baselinePreviousDateKey)
     assertEquals(249.48, s3m.currencies.first { it.code == "EUR" }.previousParallelSellDzd, 0.01)
     assertEquals(2.00, s3m.currencies.first { it.code == "EUR" }.change24hParallelPercent, 0.02)
+  }
+
+  @Test
+  fun algPosteAutoRecorder_filtersIndependently_andDeduplicates() {
+    val incomeSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Virement reçu +12 000,00 DA. Nouveau solde: 52 000,00 DA",
+      timestampMillis = 10_000_000L
+    )!!
+    val expenseSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Retrait GAB -2 500,00 DA. Nouveau solde: 49 500,00 DA",
+      timestampMillis = 20_000_000L
+    )!!
+    val alreadyInDbSms = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "Virement reçu +3 000,00 DA. Nouveau solde: 52 500,00 DA",
+      timestampMillis = 30_000_000L
+    )!!
+
+    // 1. Only Auto Income enabled -> records incomeSms only, leaves expenseSms pending, skips existingDbSmsKeys
+    val incomeOnlyRes = com.example.sms.AlgPosteAutoRecorder.partitionAutoRecordCandidates(
+      candidates = listOf(incomeSms, expenseSms, alreadyInDbSms),
+      autoIncomeEnabled = true,
+      autoExpenseEnabled = false,
+      existingDbSmsKeys = setOf(alreadyInDbSms.id),
+      processedKeys = emptySet(),
+      isArabic = false
+    )
+    assertEquals(1, incomeOnlyRes.transactionsToInsert.size)
+    assertEquals(TransactionType.INCOME, incomeOnlyRes.transactionsToInsert[0].type)
+    assertEquals(12000.0, incomeOnlyRes.transactionsToInsert[0].amount, 0.01)
+    assertTrue(incomeOnlyRes.transactionsToInsert[0].isAutoAlgPoste)
+    assertEquals(incomeSms.id, incomeOnlyRes.transactionsToInsert[0].smsKey)
+    assertEquals(1, incomeOnlyRes.remainingSuggestions.size)
+    assertEquals(expenseSms.id, incomeOnlyRes.remainingSuggestions[0].id)
+
+    // 2. Both enabled, but incomeSms is now in processedKeys -> only expenseSms is auto-recorded
+    val expenseRes = com.example.sms.AlgPosteAutoRecorder.partitionAutoRecordCandidates(
+      candidates = listOf(incomeSms, expenseSms),
+      autoIncomeEnabled = true,
+      autoExpenseEnabled = true,
+      existingDbSmsKeys = emptySet(),
+      processedKeys = incomeOnlyRes.newlyProcessedKeys.toSet(),
+      isArabic = true
+    )
+    assertEquals(1, expenseRes.transactionsToInsert.size)
+    assertEquals(TransactionType.EXPENSE, expenseRes.transactionsToInsert[0].type)
+    assertEquals(2500.0, expenseRes.transactionsToInsert[0].amount, 0.01)
+    assertTrue(expenseRes.remainingSuggestions.isEmpty())
   }
 }

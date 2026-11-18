@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "SaleryPulse"
+rootProject.name = "Vaultix"
 
 include(":app")

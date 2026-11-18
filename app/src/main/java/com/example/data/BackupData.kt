@@ -20,7 +20,7 @@ data class BackupPayload(
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
-        root.put("appName", "SaleryPulse")
+        root.put("appName", "Vaultix")
         root.put("appVersion", appVersion)
         root.put("developer", developer)
         root.put("exportTimestamp", exportTimestamp)
@@ -52,6 +52,9 @@ data class BackupPayload(
             obj.put("note", t.note)
             obj.put("dateMillis", t.dateMillis)
             obj.put("isSalaryCredit", t.isSalaryCredit)
+            obj.put("isPaidFromSavings", t.isPaidFromSavings)
+            obj.put("isAutoAlgPoste", t.isAutoAlgPoste)
+            obj.put("smsKey", t.smsKey)
             transArray.put(obj)
         }
         root.put("transactions", transArray)
@@ -135,7 +138,10 @@ data class BackupPayload(
                                 title = obj.getString("title"),
                                 note = obj.optString("note", ""),
                                 dateMillis = obj.optLong("dateMillis", System.currentTimeMillis()),
-                                isSalaryCredit = obj.optBoolean("isSalaryCredit", false)
+                                isSalaryCredit = obj.optBoolean("isSalaryCredit", false),
+                                isPaidFromSavings = obj.optBoolean("isPaidFromSavings", false),
+                                isAutoAlgPoste = obj.optBoolean("isAutoAlgPoste", false),
+                                smsKey = obj.optString("smsKey", "")
                             )
                         )
                     }

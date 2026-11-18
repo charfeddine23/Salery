@@ -24,6 +24,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.PauseCircleOutline
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -61,10 +68,10 @@ import com.example.viewmodel.FinancialSummary
  * Incorporates:
  * 1. Neumorphic Dual-Shadow & Surface Contrast matching Smart Salary Scheduler.
  * 2. Dynamic Cash Flow Ambient Glow shifting with recent spending/income ratio.
- * 3. Daily spendable balance and gross wealth indicator.
+ * 3. Toggleable ALG Post Auto Balance Mode (ALG Post Balance + Manual In - Manual Out - Savings).
  * 4. Monthly Income vs Monthly Expense summary pillars.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun TotalBalanceVaultCard(
     summary: FinancialSummary,
@@ -72,6 +79,7 @@ fun TotalBalanceVaultCard(
     onLockToVault: (Double) -> Unit = {},
     onUnlockFromVault: (Double) -> Unit = {},
     onOpenSalaryScheduler: () -> Unit = {},
+    onToggleAlgPostBalanceMode: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
@@ -83,19 +91,21 @@ fun TotalBalanceVaultCard(
     val haptic = LocalHapticFeedback.current
 
     val lockedAmount = summary.savingsBalance
-    val grossBalance = summary.grossBalance
     val spendableBalance = summary.totalBalance
+    val isAlgPostMode = summary.isAlgPostBalanceMode
 
     // Cash flow ratio calculations for ambient dynamic glow
     val isSurplus = summary.monthlyIncome > summary.monthlyExpenses * 1.20
     val isDeficit = summary.monthlyExpenses > summary.monthlyIncome && summary.monthlyExpenses > 0
 
     val glowColor1 = when {
+        isAlgPostMode -> CyanNeon
         isSurplus -> EmeraldNeon
         isDeficit -> RoseNeon
         else -> CyanNeon
     }
     val glowColor2 = when {
+        isAlgPostMode -> EmeraldNeon
         isSurplus -> CyanNeon
         isDeficit -> AmberNeon
         else -> Color(0xFF6366F1) // Indigo/Violet
@@ -156,7 +166,7 @@ fun TotalBalanceVaultCard(
         Column(
             modifier = Modifier.padding(dimens.cardPadding)
         ) {
-            // Top Header Row with Cash Flow Status Badge
+            // Top Header Row with Cash Flow Status Badge + ALG Post Balance Mode Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -173,45 +183,58 @@ fun TotalBalanceVaultCard(
                     )
                     Text(
                         text = when {
+                            isAlgPostMode -> strings.algPostBalanceModeFormulaHint
                             lockedAmount > 0 -> if (isArabic) "الرصيد المتاح (بعد الادخار)" else "Available (After Savings)"
                             else -> if (isArabic) "الفرق بين الدخل والمصاريف" else "Income − Expense"
                         },
-                        color = colors.textMuted,
+                        color = if (isAlgPostMode) CyanNeon else colors.textMuted,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.Medium,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
                 Spacer(modifier = Modifier.width(dimens.spacingSm))
 
-                // Cash Flow Phase Indicator Badge
-                val flowTagLabel = when {
-                    isSurplus -> if (isArabic) "تدفق إيجابي ↗" else "Surplus Flow ↗"
-                    isDeficit -> if (isArabic) "حرق رصيد ↘" else "High Burn ↘"
-                    else -> if (isArabic) "تدفق متوازن ⇄" else "Balanced Flow ⇄"
-                }
-                val flowTagColor = when {
-                    isSurplus -> EmeraldNeon
-                    isDeficit -> RoseNeon
-                    else -> CyanNeon
-                }
-
+                // Mode Switch Button inside the Balance Container (min 48dp accessible touch target)
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(dimens.cornerRadiusSm))
-                        .background(flowTagColor.copy(alpha = 0.16f))
-                        .border(1.dp, flowTagColor.copy(alpha = 0.35f), RoundedCornerShape(dimens.cornerRadiusSm))
-                        .padding(horizontal = dimens.spacingSm + 2.dp, vertical = 4.dp)
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+                        .background(
+                            if (isAlgPostMode) CyanNeon.copy(alpha = 0.22f)
+                            else colors.glassSurface
+                        )
+                        .border(
+                            1.dp,
+                            if (isAlgPostMode) CyanNeon.copy(alpha = 0.65f) else colors.glassBorderSubtle,
+                            RoundedCornerShape(dimens.cornerRadiusMd)
+                        )
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onToggleAlgPostBalanceMode(!isAlgPostMode)
+                        }
+                        .padding(horizontal = dimens.spacingSm + 4.dp, vertical = 6.dp)
+                        .testTag("toggle_alg_post_balance_mode_btn"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = flowTagLabel,
-                        color = flowTagColor,
-                        fontSize = typo.bodyXs,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isAlgPostMode) Icons.Default.AccountBalance else Icons.Default.AutoAwesome,
+                            contentDescription = strings.algPostBalanceModeLabel,
+                            tint = if (isAlgPostMode) CyanNeon else colors.textSecondary,
+                            modifier = Modifier.size(dimens.iconSizeXs + 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isAlgPostMode) strings.algPostBalanceModeLabel else strings.manualBalanceModeLabel,
+                            color = if (isAlgPostMode) CyanNeon else colors.textPrimary,
+                            fontSize = typo.bodyXs,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
 
@@ -228,32 +251,105 @@ fun TotalBalanceVaultCard(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
 
-            // If Safe Pocket has funds, show savings info chip (without altering Alg Post Balance)
-            if (lockedAmount > 0) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
-                        .background(colors.glassSurface)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Breakdown Chips (ALG Post + Manual Diff, Salary Scheduler Auto-Pause notice, Savings Wallet)
+            if (isAlgPostMode || lockedAmount > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Savings,
-                        contentDescription = null,
-                        tint = AmberNeon,
-                        modifier = Modifier.size(dimens.iconSizeXs)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
-                            formatDzd(lockedAmount, strings.currencyCode, isStealth),
-                        color = colors.textMuted,
-                        fontSize = typo.bodyXs,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+                    if (isAlgPostMode) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .background(CyanNeon.copy(alpha = 0.14f))
+                                .border(1.dp, CyanNeon.copy(alpha = 0.30f), RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = (if (isArabic) "ALG Post: " else "ALG Post: ") +
+                                    formatDzd(summary.algPostBalanceComponent, strings.currencyCode, isStealth),
+                                color = CyanNeon,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        val manualDiff = summary.manualNetDiffComponent
+                        val diffSign = if (manualDiff >= 0.0) "+" else ""
+                        val diffColor = if (manualDiff >= 0.0) EmeraldNeon else RoseNeon
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .background(diffColor.copy(alpha = 0.14f))
+                                .border(1.dp, diffColor.copy(alpha = 0.30f), RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = (if (isArabic) "يدوي: " else "Manual: ") +
+                                    "$diffSign${formatDzd(manualDiff, strings.currencyCode, isStealth)}",
+                                color = diffColor,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .background(AmberNeon.copy(alpha = 0.14f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PauseCircleOutline,
+                                contentDescription = null,
+                                tint = AmberNeon,
+                                modifier = Modifier.size(dimens.iconSizeXs)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = strings.salarySchedulerPausedByAlgPost,
+                                color = AmberNeon,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (lockedAmount > 0) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(dimens.cornerRadiusXs + 2.dp))
+                                .background(colors.glassSurface)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Savings,
+                                contentDescription = null,
+                                tint = AmberNeon,
+                                modifier = Modifier.size(dimens.iconSizeXs)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
+                                    formatDzd(lockedAmount, strings.currencyCode, isStealth),
+                                color = colors.textMuted,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
 

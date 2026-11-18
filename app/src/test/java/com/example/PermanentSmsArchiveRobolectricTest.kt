@@ -262,4 +262,203 @@ class PermanentSmsArchiveRobolectricTest {
         vm.clearSavingsHistory()
         assertEquals("[]", vm.settings.value.savingsHistoryJson)
     }
+
+    @Test
+    fun algPostBalanceMode_computesAlgPostPlusManualDiff_andPausesRestoresSalaryScheduler() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val prefs = PreferencesManager(app)
+        prefs.updateSettings {
+            it.copy(
+                salaryAmount = 92000.0,
+                salaryPayday = 18,
+                salaryEmployer = "Sonatrach",
+                salaryAutoCredit = true,
+                lastCreditedMonthYear = "2026-11",
+                algPostBalanceModeEnabled = false,
+                savedSalaryAutoCreditBeforeAlgPostMode = false,
+                latestSmsBalanceAmount = 50000.0,
+                latestSmsBalanceUpdatedAt = 1_763_120_000_000L,
+                savingsWalletBalance = 10000.0
+            )
+        }
+
+        val db = AppDatabase.getDatabase(app)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            db.clearAllTables()
+            // Manual income (+12,000) & manual expense (-4,000) -> manual diff = +8,000
+            db.appDao().insertTransaction(
+                com.example.data.TransactionEntity(
+                    type = com.example.data.TransactionType.INCOME,
+                    amount = 12000.0,
+                    category = "bonus",
+                    title = "Manual Side Job",
+                    isAutoAlgPoste = false
+                )
+            )
+            db.appDao().insertTransaction(
+                com.example.data.TransactionEntity(
+                    type = com.example.data.TransactionType.EXPENSE,
+                    amount = 4000.0,
+                    category = "food",
+                    title = "Manual Groceries",
+                    isAutoAlgPoste = false
+                )
+            )
+            // Auto ALG Post transaction MUST be excluded from manual diff when ALG Post mode is ON
+            db.appDao().insertTransaction(
+                com.example.data.TransactionEntity(
+                    type = com.example.data.TransactionType.EXPENSE,
+                    amount = 9000.0,
+                    category = "shopping",
+                    title = "Auto BaridiMob",
+                    isAutoAlgPoste = true,
+                    smsKey = "sms_key_1"
+                )
+            )
+        }
+
+        val vm = SaleryPelseViewModel(app)
+        val collectJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            vm.financialSummary.collect { }
+        }
+        try {
+            // Manual Mode first: Total Income (12,000) - Total Expense (13,000) - Savings (10,000) = -11,000
+            val manualDeadline = System.currentTimeMillis() + 4000L
+            while (System.currentTimeMillis() < manualDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                if (!vm.financialSummary.value.isAlgPostBalanceMode &&
+                    kotlin.math.abs(vm.financialSummary.value.totalBalance - (-11000.0)) < 0.01
+                ) break
+                kotlinx.coroutines.delay(25)
+            }
+            assertEquals(-11000.0, vm.financialSummary.value.totalBalance, 0.01)
+            assertTrue(vm.settings.value.salaryAutoCredit)
+
+            // Enable ALG Post Balance Mode:
+            // - Salary scheduler auto-pauses (salaryAutoCredit = false), keeping amount/payday/employer intact
+            // - Balance = ALG Post (50,000) + Manual Diff (12,000 - 4,000 = 8,000) - Savings (10,000) = 48,000
+            vm.setAlgPostBalanceModeEnabled(true)
+            val algDeadline = System.currentTimeMillis() + 4000L
+            while (System.currentTimeMillis() < algDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                val cur = vm.financialSummary.value
+                if (cur.isAlgPostBalanceMode && kotlin.math.abs(cur.totalBalance - 48000.0) < 0.01) break
+                kotlinx.coroutines.delay(25)
+            }
+
+            val algSummary = vm.financialSummary.value
+            assertTrue(algSummary.isAlgPostBalanceMode)
+            assertEquals(50000.0, algSummary.algPostBalanceComponent, 0.01)
+            assertEquals(8000.0, algSummary.manualNetDiffComponent, 0.01)
+            assertEquals(58000.0, algSummary.grossBalance, 0.01)
+            assertEquals(48000.0, algSummary.totalBalance, 0.01)
+
+            // Verify Smart Salary Scheduler was auto-disabled while all info remained saved
+            val pausedSettings = vm.settings.value
+            org.junit.Assert.assertFalse(pausedSettings.salaryAutoCredit)
+            assertTrue(pausedSettings.savedSalaryAutoCreditBeforeAlgPostMode)
+            assertEquals(92000.0, pausedSettings.salaryAmount, 0.01)
+            assertEquals(18, pausedSettings.salaryPayday)
+            assertEquals("Sonatrach", pausedSettings.salaryEmployer)
+            assertEquals("2026-11", pausedSettings.lastCreditedMonthYear)
+
+            // Disable ALG Post Balance Mode -> returns to Manual Mode and restores salaryAutoCredit = true
+            vm.setAlgPostBalanceModeEnabled(false)
+            val revertDeadline = System.currentTimeMillis() + 4000L
+            while (System.currentTimeMillis() < revertDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                val cur = vm.financialSummary.value
+                if (!cur.isAlgPostBalanceMode && kotlin.math.abs(cur.totalBalance - (-11000.0)) < 0.01) break
+                kotlinx.coroutines.delay(25)
+            }
+            assertEquals(-11000.0, vm.financialSummary.value.totalBalance, 0.01)
+            assertTrue(vm.settings.value.salaryAutoCredit)
+            assertEquals(92000.0, vm.settings.value.salaryAmount, 0.01)
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun autoIncomeAndExpenseToggles_convertMatchingPendingSuggestions_withoutDuplicates() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val db = AppDatabase.getDatabase(app)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            db.clearAllTables()
+        }
+
+        val incSug = AlgPosteSmsAnalyzer.parseSms(
+            sender = "ALG Poste",
+            body = "Virement reçu +14 500,00 DA. Nouveau solde: 64 500,00 DA",
+            timestampMillis = 100_000_000L
+        )!!
+        val expSug = AlgPosteSmsAnalyzer.parseSms(
+            sender = "ALG Poste",
+            body = "Retrait GAB -3 200,00 DA. Nouveau solde: 61 300,00 DA",
+            timestampMillis = 100_500_000L
+        )!!
+
+        val prefs = PreferencesManager(app)
+        prefs.updateSettings {
+            it.copy(
+                salaryAutoCredit = false,
+                autoIncomeFromAlgPostEnabled = false,
+                autoExpenseFromAlgPostEnabled = false,
+                pendingSmsSuggestionsJson = com.example.sms.AlgPosteSmsCodec.encodeSuggestions(listOf(incSug, expSug)),
+                processedSmsKeysJson = "[]"
+            )
+        }
+
+        val vm = SaleryPelseViewModel(app)
+        val collectJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            vm.pendingSmsSuggestions.collect { }
+        }
+        try {
+            // Enable Auto Income only -> converts incSug, leaves expSug pending
+            vm.setAutoIncomeFromAlgPostEnabled(true)
+            val incDeadline = System.currentTimeMillis() + 4000L
+            while (System.currentTimeMillis() < incDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                val txCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    db.appDao().getAllTransactionsList().size
+                }
+                if (txCount == 1 && vm.pendingSmsSuggestions.value.size == 1) break
+                kotlinx.coroutines.delay(25)
+            }
+
+            val afterIncTx = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                db.appDao().getAllTransactionsList()
+            }
+            assertEquals(1, afterIncTx.size)
+            assertEquals(14500.0, afterIncTx[0].amount, 0.01)
+            assertTrue(afterIncTx[0].isAutoAlgPoste)
+            assertEquals(1, vm.pendingSmsSuggestions.value.size)
+            assertEquals(expSug.id, vm.pendingSmsSuggestions.value[0].id)
+
+            // Enable Auto Expenses -> converts expSug, pending becomes empty
+            vm.setAutoExpenseFromAlgPostEnabled(true)
+            val expDeadline = System.currentTimeMillis() + 4000L
+            while (System.currentTimeMillis() < expDeadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                val txCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    db.appDao().getAllTransactionsList().size
+                }
+                if (txCount == 2 && vm.pendingSmsSuggestions.value.isEmpty()) break
+                kotlinx.coroutines.delay(25)
+            }
+
+            // Toggle again should NOT create duplicates
+            vm.setAutoIncomeFromAlgPostEnabled(true)
+            kotlinx.coroutines.delay(150)
+
+            val finalTx = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                db.appDao().getAllTransactionsList()
+            }
+            assertEquals(2, finalTx.size)
+            assertTrue(finalTx.all { it.isAutoAlgPoste && it.smsKey.isNotBlank() })
+            assertTrue(vm.pendingSmsSuggestions.value.isEmpty())
+        } finally {
+            collectJob.cancel()
+        }
+    }
 }

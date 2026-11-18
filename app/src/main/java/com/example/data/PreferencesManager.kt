@@ -61,6 +61,10 @@ data class UserSettings(
     val latestSmsBalanceRawSnippet: String = "",
     val smsBalanceHistoryJson: String = "[]",
     val detectedSmsTaxesJson: String = "[]",
+    val autoIncomeFromAlgPostEnabled: Boolean = false,
+    val autoExpenseFromAlgPostEnabled: Boolean = false,
+    val algPostBalanceModeEnabled: Boolean = false,
+    val savedSalaryAutoCreditBeforeAlgPostMode: Boolean = true,
     val hasCompletedPermissionsOnboarding: Boolean = false
 )
 
@@ -218,6 +222,10 @@ class PreferencesManager(context: Context) {
             latestSmsBalanceRawSnippet = safeString("latest_sms_balance_snippet", ""),
             smsBalanceHistoryJson = safeString("sms_balance_history_json", "[]"),
             detectedSmsTaxesJson = safeString("detected_sms_taxes_json", "[]"),
+            autoIncomeFromAlgPostEnabled = safeBoolean("auto_income_from_alg_post_enabled", false),
+            autoExpenseFromAlgPostEnabled = safeBoolean("auto_expense_from_alg_post_enabled", false),
+            algPostBalanceModeEnabled = safeBoolean("alg_post_balance_mode_enabled", false),
+            savedSalaryAutoCreditBeforeAlgPostMode = safeBoolean("saved_salary_auto_credit_before_alg_post_mode", true),
             hasCompletedPermissionsOnboarding = safeBoolean("has_completed_permissions_onboarding", false)
         )
     }
@@ -288,6 +296,10 @@ class PreferencesManager(context: Context) {
                 .putString("latest_sms_balance_snippet", finalUpdated.latestSmsBalanceRawSnippet)
                 .putString("sms_balance_history_json", finalUpdated.smsBalanceHistoryJson)
                 .putString("detected_sms_taxes_json", finalUpdated.detectedSmsTaxesJson)
+                .putBoolean("auto_income_from_alg_post_enabled", finalUpdated.autoIncomeFromAlgPostEnabled)
+                .putBoolean("auto_expense_from_alg_post_enabled", finalUpdated.autoExpenseFromAlgPostEnabled)
+                .putBoolean("alg_post_balance_mode_enabled", finalUpdated.algPostBalanceModeEnabled)
+                .putBoolean("saved_salary_auto_credit_before_alg_post_mode", finalUpdated.savedSalaryAutoCreditBeforeAlgPostMode)
                 .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
                 .apply()
             _settingsFlow.value = finalUpdated

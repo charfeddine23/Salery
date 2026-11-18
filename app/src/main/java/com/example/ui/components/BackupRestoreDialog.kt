@@ -208,7 +208,7 @@ fun BackupRestoreDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "SaleryPulse Cloud & Local Data",
+                                text = "Vaultix Cloud & Local Data",
                                 color = colors.textMuted,
                                 fontSize = 11.sp
                             )
@@ -284,10 +284,10 @@ fun BackupRestoreDialog(
 
                                 // Copy to clipboard as quick safety backup
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("SaleryPulse Backup", json))
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Vaultix Backup", json))
 
                                 // Launch Storage Access Framework Document Creator: user selects Google Drive folder or device storage
-                                createDocumentLauncher.launch("SaleryPulse_Backup.json")
+                                createDocumentLauncher.launch("Vaultix_Backup.json")
                             } catch (e: Exception) {
                                 statusMessage = "Backup error: ${e.localizedMessage ?: "Unknown"}"
                                 isErrorMessage = true
@@ -326,8 +326,8 @@ fun BackupRestoreDialog(
                                     val sendIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
                                         putExtra(Intent.EXTRA_TEXT, json)
-                                        putExtra(Intent.EXTRA_SUBJECT, "SaleryPulse Backup (${formatDate(System.currentTimeMillis())})")
-                                        putExtra(Intent.EXTRA_TITLE, "SaleryPulse_Backup.json")
+                                        putExtra(Intent.EXTRA_SUBJECT, "Vaultix Backup (${formatDate(System.currentTimeMillis())})")
+                                        putExtra(Intent.EXTRA_TITLE, "Vaultix_Backup.json")
                                         type = "application/json"
                                     }
                                     val shareIntent = Intent.createChooser(sendIntent, "Share Backup to Google Drive / Apps")

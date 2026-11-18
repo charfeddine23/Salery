@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -678,7 +677,10 @@ fun MainAppScreen(
                                     },
                                     onOpenBaridiMobSync = { currentRoute = "baridimob_sync" },
                                     onRefreshCcpBalanceFromSms = { showFeedback ->
-                                        if (userSettings.baridiMobSmsSyncEnabled) {
+                                        if (userSettings.baridiMobSmsSyncEnabled ||
+                                            userSettings.autoIncomeFromAlgPostEnabled ||
+                                            userSettings.autoExpenseFromAlgPostEnabled
+                                        ) {
                                             viewModel.scanAlgPosteSmsInbox(
                                                 context = context,
                                                 showFeedback = showFeedback
@@ -689,6 +691,9 @@ fun MainAppScreen(
                                                 showFeedback = showFeedback
                                             )
                                         }
+                                    },
+                                    onToggleAlgPostBalanceMode = { enabled ->
+                                        viewModel.setAlgPostBalanceModeEnabled(enabled)
                                     }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
@@ -713,6 +718,10 @@ fun MainAppScreen(
                                 )
                                 "income" -> IncomeScreen(
                                     transactions = transactions,
+                                    autoIncomeEnabled = userSettings.autoIncomeFromAlgPostEnabled,
+                                    onToggleAutoIncome = { enabled ->
+                                        viewModel.setAutoIncomeFromAlgPostEnabled(enabled)
+                                    },
                                     onAddIncomeClick = {
                                         addTransactionType = TransactionType.INCOME
                                         showAddTransactionDialog = true
@@ -721,6 +730,10 @@ fun MainAppScreen(
                                 )
                                 "expenses" -> ExpenseScreen(
                                     transactions = transactions,
+                                    autoExpenseEnabled = userSettings.autoExpenseFromAlgPostEnabled,
+                                    onToggleAutoExpense = { enabled ->
+                                        viewModel.setAutoExpenseFromAlgPostEnabled(enabled)
+                                    },
                                     onAddExpenseClick = {
                                         addTransactionType = TransactionType.EXPENSE
                                         showAddTransactionDialog = true
@@ -803,6 +816,7 @@ fun MainAppScreen(
                     currentPayday = userSettings.salaryPayday,
                     currentEmployer = userSettings.salaryEmployer,
                     currentAutoCredit = userSettings.salaryAutoCredit,
+                    isAlgPostBalanceModeActive = userSettings.algPostBalanceModeEnabled,
                     onDismiss = { showSalarySchedulerDialog = false },
                     onSave = { amount, payday, employer, autoCredit ->
                         viewModel.updateSalarySettings(amount, payday, employer, autoCredit)
@@ -935,25 +949,27 @@ fun MainTopAppBar(
                 .padding(horizontal = dimens.screenPaddingH, vertical = dimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Menu / Back Button (min touch target 48dp)
-            GlassCard(
-                modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
-                shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                backgroundColor = colors.glassCard,
-                breathingGlow = false,
-                onClick = if (canGoBack) onBackClick else onMenuClick
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (canGoBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
-                        contentDescription = if (canGoBack) "Back" else "Menu",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(dimens.iconSizeMd)
-                    )
+            // Back Button on sub-screens only (min touch target 48dp); top-bar settings menu button removed
+            if (canGoBack) {
+                GlassCard(
+                    modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
+                    shape = RoundedCornerShape(dimens.cornerRadiusMd),
+                    backgroundColor = colors.glassCard,
+                    breathingGlow = false,
+                    onClick = onBackClick
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(dimens.iconSizeMd)
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(dimens.spacingSm + 2.dp))
+                Spacer(modifier = Modifier.width(dimens.spacingSm + 2.dp))
+            }
 
             // Screen Title (weighted + ellipsis so it never overlaps right-side action buttons)
             Text(

@@ -180,7 +180,7 @@ fun VisaComingSoonScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "SaleryPulse",
+                            text = "Vaultix",
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = typo.bodyLg,
                             fontWeight = FontWeight.Bold,

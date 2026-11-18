@@ -70,9 +70,29 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        val existingCols = HashSet<String>()
+        db.query("PRAGMA table_info(transactions)").use { cursor ->
+            val nameIdx = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (nameIdx >= 0) {
+                    existingCols.add(cursor.getString(nameIdx))
+                }
+            }
+        }
+        if ("isAutoAlgPoste" !in existingCols) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN isAutoAlgPoste INTEGER NOT NULL DEFAULT 0")
+        }
+        if ("smsKey" !in existingCols) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN smsKey TEXT NOT NULL DEFAULT ''")
+        }
+    }
+}
+
 @Database(
     entities = [TransactionEntity::class, DebtEntity::class, ArchivedAlgPosteSmsEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -90,7 +110,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "salerypelse_database"
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

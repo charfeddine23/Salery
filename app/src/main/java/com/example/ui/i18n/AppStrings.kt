@@ -11,7 +11,7 @@ import java.util.Date
 import java.util.Locale
 
 // App Name, Version, and Developer Name MUST NEVER be translated or changed into Arabic script!
-const val APP_NAME = "SaleryPulse"
+const val APP_NAME = "Vaultix"
 const val DEVELOPER_NAME = "Charfeddine Ka"
 val APP_VERSION: String get() = com.example.BuildConfig.APP_VERSION_NAME
 
@@ -246,6 +246,17 @@ interface StringsBundle {
     val updateCheckFailed: String
     val updateInstallPermNote: String
 
+    // ALG Poste Auto Income / Expense & Auto Balance Mode Strings
+    val autoIncomeFromAlgPost: String
+    val autoIncomeFromAlgPostDesc: String
+    val autoExpensesFromAlgPost: String
+    val autoExpensesFromAlgPostDesc: String
+    val algPostBalanceModeLabel: String
+    val manualBalanceModeLabel: String
+    val algPostBalanceModeFormulaHint: String
+    val salarySchedulerPausedByAlgPost: String
+    val autoAlgPostBadge: String
+
     fun categoryName(cat: String): String
 }
 
@@ -268,7 +279,7 @@ object EnglishStrings : StringsBundle {
     override val visaCardSubtitle = "International Multi-Currency Card"
     override val comingSoon = "Coming Soon"
     override val visaComingSoonTitle = "Coming Soon"
-    override val visaComingSoonDesc = "International payments, online subscriptions and multi-currency balances will be available very soon in SaleryPulse."
+    override val visaComingSoonDesc = "International payments, online subscriptions and multi-currency balances will be available very soon in Vaultix."
     override val tapToViewDashboard = "Tap card to open full financial dashboard"
     override val backToCards = "Back to Cards"
     override val activeCardsCount = "2 Cards Active"
@@ -367,7 +378,7 @@ object EnglishStrings : StringsBundle {
 
     override val securityTitle = "Security & Privacy"
     override val patternLock = "Pattern Gesture Lock"
-    override val patternLockDesc = "Protect SaleryPulse with 3x3 gesture matrix"
+    override val patternLockDesc = "Protect Vaultix with 3x3 gesture matrix"
     override val setPattern = "Set Gesture Pattern"
     override val changePattern = "Change Pattern"
     override val drawPattern = "Draw your unlock gesture pattern"
@@ -375,11 +386,11 @@ object EnglishStrings : StringsBundle {
     override val patternSaved = "Gesture pattern saved securely"
     override val patternMismatch = "Patterns do not match. Try again."
     override val patternTooShort = "Connect at least 4 dots."
-    override val unlockApp = "Unlock SaleryPulse"
+    override val unlockApp = "Unlock Vaultix"
     override val incorrectPattern = "Incorrect pattern! Try again."
     override val biometricUnlock = "Biometric Unlock (Fingerprint / Face)"
     override val biometricUnlockDesc = "Quick authentication via fingerprint or facial recognition"
-    override val biometricPromptTitle = "Unlock SaleryPulse"
+    override val biometricPromptTitle = "Unlock Vaultix"
     override val biometricPromptSubtitle = "Touch fingerprint sensor or verify face to continue"
     override val biometricUsePattern = "Use Pattern Instead"
     override val biometricUnlockAction = "Unlock with Biometrics"
@@ -473,7 +484,17 @@ object EnglishStrings : StringsBundle {
     override val checkingForUpdates = "Checking for updates..."
     override val alreadyUpToDate = "You are on the latest version"
     override val updateCheckFailed = "Could not connect to check for updates"
-    override val updateInstallPermNote = "Allow installing apps from SaleryPulse to complete the update."
+    override val updateInstallPermNote = "Allow installing apps from Vaultix to complete the update."
+
+    override val autoIncomeFromAlgPost = "Auto Income from ALG Post"
+    override val autoIncomeFromAlgPostDesc = "Automatically add incoming ALG Poste credits to Income"
+    override val autoExpensesFromAlgPost = "Auto Expenses from ALG Post"
+    override val autoExpensesFromAlgPostDesc = "Automatically add outgoing ALG Poste debits to Expenses"
+    override val algPostBalanceModeLabel = "ALG Post Balance"
+    override val manualBalanceModeLabel = "Manual Balance"
+    override val algPostBalanceModeFormulaHint = "ALG Post Balance + Manual (Income − Expense)"
+    override val salarySchedulerPausedByAlgPost = "Smart Salary Scheduler paused (settings saved)"
+    override val autoAlgPostBadge = "Auto ALG Post"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
@@ -522,7 +543,7 @@ object ArabicStrings : StringsBundle {
     override val visaCardSubtitle = "بطاقة دولية متعددة العملات"
     override val comingSoon = "قريباً"
     override val visaComingSoonTitle = "قريباً"
-    override val visaComingSoonDesc = "خدمات الدفع الدولي، الاشتراكات العالمية وحسابات العملات الأجنبية ستتوفر قريباً جداً في SaleryPulse."
+    override val visaComingSoonDesc = "خدمات الدفع الدولي، الاشتراكات العالمية وحسابات العملات الأجنبية ستتوفر قريباً جداً في Vaultix."
     override val tapToViewDashboard = "اضغط على البطاقة لفتح لوحة التحكم الكاملة"
     override val backToCards = "العودة إلى البطاقات"
     override val activeCardsCount = "بطاقتان نشطتان"
@@ -620,7 +641,7 @@ object ArabicStrings : StringsBundle {
 
     override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"
-    override val patternLockDesc = "حماية SaleryPulse بمصفوفة إيماءات 3x3"
+    override val patternLockDesc = "حماية Vaultix بمصفوفة إيماءات 3x3"
     override val setPattern = "تعيين نمط جديد"
     override val changePattern = "تغيير النمط"
     override val drawPattern = "ارسم نمط إيماءة فتح القفل"
@@ -628,11 +649,11 @@ object ArabicStrings : StringsBundle {
     override val patternSaved = "تم حفظ نمط الإيماءة بنجاح"
     override val patternMismatch = "الأنماط غير متطابقة. أعد المحاولة."
     override val patternTooShort = "صل 4 نقاط على الأقل."
-    override val unlockApp = "فتح قفل SaleryPulse"
+    override val unlockApp = "فتح قفل Vaultix"
     override val incorrectPattern = "النمط غير صحيح! حاول ثانية."
     override val biometricUnlock = "فتح القفل بالبصمة (Fingerprint / Face ID)"
     override val biometricUnlockDesc = "دخول سريع وآمن باستخدام بصمة الإصبع أو التعرف على الوجه"
-    override val biometricPromptTitle = "فتح قفل SaleryPulse"
+    override val biometricPromptTitle = "فتح قفل Vaultix"
     override val biometricPromptSubtitle = "المس مستشعر البصمة أو تحقق من الوجه للمتابعة"
     override val biometricUsePattern = "استخدام النمط بدلاً من ذلك"
     override val biometricUnlockAction = "فتح القفل بالبصمة"
@@ -727,6 +748,16 @@ object ArabicStrings : StringsBundle {
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
     override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
     override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
+
+    override val autoIncomeFromAlgPost = "الدخل التلقائي من ALG Post"
+    override val autoIncomeFromAlgPostDesc = "إضافة عمليات الإيداع والرواتب من رسائل ALG Post تلقائياً"
+    override val autoExpensesFromAlgPost = "المصاريف التلقائية من ALG Post"
+    override val autoExpensesFromAlgPostDesc = "إضافة عمليات السحب والدفع من رسائل ALG Post تلقائياً"
+    override val algPostBalanceModeLabel = "وضع رصيد ALG Post"
+    override val manualBalanceModeLabel = "الوضع اليدوي"
+    override val algPostBalanceModeFormulaHint = "رصيد ALG Post + فارق (الدخل − المصاريف اليدوية)"
+    override val salarySchedulerPausedByAlgPost = "مجدول الراتب متوقف تلقائياً (الإعدادات محفوظة)"
+    override val autoAlgPostBadge = "تلقائي ALG Post"
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

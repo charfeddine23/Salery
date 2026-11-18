@@ -621,7 +621,7 @@ private fun VisaProviderMiniPreview(
                             letterSpacing = 1.5.sp
                         )
                         else -> Text(
-                            text = "SaleryPulse",
+                            text = "Vaultix",
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold

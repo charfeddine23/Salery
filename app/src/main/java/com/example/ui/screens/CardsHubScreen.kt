@@ -1510,7 +1510,7 @@ private fun VisaCardRealistic(
                                         SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "SaleryPulse",
+                                            text = "Vaultix",
                                             color = primaryTextColor,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,

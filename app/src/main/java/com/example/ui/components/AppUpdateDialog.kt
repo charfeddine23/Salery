@@ -328,7 +328,7 @@ fun AppUpdateDialog(
                             }
                             is AppUpdateUiState.UpToDate -> {
                                 if (isArabic) "كل المميزات والتحسينات محدثة على جهازك."
-                                else "All latest SaleryPulse features are already installed."
+                                else "All latest Vaultix features are already installed."
                             }
                             is AppUpdateUiState.Checking -> {
                                 if (isArabic) "يتم الاتصال بـ GitHub Releases للتحقق من أحدث نسخة..."

@@ -478,7 +478,7 @@ fun AccessPermissionsScreen(
                 accent = AmberNeon,
                 title = if (isArabic) "التثبيت من مصادر غير معروفة" else "Install Unknown Apps",
                 description = if (isArabic) {
-                    "مطلوب للسماح بتثبيت التحديثات الرسمية لـ SaleryPulse مباشرة من داخل التطبيق عبر إعدادات النظام"
+                    "مطلوب للسماح بتثبيت التحديثات الرسمية لـ Vaultix مباشرة من داخل التطبيق عبر إعدادات النظام"
                 } else {
                     "Required for seamless in-app APK updates from GitHub Releases in System Settings"
                 },
@@ -496,7 +496,7 @@ fun AccessPermissionsScreen(
                 accent = Color(0xFFF472B6),
                 title = if (isArabic) "الحماية البيومترية (البصمة / الوجه)" else "Biometric Hardware Access",
                 description = if (biometricReady) {
-                    if (isArabic) "مستشعر البصمة جاهز ومتاح لحماية التطبيق وبياناتك" else "Biometric sensor is ready to lock & protect SaleryPulse"
+                    if (isArabic) "مستشعر البصمة جاهز ومتاح لحماية التطبيق وبياناتك" else "Biometric sensor is ready to lock & protect Vaultix"
                 } else {
                     if (isArabic) "يرجى تسجيل بصمة في إعدادات الهاتف لاستخدام القفل البيومتري" else "Enroll fingerprint/face in device Security Settings to enable"
                 },

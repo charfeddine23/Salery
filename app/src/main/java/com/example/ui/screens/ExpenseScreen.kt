@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,17 +20,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,9 +44,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.data.ExpenseCategories
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
@@ -55,10 +72,39 @@ import com.example.ui.theme.RoseNeon
 @Composable
 fun ExpenseScreen(
     transactions: List<TransactionEntity>,
+    autoExpenseEnabled: Boolean = false,
+    onToggleAutoExpense: (Boolean) -> Unit = {},
     onAddExpenseClick: () -> Unit,
     onDeleteTransaction: (TransactionEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val smsPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.READ_SMS] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            onToggleAutoExpense(true)
+        }
+    }
+
+    fun handleAutoExpenseToggle(next: Boolean) {
+        if (!next) {
+            onToggleAutoExpense(false)
+            return
+        }
+        val hasPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (hasPerm) {
+            onToggleAutoExpense(true)
+        } else {
+            smsPermLauncher.launch(
+                arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)
+            )
+        }
+    }
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val layoutInfo = LocalAdaptiveLayoutInfo.current
@@ -109,6 +155,16 @@ fun ExpenseScreen(
                         dimens = dimens,
                         typo = typo,
                         onAddExpenseClick = onAddExpenseClick
+                    )
+                }
+
+                item {
+                    AutoExpenseAlgPostToggleCard(
+                        enabled = autoExpenseEnabled,
+                        strings = strings,
+                        dimens = dimens,
+                        typo = typo,
+                        onToggle = ::handleAutoExpenseToggle
                     )
                 }
 
@@ -208,6 +264,16 @@ fun ExpenseScreen(
                     dimens = dimens,
                     typo = typo,
                     onAddExpenseClick = onAddExpenseClick
+                )
+            }
+
+            item {
+                AutoExpenseAlgPostToggleCard(
+                    enabled = autoExpenseEnabled,
+                    strings = strings,
+                    dimens = dimens,
+                    typo = typo,
+                    onToggle = ::handleAutoExpenseToggle
                 )
             }
 
@@ -346,4 +412,82 @@ private fun ExpenseSearchBar(
         ),
         singleLine = true
     )
+}
+
+@Composable
+private fun AutoExpenseAlgPostToggleCard(
+    enabled: Boolean,
+    strings: StringsBundle,
+    dimens: com.example.ui.theme.AdaptiveDimens,
+    typo: com.example.ui.theme.AdaptiveTypography,
+    onToggle: (Boolean) -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!enabled) },
+        backgroundColor = if (enabled) RoseNeon.copy(alpha = 0.12f) else colors.glassCard,
+        shape = RoundedCornerShape(dimens.cornerRadiusMd)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimens.cardPadding, vertical = dimens.spacingSm + 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(dimens.iconSizeXl)
+                    .clip(CircleShape)
+                    .background(
+                        if (enabled) RoseNeon.copy(alpha = 0.22f)
+                        else colors.glassSurface
+                    )
+                    .border(
+                        1.dp,
+                        if (enabled) RoseNeon.copy(alpha = 0.55f) else colors.glassBorderSubtle,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Sms,
+                    contentDescription = strings.autoExpensesFromAlgPost,
+                    tint = if (enabled) RoseNeon else colors.textSecondary,
+                    modifier = Modifier.size(dimens.iconSizeSm)
+                )
+            }
+            Spacer(modifier = Modifier.width(dimens.spacingMd))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = strings.autoExpensesFromAlgPost,
+                    color = colors.textPrimary,
+                    fontSize = typo.titleSm,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = strings.autoExpensesFromAlgPostDesc,
+                    color = colors.textSecondary,
+                    fontSize = typo.caption,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(dimens.spacingSm))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                modifier = Modifier.testTag("auto_expense_alg_post_switch"),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = RoseNeon,
+                    uncheckedThumbColor = colors.textMuted,
+                    uncheckedTrackColor = colors.glassSurface
+                )
+            )
+        }
+    }
 }

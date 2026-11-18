@@ -19,5 +19,7 @@ data class TransactionEntity(
     val note: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
     val isSalaryCredit: Boolean = false,
-    val isPaidFromSavings: Boolean = false
+    val isPaidFromSavings: Boolean = false,
+    val isAutoAlgPoste: Boolean = false,
+    val smsKey: String = ""
 )
