@@ -17,13 +17,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.example.ai.FinancialInsightsEngine
 import com.example.data.DebtEntity
 import com.example.data.SavingsMovementEntry
 import com.example.data.TransactionEntity
 import com.example.data.UserSettings
-import com.example.ui.components.BalanceProjectionChart
-import com.example.ui.components.FinancialInsightsCard
 import com.example.ui.components.InstantSavingsTransferStudio
 import com.example.ui.components.SavingsActivityLedgerCard
 import com.example.ui.components.SavingsGoalDialog
@@ -66,16 +63,6 @@ fun FinancialInsightsScreen(
     val isStealth = LocalStealthMode.current
 
     var showGoalDialog by remember { mutableStateOf(false) }
-
-    val insights = remember(transactions, debts, summary, userSettings, isArabic) {
-        FinancialInsightsEngine.generateInsights(
-            transactions = transactions,
-            debts = debts,
-            summary = summary,
-            userSettings = userSettings,
-            isArabic = isArabic
-        )
-    }
 
     Box(modifier = modifier.fillMaxSize()) {
         if (layoutInfo.columns >= 2) {
@@ -149,23 +136,6 @@ fun FinancialInsightsScreen(
                         )
                     }
 
-                    item {
-                        BalanceProjectionChart(
-                            currentBalance = summary.totalBalance,
-                            transactions = transactions,
-                            debts = debts,
-                            userSettings = userSettings,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    item {
-                        FinancialInsightsCard(
-                            insights = insights,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
                     item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
                 }
             }
@@ -218,23 +188,6 @@ fun FinancialInsightsScreen(
                         userSettings = userSettings,
                         isArabic = isArabic,
                         isStealth = isStealth
-                    )
-                }
-
-                item {
-                    BalanceProjectionChart(
-                        currentBalance = summary.totalBalance,
-                        transactions = transactions,
-                        debts = debts,
-                        userSettings = userSettings,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                item {
-                    FinancialInsightsCard(
-                        insights = insights,
-                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 

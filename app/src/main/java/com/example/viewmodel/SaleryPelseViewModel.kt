@@ -691,13 +691,18 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     /**
      * Enables or disables ALG Post Auto Balance Mode on Dashboard:
-     * - When enabled: displays ALG Post Available Balance + (Manual Income - Manual Expense) - Savings,
-     *   and automatically pauses Smart Salary Scheduler while preserving all its saved configuration.
-     * - When disabled: returns cleanly to Manual Mode and restores Smart Salary Scheduler state.
+     * - When enabled: activates ALG Post Balance mode, automatically enables Auto Income and
+     *   Auto Expenses from ALG Post, converts pending SMS suggestions, scans inbox, and
+     *   automatically pauses Smart Salary Scheduler while preserving all its saved configuration.
+     * - When disabled: turns off Auto Income and Auto Expenses from ALG Post, returns cleanly to
+     *   Manual Mode, and restores Smart Salary Scheduler state.
      */
     fun setAlgPostBalanceModeEnabled(enabled: Boolean) {
         val previous = settings.value
-        if (previous.algPostBalanceModeEnabled == enabled) return
+        if (previous.algPostBalanceModeEnabled == enabled &&
+            previous.autoIncomeFromAlgPostEnabled == enabled &&
+            previous.autoExpenseFromAlgPostEnabled == enabled
+        ) return
         val isAr = previous.language == "ar"
 
         prefsManager.updateSettings { current ->
@@ -709,6 +714,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
                 current.copy(
                     algPostBalanceModeEnabled = true,
+                    autoIncomeFromAlgPostEnabled = true,
+                    autoExpenseFromAlgPostEnabled = true,
                     savedSalaryAutoCreditBeforeAlgPostMode = savedSchedulerState,
                     salaryAutoCredit = false
                 )
@@ -720,6 +727,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
                 current.copy(
                     algPostBalanceModeEnabled = false,
+                    autoIncomeFromAlgPostEnabled = false,
+                    autoExpenseFromAlgPostEnabled = false,
                     salaryAutoCredit = restoredSchedulerState
                 )
             }
@@ -727,17 +736,29 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
         viewModelScope.launch {
             if (enabled) {
+                val converted = convertPendingSmsSuggestionsForAutoModes()
                 if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-                    refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
+                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
                 }
                 _toastEvent.emit(
-                    if (isAr) "تم تفعيل وضع رصيد ALG Post التلقائي وتعطيل مجدول الراتب مؤقتاً مع حفظ إعداداته ✓"
-                    else "ALG Post Balance mode enabled; Smart Salary Scheduler paused with info saved ✓"
+                    if (isAr) {
+                        if (converted > 0) {
+                            "تم تفعيل وضع ALG Post (الدخل والمصاريف التلقائية) وتسجيل $converted عملية ✓"
+                        } else {
+                            "تم تفعيل وضع رصيد ALG Post التلقائي (مع الدخل والمصاريف التلقائية) ✓"
+                        }
+                    } else {
+                        if (converted > 0) {
+                            "ALG Post Balance active (Auto Income & Expenses on; $converted recorded) ✓"
+                        } else {
+                            "ALG Post Balance active (Auto Income & Expenses enabled; Salary Scheduler paused) ✓"
+                        }
+                    }
                 )
             } else {
                 checkAndApplySalaryScheduler()
                 _toastEvent.emit(
-                    if (isAr) "تمت العودة إلى الوضع اليدوي واستعادة إعدادات مجدول الراتب الذكي ✓"
+                    if (isAr) "تمت العودة إلى الوضع اليدوي وإيقاف التسجيل التلقائي مع استعادة مجدول الراتب ✓"
                     else "Returned to Manual Balance mode & restored Smart Salary Scheduler settings ✓"
                 )
             }

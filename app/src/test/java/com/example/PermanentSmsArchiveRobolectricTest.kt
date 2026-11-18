@@ -353,16 +353,19 @@ class PermanentSmsArchiveRobolectricTest {
             assertEquals(58000.0, algSummary.grossBalance, 0.01)
             assertEquals(48000.0, algSummary.totalBalance, 0.01)
 
-            // Verify Smart Salary Scheduler was auto-disabled while all info remained saved
+            // Verify Smart Salary Scheduler was auto-disabled while all info remained saved,
+            // AND both Auto Income & Auto Expenses were unifiedly activated!
             val pausedSettings = vm.settings.value
             org.junit.Assert.assertFalse(pausedSettings.salaryAutoCredit)
             assertTrue(pausedSettings.savedSalaryAutoCreditBeforeAlgPostMode)
+            assertTrue(pausedSettings.autoIncomeFromAlgPostEnabled)
+            assertTrue(pausedSettings.autoExpenseFromAlgPostEnabled)
             assertEquals(92000.0, pausedSettings.salaryAmount, 0.01)
             assertEquals(18, pausedSettings.salaryPayday)
             assertEquals("Sonatrach", pausedSettings.salaryEmployer)
             assertEquals("2026-11", pausedSettings.lastCreditedMonthYear)
 
-            // Disable ALG Post Balance Mode -> returns to Manual Mode and restores salaryAutoCredit = true
+            // Disable ALG Post Balance Mode -> returns to Manual Mode, disables Auto Income/Expenses, and restores salaryAutoCredit = true
             vm.setAlgPostBalanceModeEnabled(false)
             val revertDeadline = System.currentTimeMillis() + 4000L
             while (System.currentTimeMillis() < revertDeadline) {
@@ -373,6 +376,8 @@ class PermanentSmsArchiveRobolectricTest {
             }
             assertEquals(-11000.0, vm.financialSummary.value.totalBalance, 0.01)
             assertTrue(vm.settings.value.salaryAutoCredit)
+            org.junit.Assert.assertFalse(vm.settings.value.autoIncomeFromAlgPostEnabled)
+            org.junit.Assert.assertFalse(vm.settings.value.autoExpenseFromAlgPostEnabled)
             assertEquals(92000.0, vm.settings.value.salaryAmount, 0.01)
         } finally {
             collectJob.cancel()
