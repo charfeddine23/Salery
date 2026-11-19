@@ -28,10 +28,11 @@ import com.example.market.GoldAssetHolding
 import com.example.market.GoldValuationEngine
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.AssetsLauncherCard
-import com.example.ui.components.InstantSavingsTransferStudio
-import com.example.ui.components.SavingsActivityLedgerCard
 import com.example.ui.components.SavingsGoalDialog
-import com.example.ui.components.SavingsPulseSection
+import com.example.ui.components.SavingsLedgerPulseSection
+import com.example.ui.components.SavingsQuickActionDock
+import com.example.ui.components.SavingsTransferDialog
+import com.example.ui.components.SavingsTransferMode
 import com.example.ui.components.SovereignSavingsHeroCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
@@ -40,9 +41,10 @@ import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.viewmodel.FinancialSummary
 
 /**
- * Assets & Saving Screen.
- * Features a breathing sovereign vault hero card with a toggle to combine Cash Savings + Assets,
- * a dedicated Gold & Crypto launcher card, instant quick-transfer studio, savings ledger, and pulse.
+ * Assets & Saving Screen — Calm, Luxury Vault Layout:
+ * 1. Sovereign Savings Hero Card (total savings + optional assets toggle + hairline goal bar).
+ * 2. Quick-Action Dock (Deposit / Withdraw / Spend launching a clean focused sheet) + Assets Portal Card.
+ * 3. Tabbed Bottom Workspace (Activity Ledger | Monthly Liquidity Pulse).
  */
 @Composable
 fun FinancialInsightsScreen(
@@ -75,6 +77,7 @@ fun FinancialInsightsScreen(
     val isStealth = LocalStealthMode.current
 
     var showGoalDialog by remember { mutableStateOf(false) }
+    var activeTransferModalMode by remember { mutableStateOf<SavingsTransferMode?>(null) }
 
     val goldSummary = remember(goldHoldings, squareSnapshot) {
         GoldValuationEngine.evaluatePortfolio(goldHoldings, squareSnapshot)
@@ -103,7 +106,7 @@ fun FinancialInsightsScreen(
                     .padding(horizontal = dimens.screenPaddingH),
                 horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
             ) {
-                // Left Column: Sovereign Vault Hero + Assets Launcher + Quick-Transfer Studio
+                // Left Column: Hero Vault + Quick Actions + Assets Portal
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -129,6 +132,13 @@ fun FinancialInsightsScreen(
                     }
 
                     item {
+                        SavingsQuickActionDock(
+                            isArabic = isArabic,
+                            onActionClick = { mode -> activeTransferModalMode = mode }
+                        )
+                    }
+
+                    item {
                         AssetsLauncherCard(
                             goldHoldings = goldHoldings,
                             squareSnapshot = squareSnapshot,
@@ -140,22 +150,10 @@ fun FinancialInsightsScreen(
                         )
                     }
 
-                    item {
-                        InstantSavingsTransferStudio(
-                            availableBalance = summary.totalBalance,
-                            savingsBalance = summary.savingsBalance,
-                            isArabic = isArabic,
-                            isStealth = isStealth,
-                            onDeposit = onTransferToSavings,
-                            onWithdraw = onWithdrawFromSavings,
-                            onSpend = onSpendFromSavings
-                        )
-                    }
-
                     item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
                 }
 
-                // Right Column: Activity Ledger & Liquidity Pulse
+                // Right Column: Tabbed Activity Ledger & Monthly Pulse
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -165,8 +163,10 @@ fun FinancialInsightsScreen(
                     item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
 
                     item {
-                        SavingsActivityLedgerCard(
+                        SavingsLedgerPulseSection(
                             entries = savingsHistory,
+                            summary = summary,
+                            userSettings = userSettings,
                             currencyCode = strings.currencyCode,
                             isArabic = isArabic,
                             isStealth = isStealth,
@@ -174,20 +174,11 @@ fun FinancialInsightsScreen(
                         )
                     }
 
-                    item {
-                        SavingsPulseSection(
-                            summary = summary,
-                            userSettings = userSettings,
-                            isArabic = isArabic,
-                            isStealth = isStealth
-                        )
-                    }
-
                     item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
                 }
             }
         } else {
-            // Single-Column Mobile Flow
+            // Calm 3-Tier Mobile Layout
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -213,6 +204,13 @@ fun FinancialInsightsScreen(
                 }
 
                 item {
+                    SavingsQuickActionDock(
+                        isArabic = isArabic,
+                        onActionClick = { mode -> activeTransferModalMode = mode }
+                    )
+                }
+
+                item {
                     AssetsLauncherCard(
                         goldHoldings = goldHoldings,
                         squareSnapshot = squareSnapshot,
@@ -225,20 +223,10 @@ fun FinancialInsightsScreen(
                 }
 
                 item {
-                    InstantSavingsTransferStudio(
-                        availableBalance = summary.totalBalance,
-                        savingsBalance = summary.savingsBalance,
-                        isArabic = isArabic,
-                        isStealth = isStealth,
-                        onDeposit = onTransferToSavings,
-                        onWithdraw = onWithdrawFromSavings,
-                        onSpend = onSpendFromSavings
-                    )
-                }
-
-                item {
-                    SavingsActivityLedgerCard(
+                    SavingsLedgerPulseSection(
                         entries = savingsHistory,
+                        summary = summary,
+                        userSettings = userSettings,
                         currencyCode = strings.currencyCode,
                         isArabic = isArabic,
                         isStealth = isStealth,
@@ -246,17 +234,23 @@ fun FinancialInsightsScreen(
                     )
                 }
 
-                item {
-                    SavingsPulseSection(
-                        summary = summary,
-                        userSettings = userSettings,
-                        isArabic = isArabic,
-                        isStealth = isStealth
-                    )
-                }
-
                 item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
+        }
+
+        val pendingMode = activeTransferModalMode
+        if (pendingMode != null) {
+            SavingsTransferDialog(
+                initialMode = pendingMode,
+                availableBalance = summary.totalBalance,
+                savingsBalance = summary.savingsBalance,
+                isArabic = isArabic,
+                isStealth = isStealth,
+                onDismiss = { activeTransferModalMode = null },
+                onDeposit = onTransferToSavings,
+                onWithdraw = onWithdrawFromSavings,
+                onSpend = onSpendFromSavings
+            )
         }
 
         if (showGoalDialog) {

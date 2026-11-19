@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,10 +60,142 @@ import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
+import androidx.compose.material3.minimumInteractiveComponentSize
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+enum class SavingsBottomView {
+    LEDGER,
+    PULSE
+}
+
+@Composable
+fun SavingsLedgerPulseSection(
+    entries: List<SavingsMovementEntry>,
+    summary: FinancialSummary,
+    userSettings: UserSettings,
+    currencyCode: String,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    onClearHistory: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    var activeView by remember { mutableStateOf(SavingsBottomView.LEDGER) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+    ) {
+        // Sleek 2-tab luxury pill bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(dimens.cornerRadiusLg))
+                .background(colors.glassSurface)
+                .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusLg))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            SavingsBottomTabPill(
+                label = if (isArabic) "السجل (${entries.size})" else "Activity (${entries.size})",
+                icon = Icons.Default.History,
+                selected = activeView == SavingsBottomView.LEDGER,
+                tag = "savings_tab_ledger",
+                onClick = { activeView = SavingsBottomView.LEDGER },
+                modifier = Modifier.weight(1f)
+            )
+            SavingsBottomTabPill(
+                label = if (isArabic) "المؤشرات" else "Pulse",
+                icon = Icons.Default.Speed,
+                selected = activeView == SavingsBottomView.PULSE,
+                tag = "savings_tab_pulse",
+                onClick = { activeView = SavingsBottomView.PULSE },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        AnimatedContent(
+            targetState = activeView,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "savings_bottom_tab_content"
+        ) { view ->
+            when (view) {
+                SavingsBottomView.LEDGER -> SavingsActivityLedgerCard(
+                    entries = entries,
+                    currencyCode = currencyCode,
+                    isArabic = isArabic,
+                    isStealth = isStealth,
+                    onClearHistory = onClearHistory
+                )
+                SavingsBottomView.PULSE -> SavingsPulseSection(
+                    summary = summary,
+                    userSettings = userSettings,
+                    isArabic = isArabic,
+                    isStealth = isStealth,
+                    showHeader = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavingsBottomTabPill(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    tag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
+    Box(
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .defaultMinSize(minHeight = 44.dp)
+            .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+            .background(
+                if (selected) colors.primaryNeon.copy(alpha = 0.18f) else Color.Transparent
+            )
+            .then(
+                if (selected) {
+                    Modifier.border(
+                        1.dp,
+                        colors.primaryNeon.copy(alpha = 0.45f),
+                        RoundedCornerShape(dimens.cornerRadiusMd)
+                    )
+                } else Modifier
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag(tag),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) colors.primaryNeon else colors.textMuted,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                color = if (selected) colors.primaryNeon else colors.textSecondary,
+                fontSize = typo.bodySm,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1
+            )
+        }
+    }
+}
 
 /**
  * Clean chronological activity log of deposits, withdrawals, and direct expenses from Savings.
@@ -330,6 +466,7 @@ fun SavingsPulseSection(
     userSettings: UserSettings,
     isArabic: Boolean,
     isStealth: Boolean,
+    showHeader: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
@@ -350,13 +487,15 @@ fun SavingsPulseSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
     ) {
-        Text(
-            text = if (isArabic) "نبض السيولة الشهري" else "Monthly Liquidity Pulse",
-            color = colors.textPrimary,
-            fontSize = typo.titleSm,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        if (showHeader) {
+            Text(
+                text = if (isArabic) "نبض السيولة الشهري" else "Monthly Liquidity Pulse",
+                color = colors.textPrimary,
+                fontSize = typo.titleSm,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),

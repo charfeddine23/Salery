@@ -62,7 +62,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Clickable "Assets: Gold & Crypto" entry card displayed on Assets & Saving.
+ * Sleek luxury "Assets: Gold & Crypto" portal card displayed on Assets & Saving.
  * Tapping navigates into the dedicated AssetsManagementScreen page where users add/manage assets.
  */
 @Composable
@@ -93,194 +93,114 @@ fun AssetsLauncherCard(
     }
     val combinedAssetsDzd = goldSummary.totalValueDzdParallel + cryptoDzdApprox
 
+    val gramsFmt = remember(goldSummary.totalGrams) {
+        String.format(Locale.US, "%.2f", goldSummary.totalGrams).trimEnd('0').trimEnd('.')
+    }
+
     GlassCard(
         modifier = modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 76.dp)
             .testTag("assets_card_navigate_button"),
         shape = RoundedCornerShape(dimens.cornerRadiusXl),
         backgroundColor = colors.glassCard,
         cornerRadius = dimens.cornerRadiusXl,
-        borderColor = AmberNeon.copy(alpha = 0.42f),
+        borderColor = AmberNeon.copy(alpha = 0.36f),
         onClick = onOpenAssetsScreen
     ) {
-        Column(modifier = Modifier.padding(dimens.cardPadding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(AmberNeon.copy(alpha = 0.25f), CyanNeon.copy(alpha = 0.22f))
-                            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimens.cardPadding, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(AmberNeon.copy(alpha = 0.24f), CyanNeon.copy(alpha = 0.20f))
                         )
-                        .border(1.dp, AmberNeon.copy(alpha = 0.45f), RoundedCornerShape(13.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = AmberNeon,
-                        modifier = Modifier.size(22.dp)
                     )
-                }
+                    .border(1.dp, AmberNeon.copy(alpha = 0.42f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WorkspacePremium,
+                    contentDescription = null,
+                    tint = AmberNeon,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
 
-                Spacer(modifier = Modifier.width(dimens.spacingSm))
+            Spacer(modifier = Modifier.width(dimens.spacingMd))
 
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isArabic) "الأصول: الذهب والكريبتو" else "Assets: Gold & Crypto",
+                    color = colors.textPrimary,
+                    fontSize = typo.titleSm,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    val goldPart = if (goldHoldings.isEmpty()) {
+                        if (isArabic) "0 غ ذهب" else "0g Gold"
+                    } else {
+                        "${gramsFmt}g Gold"
+                    }
+                    val cryptoPart = if (isStealth) "$ ••••" else String.format(Locale.US, "$%,.2f", cryptoTotalUsd)
                     Text(
-                        text = if (isArabic) "الأصول: الذهب والكريبتو" else "Assets: Gold & Crypto",
-                        color = colors.textPrimary,
-                        fontSize = typo.titleSm,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (isArabic) "اضغط لفتح صفحة إضافة وإدارة الأصول"
-                        else "Tap to open & manage your Gold & Crypto",
+                        text = "$goldPart  •  $cryptoPart",
                         color = colors.textMuted,
-                        fontSize = typo.caption,
+                        fontSize = typo.bodyXs,
+                        style = tnumStyle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(AmberNeon.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = if (isArabic) "فتح الأصول" else "Open Assets",
-                        tint = AmberNeon,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
             }
 
-            Spacer(modifier = Modifier.height(dimens.spacingSm))
+            Spacer(modifier = Modifier.width(8.dp))
 
-            // Concise Gold + Read-only Crypto summary pills
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-            ) {
-                // Gold mini badge
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                        .background(colors.glassSurface)
-                        .border(1.dp, AmberNeon.copy(alpha = 0.28f), RoundedCornerShape(dimens.cornerRadiusMd))
-                        .padding(dimens.cardPaddingSmall)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.WorkspacePremium,
-                            contentDescription = null,
-                            tint = AmberNeon,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isArabic) "الذهب (Square)" else "Gold (Square)",
-                            color = colors.textMuted,
-                            fontSize = typo.caption,
-                            maxLines = 1
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    val gramsFmt = String.format(Locale.US, "%.2f", goldSummary.totalGrams)
-                        .trimEnd('0').trimEnd('.')
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = if (goldHoldings.isEmpty()) {
-                                if (isArabic) "0 غ • أضف ذهب" else "0g • Tap to add"
-                            } else if (goldSummary.hasLivePrices) {
-                                formatDzd(goldSummary.totalValueDzdParallel, strings.currencyCode, isStealth)
-                            } else {
-                                "${gramsFmt}g"
-                            },
-                            color = if (goldHoldings.isEmpty()) colors.textSecondary else AmberNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = tnumStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // Crypto mini badge (display-only)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                        .background(colors.glassSurface)
-                        .border(1.dp, CyanNeon.copy(alpha = 0.28f), RoundedCornerShape(dimens.cornerRadiusMd))
-                        .padding(dimens.cardPaddingSmall)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CurrencyBitcoin,
-                            contentDescription = null,
-                            tint = CyanNeon,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isArabic) "كريبتو • للعرض" else "Crypto • View",
-                            color = colors.textMuted,
-                            fontSize = typo.caption,
-                            maxLines = 1
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        val usdStr = if (isStealth) "$ ••••" else String.format(Locale.US, "$%,.2f", cryptoTotalUsd)
-                        Text(
-                            text = usdStr,
-                            color = CyanNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = tnumStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            if (combinedAssetsDzd > 0.0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isArabic) "إجمالي الأصول المقدّر:" else "Estimated Assets Total:",
-                        color = colors.textSecondary,
-                        fontSize = typo.caption
-                    )
+            Column(horizontalAlignment = Alignment.End) {
+                if (combinedAssetsDzd > 0.0) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Text(
                             text = formatDzd(combinedAssetsDzd, strings.currencyCode, isStealth),
                             color = EmeraldNeon,
                             fontSize = typo.bodySm,
                             fontWeight = FontWeight.ExtraBold,
-                            style = tnumStyle
+                            style = tnumStyle,
+                            maxLines = 1
                         )
                     }
+                    Text(
+                        text = if (isArabic) "إدارة الأصول" else "Manage",
+                        color = colors.textMuted,
+                        fontSize = typo.caption
+                    )
+                } else {
+                    Text(
+                        text = if (isArabic) "إضافة" else "Open",
+                        color = AmberNeon,
+                        fontSize = typo.bodyXs,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = if (isArabic) "فتح الأصول" else "Open Assets",
+                tint = AmberNeon,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

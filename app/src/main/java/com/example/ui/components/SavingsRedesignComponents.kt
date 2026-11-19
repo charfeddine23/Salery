@@ -60,6 +60,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,19 +68,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.ExpenseCategories
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
@@ -228,7 +235,7 @@ fun SovereignSavingsHeroCard(
                 }
         ) {
             Column(modifier = Modifier.padding(dimens.cardPaddingLarge)) {
-                // Top Row: Shield Status Pill + Goal Button
+                // Top Row: Subtle Vault Label + Include Assets Toggle Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -236,104 +243,38 @@ fun SovereignSavingsHeroCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(vaultGold.copy(alpha = if (colors.isDark) 0.14f else 0.10f))
-                            .border(1.dp, vaultGold.copy(alpha = 0.32f), RoundedCornerShape(50))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .graphicsLayer {
-                                    val s = 0.85f + 0.30f * breathPhase
-                                    scaleX = s
-                                    scaleY = s
-                                }
-                                .clip(CircleShape)
-                                .background(vaultEmerald)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = null,
                             tint = vaultGold,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isArabic) "خزنة محمية" else "Protected Vault",
-                            color = vaultGold,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
+                            text = if (includeAssetsInTotal) {
+                                if (isArabic) "إجمالي المدخرات والأصول" else "Total Savings & Assets"
+                            } else {
+                                if (isArabic) "إجمالي الرصيد المدّخر" else "Total Reserved Savings"
+                            },
+                            color = colors.textSecondary,
+                            fontSize = typo.bodySm,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 36.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(colors.glassSurface)
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(50))
-                            .clickable(onClick = onEditGoalClick)
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .testTag("savings_goal_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Flag,
-                                contentDescription = if (isArabic) "تحديد هدف الادخار" else "Set Savings Goal",
-                                tint = if (savingsGoalAmount > 0.0) vaultEmerald else colors.primaryNeon,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (savingsGoalAmount > 0.0) {
-                                    (if (isArabic) "الهدف: " else "Goal: ") + formatDzd(savingsGoalAmount, strings.currencyCode, isStealth)
-                                } else {
-                                    if (isArabic) "تحديد هدف +" else "Set Goal +"
-                                },
-                                color = colors.textPrimary,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(dimens.spacingLg))
-
-                // Hero Label Row + Toggle Button to combine Assets + Savings
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (includeAssetsInTotal) {
-                            if (isArabic) "إجمالي المدخرات والأصول" else "Total Savings & Assets"
-                        } else {
-                            if (isArabic) "إجمالي الرصيد المدّخر" else "Total Reserved Savings"
-                        },
-                        color = colors.textMuted,
-                        fontSize = typo.bodySm,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
                     Spacer(modifier = Modifier.width(8.dp))
+
                     Box(
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .defaultMinSize(minHeight = 36.dp)
                             .clip(RoundedCornerShape(50))
                             .background(
-                                if (includeAssetsInTotal) vaultEmerald.copy(alpha = 0.22f)
+                                if (includeAssetsInTotal) vaultEmerald.copy(alpha = 0.20f)
                                 else colors.glassSurface
                             )
                             .border(
@@ -350,11 +291,11 @@ fun SovereignSavingsHeroCard(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(7.dp)
                                     .clip(CircleShape)
                                     .background(if (includeAssetsInTotal) vaultEmerald else colors.textMuted)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = if (isArabic) {
                                     if (includeAssetsInTotal) "مع الأصول ✓" else "+ دمج الأصول"
@@ -370,116 +311,166 @@ fun SovereignSavingsHeroCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = formatDzd(animatedSavingsValue.toDouble(), strings.currencyCode, isStealth),
-                    color = vaultGold,
-                    fontSize = typo.hero,
-                    fontWeight = FontWeight.ExtraBold,
-                    style = tnumStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Spacer(modifier = Modifier.height(10.dp))
 
+                // Hero Monetary Figure
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = formatDzd(animatedSavingsValue.toDouble(), strings.currencyCode, isStealth),
+                        color = vaultGold,
+                        fontSize = typo.hero,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = tnumStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Airy Hairline Breakdown when Assets are Combined (no cluttered inner boxes)
                 AnimatedVisibility(visible = includeAssetsInTotal) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                                .background(colors.glassSurface.copy(alpha = 0.78f))
-                                .border(1.dp, vaultEmerald.copy(alpha = 0.28f), RoundedCornerShape(dimens.cornerRadiusMd))
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = (if (isArabic) "نقد: " else "Cash: ") +
-                                    formatDzd(savingsBalance, strings.currencyCode, isStealth),
-                                color = colors.textSecondary,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.SemiBold,
-                                style = tnumStyle,
-                                maxLines = 1
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isArabic) "نقد مدّخر" else "Cash",
+                                    color = colors.textMuted,
+                                    fontSize = typo.caption
+                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = formatDzd(savingsBalance, strings.currencyCode, isStealth),
+                                        color = colors.textPrimary,
+                                        fontSize = typo.bodyXs,
+                                        fontWeight = FontWeight.Bold,
+                                        style = tnumStyle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .height(24.dp)
+                                    .padding(horizontal = 6.dp),
+                                color = colors.glassBorderSubtle
                             )
-                            Text(
-                                text = (if (isArabic) "ذهب: " else "Gold: ") +
-                                    formatDzd(goldValueDzd, strings.currencyCode, isStealth),
-                                color = vaultGold,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.Bold,
-                                style = tnumStyle,
-                                maxLines = 1
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isArabic) "ذهب" else "Gold",
+                                    color = colors.textMuted,
+                                    fontSize = typo.caption
+                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = formatDzd(goldValueDzd, strings.currencyCode, isStealth),
+                                        color = vaultGold,
+                                        fontSize = typo.bodyXs,
+                                        fontWeight = FontWeight.Bold,
+                                        style = tnumStyle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .height(24.dp)
+                                    .padding(horizontal = 6.dp),
+                                color = colors.glassBorderSubtle
                             )
-                            Text(
-                                text = (if (isArabic) "كريبتو: " else "Crypto: ") +
-                                    formatDzd(cryptoValueDzd, strings.currencyCode, isStealth),
-                                color = CyanNeon,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.Bold,
-                                style = tnumStyle,
-                                maxLines = 1
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isArabic) "كريبتو" else "Crypto",
+                                    color = colors.textMuted,
+                                    fontSize = typo.caption
+                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = formatDzd(cryptoValueDzd, strings.currencyCode, isStealth),
+                                        color = CyanNeon,
+                                        fontSize = typo.bodyXs,
+                                        fontWeight = FontWeight.Bold,
+                                        style = tnumStyle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                // Goal Progress Section (if target set)
-                if (savingsGoalAmount > 0.0) {
-                    Spacer(modifier = Modifier.height(dimens.spacingMd))
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.65f), thickness = 0.8.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Sleek Single-Row Goal Progress + Edit Trigger (no nested card rectangle)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onEditGoalClick)
+                        .padding(vertical = 4.dp)
+                        .testTag("savings_goal_button"),
+                    verticalArrangement = Arrangement.Center
+                ) {
                     val pct = (goalProgress * 100f).toInt().coerceIn(0, 100)
-                    val remaining = (savingsGoalAmount - savingsBalance).coerceAtLeast(0.0)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-                            .background(colors.glassSurface.copy(alpha = 0.85f))
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusMd))
-                            .padding(dimens.cardPaddingSmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (remaining <= 0.0) {
-                                    if (isArabic) "🎉 تم تحقيق هدف الادخار!" else "🎉 Savings Goal Reached!"
-                                } else {
-                                    if (isArabic) "تقدّم الهدف ($pct٪)" else "Goal Progress ($pct%)"
-                                },
-                                color = if (remaining <= 0.0) vaultEmerald else colors.textPrimary,
-                                fontSize = typo.bodyXs,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = if (isArabic) "تحديد هدف الادخار" else "Set Savings Goal",
+                                tint = if (savingsGoalAmount > 0.0) vaultEmerald else colors.primaryNeon,
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            if (remaining > 0.0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (savingsGoalAmount > 0.0) {
+                                    (if (isArabic) "هدف الادخار ($pct٪)" else "Savings Goal ($pct%)")
+                                } else {
+                                    if (isArabic) "تحديد هدف ادخار +" else "Set Savings Goal +"
+                                },
+                                color = colors.textSecondary,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (savingsGoalAmount > 0.0) {
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 Text(
-                                    text = (if (isArabic) "المتبقي: " else "Left: ") +
-                                        formatDzd(remaining, strings.currencyCode, isStealth),
-                                    color = colors.textMuted,
-                                    fontSize = typo.caption,
-                                    style = tnumStyle,
-                                    maxLines = 1
+                                    text = formatDzd(savingsGoalAmount, strings.currencyCode, isStealth),
+                                    color = vaultGold,
+                                    fontSize = typo.bodyXs,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnumStyle
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    if (savingsGoalAmount > 0.0) {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
+                                .height(5.dp)
                                 .clip(CircleShape)
-                                .background(colors.glassBorderSubtle.copy(alpha = 0.5f))
+                                .background(colors.glassBorderSubtle.copy(alpha = 0.45f))
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(animatedGoalProgress.coerceAtLeast(0.02f))
-                                    .height(8.dp)
+                                    .height(5.dp)
                                     .clip(CircleShape)
                                     .background(
                                         Brush.horizontalGradient(listOf(vaultGold, vaultEmerald))
@@ -489,84 +480,197 @@ fun SovereignSavingsHeroCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(dimens.spacingMd))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Dual Liquidity Snapshot Strip (Available Balance + Reserve Share %)
+                // Airy Bottom Liquidity Strip (Available vs Reserve %)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    VaultMiniStatTile(
-                        icon = Icons.Default.AccountBalanceWallet,
-                        iconTint = CyanNeon,
-                        label = if (isArabic) "المتاح للصرف" else "Available Balance",
-                        value = formatDzd(availableBalance, strings.currencyCode, isStealth),
-                        modifier = Modifier.weight(1f)
-                    )
-                    VaultMiniStatTile(
-                        icon = Icons.Default.Savings,
-                        iconTint = vaultEmerald,
-                        label = if (isArabic) "نسبة التحصين" else "Reserve Share",
-                        value = if (isArabic) "${(reserveRatio * 100).toInt()}٪ محصّن" else "${(reserveRatio * 100).toInt()}% Secured",
-                        modifier = Modifier.weight(1f)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = (if (isArabic) "المتاح: " else "Available: ") +
+                                formatDzd(availableBalance, strings.currencyCode, isStealth),
+                            color = colors.textMuted,
+                            fontSize = typo.caption,
+                            style = tnumStyle,
+                            maxLines = 1
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Savings,
+                            contentDescription = null,
+                            tint = vaultEmerald,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (isArabic) "محصّن ${(reserveRatio * 100).toInt()}٪"
+                            else "${(reserveRatio * 100).toInt()}% Secured",
+                            color = vaultEmerald,
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Sleek 3-button luxury quick-action bar positioned right below the Sovereign Hero card.
+ * Keeps the Saving workspace calm and clutter-free while opening focused transfer modals on tap.
+ */
 @Composable
-private fun VaultMiniStatTile(
+fun SavingsQuickActionDock(
+    isArabic: Boolean,
+    onActionClick: (SavingsTransferMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimens = LocalAdaptiveDimens.current
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+    ) {
+        QuickActionPill(
+            title = if (isArabic) "إيداع" else "Deposit",
+            icon = Icons.Default.ArrowDownward,
+            accent = EmeraldNeon,
+            tag = "quick_action_deposit",
+            onClick = { onActionClick(SavingsTransferMode.DEPOSIT) },
+            modifier = Modifier.weight(1f)
+        )
+        QuickActionPill(
+            title = if (isArabic) "سحب" else "Withdraw",
+            icon = Icons.Default.ArrowUpward,
+            accent = AmberNeon,
+            tag = "quick_action_withdraw",
+            onClick = { onActionClick(SavingsTransferMode.WITHDRAW) },
+            modifier = Modifier.weight(1f)
+        )
+        QuickActionPill(
+            title = if (isArabic) "صرف" else "Spend",
+            icon = Icons.Default.CreditCard,
+            accent = RoseNeon,
+            tag = "quick_action_spend",
+            onClick = { onActionClick(SavingsTransferMode.SPEND) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun QuickActionPill(
+    title: String,
     icon: ImageVector,
-    iconTint: Color,
-    label: String,
-    value: String,
+    accent: Color,
+    tag: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
-    Row(
+    GlassCard(
         modifier = modifier
-            .clip(RoundedCornerShape(dimens.cornerRadiusMd))
-            .background(colors.glassSurface)
-            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusMd))
-            .padding(dimens.cardPaddingSmall),
-        verticalAlignment = Alignment.CenterVertically
+            .defaultMinSize(minHeight = 56.dp)
+            .testTag(tag),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        backgroundColor = colors.glassCard,
+        cornerRadius = dimens.cornerRadiusLg,
+        borderColor = accent.copy(alpha = 0.36f),
+        breathingGlow = false,
+        onClick = onClick
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(iconTint.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(dimens.spacingSm))
-        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = accent,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(7.dp))
             Text(
-                text = label,
-                color = colors.textMuted,
-                fontSize = typo.caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = value,
+                text = title,
                 color = colors.textPrimary,
                 fontSize = typo.bodySm,
                 fontWeight = FontWeight.Bold,
-                style = TextStyle(fontFeatureSettings = "tnum"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun SavingsTransferDialog(
+    initialMode: SavingsTransferMode,
+    availableBalance: Double,
+    savingsBalance: Double,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    onDismiss: () -> Unit,
+    onDeposit: (Double) -> Unit,
+    onWithdraw: (Double) -> Unit,
+    onSpend: (amount: Double, title: String, category: String, note: String) -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.Center
+        ) {
+            InstantSavingsTransferStudio(
+                availableBalance = availableBalance,
+                savingsBalance = savingsBalance,
+                isArabic = isArabic,
+                isStealth = isStealth,
+                initialMode = initialMode,
+                onDismiss = onDismiss,
+                onDeposit = {
+                    onDeposit(it)
+                    onDismiss()
+                },
+                onWithdraw = {
+                    onWithdraw(it)
+                    onDismiss()
+                },
+                onSpend = { amt, title, cat, note ->
+                    onSpend(amt, title, cat, note)
+                    onDismiss()
+                }
             )
         }
     }
@@ -587,6 +691,8 @@ fun InstantSavingsTransferStudio(
     onDeposit: (Double) -> Unit,
     onWithdraw: (Double) -> Unit,
     onSpend: (amount: Double, title: String, category: String, note: String) -> Unit,
+    initialMode: SavingsTransferMode = SavingsTransferMode.DEPOSIT,
+    onDismiss: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
@@ -594,7 +700,7 @@ fun InstantSavingsTransferStudio(
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
-    var activeMode by remember { mutableStateOf(SavingsTransferMode.DEPOSIT) }
+    var activeMode by remember(initialMode) { mutableStateOf(initialMode) }
     var amountInput by remember { mutableStateOf("") }
     var spendTitle by remember { mutableStateOf("") }
     var spendCategory by remember { mutableStateOf("shopping") }
@@ -645,7 +751,7 @@ fun InstantSavingsTransferStudio(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -679,6 +785,18 @@ fun InstantSavingsTransferStudio(
                             fontSize = typo.caption,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (onDismiss != null) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isArabic) "إغلاق" else "Close",
+                            tint = colors.textMuted
                         )
                     }
                 }
