@@ -58,6 +58,8 @@ import com.example.crypto.BinanceMarketPriceFetcher
 import com.example.crypto.CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS
 import com.example.crypto.CryptoHoldingEntry
 import com.example.crypto.CryptoMarketPriceEntry
+import com.example.market.GoldAssetCodec
+import com.example.market.GoldAssetHolding
 import com.example.market.SQUARE_SNAPSHOT_VERSION
 import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketCodec
@@ -232,6 +234,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Stored Physical Gold Assets (paired with live Square rates)
+    val goldHoldings: StateFlow<List<GoldAssetHolding>> = settings
+        .map { GoldAssetCodec.parseHoldings(it.goldAssetHoldingsJson) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _isRefreshingSquareMarket = MutableStateFlow(false)
     val isRefreshingSquareMarket: StateFlow<Boolean> = _isRefreshingSquareMarket.asStateFlow()
 
@@ -284,9 +292,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 val cfg = settings.value
                 val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
                     (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
-                    BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty()
+                    BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty() ||
+                    cfg.savingsAssetsSyncEnabled
                 if (usesBinance) {
                     refreshCryptoMarketPrices(force = false, showFeedback = false)
+                }
+                if (cfg.savingsAssetsSyncEnabled) {
+                    refreshSquareMarketData(force = false, showFeedback = false)
                 }
                 delay(CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS)
             }
@@ -2359,6 +2371,106 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 currentPins.remove(cleanId)
             }
             current.copy(squarePinnedIdsJson = SquareMarketCodec.encodePinnedIds(currentPins))
+        }
+    }
+
+    // ==================== Assets & Saving (Gold via Square + Crypto via Binance) ====================
+
+    fun setSavingsAssetsSyncEnabled(enabled: Boolean) {
+        val isAr = settings.value.language == "ar"
+        prefsManager.updateSettings { current ->
+            current.copy(savingsAssetsSyncEnabled = enabled)
+        }
+        if (enabled) {
+            syncAssetsMarketPrices(force = false, showFeedback = false)
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (enabled) {
+                    if (isAr) "تم تفعيل تخزين الأصول والمزامنة التلقائية مع Square و Binance ✓"
+                    else "Assets tracking & auto-sync (Square + Binance) enabled ✓"
+                } else {
+                    if (isAr) "تم إيقاف عرض الأصول في صفحة الادخار"
+                    else "Assets tracking hidden on Assets & Saving"
+                }
+            )
+        }
+    }
+
+    fun syncAssetsMarketPrices(force: Boolean = true, showFeedback: Boolean = true) {
+        refreshSquareMarketData(force = force, showFeedback = showFeedback)
+        refreshCryptoMarketPrices(force = force, showFeedback = false)
+    }
+
+    fun upsertGoldHolding(
+        karat: Int,
+        grams: Double,
+        label: String = "",
+        existingId: String? = null
+    ) {
+        if (grams <= 0.0 || !grams.isFinite()) return
+        val allowedKarats = SquareMarketCatalog.karats.map { it.first }.toSet()
+        val safeKarat = if (karat in allowedKarats) karat else 18
+        val cleanLabel = label.trim()
+        val now = System.currentTimeMillis()
+        val isAr = settings.value.language == "ar"
+
+        prefsManager.updateSettings { current ->
+            val existingList = GoldAssetCodec.parseHoldings(current.goldAssetHoldingsJson)
+            val updatedList = if (!existingId.isNullOrBlank() && existingList.any { it.id == existingId }) {
+                existingList.map { item ->
+                    if (item.id == existingId) {
+                        item.copy(
+                            karat = safeKarat,
+                            grams = grams,
+                            label = cleanLabel,
+                            updatedAtMillis = now
+                        )
+                    } else item
+                }
+            } else {
+                listOf(
+                    GoldAssetHolding(
+                        karat = safeKarat,
+                        grams = grams,
+                        label = cleanLabel,
+                        updatedAtMillis = now
+                    )
+                ) + existingList
+            }
+            current.copy(goldAssetHoldingsJson = GoldAssetCodec.encodeHoldings(updatedList))
+        }
+
+        if (squareSnapshot.value == null || SquareMarketCatalog.shouldRefresh(
+                lastSyncMillis = settings.value.squareLastPriceSyncMillis,
+                intervalMinutes = settings.value.squareSyncIntervalMinutes
+            )
+        ) {
+            refreshSquareMarketData(force = true, showFeedback = false)
+        }
+
+        viewModelScope.launch {
+            val formattedGrams = String.format(java.util.Locale.US, "%.2f", grams).trimEnd('0').trimEnd('.')
+            _toastEvent.emit(
+                if (isAr) "تم حفظ $formattedGrams غ ذهب عيار $safeKarat وتحديث التقييم ✓"
+                else "Saved ${formattedGrams}g of ${safeKarat}K gold ✓"
+            )
+        }
+    }
+
+    fun removeGoldHolding(id: String) {
+        if (id.isBlank()) return
+        val isAr = settings.value.language == "ar"
+        prefsManager.updateSettings { current ->
+            val filtered = GoldAssetCodec.parseHoldings(current.goldAssetHoldingsJson)
+                .filterNot { it.id == id }
+            current.copy(goldAssetHoldingsJson = GoldAssetCodec.encodeHoldings(filtered))
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (isAr) "تمت إزالة سجل الذهب"
+                else "Gold entry removed"
+            )
         }
     }
 }

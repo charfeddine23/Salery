@@ -35,20 +35,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -81,7 +75,6 @@ import com.example.ui.theme.LiquidGlassColors
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
-import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.RoseNeon
 import java.text.NumberFormat
 import java.util.Locale
@@ -174,207 +167,6 @@ private val TickerGreenPill = Color(0xFF2EBD85)
 private val TickerRedPill = Color(0xFFF6465D)
 private val TickerNeutralPill = Color(0xFF475569)
 private val PinHighlightColor = Color(0xFFF97316)
-
-@Composable
-fun SquareCompactMarketHeader(
-    snapshot: SquareMarketSnapshot?,
-    lastSyncLabel: String,
-    remainingMins: Long,
-    effectiveLastSync: Long,
-    syncIntervalMinutes: Int,
-    isRefreshing: Boolean,
-    errorMessage: String?,
-    onOpenSyncSettings: () -> Unit,
-    isArabic: Boolean,
-    colors: LiquidGlassColors
-) {
-    val breathingEnabled = LocalBreathingGlowEnabled.current
-    val dimens = LocalAdaptiveDimens.current
-    val typo = LocalAdaptiveTypography.current
-    val intervalShortLabel = remember(syncIntervalMinutes, isArabic) {
-        when {
-            syncIntervalMinutes <= 0 -> if (isArabic) "يدوي" else "Manual"
-            syncIntervalMinutes < 60 -> if (isArabic) "كل ${syncIntervalMinutes}د" else "${syncIntervalMinutes}m auto"
-            else -> {
-                val hrs = syncIntervalMinutes / 60
-                if (isArabic) "كل ${hrs}سا" else "${hrs}h auto"
-            }
-        }
-    }
-
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("square_hero_card"),
-        backgroundColor = colors.glassCard,
-        borderColor = SquareGoldAccent.copy(alpha = 0.38f),
-        shape = RoundedCornerShape(dimens.cornerRadiusLg),
-        cornerRadius = dimens.cornerRadiusLg,
-        breathingGlow = breathingEnabled
-    ) {
-        Column(modifier = Modifier.padding(horizontal = dimens.cardPadding, vertical = dimens.cardPaddingSmall)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(dimens.cornerRadiusSm))
-                            .background(Brush.linearGradient(listOf(SquareGoldAccent, SquareGoldDeep))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CurrencyExchange,
-                            contentDescription = "Square Markets",
-                            tint = Color(0xFF1F1600),
-                            modifier = Modifier.size(dimens.iconSizeMd)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(dimens.spacingSm))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (snapshot != null) {
-                                val totalFeeds = snapshot.goldSourceCount + snapshot.bankSourceCount + snapshot.parallelSourceCount
-                                if (totalFeeds > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(dimens.cornerRadiusXs))
-                                            .background(EmeraldNeon.copy(alpha = 0.16f))
-                                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isArabic) "$totalFeeds مصادر" else "$totalFeeds feeds",
-                                            color = EmeraldNeon,
-                                            fontSize = typo.caption,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = if (isArabic) "اسحب للأسفل للتحديث" else "Pull down to refresh",
-                                color = colors.textSecondary,
-                                fontSize = typo.bodyXs,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = CyanNeon,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            val syncStatus = when {
-                                effectiveLastSync <= 0L -> lastSyncLabel
-                                syncIntervalMinutes <= 0 -> "$intervalShortLabel • $lastSyncLabel"
-                                else -> {
-                                    if (isArabic) "$intervalShortLabel • $lastSyncLabel (بعد ${remainingMins}د)"
-                                    else "$intervalShortLabel • $lastSyncLabel (${remainingMins}m left)"
-                                }
-                            }
-                            Text(
-                                text = syncStatus,
-                                color = colors.textMuted,
-                                fontSize = typo.bodyXs,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.width(dimens.spacingSm))
-
-                Row(
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(CyanNeon.copy(alpha = 0.12f))
-                        .border(1.dp, CyanNeon.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = CyanNeon),
-                            onClick = onOpenSyncSettings
-                        )
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .testTag("square_sync_interval_chip"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = if (isArabic) "إعدادات وقت المزامنة" else "Sync interval settings",
-                        tint = CyanNeon,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = intervalShortLabel,
-                        color = CyanNeon,
-                        fontSize = typo.caption,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            if (isRefreshing) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .clip(CircleShape),
-                    color = SquareGoldAccent,
-                    trackColor = colors.glassSurface
-                )
-            }
-
-            if (errorMessage != null && snapshot != null) {
-                Spacer(modifier = Modifier.height(7.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(AmberNeon.copy(alpha = 0.14f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WarningAmber,
-                        contentDescription = null,
-                        tint = AmberNeon,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = errorMessage,
-                        color = AmberNeon,
-                        fontSize = 10.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun SquareCategoryTabStrip(

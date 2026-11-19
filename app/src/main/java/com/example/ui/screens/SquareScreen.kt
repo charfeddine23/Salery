@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +40,6 @@ import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SquareCategoryTabStrip
-import com.example.ui.components.SquareCompactMarketHeader
 import com.example.ui.components.SquareExchangeTickerRow
 import com.example.ui.components.SquareGoldAccent
 import com.example.ui.components.SquarePrimaryTab
@@ -53,6 +53,7 @@ import com.example.ui.components.SquareTopAnchoredPullToRefresh
 import com.example.ui.components.SquareVenueFilter
 import com.example.ui.components.SquareVenueSubFilterStrip
 import com.example.ui.components.buildSquareTickerRows
+import com.example.ui.components.formatSquareIntervalLabel
 import com.example.ui.components.sortSquareTickerRows
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -204,20 +205,44 @@ fun SquareScreen(
         ).joinToString(" • ")
     }
 
+    val intervalLabel = remember(syncIntervalMinutes, isArabic) {
+        formatSquareIntervalLabel(syncIntervalMinutes, isArabic)
+    }
+    val syncStatusFooter = remember(effectiveLastSync, lastSyncLabel, intervalLabel, remainingMins, syncIntervalMinutes, isArabic) {
+        when {
+            effectiveLastSync <= 0L -> lastSyncLabel
+            syncIntervalMinutes <= 0 -> "$intervalLabel • $lastSyncLabel"
+            else -> if (isArabic) {
+                "$intervalLabel • $lastSyncLabel (بعد ${remainingMins}د)"
+            } else {
+                "$intervalLabel • $lastSyncLabel (${remainingMins}m left)"
+            }
+        }
+    }
+
     @Composable
-    fun MarketHeaderSection() {
-        SquareCompactMarketHeader(
-            snapshot = snapshot,
-            lastSyncLabel = lastSyncLabel,
-            remainingMins = remainingMins,
-            effectiveLastSync = effectiveLastSync,
-            syncIntervalMinutes = syncIntervalMinutes,
-            isRefreshing = isRefreshing,
-            errorMessage = errorMessage,
-            onOpenSyncSettings = { showSyncSettingsDialog = true },
-            isArabic = isArabic,
-            colors = colors
-        )
+    fun InlineSyncErrorNotice() {
+        if (errorMessage != null && snapshot != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = AmberNeon,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = errorMessage,
+                    color = AmberNeon,
+                    fontSize = typo.bodyXs
+                )
+            }
+        }
     }
 
     @Composable
@@ -349,9 +374,6 @@ fun SquareScreen(
                 ) {
                     item {
                         Spacer(modifier = Modifier.height(dimens.spacingXs))
-                        MarketHeaderSection()
-                    }
-                    item {
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
                             backgroundColor = colors.glassCard,
@@ -408,11 +430,7 @@ fun SquareScreen(
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
                 ) {
                     item {
-                        Spacer(modifier = Modifier.height(dimens.spacingXs))
-                        MarketHeaderSection()
-                    }
-
-                    item {
+                        InlineSyncErrorNotice()
                         SquareCategoryTabStrip(
                             selectedTab = primaryTab,
                             favoritesCount = pinnedIds.size,
@@ -468,21 +486,22 @@ fun SquareScreen(
                         ConverterSection()
                     }
 
-                    if (sourcesSummary.isNotBlank()) {
+                    if (sourcesSummary.isNotBlank() || syncStatusFooter.isNotBlank()) {
                         item {
+                            val combinedInfo = listOf(sourcesSummary, syncStatusFooter)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" • ")
                             GlassCard(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showSyncSettingsDialog = true },
                                 backgroundColor = colors.glassCard,
                                 shape = RoundedCornerShape(dimens.cornerRadiusMd),
                                 cornerRadius = dimens.cornerRadiusMd,
                                 breathingGlow = false
                             ) {
                                 Text(
-                                    text = if (isArabic) {
-                                        "تجميع موثق من عدة مواقع • $sourcesSummary"
-                                    } else {
-                                        "Multi-source verified feed • $sourcesSummary"
-                                    },
+                                    text = combinedInfo,
                                     color = EmeraldNeon.copy(alpha = 0.88f),
                                     fontSize = typo.bodyXs,
                                     modifier = Modifier.padding(dimens.cardPaddingSmall)
@@ -503,11 +522,7 @@ fun SquareScreen(
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
             ) {
                 item {
-                    Spacer(modifier = Modifier.height(dimens.spacingXs))
-                    MarketHeaderSection()
-                }
-
-                item {
+                    InlineSyncErrorNotice()
                     SquareCategoryTabStrip(
                         selectedTab = primaryTab,
                         favoritesCount = pinnedIds.size,
@@ -552,17 +567,27 @@ fun SquareScreen(
 
                     item { TickerSheetSection() }
 
-                    if (sourcesSummary.isNotBlank()) {
+                    if (sourcesSummary.isNotBlank() || syncStatusFooter.isNotBlank()) {
                         item {
+                            val footerLine = buildString {
+                                if (sourcesSummary.isNotBlank()) {
+                                    append(
+                                        if (isArabic) "تجميع موثق من عدة مواقع • $sourcesSummary"
+                                        else "Multi-source verified feed • $sourcesSummary"
+                                    )
+                                }
+                                if (syncStatusFooter.isNotBlank()) {
+                                    if (isNotEmpty()) append(" • ")
+                                    append(syncStatusFooter)
+                                }
+                            }
                             Text(
-                                text = if (isArabic) {
-                                    "تجميع موثق من عدة مواقع • $sourcesSummary"
-                                } else {
-                                    "Multi-source verified feed • $sourcesSummary"
-                                },
+                                text = footerLine,
                                 color = EmeraldNeon.copy(alpha = 0.85f),
                                 fontSize = typo.bodyXs,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                modifier = Modifier
+                                    .clickable { showSyncSettingsDialog = true }
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
                             )
                         }
                     }

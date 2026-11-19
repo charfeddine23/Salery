@@ -13,6 +13,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,17 +24,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
@@ -67,6 +74,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -89,6 +97,9 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import com.example.update.AppUpdateUiState
+import com.example.update.LatestChangelogBundle
+import com.example.update.ReleaseChangelogProvider
+import com.example.update.ReleaseFeatureNote
 import com.example.update.formatBytesToMb
 import kotlin.math.PI
 import kotlin.math.cos
@@ -109,11 +120,13 @@ fun AppUpdateDialog(
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
+    val context = LocalContext.current
     val isArabic = strings is ArabicStrings
     val isDark = colors.isDark
 
     val isDownloading = state is AppUpdateUiState.Downloading
     var appeared by remember { mutableStateOf(false) }
+    var showWhatsNew by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
 
     val cardScale by animateFloatAsState(
@@ -151,6 +164,10 @@ fun AppUpdateDialog(
         is AppUpdateUiState.ReadyToInstall -> state.release
         is AppUpdateUiState.Error -> state.release
         else -> null
+    }
+
+    val latestChangelog = remember(release?.tagName, release?.releaseNotes) {
+        ReleaseChangelogProvider.resolveForUpdateDialog(context, release)
     }
 
     Dialog(
@@ -205,7 +222,7 @@ fun AppUpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Top Row: Always show Close button so the user can skip or close anytime
+                        // Top Row: Close Button, "New / الجديد" Toggle Pill, and Version Pill
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -234,6 +251,50 @@ fun AppUpdateDialog(
                                 }
                             }
 
+                            // "الجديد" / "New" button showing ONLY the latest update's features
+                            Box(
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false, radius = 28.dp, color = AmberNeon),
+                                        onClick = { showWhatsNew = !showWhatsNew }
+                                    )
+                                    .testTag("update_whats_new_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            if (showWhatsNew) AmberNeon.copy(alpha = 0.24f)
+                                            else CyanNeon.copy(alpha = 0.14f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (showWhatsNew) AmberNeon.copy(alpha = 0.70f)
+                                            else CyanNeon.copy(alpha = 0.45f),
+                                            shape = RoundedCornerShape(50)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (showWhatsNew) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.AutoAwesome,
+                                        contentDescription = if (isArabic) "الجديد" else "New",
+                                        tint = if (showWhatsNew) AmberNeon else CyanNeon,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = if (isArabic) "الجديد" else "New",
+                                        color = if (showWhatsNew) AmberNeon else CyanNeon,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            }
+
                             if (release != null) {
                                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Box(
@@ -241,12 +302,12 @@ fun AppUpdateDialog(
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(colors.primaryNeon.copy(alpha = 0.12f))
                                             .border(0.8.dp, colors.primaryNeon.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Text(
                                             text = "v$APP_VERSION → ${release.tagName}",
                                             color = colors.primaryNeon,
-                                            fontSize = 10.5.sp,
+                                            fontSize = 10.sp,
                                             fontFamily = FontFamily.Monospace,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -256,6 +317,24 @@ fun AppUpdateDialog(
                                 Spacer(modifier = Modifier.size(48.dp))
                             }
                         }
+
+                        AnimatedContent(
+                            targetState = showWhatsNew,
+                            label = "update_dialog_content_switch"
+                        ) { showingWhatsNew ->
+                            if (showingWhatsNew) {
+                                WhatsNewLatestOnlyPanel(
+                                    bundle = latestChangelog,
+                                    fallbackVersion = release?.tagName ?: "v$APP_VERSION",
+                                    isArabic = isArabic,
+                                    sheenProgress = sheenProgress,
+                                    onBack = { showWhatsNew = false }
+                                )
+                            } else {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
 
                         // Artistic Dynamic Animated Rocket Emblem (inspired by reference image)
                         UpdateRocketEmblem(
@@ -339,11 +418,21 @@ fun AppUpdateDialog(
                                 else "Check your internet connection and try again."
                             }
                             else -> {
+                                val firstFeatureSummary = latestChangelog.features.firstOrNull()?.let { f ->
+                                    val t = if (isArabic) f.titleAr.ifBlank { f.titleEn } else f.titleEn.ifBlank { f.titleAr }
+                                    val d = if (isArabic) f.descAr.ifBlank { f.descEn } else f.descEn.ifBlank { f.descAr }
+                                    when {
+                                        t.isNotBlank() && d.isNotBlank() -> "$t — $d"
+                                        t.isNotBlank() -> t
+                                        else -> d
+                                    }
+                                }?.takeIf { release != null && !release.releaseNotes.isNullOrBlank() }
                                 val cleanedNotes = release?.releaseNotes
+                                    ?.replace(Regex("<!--[\\s\\S]*?-->"), "")
                                     ?.lines()
                                     ?.map { it.trim().removePrefix("-").removePrefix("*").removePrefix("#").trim() }
                                     ?.firstOrNull { it.isNotBlank() && !it.startsWith("###") }
-                                cleanedNotes ?: if (isArabic) {
+                                firstFeatureSummary ?: cleanedNotes ?: if (isArabic) {
                                     "يتوفر إصدار جديد بتحسينات ومزايا جديدة. يمكنك التحديث الآن أو التخطي والمتابعة لاحقاً."
                                 } else {
                                     "A new version with improvements is available. You can update now or skip and continue."
@@ -548,9 +637,188 @@ fun AppUpdateDialog(
                                 )
                             }
                         }
+                                } // End Column inside AnimatedContent else branch
+                            }
+                        } // End AnimatedContent
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WhatsNewLatestOnlyPanel(
+    bundle: LatestChangelogBundle,
+    fallbackVersion: String,
+    isArabic: Boolean,
+    sheenProgress: Float,
+    onBack: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val versionLabel = bundle.versionTag.ifBlank { fallbackVersion }.let { tag ->
+        if (tag.startsWith("v", ignoreCase = true)) tag else "v$tag"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .testTag("update_whats_new_panel"),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(AmberNeon.copy(alpha = 0.25f), CyanNeon.copy(alpha = 0.22f))
+                    )
+                )
+                .border(1.2.dp, AmberNeon.copy(alpha = 0.55f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = AmberNeon,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = if (isArabic) "الجديد في آخر تحديث فقط" else "What's New (Latest Release)",
+            color = colors.textPrimary,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = if (isArabic) "الإصدار $versionLabel • ميزات هذا التحديث"
+            else "Release $versionLabel • Latest Features Only",
+            color = CyanNeon,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (bundle.features.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.glassSurface)
+                    .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isArabic) "تحسينات عامة واستقرار في الأداء لآخر إصدار."
+                    else "General improvements and stability updates in the latest build.",
+                    color = colors.textSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 290.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                bundle.features.forEachIndexed { idx, feature ->
+                    WhatsNewFeatureItemCard(
+                        index = idx + 1,
+                        feature = feature,
+                        isArabic = isArabic
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CapsuleShimmerButton(
+            text = if (isArabic) "العودة للتحديث" else "Back to Update",
+            gradientColors = listOf(CyanNeon, Color(0xFF2563EB)),
+            sheenProgress = sheenProgress,
+            onClick = onBack,
+            testTag = "update_whats_new_back_button"
+        )
+    }
+}
+
+@Composable
+private fun WhatsNewFeatureItemCard(
+    index: Int,
+    feature: ReleaseFeatureNote,
+    isArabic: Boolean
+) {
+    val colors = LiquidGlassTheme.colors
+    val title = if (isArabic) {
+        feature.titleAr.ifBlank { feature.titleEn }
+    } else {
+        feature.titleEn.ifBlank { feature.titleAr }
+    }
+    val desc = if (isArabic) {
+        feature.descAr.ifBlank { feature.descEn }
+    } else {
+        feature.descEn.ifBlank { feature.descAr }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.glassSurface.copy(alpha = 0.85f))
+            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(AmberNeon.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = index.toString(),
+                    color = AmberNeon,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = colors.textPrimary,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (desc.isNotBlank()) {
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = desc,
+                color = colors.textSecondary,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
         }
     }
 }

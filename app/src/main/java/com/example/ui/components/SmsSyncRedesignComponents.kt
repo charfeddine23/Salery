@@ -358,9 +358,11 @@ fun SmsHeroBalanceCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 3-KPI Telemetry Row (Taxes, Transactions, Archive)
+                // 3-KPI Telemetry Row (Taxes, Transactions, Archive) — equal 3-column grid
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     HeroTelemetryChip(
@@ -368,7 +370,8 @@ fun SmsHeroBalanceCard(
                         value = formatDzdAmount(annualTaxesTotal, currencyCode, isStealth),
                         accent = AmberNeon,
                         modifier = Modifier
-                            .weight(1.25f)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .clickable { onSelectTabQuick(SmsWorkspaceTab.TAXES) },
                         colors = colors
                     )
@@ -377,7 +380,8 @@ fun SmsHeroBalanceCard(
                         value = "$transactionsCount",
                         accent = EmeraldNeon,
                         modifier = Modifier
-                            .weight(0.9f)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .clickable { onSelectTabQuick(SmsWorkspaceTab.TRANSACTIONS) },
                         colors = colors
                     )
@@ -386,31 +390,14 @@ fun SmsHeroBalanceCard(
                         value = "$archiveCount",
                         accent = CyanNeon,
                         modifier = Modifier
-                            .weight(0.85f)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .clickable { onSelectTabQuick(SmsWorkspaceTab.ARCHIVE) },
                         colors = colors
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Unified Sync Action CTA
-                GlassButton(
-                    text = if (hasSmsPerm) {
-                        if (isArabic) "مزامنة وفحص الرسائل الآن" else "Sync Balance & Inbox"
-                    } else {
-                        if (isArabic) "تفعيل قراءة رسائل ALG Poste" else "Enable ALG Poste SMS Sync"
-                    },
-                    icon = Icons.Default.Refresh,
-                    containerColor = EmeraldNeon,
-                    contentColor = Color(0xFF042419),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("scan_alg_poste_sms_button"),
-                    onClick = onUnifiedSyncClick
-                )
-
-                // Expandable Sync Controls Drawer
+                // Expandable Sync Controls Drawer (opened via Settings button)
                 AnimatedVisibility(
                     visible = controlsExpanded,
                     enter = expandVertically() + fadeIn(),
@@ -426,6 +413,22 @@ fun SmsHeroBalanceCard(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        GlassButton(
+                            text = if (hasSmsPerm) {
+                                if (isArabic) "مزامنة وفحص الرسائل الآن" else "Sync Balance & Inbox"
+                            } else {
+                                if (isArabic) "تفعيل قراءة رسائل ALG Poste" else "Enable ALG Poste SMS Sync"
+                            },
+                            icon = Icons.Default.Refresh,
+                            containerColor = EmeraldNeon,
+                            contentColor = Color(0xFF042419),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("scan_alg_poste_sms_button"),
+                            onClick = onUnifiedSyncClick
+                        )
+
+                        HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -563,10 +566,12 @@ private fun HeroTelemetryChip(
 ) {
     Column(
         modifier = modifier
+            .defaultMinSize(minHeight = 56.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(accent.copy(alpha = 0.08f))
             .border(0.7.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = label,

@@ -130,6 +130,85 @@ jobs:
 
           echo "apk_path=${{ env.APK_FILENAME }}" >> $GITHUB_OUTPUT
 
+      - name: Generate Latest-Only Release Notes
+        id: release_notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREV_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)
+          COMMIT_RANGE=""
+          if [ -n "$PREV_TAG" ] && git rev-parse "$PREV_TAG" >/dev/null 2>&1; then
+            COMMIT_RANGE="${PREV_TAG}..HEAD"
+          fi
+          export PREV_TAG COMMIT_RANGE
+
+          python3 - <<'PY'
+          import json, os, subprocess
+
+          tag_name = os.environ.get("TAG_NAME", "latest")
+          app_name = os.environ.get("APP_NAME", "Vaultix")
+          version_name = os.environ.get("VERSION_NAME", "")
+          build_num = os.environ.get("BUILD_NUMBER", "")
+          apk_name = os.environ.get("APK_FILENAME", "")
+          commit_range = os.environ.get("COMMIT_RANGE", "")
+
+          features = []
+          whats_new_path = "app/src/main/assets/whats_new.json"
+          whats_new_modified = False
+          if commit_range:
+              diff_out = subprocess.check_output(["git", "diff", "--name-only", commit_range], text=True)
+              whats_new_modified = whats_new_path in diff_out.splitlines()
+
+          if os.path.isfile(whats_new_path) and (whats_new_modified or not commit_range):
+              with open(whats_new_path, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+              features = data.get("features", [])
+          elif commit_range:
+              logs = subprocess.check_output(
+                  ["git", "log", commit_range, "--no-merges", "--pretty=format:%s"],
+                  text=True
+              ).splitlines()
+              for line in logs:
+                  clean = line.strip()
+                  if clean and not clean.lower().startswith("merge "):
+                      features.append({
+                          "titleAr": clean,
+                          "titleEn": clean,
+                          "descAr": "",
+                          "descEn": "",
+                          "badge": tag_name
+                      })
+          elif os.path.isfile(whats_new_path):
+              with open(whats_new_path, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+              features = data.get("features", [])
+
+          payload = {"versionTag": tag_name, "features": features}
+          md = [f"### ✨ What's New in {app_name} ({tag_name})"]
+          if features:
+              for item in features:
+                  title_en = item.get("titleEn") or item.get("titleAr") or ""
+                  desc_en = item.get("descEn") or item.get("descAr") or ""
+                  line = f"- **{title_en}**"
+                  if desc_en:
+                      line += f" — {desc_en}"
+                  md.append(line)
+          else:
+              md.append("- Latest improvements and performance refinements.")
+
+          md.extend([
+              "",
+              f"- **Developer:** Charfeddine Ka",
+              f"- **Version:** {version_name} (Build {build_num})",
+              f"- **Package:** {apk_name}",
+              "- **Direct Upgrade:** Signed with consistent release key for seamless update over existing installation.",
+              f"<!-- WHATS_NEW_JSON:{json.dumps(payload, ensure_ascii=False)} -->"
+          ])
+
+          with open("release_notes.md", "w", encoding="utf-8") as out:
+              out.write("\n".join(md) + "\n")
+          PY
+
       - name: Publish Latest Release to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -137,12 +216,7 @@ jobs:
           gh release create "${{ env.TAG_NAME }}" \
             "${{ steps.prepare_artifacts.outputs.apk_path }}" \
             --title "${{ env.APP_NAME }} ${{ env.TAG_NAME }}" \
-            --notes "### ${{ env.APP_NAME }} Android Release (${{ env.TAG_NAME }})
-            - **Developer:** Charfeddine Ka
-            - **Version:** ${{ env.VERSION_NAME }} (Build ${{ env.BUILD_NUMBER }})
-            - **Package:** ${{ env.APK_FILENAME }}
-            - **Direct Upgrade:** Signed with consistent release key for seamless update over existing installation.
-            - Automatically built & published on push via GitHub Actions."
+            --notes-file release_notes.md
 
       - name: Delete All Older Releases & Tags (Keep Only Latest)
         env:

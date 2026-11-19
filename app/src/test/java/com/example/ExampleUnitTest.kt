@@ -1538,4 +1538,79 @@ class ExampleUnitTest {
     assertEquals(30.0, summary.recordedYearTaxesDzd, 0.01)
     assertEquals(120.5, summary.unrecordedYearTaxesDzd, 0.01)
   }
+
+  @Test
+  fun goldAssetCodec_andValuationEngine_computeLiveSquareWorthAccurately() {
+    val karats = com.example.market.SquareMarketCatalog.buildGoldKarats(
+      goldOzUsd = 3110.34768, // exact 100.0 USD / gram for 24K
+      usdBankDzd = 135.0,
+      usdParallelDzd = 240.0
+    )
+    val snapshot = com.example.market.SquareMarketSnapshot(
+      goldOzUsd = 3110.34768,
+      goldKarats = karats,
+      currencies = listOf(
+        com.example.market.CurrencySquareRate(
+          code = "USD",
+          nameEn = "US Dollar",
+          nameAr = "دولار",
+          flag = "🇺🇸",
+          symbol = "$",
+          bankRateDzd = 135.0,
+          parallelBuyDzd = 238.0,
+          parallelSellDzd = 240.0
+        )
+      )
+    )
+
+    val holdings = listOf(
+      com.example.market.GoldAssetHolding(id = "g1", karat = 24, grams = 2.0, label = "24K Bar"),
+      com.example.market.GoldAssetHolding(id = "g2", karat = 18, grams = 10.0, label = "Ring"),
+      com.example.market.GoldAssetHolding(id = "g_bad", karat = 18, grams = 0.0)
+    )
+    val encoded = com.example.market.GoldAssetCodec.encodeHoldings(holdings)
+    val decoded = com.example.market.GoldAssetCodec.parseHoldings(encoded)
+    assertEquals(2, decoded.size)
+
+    val eval = com.example.market.GoldValuationEngine.evaluatePortfolio(decoded, snapshot)
+    // 24K: 2g * 100 USD = 200 USD * 240 = 48,000 DZD
+    // 18K: 10g * 75 USD = 750 USD * 240 = 180,000 DZD
+    assertTrue(eval.hasLivePrices)
+    assertEquals(12.0, eval.totalGrams, 0.001)
+    assertEquals(950.0, eval.totalValueUsd, 0.01)
+    assertEquals(228_000.0, eval.totalValueDzdParallel, 1.0)
+
+    val cryptoDzd = com.example.market.GoldValuationEngine.convertUsdToSquareParallelDzd(50.0, snapshot)
+    assertNotNull(cryptoDzd)
+    assertEquals(12_000.0, cryptoDzd!!, 0.01)
+  }
+
+  @Test
+  fun releaseChangelogProvider_parsesLatestOnlyJsonAndMarkdownStrippingBoilerplate() {
+    val embeddedBody = """
+      ### ✨ What's New in Vaultix (v1.0.9)
+      - **Assets & Saving** — Gold & Crypto sync added
+      - **Developer:** Charfeddine Ka
+      - **Version:** 1.0.9 (Build 9)
+      <!-- WHATS_NEW_JSON:{"versionTag":"v1.0.9","features":[{"titleAr":"ميزة الأصول","titleEn":"Assets Vault","descAr":"تخزين الذهب","descEn":"Store Gold","badge":"New"}]} -->
+    """.trimIndent()
+
+    val parsedEmbedded = com.example.update.ReleaseChangelogProvider.parseRemoteReleaseNotes(embeddedBody)
+    assertNotNull(parsedEmbedded)
+    assertEquals("v1.0.9", parsedEmbedded!!.versionTag)
+    assertEquals(1, parsedEmbedded.features.size)
+    assertEquals("ميزة الأصول", parsedEmbedded.features[0].titleAr)
+
+    val markdownOnly = """
+      ### Release v1.0.10
+      - **Gold Sync** — Live valuation from Square
+      - **Developer:** Charfeddine Ka
+      - **Package:** Vaultix.apk
+    """.trimIndent()
+    val parsedMd = com.example.update.ReleaseChangelogProvider.parseRemoteReleaseNotes(markdownOnly)
+    assertNotNull(parsedMd)
+    assertEquals(1, parsedMd!!.features.size)
+    assertEquals("Gold Sync", parsedMd.features[0].titleEn)
+    assertEquals("Live valuation from Square", parsedMd.features[0].descEn)
+  }
 }

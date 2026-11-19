@@ -1,0 +1,33 @@
+{
+  "versionTag": "1.0.3",
+  "features": [
+    {
+      "badge": "الأصول والادخار • Assets & Saving",
+      "titleAr": "صفحة الأصول والادخار (الذهب والكريبتو)",
+      "titleEn": "Assets & Saving (Gold & Crypto Sync)",
+      "descAr": "تم تغيير اسم صفحة الادخار إلى الأصول والادخار وإضافة ميزة تتبع الأصول بمزامنة تلقائية للأسعار من Square و Binance. عند التفعيل، يظهر إجمالي العملات الرقمية من Binance للعرض فقط، وتتوفر خانة مخصصة لإدخال كمية الذهب بالغرام ونوع العيار لحساب قيمته الحقيقية فوراً.",
+      "descEn": "Renamed Savings to Assets & Saving with a toggleable Asset Vault synced automatically from Square & Binance. Shows your Binance Crypto total in read-only mode, plus a dedicated Gold tracker by grams & karat with live Square valuation."
+    },
+    {
+      "badge": "التحديثات • Updates",
+      "titleAr": "زر الجديد في نافذة التحديث",
+      "titleEn": "What's New Button in Update Dialog",
+      "descAr": "إضافة زر (الجديد) داخل نافذة التحديثات لعرض شرح الميزات المضافة في آخر تحديث فقط مع استبدال الشرح القديم تلقائياً مع كل تحديث جديد.",
+      "descEn": "Added a New button inside the Update dialog displaying only the features introduced in the latest release, automatically replacing older release notes."
+    },
+    {
+      "badge": "بريدي موب • BaridiMob SMS",
+      "titleAr": "تطوير مركز مزامنة بريدي موب والضرائب",
+      "titleEn": "BaridiMob Sync Redesign & Annual Taxes",
+      "descAr": "تحديث التبويبات إلى الضرائب والمعاملات والأرشيف مع خانة لإجمالي الضرائب خلال السنة الحالية منذ 1.1، وتوحيد حجم بطاقات الملخص الثلاث ونقل زر التفعيل إلى الإعدادات.",
+      "descEn": "Redesigned sync tabs to Taxes (with YTD total anchored to 1.1), Transactions, and Archive, equalized the 3 summary cards, and moved the SMS sync toggle inside Settings."
+    },
+    {
+      "badge": "سكوار • Square",
+      "titleAr": "سحب التحديث التفاعلي وتأثير التوهج",
+      "titleEn": "Interactive Pull-to-Refresh & Glow Aura",
+      "descAr": "إزالة مربع التحديث الثابت وإضافة تلميح سحب تفاعلي وتوهج علوي ملتصق بالشاشة مع إمكانية السحب والانتظار ثانيتين لفتح إعدادات وقت المزامنة.",
+      "descEn": "Replaced the static refresh banner with a subtle pull gesture cue, top-attached glow blur, and a 2-second hold trigger for sync interval settings."
+    }
+  ]
+}

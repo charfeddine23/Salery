@@ -283,6 +283,15 @@ fun SquareTopAnchoredPullToRefresh(
         ),
         label = "square_refresh_spin"
     )
+    val glidePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "square_pull_hint_glide"
+    )
 
     val activeAccent by animateColorAsState(
         targetValue = when {
@@ -316,6 +325,7 @@ fun SquareTopAnchoredPullToRefresh(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = 30.dp)
                 .graphicsLayer {
                     translationY = effectiveTopGlowHeightPx * 0.78f
                 },
@@ -324,7 +334,7 @@ fun SquareTopAnchoredPullToRefresh(
 
         // 2. Top-glued glowing blur aura (anchored strictly at y = 0 and stretches downward on pull)
         val glowBandHeightDp = with(density) {
-            val baseRestingPx = 10.dp.toPx()
+            val baseRestingPx = 14.dp.toPx()
             val dynamicPx = baseRestingPx + effectiveTopGlowHeightPx * 1.28f
             dynamicPx.toDp()
         }
@@ -423,6 +433,89 @@ fun SquareTopAnchoredPullToRefresh(
                         )
                     )
                 )
+            }
+
+            // Subtle unboxed visual pull-down gesture hint at top edge when idle
+            val idleHintAlpha = if (isRefreshing) {
+                0f
+            } else {
+                (1f - (effectiveTopGlowHeightPx / 24f)).coerceIn(0f, 1f)
+            }
+
+            if (idleHintAlpha > 0.02f) {
+                val chevronOffsetDp = (glidePhase * 3.5f).dp
+                val chevronPulse = if (glidePhase < 0.5f) {
+                    0.35f + (glidePhase / 0.5f) * 0.55f
+                } else {
+                    0.90f - ((glidePhase - 0.5f) / 0.5f) * 0.55f
+                }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 6.dp)
+                        .alpha(idleHintAlpha)
+                        .testTag("square_pull_hint_cue"),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(34.dp)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        SquareGoldAccent.copy(alpha = 0.25f),
+                                        SquareGoldAccent.copy(alpha = 0.75f + 0.20f * ambientWave),
+                                        CyanNeon.copy(alpha = 0.65f + 0.20f * ambientWave),
+                                        CyanNeon.copy(alpha = 0.25f)
+                                    )
+                                )
+                            )
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.graphicsLayer {
+                            translationY = chevronOffsetDp.toPx() * 0.6f
+                        }
+                    ) {
+                        Canvas(modifier = Modifier.size(width = 12.dp, height = 11.dp)) {
+                            val w = size.width
+                            val h = size.height
+                            val strokeW = 1.5.dp.toPx()
+                            val topChevron = Path().apply {
+                                moveTo(w * 0.15f, h * 0.15f)
+                                lineTo(w * 0.50f, h * 0.48f)
+                                lineTo(w * 0.85f, h * 0.15f)
+                            }
+                            drawPath(
+                                path = topChevron,
+                                color = SquareGoldAccent.copy(alpha = (0.45f + 0.40f * chevronPulse).coerceIn(0f, 0.9f)),
+                                style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                            )
+                            val bottomChevron = Path().apply {
+                                moveTo(w * 0.15f, h * 0.56f)
+                                lineTo(w * 0.50f, h * 0.90f)
+                                lineTo(w * 0.85f, h * 0.56f)
+                            }
+                            drawPath(
+                                path = bottomChevron,
+                                color = CyanNeon.copy(alpha = (0.35f + 0.50f * (1f - chevronPulse + 0.35f)).coerceIn(0f, 0.9f)),
+                                style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                            )
+                        }
+                        Text(
+                            text = if (isArabic) "اسحب للأسفل" else "Pull down",
+                            color = colors.textMuted.copy(alpha = 0.72f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
 
             // Pull feedback HUD capsule (appears organically when pulling or refreshing)

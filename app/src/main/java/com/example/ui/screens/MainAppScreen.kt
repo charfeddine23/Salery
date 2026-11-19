@@ -180,6 +180,7 @@ fun MainAppScreen(
     val cryptoPriceError by viewModel.cryptoPriceError.collectAsState()
     val squareSnapshot by viewModel.squareSnapshot.collectAsState()
     val savingsHistory by viewModel.savingsHistory.collectAsState()
+    val goldHoldings by viewModel.goldHoldings.collectAsState()
     val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
     val squareMarketError by viewModel.squareMarketError.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
@@ -431,7 +432,7 @@ fun MainAppScreen(
                                                 "income" -> activeStrings.navIncome
                                                 "expenses" -> activeStrings.navExpenses
                                                 "debts" -> activeStrings.navDebts
-                                                "insights" -> if (isArabic) "الادخار" else "Savings"
+                                                "insights" -> if (isArabic) "الأصول والادخار" else "Assets & Saving"
                                                 else -> APP_NAME
                                             },
                                             canGoBack = isSubScreen,
@@ -750,6 +751,12 @@ fun MainAppScreen(
                                     debts = debts,
                                     userSettings = userSettings,
                                     savingsHistory = savingsHistory,
+                                    goldHoldings = goldHoldings,
+                                    squareSnapshot = squareSnapshot,
+                                    binanceHoldings = binanceHoldings,
+                                    binancePrices = binancePrices,
+                                    isRefreshingSquare = isRefreshingSquareMarket,
+                                    isRefreshingCrypto = isRefreshingCryptoPrices,
                                     onBackClick = { currentRoute = "cards" },
                                     onTransferToSavings = { viewModel.transferToSavings(it) },
                                     onWithdrawFromSavings = { viewModel.withdrawFromSavings(it) },
@@ -757,7 +764,19 @@ fun MainAppScreen(
                                         viewModel.spendFromSavings(amount, title, category, note)
                                     },
                                     onSetSavingsGoal = { viewModel.setSavingsGoal(it) },
-                                    onClearSavingsHistory = { viewModel.clearSavingsHistory() }
+                                    onClearSavingsHistory = { viewModel.clearSavingsHistory() },
+                                    onToggleAssetsSync = { enabled ->
+                                        viewModel.setSavingsAssetsSyncEnabled(enabled)
+                                    },
+                                    onSyncAssetsPricesNow = { force ->
+                                        viewModel.syncAssetsMarketPrices(force = force, showFeedback = force)
+                                    },
+                                    onUpsertGoldHolding = { karat, grams, label, existingId ->
+                                        viewModel.upsertGoldHolding(karat, grams, label, existingId)
+                                    },
+                                    onRemoveGoldHolding = { id ->
+                                        viewModel.removeGoldHolding(id)
+                                    }
                                 )
                                         }
                                     }
