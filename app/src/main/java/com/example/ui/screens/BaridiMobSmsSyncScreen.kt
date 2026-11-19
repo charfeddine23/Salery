@@ -225,9 +225,6 @@ fun BaridiMobSmsSyncScreen(
             latestBalance = effectiveLatestBalance,
             latestDelta = latestDelta,
             updatedAtMillis = effectiveUpdatedAt,
-            annualTaxesTotal = annualTaxesSummary.totalYearTaxesDzd,
-            transactionsCount = totalTransactionsCount,
-            archiveCount = archiveTotalCount,
             currencyCode = strings.currencyCode,
             isStealth = isStealth,
             hasSmsPerm = hasReadSmsPerm,
@@ -252,8 +249,7 @@ fun BaridiMobSmsSyncScreen(
                 }
             },
             onSkipOldSms = onSkipOldSmsAndStartFresh,
-            onResetBaseline = onResetBaselineAndRescan,
-            onSelectTabQuick = { activeTab = it }
+            onResetBaseline = onResetBaselineAndRescan
         )
     }
 

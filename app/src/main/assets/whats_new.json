@@ -5,8 +5,8 @@
       "badge": "الأصول والادخار • Assets & Saving",
       "titleAr": "صفحة الأصول والادخار (الذهب والكريبتو)",
       "titleEn": "Assets & Saving (Gold & Crypto Sync)",
-      "descAr": "تم تغيير اسم صفحة الادخار إلى الأصول والادخار وإضافة ميزة تتبع الأصول بمزامنة تلقائية للأسعار من Square و Binance. عند التفعيل، يظهر إجمالي العملات الرقمية من Binance للعرض فقط، وتتوفر خانة مخصصة لإدخال كمية الذهب بالغرام ونوع العيار لحساب قيمته الحقيقية فوراً.",
-      "descEn": "Renamed Savings to Assets & Saving with a toggleable Asset Vault synced automatically from Square & Binance. Shows your Binance Crypto total in read-only mode, plus a dedicated Gold tracker by grams & karat with live Square valuation."
+      "descAr": "تم تطوير صفحة الأصول والادخار مع صفحة مستقلة لإدارة الذهب بالغرام والعيار وعرض إجمالي العملات الرقمية من Binance، بمزامنة تلقائية من Square و Binance، مع زر في Total Reserved Savings لدمج قيمة الأصول مع المدخرات في المجموع الإجمالي.",
+      "descEn": "Upgraded Assets & Saving with a dedicated Manage Assets page for adding Gold holdings and viewing read-only Binance Crypto totals synced from Square & Binance, plus a toggle inside Total Reserved Savings to combine Assets + Cash Savings."
     },
     {
       "badge": "التحديثات • Updates",
@@ -19,8 +19,8 @@
       "badge": "بريدي موب • BaridiMob SMS",
       "titleAr": "تطوير مركز مزامنة بريدي موب والضرائب",
       "titleEn": "BaridiMob Sync Redesign & Annual Taxes",
-      "descAr": "تحديث التبويبات إلى الضرائب والمعاملات والأرشيف مع خانة لإجمالي الضرائب خلال السنة الحالية منذ 1.1، وتوحيد حجم بطاقات الملخص الثلاث ونقل زر التفعيل إلى الإعدادات.",
-      "descEn": "Redesigned sync tabs to Taxes (with YTD total anchored to 1.1), Transactions, and Archive, equalized the 3 summary cards, and moved the SMS sync toggle inside Settings."
+      "descAr": "تحديث التبويبات إلى الضرائب والمعاملات والأرشيف مع خانة لإجمالي الضرائب خلال السنة الحالية منذ 1.1، ونقل زر التفعيل إلى الإعدادات.",
+      "descEn": "Redesigned sync tabs to Taxes (with YTD total anchored to 1.1), Transactions, and Archive, and moved the SMS sync toggle inside Settings."
     },
     {
       "badge": "سكوار • Square",

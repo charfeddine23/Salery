@@ -161,7 +161,7 @@ fun SidebarDrawer(
 
             // Navigation Items
             val isInsideCard = selectedRoute in listOf(
-                "dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights"
+                "dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault"
             )
 
             DrawerNavItem(

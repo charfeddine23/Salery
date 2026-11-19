@@ -293,11 +293,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
                     (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
                     BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty() ||
-                    cfg.savingsAssetsSyncEnabled
+                    cfg.savingsAssetsSyncEnabled ||
+                    cfg.includeAssetsInSavingsTotal
                 if (usesBinance) {
                     refreshCryptoMarketPrices(force = false, showFeedback = false)
                 }
-                if (cfg.savingsAssetsSyncEnabled) {
+                if (cfg.savingsAssetsSyncEnabled || cfg.includeAssetsInSavingsTotal) {
                     refreshSquareMarketData(force = false, showFeedback = false)
                 }
                 delay(CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS)
@@ -2392,6 +2393,27 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 } else {
                     if (isAr) "تم إيقاف عرض الأصول في صفحة الادخار"
                     else "Assets tracking hidden on Assets & Saving"
+                }
+            )
+        }
+    }
+
+    fun setIncludeAssetsInSavingsTotal(enabled: Boolean) {
+        val isAr = settings.value.language == "ar"
+        prefsManager.updateSettings { current ->
+            current.copy(includeAssetsInSavingsTotal = enabled)
+        }
+        if (enabled) {
+            syncAssetsMarketPrices(force = false, showFeedback = false)
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (enabled) {
+                    if (isAr) "تم دمج الأصول (الذهب + الكريبتو) مع إجمالي المدخرات ✓"
+                    else "Combined Gold & Crypto assets into Total Reserved Savings ✓"
+                } else {
+                    if (isAr) "عرض الرصيد النقدي المدّخر فقط"
+                    else "Showing Cash Savings balance only"
                 }
             )
         }

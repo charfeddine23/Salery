@@ -295,16 +295,16 @@ fun MainAppScreen(
     var currentRoute by remember { mutableStateOf("cards") }
     val hubRoutes = listOf("cards", "keys", "ccps", "square")
     val isOnHubTabs = currentRoute in hubRoutes
-    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights")
+    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault")
     val isInsideCard = currentRoute in cardInnerRoutes
 
-    // Intercept system back gestures: exit sub-tabs back to Dashboard, or exit Card back to Cards Hub
+    // Intercept system back gestures: assets_vault -> insights -> dashboard_details -> cards
     if (currentRoute != "cards") {
         BackHandler {
-            currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
-                "dashboard_details"
-            } else {
-                "cards"
+            currentRoute = when (currentRoute) {
+                "assets_vault" -> "insights"
+                "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
+                else -> "cards"
             }
         }
     }
@@ -433,14 +433,15 @@ fun MainAppScreen(
                                                 "expenses" -> activeStrings.navExpenses
                                                 "debts" -> activeStrings.navDebts
                                                 "insights" -> if (isArabic) "الأصول والادخار" else "Assets & Saving"
+                                                "assets_vault" -> if (isArabic) "إدارة الأصول" else "Manage Assets"
                                                 else -> APP_NAME
                                             },
                                             canGoBack = isSubScreen,
                                             onBackClick = {
-                                                currentRoute = if (currentRoute in listOf("income", "expenses", "debts", "baridimob_sync", "insights")) {
-                                                    "dashboard_details"
-                                                } else {
-                                                    "cards"
+                                                currentRoute = when (currentRoute) {
+                                                    "assets_vault" -> "insights"
+                                                    "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
+                                                    else -> "cards"
                                                 }
                                             },
                                             onMenuClick = {
@@ -755,9 +756,7 @@ fun MainAppScreen(
                                     squareSnapshot = squareSnapshot,
                                     binanceHoldings = binanceHoldings,
                                     binancePrices = binancePrices,
-                                    isRefreshingSquare = isRefreshingSquareMarket,
-                                    isRefreshingCrypto = isRefreshingCryptoPrices,
-                                    onBackClick = { currentRoute = "cards" },
+                                    onBackClick = { currentRoute = "dashboard_details" },
                                     onTransferToSavings = { viewModel.transferToSavings(it) },
                                     onWithdrawFromSavings = { viewModel.withdrawFromSavings(it) },
                                     onSpendFromSavings = { amount, title, category, note ->
@@ -765,10 +764,26 @@ fun MainAppScreen(
                                     },
                                     onSetSavingsGoal = { viewModel.setSavingsGoal(it) },
                                     onClearSavingsHistory = { viewModel.clearSavingsHistory() },
-                                    onToggleAssetsSync = { enabled ->
-                                        viewModel.setSavingsAssetsSyncEnabled(enabled)
+                                    onToggleIncludeAssets = { enabled ->
+                                        viewModel.setIncludeAssetsInSavingsTotal(enabled)
+                                    },
+                                    onOpenAssetsScreen = {
+                                        currentRoute = "assets_vault"
                                     },
                                     onSyncAssetsPricesNow = { force ->
+                                        viewModel.syncAssetsMarketPrices(force = force, showFeedback = force)
+                                    }
+                                )
+                                "assets_vault" -> AssetsManagementScreen(
+                                    userSettings = userSettings,
+                                    goldHoldings = goldHoldings,
+                                    squareSnapshot = squareSnapshot,
+                                    binanceHoldings = binanceHoldings,
+                                    binancePrices = binancePrices,
+                                    isRefreshingSquare = isRefreshingSquareMarket,
+                                    isRefreshingCrypto = isRefreshingCryptoPrices,
+                                    onBackClick = { currentRoute = "insights" },
+                                    onSyncPricesNow = { force ->
                                         viewModel.syncAssetsMarketPrices(force = force, showFeedback = force)
                                     },
                                     onUpsertGoldHolding = { karat, grams, label, existingId ->

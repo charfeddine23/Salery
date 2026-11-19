@@ -112,9 +112,6 @@ fun SmsHeroBalanceCard(
     latestBalance: Double,
     latestDelta: Double?,
     updatedAtMillis: Long,
-    annualTaxesTotal: Double,
-    transactionsCount: Int,
-    archiveCount: Int,
     currencyCode: String,
     isStealth: Boolean,
     hasSmsPerm: Boolean,
@@ -128,8 +125,7 @@ fun SmsHeroBalanceCard(
     onToggleControls: () -> Unit,
     onToggleAutoSync: (Boolean) -> Unit,
     onSkipOldSms: () -> Unit,
-    onResetBaseline: () -> Unit,
-    onSelectTabQuick: (SmsWorkspaceTab) -> Unit = {}
+    onResetBaseline: () -> Unit
 ) {
     val hasBalance = updatedAtMillis > 0L || latestBalance >= 0.0
     val isNegativeBalance = hasBalance && latestBalance < 0.0
@@ -356,47 +352,6 @@ fun SmsHeroBalanceCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // 3-KPI Telemetry Row (Taxes, Transactions, Archive) — equal 3-column grid
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Max),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    HeroTelemetryChip(
-                        label = if (isArabic) "الضرائب" else "Taxes",
-                        value = formatDzdAmount(annualTaxesTotal, currencyCode, isStealth),
-                        accent = AmberNeon,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onSelectTabQuick(SmsWorkspaceTab.TAXES) },
-                        colors = colors
-                    )
-                    HeroTelemetryChip(
-                        label = if (isArabic) "المعاملات" else "Transactions",
-                        value = "$transactionsCount",
-                        accent = EmeraldNeon,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onSelectTabQuick(SmsWorkspaceTab.TRANSACTIONS) },
-                        colors = colors
-                    )
-                    HeroTelemetryChip(
-                        label = if (isArabic) "الأرشيف" else "Archive",
-                        value = "$archiveCount",
-                        accent = CyanNeon,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onSelectTabQuick(SmsWorkspaceTab.ARCHIVE) },
-                        colors = colors
-                    )
-                }
-
                 // Expandable Sync Controls Drawer (opened via Settings button)
                 AnimatedVisibility(
                     visible = controlsExpanded,
@@ -552,46 +507,6 @@ fun SmsHeroBalanceCard(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun HeroTelemetryChip(
-    label: String,
-    value: String,
-    accent: Color,
-    colors: LiquidGlassColors,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .defaultMinSize(minHeight = 56.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(accent.copy(alpha = 0.08f))
-            .border(0.7.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = label,
-            color = colors.textMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Text(
-                text = value,
-                color = accent,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.ExtraBold,
-                style = TextStyle(fontFeatureSettings = "tnum"),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }

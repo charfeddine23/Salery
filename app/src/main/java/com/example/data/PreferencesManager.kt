@@ -26,6 +26,7 @@ data class UserSettings(
     val savingsGoalAmount: Double = 0.0,
     val savingsHistoryJson: String = "[]",
     val savingsAssetsSyncEnabled: Boolean = false,
+    val includeAssetsInSavingsTotal: Boolean = false,
     val goldAssetHoldingsJson: String = "[]",
     val classicCardBankStyle: String = "EDAHABIA",
     val classicCardHolderName: String = "CHARFEDDINE KA",
@@ -186,6 +187,7 @@ class PreferencesManager(context: Context) {
             savingsGoalAmount = safeDouble("savings_goal_amount", 0.0),
             savingsHistoryJson = safeString("savings_history_json", "[]"),
             savingsAssetsSyncEnabled = safeBoolean("savings_assets_sync_enabled", false),
+            includeAssetsInSavingsTotal = safeBoolean("include_assets_in_savings_total", false),
             goldAssetHoldingsJson = safeString("gold_asset_holdings_json", "[]"),
             classicCardBankStyle = safeString("classic_card_bank_style", "EDAHABIA"),
             classicCardHolderName = safeString("classic_card_holder", "CHARFEDDINE KA"),
@@ -259,6 +261,7 @@ class PreferencesManager(context: Context) {
                 .putString("savings_goal_amount", finalUpdated.savingsGoalAmount.toString())
                 .putString("savings_history_json", finalUpdated.savingsHistoryJson)
                 .putBoolean("savings_assets_sync_enabled", finalUpdated.savingsAssetsSyncEnabled)
+                .putBoolean("include_assets_in_savings_total", finalUpdated.includeAssetsInSavingsTotal)
                 .putString("gold_asset_holdings_json", finalUpdated.goldAssetHoldingsJson)
                 .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
                 .putString("classic_card_holder", finalUpdated.classicCardHolderName)

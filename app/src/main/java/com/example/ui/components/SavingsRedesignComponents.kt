@@ -113,6 +113,11 @@ fun SovereignSavingsHeroCard(
     isArabic: Boolean,
     isStealth: Boolean,
     onEditGoalClick: () -> Unit,
+    assetsTotalDzd: Double = 0.0,
+    goldValueDzd: Double = 0.0,
+    cryptoValueDzd: Double = 0.0,
+    includeAssetsInTotal: Boolean = false,
+    onToggleIncludeAssets: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LiquidGlassTheme.colors
@@ -142,8 +147,14 @@ fun SovereignSavingsHeroCard(
         breathPhase = 0.45f
     }
 
+    val heroTargetValue = if (includeAssetsInTotal) {
+        (savingsBalance + assetsTotalDzd).coerceAtLeast(0.0)
+    } else {
+        savingsBalance.coerceAtLeast(0.0)
+    }
+
     val animatedSavingsValue by animateFloatAsState(
-        targetValue = savingsBalance.toFloat().coerceAtLeast(0f),
+        targetValue = heroTargetValue.toFloat(),
         animationSpec = spring(stiffness = 260f, dampingRatio = 0.88f),
         label = "animated_savings"
     )
@@ -296,14 +307,70 @@ fun SovereignSavingsHeroCard(
 
                 Spacer(modifier = Modifier.height(dimens.spacingLg))
 
-                // Centered Hero Savings Balance
-                Text(
-                    text = if (isArabic) "إجمالي الرصيد المدّخر" else "Total Reserved Savings",
-                    color = colors.textMuted,
-                    fontSize = typo.bodySm,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                // Hero Label Row + Toggle Button to combine Assets + Savings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (includeAssetsInTotal) {
+                            if (isArabic) "إجمالي المدخرات والأصول" else "Total Savings & Assets"
+                        } else {
+                            if (isArabic) "إجمالي الرصيد المدّخر" else "Total Reserved Savings"
+                        },
+                        color = colors.textMuted,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .defaultMinSize(minHeight = 36.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (includeAssetsInTotal) vaultEmerald.copy(alpha = 0.22f)
+                                else colors.glassSurface
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (includeAssetsInTotal) vaultEmerald.copy(alpha = 0.65f)
+                                else colors.glassBorderSubtle,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .clickable { onToggleIncludeAssets(!includeAssetsInTotal) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("hero_include_assets_toggle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (includeAssetsInTotal) vaultEmerald else colors.textMuted)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isArabic) {
+                                    if (includeAssetsInTotal) "مع الأصول ✓" else "+ دمج الأصول"
+                                } else {
+                                    if (includeAssetsInTotal) "With Assets ✓" else "+ Include Assets"
+                                },
+                                color = if (includeAssetsInTotal) vaultEmerald else colors.textSecondary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = formatDzd(animatedSavingsValue.toDouble(), strings.currencyCode, isStealth),
                     color = vaultGold,
@@ -313,6 +380,50 @@ fun SovereignSavingsHeroCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                AnimatedVisibility(visible = includeAssetsInTotal) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+                                .background(colors.glassSurface.copy(alpha = 0.78f))
+                                .border(1.dp, vaultEmerald.copy(alpha = 0.28f), RoundedCornerShape(dimens.cornerRadiusMd))
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = (if (isArabic) "نقد: " else "Cash: ") +
+                                    formatDzd(savingsBalance, strings.currencyCode, isStealth),
+                                color = colors.textSecondary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.SemiBold,
+                                style = tnumStyle,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = (if (isArabic) "ذهب: " else "Gold: ") +
+                                    formatDzd(goldValueDzd, strings.currencyCode, isStealth),
+                                color = vaultGold,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                style = tnumStyle,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = (if (isArabic) "كريبتو: " else "Crypto: ") +
+                                    formatDzd(cryptoValueDzd, strings.currencyCode, isStealth),
+                                color = CyanNeon,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                style = tnumStyle,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
 
                 // Goal Progress Section (if target set)
                 if (savingsGoalAmount > 0.0) {

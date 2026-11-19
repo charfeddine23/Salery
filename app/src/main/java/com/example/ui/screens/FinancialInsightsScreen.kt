@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.example.crypto.BinanceCryptoCatalog
 import com.example.crypto.CryptoHoldingEntry
 import com.example.crypto.CryptoMarketPriceEntry
 import com.example.data.DebtEntity
@@ -24,8 +25,9 @@ import com.example.data.SavingsMovementEntry
 import com.example.data.TransactionEntity
 import com.example.data.UserSettings
 import com.example.market.GoldAssetHolding
+import com.example.market.GoldValuationEngine
 import com.example.market.SquareMarketSnapshot
-import com.example.ui.components.AssetsReserveSection
+import com.example.ui.components.AssetsLauncherCard
 import com.example.ui.components.InstantSavingsTransferStudio
 import com.example.ui.components.SavingsActivityLedgerCard
 import com.example.ui.components.SavingsGoalDialog
@@ -39,8 +41,8 @@ import com.example.viewmodel.FinancialSummary
 
 /**
  * Assets & Saving Screen.
- * Features a breathing sovereign vault hero card, toggleable Gold (Square) & Crypto (Binance)
- * auto-synced asset storage, instant quick-transfer studio, savings ledger, and wealth forecasting.
+ * Features a breathing sovereign vault hero card with a toggle to combine Cash Savings + Assets,
+ * a dedicated Gold & Crypto launcher card, instant quick-transfer studio, savings ledger, and pulse.
  */
 @Composable
 fun FinancialInsightsScreen(
@@ -53,20 +55,15 @@ fun FinancialInsightsScreen(
     squareSnapshot: SquareMarketSnapshot? = null,
     binanceHoldings: List<CryptoHoldingEntry> = emptyList(),
     binancePrices: Map<String, CryptoMarketPriceEntry> = emptyMap(),
-    isRefreshingSquare: Boolean = false,
-    isRefreshingCrypto: Boolean = false,
     onBackClick: () -> Unit,
     onTransferToSavings: (Double) -> Unit = {},
     onWithdrawFromSavings: (Double) -> Unit = {},
     onSpendFromSavings: (Double, String, String, String) -> Unit = { _, _, _, _ -> },
     onSetSavingsGoal: (Double) -> Unit = {},
     onClearSavingsHistory: () -> Unit = {},
-    onToggleAssetsSync: (Boolean) -> Unit = {},
+    onToggleIncludeAssets: (Boolean) -> Unit = {},
+    onOpenAssetsScreen: () -> Unit = {},
     onSyncAssetsPricesNow: (Boolean) -> Unit = {},
-    onUpsertGoldHolding: (Int, Double, String, String?) -> Unit = { _, _, _, _ -> },
-    onRemoveGoldHolding: (String) -> Unit = {},
-    onLockToVault: (Double) -> Unit = onTransferToSavings,
-    onUnlockFromVault: (Double) -> Unit = onWithdrawFromSavings,
     modifier: Modifier = Modifier
 ) {
     BackHandler(onBack = onBackClick)
@@ -79,9 +76,20 @@ fun FinancialInsightsScreen(
 
     var showGoalDialog by remember { mutableStateOf(false) }
 
-    // Automatically refresh stale Square & Binance prices whenever the Assets feature is active
-    LaunchedEffect(userSettings.savingsAssetsSyncEnabled) {
-        if (userSettings.savingsAssetsSyncEnabled) {
+    val goldSummary = remember(goldHoldings, squareSnapshot) {
+        GoldValuationEngine.evaluatePortfolio(goldHoldings, squareSnapshot)
+    }
+    val cryptoTotalUsd = remember(binanceHoldings, binancePrices) {
+        BinanceCryptoCatalog.calculatePortfolioTotalUsd(binanceHoldings, binancePrices)
+    }
+    val cryptoDzdApprox = remember(cryptoTotalUsd, squareSnapshot) {
+        GoldValuationEngine.convertUsdToSquareParallelDzd(cryptoTotalUsd, squareSnapshot) ?: 0.0
+    }
+    val combinedAssetsDzd = goldSummary.totalValueDzdParallel + cryptoDzdApprox
+
+    // Automatically refresh stale Square & Binance prices whenever combined total is active or holdings exist
+    LaunchedEffect(userSettings.includeAssetsInSavingsTotal) {
+        if (userSettings.includeAssetsInSavingsTotal || goldHoldings.isNotEmpty() || binanceHoldings.isNotEmpty()) {
             onSyncAssetsPricesNow(false)
         }
     }
@@ -95,7 +103,7 @@ fun FinancialInsightsScreen(
                     .padding(horizontal = dimens.screenPaddingH),
                 horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
             ) {
-                // Left Column: Sovereign Vault Hero + Assets (Gold & Crypto) + Quick-Transfer Studio
+                // Left Column: Sovereign Vault Hero + Assets Launcher + Quick-Transfer Studio
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -111,28 +119,24 @@ fun FinancialInsightsScreen(
                             savingsGoalAmount = userSettings.savingsGoalAmount,
                             isArabic = isArabic,
                             isStealth = isStealth,
-                            onEditGoalClick = { showGoalDialog = true }
+                            onEditGoalClick = { showGoalDialog = true },
+                            assetsTotalDzd = combinedAssetsDzd,
+                            goldValueDzd = goldSummary.totalValueDzdParallel,
+                            cryptoValueDzd = cryptoDzdApprox,
+                            includeAssetsInTotal = userSettings.includeAssetsInSavingsTotal,
+                            onToggleIncludeAssets = onToggleIncludeAssets
                         )
                     }
 
                     item {
-                        AssetsReserveSection(
-                            isEnabled = userSettings.savingsAssetsSyncEnabled,
-                            cashSavingsBalance = summary.savingsBalance,
+                        AssetsLauncherCard(
                             goldHoldings = goldHoldings,
                             squareSnapshot = squareSnapshot,
-                            squareLastSyncMillis = userSettings.squareLastPriceSyncMillis,
                             binanceHoldings = binanceHoldings,
                             binancePrices = binancePrices,
-                            binanceLastSyncMillis = userSettings.binanceLastPriceSyncMillis,
-                            isRefreshingSquare = isRefreshingSquare,
-                            isRefreshingCrypto = isRefreshingCrypto,
                             isArabic = isArabic,
                             isStealth = isStealth,
-                            onToggleEnabled = onToggleAssetsSync,
-                            onSyncNow = { onSyncAssetsPricesNow(true) },
-                            onUpsertGoldHolding = onUpsertGoldHolding,
-                            onRemoveGoldHolding = onRemoveGoldHolding
+                            onOpenAssetsScreen = onOpenAssetsScreen
                         )
                     }
 
@@ -199,28 +203,24 @@ fun FinancialInsightsScreen(
                         savingsGoalAmount = userSettings.savingsGoalAmount,
                         isArabic = isArabic,
                         isStealth = isStealth,
-                        onEditGoalClick = { showGoalDialog = true }
+                        onEditGoalClick = { showGoalDialog = true },
+                        assetsTotalDzd = combinedAssetsDzd,
+                        goldValueDzd = goldSummary.totalValueDzdParallel,
+                        cryptoValueDzd = cryptoDzdApprox,
+                        includeAssetsInTotal = userSettings.includeAssetsInSavingsTotal,
+                        onToggleIncludeAssets = onToggleIncludeAssets
                     )
                 }
 
                 item {
-                    AssetsReserveSection(
-                        isEnabled = userSettings.savingsAssetsSyncEnabled,
-                        cashSavingsBalance = summary.savingsBalance,
+                    AssetsLauncherCard(
                         goldHoldings = goldHoldings,
                         squareSnapshot = squareSnapshot,
-                        squareLastSyncMillis = userSettings.squareLastPriceSyncMillis,
                         binanceHoldings = binanceHoldings,
                         binancePrices = binancePrices,
-                        binanceLastSyncMillis = userSettings.binanceLastPriceSyncMillis,
-                        isRefreshingSquare = isRefreshingSquare,
-                        isRefreshingCrypto = isRefreshingCrypto,
                         isArabic = isArabic,
                         isStealth = isStealth,
-                        onToggleEnabled = onToggleAssetsSync,
-                        onSyncNow = { onSyncAssetsPricesNow(true) },
-                        onUpsertGoldHolding = onUpsertGoldHolding,
-                        onRemoveGoldHolding = onRemoveGoldHolding
+                        onOpenAssetsScreen = onOpenAssetsScreen
                     )
                 }
 
