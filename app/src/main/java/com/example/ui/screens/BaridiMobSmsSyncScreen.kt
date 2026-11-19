@@ -68,12 +68,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
+import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
+import com.example.ui.components.SmsAnnualTaxSummaryCard
 import com.example.ui.components.SmsCleanArchiveRow
 import com.example.ui.components.SmsCleanBalanceTimelineRow
 import com.example.ui.components.SmsHeroBalanceCard
@@ -173,13 +175,19 @@ fun BaridiMobSmsSyncScreen(
         }
     }
 
-    var activeTab by remember { mutableStateOf(SmsWorkspaceTab.ACTIVITY) }
+    var activeTab by remember { mutableStateOf(SmsWorkspaceTab.TAXES) }
     var controlsExpanded by remember { mutableStateOf(false) }
     var manualSmsText by remember { mutableStateOf("") }
     var showAllBalanceHistory by remember { mutableStateOf(false) }
     var showAllPermanentArchive by remember { mutableStateOf(false) }
 
     val hasFreshBaseline = userSettings.smsSyncBaselineTimestampMillis > 0L
+
+    val annualTaxesSummary = remember(detectedTaxes) {
+        AlgPosteSmsAnalyzer.computeAnnualTaxesSummary(detectedTaxes)
+    }
+    val archiveTotalCount = archiveStudyReport.totalArchived.takeIf { it > 0 } ?: archivedSmsList.size
+    val totalTransactionsCount = pendingSuggestions.size + balanceHistory.size
 
     val chronologicalHistory = remember(balanceHistory) {
         balanceHistory.sortedBy { it.timestampMillis }
@@ -217,6 +225,9 @@ fun BaridiMobSmsSyncScreen(
             latestBalance = effectiveLatestBalance,
             latestDelta = latestDelta,
             updatedAtMillis = effectiveUpdatedAt,
+            annualTaxesTotal = annualTaxesSummary.totalYearTaxesDzd,
+            transactionsCount = totalTransactionsCount,
+            archiveCount = archiveTotalCount,
             currencyCode = strings.currencyCode,
             isStealth = isStealth,
             hasSmsPerm = hasReadSmsPerm,
@@ -241,7 +252,8 @@ fun BaridiMobSmsSyncScreen(
                 }
             },
             onSkipOldSms = onSkipOldSmsAndStartFresh,
-            onResetBaseline = onResetBaselineAndRescan
+            onResetBaseline = onResetBaselineAndRescan,
+            onSelectTabQuick = { activeTab = it }
         )
     }
 
@@ -249,9 +261,9 @@ fun BaridiMobSmsSyncScreen(
     fun SegmentedTabsSection() {
         SmsWorkspaceSegmentedTabs(
             selectedTab = activeTab,
-            activityCount = pendingSuggestions.size + detectedTaxes.size,
-            balancesCount = balanceHistory.size,
-            archiveCount = archiveStudyReport.totalArchived.takeIf { it > 0 } ?: archivedSmsList.size,
+            taxesCount = detectedTaxes.size,
+            transactionsCount = totalTransactionsCount,
+            archiveCount = archiveTotalCount,
             isArabic = isArabic,
             colors = colors,
             onSelectTab = { activeTab = it }
@@ -259,11 +271,11 @@ fun BaridiMobSmsSyncScreen(
     }
 
     @Composable
-    fun BalanceTimelineCardSection() {
+    fun TransactionsTimelineCardSection() {
         GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("sms_balance_history_card"),
+                .testTag("sms_transactions_ledger_card"),
             backgroundColor = colors.glassCard,
             borderColor = colors.glassBorderSubtle,
             shape = RoundedCornerShape(dimens.cornerRadiusLg),
@@ -285,12 +297,13 @@ fun BaridiMobSmsSyncScreen(
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = CyanNeon,
+                            tint = EmeraldNeon,
                             modifier = Modifier.size(dimens.iconSizeSm)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isArabic) "التسلسل الزمني للرصيد" else "Balance Timeline",
+                            text = if (isArabic) "سجل المعاملات والأرصدة (${newestHistoryFirst.size})"
+                            else "Transactions & Balance Log (${newestHistoryFirst.size})",
                             color = colors.textPrimary,
                             fontSize = typo.titleSm,
                             fontWeight = FontWeight.Bold,
@@ -527,33 +540,22 @@ fun BaridiMobSmsSyncScreen(
 
     fun androidx.compose.foundation.lazy.LazyListScope.renderActiveTabItems() {
         when (activeTab) {
-            SmsWorkspaceTab.ACTIVITY -> {
-                if (pendingSuggestions.isNotEmpty()) {
-                    item {
-                        SectionActionHeader(
-                            title = if (isArabic) "عمليات بانتظار الإضافة (${pendingSuggestions.size})"
-                            else "Ready to Add (${pendingSuggestions.size})",
-                            actionLabel = if (isArabic) "تجاهل الكل" else "Clear All",
-                            actionColor = RoseNeon,
-                            onActionClick = onClearAllSuggestions
-                        )
-                    }
-
-                    items(pendingSuggestions, key = { it.id }) { suggestion ->
-                        SmsSuggestionCard(
-                            suggestion = suggestion,
-                            isArabic = isArabic,
-                            onAccept = { chosenType -> onAcceptSuggestion(suggestion.id, chosenType) },
-                            onDismiss = { onDismissSuggestion(suggestion.id) }
-                        )
-                    }
+            SmsWorkspaceTab.TAXES -> {
+                item {
+                    SmsAnnualTaxSummaryCard(
+                        summary = annualTaxesSummary,
+                        currencyCode = strings.currencyCode,
+                        isStealth = isStealth,
+                        isArabic = isArabic,
+                        colors = colors
+                    )
                 }
 
                 if (detectedTaxes.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(2.dp))
                         SectionActionHeader(
-                            title = if (isArabic) "رسوم واقتطاعات مرصودة (${detectedTaxes.size})"
+                            title = if (isArabic) "الضرائب والاقتطاعات المرصودة (${detectedTaxes.size})"
                             else "Detected Fees & Taxes (${detectedTaxes.size})",
                             actionLabel = if (isArabic) "مسح الكل" else "Clear",
                             actionColor = AmberNeon,
@@ -572,26 +574,47 @@ fun BaridiMobSmsSyncScreen(
                             onDismiss = { onDismissTaxAnomaly(anomaly.id) }
                         )
                     }
-                }
-
-                if (pendingSuggestions.isEmpty() && detectedTaxes.isEmpty()) {
+                } else {
                     item {
                         LiquidEmptyStateCard(
                             icon = Icons.Default.MarkEmailRead,
-                            title = if (isArabic) "كل المعاملات محدّثة ✓" else "All Caught Up ✓",
+                            title = if (isArabic) "لا توجد ضرائب أو اقتطاعات مرصودة ✓" else "No Caught Taxes or Fees ✓",
                             description = if (isArabic) {
-                                "عند وصول أي إشعار جديد من بريدي موب، سيظهر هنا لتأكيده بنقرة واحدة."
+                                "أي اقتطاع ضريبي أو رسوم بنكية خفية منذ ${annualTaxesSummary.referenceStartDateLabel} ستُحسب تلقائياً في المجموع السنوي وتظهر هنا."
                             } else {
-                                "New BaridiMob alerts will appear here cleanly for 1-tap confirmation."
+                                "Any hidden fees or bank taxes caught since ${annualTaxesSummary.referenceStartDateLabel} will be tallied above and listed here."
                             },
-                            iconColor = EmeraldNeon
+                            iconColor = AmberNeon
                         )
                     }
                 }
             }
 
-            SmsWorkspaceTab.BALANCES -> {
-                item { BalanceTimelineCardSection() }
+            SmsWorkspaceTab.TRANSACTIONS -> {
+                if (pendingSuggestions.isNotEmpty()) {
+                    item {
+                        SectionActionHeader(
+                            title = if (isArabic) "معاملات بانتظار الإضافة (${pendingSuggestions.size})"
+                            else "Pending SMS Transactions (${pendingSuggestions.size})",
+                            actionLabel = if (isArabic) "تجاهل الكل" else "Clear All",
+                            actionColor = RoseNeon,
+                            onActionClick = onClearAllSuggestions
+                        )
+                    }
+
+                    items(pendingSuggestions, key = { it.id }) { suggestion ->
+                        SmsSuggestionCard(
+                            suggestion = suggestion,
+                            isArabic = isArabic,
+                            onAccept = { chosenType -> onAcceptSuggestion(suggestion.id, chosenType) },
+                            onDismiss = { onDismissSuggestion(suggestion.id) }
+                        )
+                    }
+                }
+
+                if (newestHistoryFirst.isNotEmpty() || pendingSuggestions.isEmpty()) {
+                    item { TransactionsTimelineCardSection() }
+                }
             }
 
             SmsWorkspaceTab.ARCHIVE -> {

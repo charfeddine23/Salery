@@ -1488,4 +1488,54 @@ class ExampleUnitTest {
       com.example.market.SquareMarketCatalog.shouldRefresh(tenHoursAgo, now, intervalMinutes = 0)
     )
   }
+
+  @Test
+  fun algPosteSmsAnalyzer_computesCurrentYearTaxesSinceJanFirst() {
+    val utc = java.util.TimeZone.getTimeZone("UTC")
+    fun utcMillis(year: Int, month: Int, day: Int): Long {
+      return java.util.Calendar.getInstance(utc).apply {
+        clear()
+        set(year, month, day, 12, 0, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+      }.timeInMillis
+    }
+
+    val decLastYear = utcMillis(2025, java.util.Calendar.DECEMBER, 31)
+    val jan1Current = utcMillis(2026, java.util.Calendar.JANUARY, 1)
+    val novCurrent = utcMillis(2026, java.util.Calendar.NOVEMBER, 19)
+
+    val taxes = listOf(
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "t_old",
+        taxAmount = 500.0,
+        detectedAtMillis = decLastYear,
+        isRecordedAsExpense = true
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "t_jan",
+        taxAmount = 30.0,
+        detectedAtMillis = jan1Current,
+        isRecordedAsExpense = true
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "t_nov",
+        taxAmount = 120.5,
+        detectedAtMillis = novCurrent,
+        isRecordedAsExpense = false
+      )
+    )
+
+    val summary = com.example.sms.AlgPosteSmsAnalyzer.computeAnnualTaxesSummary(
+      taxes = taxes,
+      referenceNowMillis = novCurrent,
+      timeZone = utc
+    )
+
+    assertEquals(2026, summary.year)
+    assertEquals("1.1.2026", summary.referenceStartDateLabel)
+    assertEquals(2, summary.yearTaxCount)
+    assertEquals(150.5, summary.totalYearTaxesDzd, 0.01)
+    assertEquals(30.0, summary.recordedYearTaxesDzd, 0.01)
+    assertEquals(120.5, summary.unrecordedYearTaxesDzd, 0.01)
+  }
 }

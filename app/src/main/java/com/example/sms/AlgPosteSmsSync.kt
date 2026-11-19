@@ -98,6 +98,16 @@ data class ArchivedSmsStudyReport(
     val totalValidCaughtTaxesDzd: Double = 0.0
 )
 
+data class AnnualSmsTaxesSummary(
+    val year: Int,
+    val referenceStartDateLabel: String,
+    val yearStartMillis: Long,
+    val totalYearTaxesDzd: Double,
+    val yearTaxCount: Int,
+    val recordedYearTaxesDzd: Double,
+    val unrecordedYearTaxesDzd: Double
+)
+
 object AlgPosteSmsAnalyzer {
 
     /**
@@ -105,6 +115,48 @@ object AlgPosteSmsAnalyzer {
      * since larger jumps indicate unlogged transfers/withdrawals or missing SMS rather than taxes.
      */
     const val MAX_CAUGHT_TAX_AMOUNT_DZD = 1000.0
+
+    fun computeAnnualTaxesSummary(
+        taxes: List<SmsTaxAnomalyEntry>,
+        referenceNowMillis: Long = System.currentTimeMillis(),
+        timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()
+    ): AnnualSmsTaxesSummary {
+        val cal = java.util.Calendar.getInstance(timeZone).apply {
+            timeInMillis = referenceNowMillis
+        }
+        val currentYear = cal.get(java.util.Calendar.YEAR)
+        val startCal = java.util.Calendar.getInstance(timeZone).apply {
+            clear()
+            set(currentYear, java.util.Calendar.JANUARY, 1, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val endCal = java.util.Calendar.getInstance(timeZone).apply {
+            clear()
+            set(currentYear + 1, java.util.Calendar.JANUARY, 1, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val yearStartMillis = startCal.timeInMillis
+        val nextYearStartMillis = endCal.timeInMillis
+
+        val yearEntries = taxes.filter { entry ->
+            entry.taxAmount > 0.0 &&
+                entry.detectedAtMillis >= yearStartMillis &&
+                entry.detectedAtMillis < nextYearStartMillis
+        }
+        val total = yearEntries.sumOf { it.taxAmount }
+        val recorded = yearEntries.filter { it.isRecordedAsExpense }.sumOf { it.taxAmount }
+        val unrecorded = (total - recorded).coerceAtLeast(0.0)
+
+        return AnnualSmsTaxesSummary(
+            year = currentYear,
+            referenceStartDateLabel = "1.1.$currentYear",
+            yearStartMillis = yearStartMillis,
+            totalYearTaxesDzd = (total * 100.0).roundToLong() / 100.0,
+            yearTaxCount = yearEntries.size,
+            recordedYearTaxesDzd = (recorded * 100.0).roundToLong() / 100.0,
+            unrecordedYearTaxesDzd = (unrecorded * 100.0).roundToLong() / 100.0
+        )
+    }
 
     private val debitKeywords = listOf(
         "retrait", "retire", "retiré", "débit", "debit", "débité", "debite",
