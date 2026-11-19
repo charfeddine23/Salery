@@ -181,21 +181,26 @@ fun SquareCompactMarketHeader(
     lastSyncLabel: String,
     remainingMins: Long,
     effectiveLastSync: Long,
+    syncIntervalMinutes: Int,
     isRefreshing: Boolean,
     errorMessage: String?,
-    refreshSpins: Int,
-    onRefreshClick: () -> Unit,
+    onOpenSyncSettings: () -> Unit,
     isArabic: Boolean,
     colors: LiquidGlassColors
 ) {
-    val spinAngle by animateFloatAsState(
-        targetValue = refreshSpins * 360f,
-        animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing),
-        label = "square_header_refresh_spin"
-    )
     val breathingEnabled = LocalBreathingGlowEnabled.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+    val intervalShortLabel = remember(syncIntervalMinutes, isArabic) {
+        when {
+            syncIntervalMinutes <= 0 -> if (isArabic) "يدوي" else "Manual"
+            syncIntervalMinutes < 60 -> if (isArabic) "كل ${syncIntervalMinutes}د" else "${syncIntervalMinutes}m auto"
+            else -> {
+                val hrs = syncIntervalMinutes / 60
+                if (isArabic) "كل ${hrs}سا" else "${hrs}h auto"
+            }
+        }
+    }
 
     GlassCard(
         modifier = Modifier
@@ -237,15 +242,6 @@ fun SquareCompactMarketHeader(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = if (isArabic) "الذهب والعملة الصعبة — بث حي" else "Live Gold & FX Feed",
-                                color = colors.textPrimary,
-                                fontSize = typo.bodyLg,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
                             if (snapshot != null) {
                                 val totalFeeds = snapshot.goldSourceCount + snapshot.bankSourceCount + snapshot.parallelSourceCount
                                 if (totalFeeds > 0) {
@@ -253,7 +249,7 @@ fun SquareCompactMarketHeader(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(dimens.cornerRadiusXs))
                                             .background(EmeraldNeon.copy(alpha = 0.16f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
                                             text = if (isArabic) "$totalFeeds مصادر" else "$totalFeeds feeds",
@@ -265,9 +261,18 @@ fun SquareCompactMarketHeader(
                                     }
                                 }
                             }
+                            Text(
+                                text = if (isArabic) "اسحب للأسفل للتحديث" else "Pull down to refresh",
+                                color = colors.textSecondary,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -277,11 +282,13 @@ fun SquareCompactMarketHeader(
                                 modifier = Modifier.size(11.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            val syncStatus = if (effectiveLastSync > 0L) {
-                                if (isArabic) "كل 1سا • $lastSyncLabel (بعد ${remainingMins}د)"
-                                else "1h auto • $lastSyncLabel (${remainingMins}m left)"
-                            } else {
-                                lastSyncLabel
+                            val syncStatus = when {
+                                effectiveLastSync <= 0L -> lastSyncLabel
+                                syncIntervalMinutes <= 0 -> "$intervalShortLabel • $lastSyncLabel"
+                                else -> {
+                                    if (isArabic) "$intervalShortLabel • $lastSyncLabel (بعد ${remainingMins}د)"
+                                    else "$intervalShortLabel • $lastSyncLabel (${remainingMins}m left)"
+                                }
                             }
                             Text(
                                 text = syncStatus,
@@ -295,22 +302,34 @@ fun SquareCompactMarketHeader(
                 }
                 Spacer(modifier = Modifier.width(dimens.spacingSm))
 
-                IconButton(
-                    onClick = onRefreshClick,
+                Row(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(SquareGoldAccent.copy(alpha = 0.14f))
-                        .border(1.dp, SquareGoldAccent.copy(alpha = 0.42f), CircleShape)
-                        .testTag("square_refresh_button")
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(CyanNeon.copy(alpha = 0.12f))
+                        .border(1.dp, CyanNeon.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = CyanNeon),
+                            onClick = onOpenSyncSettings
+                        )
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("square_sync_interval_chip"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = if (isArabic) "تحديث الأسعار الآن" else "Refresh market rates",
-                        tint = SquareGoldAccent,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .rotate(spinAngle)
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = if (isArabic) "إعدادات وقت المزامنة" else "Sync interval settings",
+                        tint = CyanNeon,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = intervalShortLabel,
+                        color = CyanNeon,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }

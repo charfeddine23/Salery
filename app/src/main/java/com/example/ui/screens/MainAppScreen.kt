@@ -557,11 +557,15 @@ fun MainAppScreen(
                                 "square" -> SquareScreen(
                                     snapshot = squareSnapshot,
                                     lastSyncMillis = userSettings.squareLastPriceSyncMillis,
+                                    syncIntervalMinutes = userSettings.squareSyncIntervalMinutes,
                                     pinnedIdsJson = userSettings.squarePinnedIdsJson,
                                     isRefreshing = isRefreshingSquareMarket,
                                     errorMessage = squareMarketError,
                                     onRefresh = { force ->
                                         viewModel.refreshSquareMarketData(force = force, showFeedback = force)
+                                    },
+                                    onUpdateSyncIntervalMinutes = { mins ->
+                                        viewModel.updateSquareSyncIntervalMinutes(mins)
                                     },
                                     onTogglePin = { tickerId ->
                                         viewModel.toggleSquarePinnedId(tickerId)

@@ -1461,4 +1461,31 @@ class ExampleUnitTest {
     assertEquals(249.48, s3m.currencies.first { it.code == "EUR" }.previousParallelSellDzd, 0.01)
     assertEquals(2.00, s3m.currencies.first { it.code == "EUR" }.change24hParallelPercent, 0.02)
   }
+
+  @Test
+  fun squareSyncInterval_respectsCustomMinutesAndManualOnlyMode() {
+    val now = 1_763_200_000_000L
+    // Default UserSettings is 60 minutes (1h)
+    assertEquals(60, UserSettings().squareSyncIntervalMinutes)
+
+    // Initial sync (lastSync == 0) always triggers refresh regardless of interval
+    assertTrue(com.example.market.SquareMarketCatalog.shouldRefresh(0L, now, intervalMinutes = 0))
+    assertTrue(com.example.market.SquareMarketCatalog.shouldRefresh(0L, now, intervalMinutes = 15))
+
+    // 5-minute interval
+    val fourMinsAgo = now - 4 * 60_000L
+    val fiveMinsAgo = now - 5 * 60_000L
+    org.junit.Assert.assertFalse(
+      com.example.market.SquareMarketCatalog.shouldRefresh(fourMinsAgo, now, intervalMinutes = 5)
+    )
+    assertTrue(
+      com.example.market.SquareMarketCatalog.shouldRefresh(fiveMinsAgo, now, intervalMinutes = 5)
+    )
+
+    // Manual-only (0 minutes) never auto-refreshes once synced once
+    val tenHoursAgo = now - 10 * 3_600_000L
+    org.junit.Assert.assertFalse(
+      com.example.market.SquareMarketCatalog.shouldRefresh(tenHoursAgo, now, intervalMinutes = 0)
+    )
+  }
 }

@@ -34,7 +34,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.market.SQUARE_REFRESH_INTERVAL_MILLIS
 import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.GlassButton
@@ -47,8 +46,10 @@ import com.example.ui.components.SquarePrimaryTab
 import com.example.ui.components.SquareQuickConverterCard
 import com.example.ui.components.SquareSortColumn
 import com.example.ui.components.SquareSortDirection
+import com.example.ui.components.SquareSyncIntervalSettingsDialog
 import com.example.ui.components.SquareTableHeaderRow
 import com.example.ui.components.SquareTickerRowModel
+import com.example.ui.components.SquareTopAnchoredPullToRefresh
 import com.example.ui.components.SquareVenueFilter
 import com.example.ui.components.SquareVenueSubFilterStrip
 import com.example.ui.components.buildSquareTickerRows
@@ -71,10 +72,12 @@ import java.util.Locale
 fun SquareScreen(
     snapshot: SquareMarketSnapshot?,
     lastSyncMillis: Long,
+    syncIntervalMinutes: Int = 60,
     pinnedIdsJson: String = SquareMarketCodec.DEFAULT_PINNED_JSON,
     isRefreshing: Boolean,
     errorMessage: String?,
     onRefresh: (force: Boolean) -> Unit,
+    onUpdateSyncIntervalMinutes: (Int) -> Unit = {},
     onTogglePin: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -85,20 +88,24 @@ fun SquareScreen(
     val typo = LocalAdaptiveTypography.current
     val layoutInfo = LocalAdaptiveLayoutInfo.current
 
-    // Initial check & continuous 1-hour auto-refresh timer while viewing Square
+    var showSyncSettingsDialog by remember { mutableStateOf(false) }
+
+    // Initial check & continuous configurable auto-refresh timer while viewing Square
     LaunchedEffect(Unit) {
         onRefresh(false)
     }
 
-    LaunchedEffect(lastSyncMillis) {
+    LaunchedEffect(lastSyncMillis, syncIntervalMinutes) {
+        if (syncIntervalMinutes <= 0) return@LaunchedEffect
+        val intervalMillis = syncIntervalMinutes.toLong() * 60_000L
         while (isActive) {
             val now = System.currentTimeMillis()
             val waitMillis = if (lastSyncMillis <= 0L) {
-                SQUARE_REFRESH_INTERVAL_MILLIS
+                intervalMillis
             } else {
                 val elapsed = now - lastSyncMillis
-                if (elapsed >= SQUARE_REFRESH_INTERVAL_MILLIS) 1_000L
-                else (SQUARE_REFRESH_INTERVAL_MILLIS - elapsed).coerceAtLeast(1_000L)
+                if (elapsed >= intervalMillis) 1_000L
+                else (intervalMillis - elapsed).coerceAtLeast(1_000L)
             }
             delay(waitMillis)
             onRefresh(false)
@@ -118,7 +125,6 @@ fun SquareScreen(
     var converterInput by remember { mutableStateOf("10") }
     var selectedKarat by remember { mutableIntStateOf(18) }
     var selectedCurrencyCode by remember { mutableStateOf("EUR") }
-    var refreshSpins by remember { mutableIntStateOf(0) }
 
     val pinnedIds = remember(pinnedIdsJson) {
         SquareMarketCodec.parsePinnedIds(pinnedIdsJson)
@@ -134,10 +140,13 @@ fun SquareScreen(
             if (isArabic) "بانتظار أول مزامنة" else "Pending initial sync"
         }
     }
-    val remainingMins = remember(effectiveLastSync) {
-        if (effectiveLastSync <= 0L) 0L
-        else ((effectiveLastSync + SQUARE_REFRESH_INTERVAL_MILLIS - System.currentTimeMillis()) / 60_000L)
-            .coerceAtLeast(0L)
+    val remainingMins = remember(effectiveLastSync, syncIntervalMinutes) {
+        if (effectiveLastSync <= 0L || syncIntervalMinutes <= 0) 0L
+        else {
+            val intervalMillis = syncIntervalMinutes.toLong() * 60_000L
+            ((effectiveLastSync + intervalMillis - System.currentTimeMillis()) / 60_000L)
+                .coerceAtLeast(0L)
+        }
     }
 
     val effectiveTabForTable = if (layoutInfo.columns >= 2 && primaryTab == SquarePrimaryTab.CALC) {
@@ -202,13 +211,10 @@ fun SquareScreen(
             lastSyncLabel = lastSyncLabel,
             remainingMins = remainingMins,
             effectiveLastSync = effectiveLastSync,
+            syncIntervalMinutes = syncIntervalMinutes,
             isRefreshing = isRefreshing,
             errorMessage = errorMessage,
-            refreshSpins = refreshSpins,
-            onRefreshClick = {
-                refreshSpins++
-                onRefresh(true)
-            },
+            onOpenSyncSettings = { showSyncSettingsDialog = true },
             isArabic = isArabic,
             colors = colors
         )
@@ -321,77 +327,179 @@ fun SquareScreen(
         }
     }
 
-    if (snapshot == null) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = dimens.screenPaddingH),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            LazyColumn(
+    SquareTopAnchoredPullToRefresh(
+        isRefreshing = isRefreshing,
+        isArabic = isArabic,
+        onRefresh = { onRefresh(true) },
+        onOpenSyncSettings = { showSyncSettingsDialog = true },
+        modifier = modifier
+    ) {
+        if (snapshot == null) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = dimens.contentMaxWidth),
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                    .fillMaxSize()
+                    .padding(horizontal = dimens.screenPaddingH),
+                contentAlignment = Alignment.TopCenter
             ) {
-                item {
-                    Spacer(modifier = Modifier.height(dimens.spacingXs))
-                    MarketHeaderSection()
-                }
-                item {
-                    GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = colors.glassCard,
-                        shape = RoundedCornerShape(dimens.cornerRadiusLg),
-                        cornerRadius = dimens.cornerRadiusLg
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(dimens.cardPaddingLarge),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = dimens.contentMaxWidth),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                ) {
+                    item {
+                        Spacer(modifier = Modifier.height(dimens.spacingXs))
+                        MarketHeaderSection()
+                    }
+                    item {
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = colors.glassCard,
+                            shape = RoundedCornerShape(dimens.cornerRadiusLg),
+                            cornerRadius = dimens.cornerRadiusLg
                         ) {
-                            Icon(
-                                imageVector = if (isRefreshing) Icons.Default.AutoGraph else Icons.Default.WarningAmber,
-                                contentDescription = null,
-                                tint = if (isRefreshing) SquareGoldAccent else AmberNeon,
-                                modifier = Modifier.size(dimens.iconSizeXl)
-                            )
-                            Spacer(modifier = Modifier.height(dimens.spacingSm))
-                            Text(
-                                text = when {
-                                    isRefreshing -> if (isArabic) "جاري جلب أسعار الذهب والعملات المباشرة..." else "Fetching live gold & FX market rates..."
-                                    errorMessage != null -> errorMessage
-                                    else -> if (isArabic) "لا توجد بيانات سوق مخزنة بعد" else "No market data cached yet"
-                                },
-                                color = colors.textPrimary,
-                                fontSize = typo.bodyLg,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(dimens.spacingMd))
-                            GlassButton(
-                                text = if (isArabic) "إعادة المحاولة" else "Retry Sync",
-                                onClick = { onRefresh(true) },
-                                modifier = Modifier.testTag("square_retry_button")
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(dimens.cardPaddingLarge),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = if (isRefreshing) Icons.Default.AutoGraph else Icons.Default.WarningAmber,
+                                    contentDescription = null,
+                                    tint = if (isRefreshing) SquareGoldAccent else AmberNeon,
+                                    modifier = Modifier.size(dimens.iconSizeXl)
+                                )
+                                Spacer(modifier = Modifier.height(dimens.spacingSm))
+                                Text(
+                                    text = when {
+                                        isRefreshing -> if (isArabic) "جاري جلب أسعار الذهب والعملات المباشرة..." else "Fetching live gold & FX market rates..."
+                                        errorMessage != null -> errorMessage
+                                        else -> if (isArabic) "لا توجد بيانات سوق مخزنة بعد" else "No market data cached yet"
+                                    },
+                                    color = colors.textPrimary,
+                                    fontSize = typo.bodyLg,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(dimens.spacingMd))
+                                GlassButton(
+                                    text = if (isArabic) "إعادة المحاولة" else "Retry Sync",
+                                    onClick = { onRefresh(true) },
+                                    modifier = Modifier.testTag("square_retry_button")
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-    } else if (layoutInfo.columns >= 2) {
-        // Adaptive 2-column Tablet Layout: Live Market Table + Always-Docked Converter
-        Row(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = dimens.screenPaddingH),
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
-        ) {
+        } else if (layoutInfo.columns >= 2) {
+            // Adaptive 2-column Tablet Layout: Live Market Table + Always-Docked Converter
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = dimens.screenPaddingH),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1.22f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                ) {
+                    item {
+                        Spacer(modifier = Modifier.height(dimens.spacingXs))
+                        MarketHeaderSection()
+                    }
+
+                    item {
+                        SquareCategoryTabStrip(
+                            selectedTab = primaryTab,
+                            favoritesCount = pinnedIds.size,
+                            onSelectTab = { nextTab ->
+                                primaryTab = nextTab
+                                expandedRowId = null
+                            },
+                            isArabic = isArabic,
+                            colors = colors
+                        )
+                    }
+
+                    item {
+                        SquareVenueSubFilterStrip(
+                            selectedVenue = venueFilter,
+                            onSelectVenue = { venueFilter = it },
+                            searchExpanded = searchExpanded,
+                            onToggleSearch = {
+                                searchExpanded = !searchExpanded
+                                if (!searchExpanded) searchQuery = ""
+                            },
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            isArabic = isArabic,
+                            colors = colors
+                        )
+                    }
+
+                    item {
+                        SquareTableHeaderRow(
+                            sortColumn = sortColumn,
+                            sortDirection = sortDirection,
+                            selectedVenue = venueFilter,
+                            onToggleSort = onToggleSortColumn,
+                            isArabic = isArabic,
+                            colors = colors
+                        )
+                    }
+
+                    item { TickerSheetSection() }
+
+                    item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(0.78f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                ) {
+                    item {
+                        Spacer(modifier = Modifier.height(dimens.spacingXs))
+                        ConverterSection()
+                    }
+
+                    if (sourcesSummary.isNotBlank()) {
+                        item {
+                            GlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                backgroundColor = colors.glassCard,
+                                shape = RoundedCornerShape(dimens.cornerRadiusMd),
+                                cornerRadius = dimens.cornerRadiusMd,
+                                breathingGlow = false
+                            ) {
+                                Text(
+                                    text = if (isArabic) {
+                                        "تجميع موثق من عدة مواقع • $sourcesSummary"
+                                    } else {
+                                        "Multi-source verified feed • $sourcesSummary"
+                                    },
+                                    color = EmeraldNeon.copy(alpha = 0.88f),
+                                    fontSize = typo.bodyXs,
+                                    modifier = Modifier.padding(dimens.cardPaddingSmall)
+                                )
+                            }
+                        }
+                    }
+
+                    item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
+                }
+            }
+        } else {
+            // Single-column smooth vertical flow for Phones
             LazyColumn(
                 modifier = Modifier
-                    .weight(1.22f)
-                    .fillMaxHeight(),
+                    .fillMaxSize()
+                    .padding(horizontal = dimens.screenPaddingH),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
             ) {
                 item {
@@ -412,67 +520,49 @@ fun SquareScreen(
                     )
                 }
 
-                item {
-                    SquareVenueSubFilterStrip(
-                        selectedVenue = venueFilter,
-                        onSelectVenue = { venueFilter = it },
-                        searchExpanded = searchExpanded,
-                        onToggleSearch = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) searchQuery = ""
-                        },
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        isArabic = isArabic,
-                        colors = colors
-                    )
-                }
-
-                item {
-                    SquareTableHeaderRow(
-                        sortColumn = sortColumn,
-                        sortDirection = sortDirection,
-                        selectedVenue = venueFilter,
-                        onToggleSort = onToggleSortColumn,
-                        isArabic = isArabic,
-                        colors = colors
-                    )
-                }
-
-                item { TickerSheetSection() }
-
-                item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(0.78f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
-            ) {
-                item {
-                    Spacer(modifier = Modifier.height(dimens.spacingXs))
-                    ConverterSection()
-                }
-
-                if (sourcesSummary.isNotBlank()) {
+                if (primaryTab == SquarePrimaryTab.CALC) {
+                    item { ConverterSection() }
+                } else {
                     item {
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = colors.glassCard,
-                            shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                            cornerRadius = dimens.cornerRadiusMd,
-                            breathingGlow = false
-                        ) {
+                        SquareVenueSubFilterStrip(
+                            selectedVenue = venueFilter,
+                            onSelectVenue = { venueFilter = it },
+                            searchExpanded = searchExpanded,
+                            onToggleSearch = {
+                                searchExpanded = !searchExpanded
+                                if (!searchExpanded) searchQuery = ""
+                            },
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            isArabic = isArabic,
+                            colors = colors
+                        )
+                    }
+
+                    item {
+                        SquareTableHeaderRow(
+                            sortColumn = sortColumn,
+                            sortDirection = sortDirection,
+                            selectedVenue = venueFilter,
+                            onToggleSort = onToggleSortColumn,
+                            isArabic = isArabic,
+                            colors = colors
+                        )
+                    }
+
+                    item { TickerSheetSection() }
+
+                    if (sourcesSummary.isNotBlank()) {
+                        item {
                             Text(
                                 text = if (isArabic) {
                                     "تجميع موثق من عدة مواقع • $sourcesSummary"
                                 } else {
                                     "Multi-source verified feed • $sourcesSummary"
                                 },
-                                color = EmeraldNeon.copy(alpha = 0.88f),
+                                color = EmeraldNeon.copy(alpha = 0.85f),
                                 fontSize = typo.bodyXs,
-                                modifier = Modifier.padding(dimens.cardPaddingSmall)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -481,81 +571,16 @@ fun SquareScreen(
                 item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
             }
         }
-    } else {
-        // Single-column smooth vertical flow for Phones
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = dimens.screenPaddingH),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-        ) {
-            item {
-                Spacer(modifier = Modifier.height(dimens.spacingXs))
-                MarketHeaderSection()
-            }
+    }
 
-            item {
-                SquareCategoryTabStrip(
-                    selectedTab = primaryTab,
-                    favoritesCount = pinnedIds.size,
-                    onSelectTab = { nextTab ->
-                        primaryTab = nextTab
-                        expandedRowId = null
-                    },
-                    isArabic = isArabic,
-                    colors = colors
-                )
-            }
-
-            if (primaryTab == SquarePrimaryTab.CALC) {
-                item { ConverterSection() }
-            } else {
-                item {
-                    SquareVenueSubFilterStrip(
-                        selectedVenue = venueFilter,
-                        onSelectVenue = { venueFilter = it },
-                        searchExpanded = searchExpanded,
-                        onToggleSearch = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) searchQuery = ""
-                        },
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        isArabic = isArabic,
-                        colors = colors
-                    )
-                }
-
-                item {
-                    SquareTableHeaderRow(
-                        sortColumn = sortColumn,
-                        sortDirection = sortDirection,
-                        selectedVenue = venueFilter,
-                        onToggleSort = onToggleSortColumn,
-                        isArabic = isArabic,
-                        colors = colors
-                    )
-                }
-
-                item { TickerSheetSection() }
-
-                if (sourcesSummary.isNotBlank()) {
-                    item {
-                        Text(
-                            text = if (isArabic) {
-                                "تجميع موثق من عدة مواقع • $sourcesSummary"
-                            } else {
-                                "Multi-source verified feed • $sourcesSummary"
-                            },
-                            color = EmeraldNeon.copy(alpha = 0.85f),
-                            fontSize = typo.bodyXs,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
-        }
+    if (showSyncSettingsDialog) {
+        SquareSyncIntervalSettingsDialog(
+            currentIntervalMinutes = syncIntervalMinutes,
+            lastSyncLabel = lastSyncLabel,
+            isArabic = isArabic,
+            onSaveInterval = onUpdateSyncIntervalMinutes,
+            onSyncNow = { onRefresh(true) },
+            onDismiss = { showSyncSettingsDialog = false }
+        )
     }
 }

@@ -19,7 +19,9 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-const val SQUARE_REFRESH_INTERVAL_MILLIS = 3_600_000L // 1 hour
+const val DEFAULT_SQUARE_SYNC_INTERVAL_MINUTES = 60
+const val SQUARE_REFRESH_INTERVAL_MILLIS = DEFAULT_SQUARE_SYNC_INTERVAL_MINUTES * 60_000L // 1 hour
+val SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES = listOf(5, 15, 30, 60, 180, 360, 720, 1440, 0)
 const val SQUARE_SNAPSHOT_VERSION = 3
 const val TROY_OUNCE_IN_GRAMS = 31.1034768
 
@@ -145,10 +147,13 @@ object SquareMarketCatalog {
 
     fun shouldRefresh(
         lastSyncMillis: Long,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        intervalMinutes: Int = DEFAULT_SQUARE_SYNC_INTERVAL_MINUTES
     ): Boolean {
         if (lastSyncMillis <= 0L) return true
-        return (nowMillis - lastSyncMillis) >= SQUARE_REFRESH_INTERVAL_MILLIS
+        if (intervalMinutes <= 0) return false
+        val intervalMillis = intervalMinutes.toLong() * 60_000L
+        return (nowMillis - lastSyncMillis) >= intervalMillis
     }
 
     fun dayKeyForMillis(

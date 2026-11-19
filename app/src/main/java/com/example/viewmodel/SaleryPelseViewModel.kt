@@ -2263,12 +2263,20 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         if (_isRefreshingSquareMarket.value) return
         val currentSettings = settings.value
         val lastSync = currentSettings.squareLastPriceSyncMillis
+        val syncIntervalMinutes = currentSettings.squareSyncIntervalMinutes.coerceIn(0, 1440)
         val cachedSnapshot = SquareMarketCodec.parseSnapshot(currentSettings.squareMarketSnapshotJson)
         val hasCurrentVersionCache = cachedSnapshot != null && cachedSnapshot.version >= SQUARE_SNAPSHOT_VERSION
+        if (!force && hasCurrentVersionCache && syncIntervalMinutes <= 0) {
+            return
+        }
         val needsDailyRollover = SquareMarketCatalog.needsDailyRollover(
             storedBaselineJson = currentSettings.squareDailyBaselineJson
         )
-        if (!force && hasCurrentVersionCache && !needsDailyRollover && !SquareMarketCatalog.shouldRefresh(lastSync)) {
+        if (!force && hasCurrentVersionCache && !needsDailyRollover && !SquareMarketCatalog.shouldRefresh(
+                lastSyncMillis = lastSync,
+                intervalMinutes = syncIntervalMinutes
+            )
+        ) {
             return
         }
 
@@ -2317,6 +2325,28 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     _toastEvent.emit(msg)
                 }
             }
+        }
+    }
+
+    fun updateSquareSyncIntervalMinutes(minutes: Int) {
+        val safeMinutes = minutes.coerceIn(0, 1440)
+        prefsManager.updateSettings { current ->
+            current.copy(squareSyncIntervalMinutes = safeMinutes)
+        }
+        val isAr = settings.value.language == "ar"
+        viewModelScope.launch {
+            val label = when {
+                safeMinutes <= 0 -> if (isAr) "يدوي فقط" else "Manual only"
+                safeMinutes < 60 -> if (isAr) "كل $safeMinutes دقيقة" else "Every $safeMinutes min"
+                else -> {
+                    val hours = safeMinutes / 60
+                    if (isAr) "كل $hours ساعة" else "Every ${hours}h"
+                }
+            }
+            _toastEvent.emit(
+                if (isAr) "تم حفظ وقت مزامنة سكوار: $label ⏱️"
+                else "Square sync interval saved: $label ⏱️"
+            )
         }
     }
 
