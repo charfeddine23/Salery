@@ -293,15 +293,20 @@ fun MainAppScreen(
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
+    var editingGoldHoldingForRoute by remember { mutableStateOf<com.example.market.GoldAssetHolding?>(null) }
     val hubRoutes = listOf("cards", "keys", "ccps", "square")
     val isOnHubTabs = currentRoute in hubRoutes
-    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault")
+    val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault", "gold_asset_editor")
     val isInsideCard = currentRoute in cardInnerRoutes
 
-    // Intercept system back gestures: assets_vault -> insights -> dashboard_details -> cards
+    // Intercept system back gestures: gold_asset_editor -> assets_vault -> insights -> dashboard_details -> cards
     if (currentRoute != "cards") {
         BackHandler {
             currentRoute = when (currentRoute) {
+                "gold_asset_editor" -> {
+                    editingGoldHoldingForRoute = null
+                    "assets_vault"
+                }
                 "assets_vault" -> "insights"
                 "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
                 else -> "cards"
@@ -434,11 +439,20 @@ fun MainAppScreen(
                                                 "debts" -> activeStrings.navDebts
                                                 "insights" -> if (isArabic) "الأصول والادخار" else "Assets & Saving"
                                                 "assets_vault" -> if (isArabic) "إدارة الأصول" else "Manage Assets"
+                                                "gold_asset_editor" -> if (editingGoldHoldingForRoute != null) {
+                                                    if (isArabic) "تعديل رصيد الذهب" else "Edit Gold"
+                                                } else {
+                                                    if (isArabic) "إضافة ذهب" else "Add Gold"
+                                                }
                                                 else -> APP_NAME
                                             },
                                             canGoBack = isSubScreen,
                                             onBackClick = {
                                                 currentRoute = when (currentRoute) {
+                                                    "gold_asset_editor" -> {
+                                                        editingGoldHoldingForRoute = null
+                                                        "assets_vault"
+                                                    }
                                                     "assets_vault" -> "insights"
                                                     "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
                                                     else -> "cards"
@@ -770,8 +784,8 @@ fun MainAppScreen(
                                     onOpenAssetsScreen = {
                                         currentRoute = "assets_vault"
                                     },
-                                    onSyncAssetsPricesNow = { force ->
-                                        viewModel.syncAssetsMarketPrices(force = force, showFeedback = force)
+                                    onSyncEverythingOnEnter = {
+                                        viewModel.syncEverythingOnAssetsSavingEnter(context)
                                     }
                                 )
                                 "assets_vault" -> AssetsManagementScreen(
@@ -786,11 +800,35 @@ fun MainAppScreen(
                                     onSyncPricesNow = { force ->
                                         viewModel.syncAssetsMarketPrices(force = force, showFeedback = force)
                                     },
-                                    onUpsertGoldHolding = { karat, grams, label, existingId ->
-                                        viewModel.upsertGoldHolding(karat, grams, label, existingId)
+                                    onOpenAddGold = {
+                                        editingGoldHoldingForRoute = null
+                                        currentRoute = "gold_asset_editor"
+                                    },
+                                    onOpenEditGold = { holding ->
+                                        editingGoldHoldingForRoute = holding
+                                        currentRoute = "gold_asset_editor"
                                     },
                                     onRemoveGoldHolding = { id ->
+                                        if (editingGoldHoldingForRoute?.id == id) {
+                                            editingGoldHoldingForRoute = null
+                                        }
                                         viewModel.removeGoldHolding(id)
+                                    }
+                                )
+                                "gold_asset_editor" -> GoldAssetEditorScreen(
+                                    editingHolding = editingGoldHoldingForRoute,
+                                    squareSnapshot = squareSnapshot,
+                                    isRefreshingSquare = isRefreshingSquareMarket,
+                                    isArabic = isArabic,
+                                    onBackClick = {
+                                        editingGoldHoldingForRoute = null
+                                        currentRoute = "assets_vault"
+                                    },
+                                    onRequestSyncSquare = {
+                                        viewModel.syncAssetsMarketPrices(force = true, showFeedback = true)
+                                    },
+                                    onSaveGold = { karat, grams, label, existingId ->
+                                        viewModel.upsertGoldHolding(karat, grams, label, existingId)
                                     }
                                 )
                                         }

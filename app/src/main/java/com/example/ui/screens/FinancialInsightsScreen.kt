@@ -65,7 +65,7 @@ fun FinancialInsightsScreen(
     onClearSavingsHistory: () -> Unit = {},
     onToggleIncludeAssets: (Boolean) -> Unit = {},
     onOpenAssetsScreen: () -> Unit = {},
-    onSyncAssetsPricesNow: (Boolean) -> Unit = {},
+    onSyncEverythingOnEnter: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     BackHandler(onBack = onBackClick)
@@ -90,11 +90,9 @@ fun FinancialInsightsScreen(
     }
     val combinedAssetsDzd = goldSummary.totalValueDzdParallel + cryptoDzdApprox
 
-    // Automatically refresh stale Square & Binance prices whenever combined total is active or holdings exist
-    LaunchedEffect(userSettings.includeAssetsInSavingsTotal) {
-        if (userSettings.includeAssetsInSavingsTotal || goldHoldings.isNotEmpty() || binanceHoldings.isNotEmpty()) {
-            onSyncAssetsPricesNow(false)
-        }
+    // Automatically synchronize everything in the app on every entry to Assets & Saving
+    LaunchedEffect(Unit) {
+        onSyncEverythingOnEnter()
     }
 
     Box(modifier = modifier.fillMaxSize()) {

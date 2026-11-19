@@ -1,11 +1,6 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
@@ -36,10 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +52,6 @@ import com.example.market.GoldAssetHolding
 import com.example.market.GoldPortfolioSummary
 import com.example.market.GoldValuationEngine
 import com.example.market.SquareMarketSnapshot
-import com.example.ui.components.AssetsGoldEntryPanel
 import com.example.ui.components.CryptoReadOnlySummaryCard
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GoldHoldingRowItem
@@ -87,7 +79,8 @@ fun AssetsManagementScreen(
     isRefreshingCrypto: Boolean,
     onBackClick: () -> Unit,
     onSyncPricesNow: (Boolean) -> Unit,
-    onUpsertGoldHolding: (Int, Double, String, String?) -> Unit,
+    onOpenAddGold: () -> Unit,
+    onOpenEditGold: (GoldAssetHolding) -> Unit,
     onRemoveGoldHolding: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -113,15 +106,6 @@ fun AssetsManagementScreen(
     }
     val combinedAssetsDzd = goldSummary.totalValueDzdParallel + cryptoDzdApprox
     val isSyncingAny = isRefreshingSquare || isRefreshingCrypto
-
-    var showGoldEditor by remember { mutableStateOf(goldHoldings.isEmpty()) }
-    var editingGoldHolding by remember { mutableStateOf<GoldAssetHolding?>(null) }
-
-    LaunchedEffect(goldHoldings.size) {
-        if (goldHoldings.isEmpty()) {
-            showGoldEditor = true
-        }
-    }
 
     Box(modifier = modifier.fillMaxSize()) {
         if (layoutInfo.columns >= 2) {
@@ -173,38 +157,11 @@ fun AssetsManagementScreen(
                     item {
                         GoldVaultManagementCard(
                             goldSummary = goldSummary,
-                            squareSnapshot = squareSnapshot,
-                            isRefreshingSquare = isRefreshingSquare,
                             isArabic = isArabic,
                             isStealth = isStealth,
-                            showGoldEditor = showGoldEditor,
-                            editingGoldHolding = editingGoldHolding,
-                            onToggleEditorOpen = {
-                                if (showGoldEditor && editingGoldHolding == null) {
-                                    showGoldEditor = false
-                                } else {
-                                    editingGoldHolding = null
-                                    showGoldEditor = true
-                                }
-                            },
-                            onRequestSyncSquare = { onSyncPricesNow(true) },
-                            onSaveGold = { karat, grams, label, existingId ->
-                                onUpsertGoldHolding(karat, grams, label, existingId)
-                                editingGoldHolding = null
-                                showGoldEditor = false
-                            },
-                            onCancelEditor = {
-                                editingGoldHolding = null
-                                showGoldEditor = false
-                            },
-                            onEditItem = { holding ->
-                                editingGoldHolding = holding
-                                showGoldEditor = true
-                            },
-                            onDeleteItem = { id ->
-                                if (editingGoldHolding?.id == id) editingGoldHolding = null
-                                onRemoveGoldHolding(id)
-                            }
+                            onOpenAddGold = onOpenAddGold,
+                            onEditItem = onOpenEditGold,
+                            onDeleteItem = onRemoveGoldHolding
                         )
                     }
                     item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
@@ -235,38 +192,11 @@ fun AssetsManagementScreen(
                 item {
                     GoldVaultManagementCard(
                         goldSummary = goldSummary,
-                        squareSnapshot = squareSnapshot,
-                        isRefreshingSquare = isRefreshingSquare,
                         isArabic = isArabic,
                         isStealth = isStealth,
-                        showGoldEditor = showGoldEditor,
-                        editingGoldHolding = editingGoldHolding,
-                        onToggleEditorOpen = {
-                            if (showGoldEditor && editingGoldHolding == null) {
-                                showGoldEditor = false
-                            } else {
-                                editingGoldHolding = null
-                                showGoldEditor = true
-                            }
-                        },
-                        onRequestSyncSquare = { onSyncPricesNow(true) },
-                        onSaveGold = { karat, grams, label, existingId ->
-                            onUpsertGoldHolding(karat, grams, label, existingId)
-                            editingGoldHolding = null
-                            showGoldEditor = false
-                        },
-                        onCancelEditor = {
-                            editingGoldHolding = null
-                            showGoldEditor = false
-                        },
-                        onEditItem = { holding ->
-                            editingGoldHolding = holding
-                            showGoldEditor = true
-                        },
-                        onDeleteItem = { id ->
-                            if (editingGoldHolding?.id == id) editingGoldHolding = null
-                            onRemoveGoldHolding(id)
-                        }
+                        onOpenAddGold = onOpenAddGold,
+                        onEditItem = onOpenEditGold,
+                        onDeleteItem = onRemoveGoldHolding
                     )
                 }
 
@@ -479,16 +409,9 @@ private fun AssetsSummaryHeaderCard(
 @Composable
 private fun GoldVaultManagementCard(
     goldSummary: GoldPortfolioSummary,
-    squareSnapshot: SquareMarketSnapshot?,
-    isRefreshingSquare: Boolean,
     isArabic: Boolean,
     isStealth: Boolean,
-    showGoldEditor: Boolean,
-    editingGoldHolding: GoldAssetHolding?,
-    onToggleEditorOpen: () -> Unit,
-    onRequestSyncSquare: () -> Unit,
-    onSaveGold: (karat: Int, grams: Double, label: String, existingId: String?) -> Unit,
-    onCancelEditor: () -> Unit,
+    onOpenAddGold: () -> Unit,
     onEditItem: (GoldAssetHolding) -> Unit,
     onDeleteItem: (String) -> Unit
 ) {
@@ -508,7 +431,13 @@ private fun GoldVaultManagementCard(
             .testTag("assets_gold_storage_card")
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onOpenAddGold)
+                .padding(vertical = 2.dp)
+                .testTag("gold_vault_header_button"),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -538,8 +467,8 @@ private fun GoldVaultManagementCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isArabic) "أدخل وزن الذهب ونوع العيار لحساب قيمته"
-                        else "Add gold weight & karat for live Square worth",
+                        text = if (isArabic) "اضغط لفتح صفحة إضافة وتقييم الذهب"
+                        else "Tap to open gold valuation & entry",
                         color = colors.textMuted,
                         fontSize = typo.caption,
                         maxLines = 1,
@@ -556,7 +485,7 @@ private fun GoldVaultManagementCard(
                     .clip(RoundedCornerShape(14.dp))
                     .background(AmberNeon.copy(alpha = 0.18f))
                     .border(1.dp, AmberNeon.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                    .clickable(onClick = onToggleEditorOpen)
+                    .clickable(onClick = onOpenAddGold)
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .testTag("gold_add_open_button"),
                 contentAlignment = Alignment.Center
@@ -575,27 +504,14 @@ private fun GoldVaultManagementCard(
                         fontSize = typo.bodyXs,
                         fontWeight = FontWeight.ExtraBold
                     )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = AmberNeon,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showGoldEditor,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                AssetsGoldEntryPanel(
-                    editingHolding = editingGoldHolding,
-                    squareSnapshot = squareSnapshot,
-                    isRefreshingSquare = isRefreshingSquare,
-                    isArabic = isArabic,
-                    isStealth = isStealth,
-                    onRequestSyncSquare = onRequestSyncSquare,
-                    onSave = onSaveGold,
-                    onCancel = onCancelEditor
-                )
             }
         }
 
@@ -664,14 +580,26 @@ private fun GoldVaultManagementCard(
                     }
                 }
             }
-        } else if (!showGoldEditor) {
+        } else {
             Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = if (isArabic) "لم تضف أي ذهب بعد. اضغط على (إضافة ذهب) لإدخال الوزن والعيار."
-                else "No gold entries yet. Tap Add Gold to enter weight & karat.",
-                color = colors.textMuted,
-                fontSize = typo.bodyXs
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .clip(RoundedCornerShape(dimens.cornerRadiusMd))
+                    .background(colors.glassSurface.copy(alpha = 0.6f))
+                    .border(1.dp, AmberNeon.copy(alpha = 0.25f), RoundedCornerShape(dimens.cornerRadiusMd))
+                    .clickable(onClick = onOpenAddGold)
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                    .testTag("gold_empty_add_prompt")
+            ) {
+                Text(
+                    text = if (isArabic) "لم تضف أي ذهب بعد • اضغط هنا لإدخال الوزن والعيار وتقدير قيمته"
+                    else "No gold entries yet • Tap here to add weight & karat",
+                    color = colors.textMuted,
+                    fontSize = typo.bodyXs
+                )
+            }
         }
     }
 }

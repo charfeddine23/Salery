@@ -2424,6 +2424,28 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         refreshCryptoMarketPrices(force = force, showFeedback = false)
     }
 
+    /**
+     * Triggered every time the user enters the Assets & Saving screen:
+     * forces a fresh background sync across Square (Gold + FX), Binance Crypto,
+     * BaridiMob / ALG Poste SMS Inbox, Salary Scheduler, Auto-Pay Debts, and App Updates.
+     */
+    fun syncEverythingOnAssetsSavingEnter(context: Context = getApplication()) {
+        refreshSquareMarketData(force = true, showFeedback = false)
+        refreshCryptoMarketPrices(force = true, showFeedback = false)
+        if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+            if (settings.value.baridiMobSmsSyncEnabled) {
+                scanAlgPosteSmsInbox(context = context, showFeedback = false)
+            } else {
+                refreshCurrentBalanceOnlyFromInbox(context = context, showFeedback = false)
+            }
+        }
+        viewModelScope.launch {
+            checkAndApplySalaryScheduler(force = false)
+            checkAndExecuteAutoPayDebts()
+        }
+        checkForUpdates(manual = false)
+    }
+
     fun upsertGoldHolding(
         karat: Int,
         grams: Double,
