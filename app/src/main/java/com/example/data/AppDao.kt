@@ -14,20 +14,11 @@ interface AppDao {
     @Query("SELECT * FROM transactions ORDER BY dateMillis DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE type = :type ORDER BY dateMillis DESC")
-    fun getTransactionsByType(type: TransactionType): Flow<List<TransactionEntity>>
-
-    @Query("SELECT * FROM transactions ORDER BY dateMillis DESC LIMIT :limit")
-    fun getRecentTransactions(limit: Int): Flow<List<TransactionEntity>>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransactions(transactions: List<TransactionEntity>)
-
-    @Update
-    suspend fun updateTransaction(transaction: TransactionEntity)
 
     @Delete
     suspend fun deleteTransaction(transaction: TransactionEntity)
@@ -38,12 +29,6 @@ interface AppDao {
     // Debts
     @Query("SELECT * FROM debts ORDER BY dueDateMillis ASC")
     fun getAllDebts(): Flow<List<DebtEntity>>
-
-    @Query("SELECT * FROM debts WHERE isPaid = 0 ORDER BY dueDateMillis ASC")
-    fun getPendingDebts(): Flow<List<DebtEntity>>
-
-    @Query("SELECT * FROM debts WHERE isPaid = 0 AND autoPayOnDueDate = 1 AND dueDateMillis <= :currentMillis")
-    suspend fun getDueAutoPayDebts(currentMillis: Long): List<DebtEntity>
 
     @Query("SELECT * FROM debts WHERE isPaid = 0 AND autoPayOnDueDate = 1")
     suspend fun getPendingAutoPayDebts(): List<DebtEntity>

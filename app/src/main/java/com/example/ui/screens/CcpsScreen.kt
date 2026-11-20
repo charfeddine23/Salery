@@ -1,13 +1,8 @@
 package com.example.ui.screens
 
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -49,7 +44,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,7 +64,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -86,9 +79,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -121,15 +112,13 @@ import com.example.ui.components.AppPresetPickerDialog
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
-import com.example.ui.components.InAppContactsPickerDialog
 import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.VaultAppBrandBackdrop
 import com.example.ui.components.VaultAppEmblemBadge
 import com.example.ui.components.VaultHoldActionDialog
-import com.example.ui.components.hasReadContactsPermission
 import com.example.ui.components.openAppContactsPermissionSettings
 import com.example.ui.components.primaryColor
-import com.example.ui.components.resolvePickedContactSafely
+import com.example.ui.components.rememberContactPickerFlow
 import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -1364,8 +1353,6 @@ private fun AddOrEditCcpAccountDialog(
     var contactPhone by remember(existing) { mutableStateOf(existing?.contactPhone ?: "") }
     var isPinned by remember(existing) { mutableStateOf(existing?.isPinned ?: false) }
 
-    var showInAppContactsPicker by remember { mutableStateOf(false) }
-    var contactsPermissionDeniedHint by remember { mutableStateOf(false) }
     var lastAutoFilledContactName by remember { mutableStateOf("") }
 
     if (showAppPickerModal) {
@@ -1401,64 +1388,12 @@ private fun AddOrEditCcpAccountDialog(
         if (phone.isNotBlank()) {
             contactPhone = phone
         }
-        contactsPermissionDeniedHint = false
     }
 
-    val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { pickedUri: Uri? ->
-        pickedUri?.let { uri ->
-            val (resolvedName, resolvedPhone, resolvedUriStr) = resolvePickedContactSafely(context, uri)
-            if (resolvedName.isBlank() && resolvedPhone.isBlank()) {
-                if (hasReadContactsPermission(context)) {
-                    showInAppContactsPicker = true
-                } else {
-                    contactsPermissionDeniedHint = true
-                }
-            } else {
-                applyResolvedContact(resolvedName, resolvedPhone, resolvedUriStr)
-            }
-        }
-    }
-
-    fun launchSystemContactPickerWithFallback() {
-        try {
-            contactPickerLauncher.launch(null)
-        } catch (_: Throwable) {
-            if (hasReadContactsPermission(context)) {
-                showInAppContactsPicker = true
-            } else {
-                contactsPermissionDeniedHint = true
-            }
-        }
-    }
-
-    val readContactsPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            contactsPermissionDeniedHint = false
-            showInAppContactsPicker = true
-        } else {
-            contactsPermissionDeniedHint = true
-            // Try system zero-permission PickContact as fallback on standard AOSP
-            launchSystemContactPickerWithFallback()
-        }
-    }
-
-    if (showInAppContactsPicker) {
-        InAppContactsPickerDialog(
-            secureScreenshots = secureScreenshots,
-            onDismiss = { showInAppContactsPicker = false },
-            onSelectContact = { item ->
-                showInAppContactsPicker = false
-                applyResolvedContact(item.displayName, item.phoneNumber, item.contactUri)
-            },
-            onOpenSystemPicker = {
-                showInAppContactsPicker = false
-                launchSystemContactPickerWithFallback()
-            }
-        )
+    val contactPicker = rememberContactPickerFlow(
+        secureScreenshots = secureScreenshots
+    ) { resolvedName, resolvedPhone, resolvedUriStr ->
+        applyResolvedContact(resolvedName, resolvedPhone, resolvedUriStr)
     }
 
     Dialog(
@@ -1643,14 +1578,7 @@ private fun AddOrEditCcpAccountDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                if (hasReadContactsPermission(context)) {
-                                    contactsPermissionDeniedHint = false
-                                    showInAppContactsPicker = true
-                                } else {
-                                    readContactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-                                }
-                            }
+                            .clickable { contactPicker.openPicker() }
                             .padding(horizontal = 12.dp, vertical = 10.dp)
                             .testTag("link_ccp_contact_button"),
                         verticalAlignment = Alignment.CenterVertically
@@ -1705,7 +1633,7 @@ private fun AddOrEditCcpAccountDialog(
                         }
                     }
 
-                    if (contactsPermissionDeniedHint && !hasReadContactsPermission(context)) {
+                    if (contactPicker.permissionDeniedHint && !contactPicker.hasPermission) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

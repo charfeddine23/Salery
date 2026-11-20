@@ -29,13 +29,8 @@ val BlueNeon = Color(0xFF2979FF)
 val EmeraldNeon = Color(0xFF00E676)
 val AmberNeon = Color(0xFFFFAB00)
 val RoseNeon = Color(0xFFFF1744)
-val PurpleNeon = Color(0xFFD500F9)
 
 // Quick Action Refined Palette
-val IncomeBtnColor = Color(0xFF059669) // Refined Emerald Green
-val ExpenseBtnColor = Color(0xFFE11D48) // Refined Vibrant Rose Red
-val DebtBtnColor = Color(0xFF0284C7)    // Refined Royal Cyan/Azure
-
 val IncomeBtnGradient = Brush.horizontalGradient(
     colors = listOf(Color(0xFF059669), Color(0xFF10B981))
 )
@@ -56,18 +51,6 @@ val TextLightSecondary = Color(0xFF475569)
 val TextLightMuted = Color(0xFF64748B)
 
 // Gradients
-val LiquidCyanGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF00E5FF), Color(0xFF2979FF))
-)
-val LiquidEmeraldGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF00E676), Color(0xFF00B0FF))
-)
-val LiquidAmberGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFFFFAB00), Color(0xFFFF6D00))
-)
-val LiquidRoseGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFFFF5252), Color(0xFFFF1744))
-)
 val GlassHighlightGradient = Brush.linearGradient(
     colors = listOf(Color(0x66FFFFFF), Color(0x10FFFFFF), Color(0x00FFFFFF))
 )

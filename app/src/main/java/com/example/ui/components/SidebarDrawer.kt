@@ -1,8 +1,6 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,25 +23,18 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,14 +48,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
 import com.example.data.UserSettings
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
@@ -85,17 +73,12 @@ fun SidebarDrawer(
     onNavigate: (String) -> Unit,
     userSettings: UserSettings,
     pendingSmsCount: Int = 0,
-    onOpenSalaryScheduler: () -> Unit = {},
     onOpenBackupRestore: () -> Unit = {},
     onOpenAccessPermissions: () -> Unit = {},
     onOpenThemeEngine: () -> Unit = {},
-    onOpenPatternLock: () -> Unit = {},
-    onLockAppNow: () -> Unit = {},
-    onToggleStealthMode: () -> Unit = {},
     onToggleBiometric: (Boolean) -> Unit = {},
     onToggleBreathingGlow: (Boolean) -> Unit = {},
     onToggleScreenshotProtection: (Boolean) -> Unit = {},
-    onSelectDesignStyle: (String) -> Unit,
     onSelectThemeMode: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,

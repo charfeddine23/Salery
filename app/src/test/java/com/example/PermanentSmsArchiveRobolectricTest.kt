@@ -24,7 +24,6 @@ import com.example.ui.i18n.EnglishStrings
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])

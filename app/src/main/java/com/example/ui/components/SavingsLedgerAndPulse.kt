@@ -53,12 +53,9 @@ import com.example.data.UserSettings
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
-import com.example.ui.theme.CyanNeon
-import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
-import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.FinancialSummary
 import androidx.compose.material3.minimumInteractiveComponentSize
 import java.text.SimpleDateFormat

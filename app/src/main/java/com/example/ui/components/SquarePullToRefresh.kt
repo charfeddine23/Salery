@@ -98,7 +98,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.market.SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES
 import com.example.ui.i18n.AppStrings
-import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme

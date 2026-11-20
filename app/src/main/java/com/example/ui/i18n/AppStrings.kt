@@ -3,8 +3,6 @@ package com.example.ui.i18n
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
-import com.example.data.DebtType
-import com.example.data.TransactionType
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -17,7 +15,6 @@ val APP_VERSION: String get() = com.example.BuildConfig.APP_VERSION_NAME
 
 interface StringsBundle {
     val appName: String get() = APP_NAME
-    val developerName: String get() = DEVELOPER_NAME
     val appVersion: String get() = com.example.BuildConfig.APP_VERSION_NAME
     val buildDate: String get() = com.example.BuildConfig.BUILD_DATE
     val currencyCode: String
@@ -26,20 +23,14 @@ interface StringsBundle {
     val navIncome: String
     val navExpenses: String
     val navDebts: String
-    val navSettings: String
 
     val cardsHubTitle: String
     val cardsHubSubtitle: String
     val edahabiaCardTitle: String
-    val edahabiaCardSubtitle: String
-    val algeriePoste: String
-    val edahabiaName: String
     val visaCardTitle: String
     val visaCardSubtitle: String
     val comingSoon: String
-    val visaComingSoonTitle: String
     val visaComingSoonDesc: String
-    val tapToViewDashboard: String
     val backToCards: String
     val activeCardsCount: String
     val currentAccount: String
@@ -64,17 +55,12 @@ interface StringsBundle {
     val salaryPayday: String
     val salaryEmployer: String
     val salaryAutoCredit: String
-    val salaryCreditedNotice: String
-    val salaryNextPayday: String
     val salaryDepositNow: String
-    val salaryDepositedToday: String
 
-    val debtManagement: String
     val debtsOwedByMe: String
     val debtsOwedToMe: String
     val debtAutoPay: String
     val debtDueDate: String
-    val debtPending: String
     val debtPaid: String
     val markAsPaid: String
     val executePayment: String
@@ -97,10 +83,7 @@ interface StringsBundle {
     val filterActive: String
     val filterSettled: String
     val filterAll: String
-    val debtProgress: String
     val fullySettled: String
-    val debtDueReminderTitle: String
-    val debtDueReminderBody: String
 
     val addTransaction: String
     val addIncome: String
@@ -114,8 +97,6 @@ interface StringsBundle {
     val pickFromCalendar: String
     val pickFromContacts: String
     val initialPaidAmountHelp: String
-    val selectDueDate: String
-    val selectPayday: String
     val note: String
     val date: String
     val save: String
@@ -125,33 +106,24 @@ interface StringsBundle {
 
     val settingsTitle: String
     val appLanguage: String
-    val langEnglish: String
-    val langArabic: String
     val themeMode: String
     val themeDark: String
     val themeLight: String
     val themeSystem: String
-    val designStyleTitle: String
     val styleLiquidGlass: String
     val styleNeumorphism: String
 
-    val securityTitle: String
     val patternLock: String
-    val patternLockDesc: String
-    val setPattern: String
-    val changePattern: String
     val drawPattern: String
     val confirmPattern: String
     val patternSaved: String
     val patternMismatch: String
     val patternTooShort: String
     val unlockApp: String
-    val incorrectPattern: String
     val biometricUnlock: String
     val biometricUnlockDesc: String
     val biometricPromptTitle: String
     val biometricPromptSubtitle: String
-    val biometricUsePattern: String
     val biometricUnlockAction: String
     val biometricNotAvailable: String
     val biometricSettingsTitle: String
@@ -165,11 +137,9 @@ interface StringsBundle {
     val screenshotProtectionActive: String
     val screenshotProtectionDisabled: String
 
-    val backupRestore: String
     val backupDriveTitle: String
     val backupToDrive: String
     val restoreFromDrive: String
-    val exportBackup: String
     val restoreBackup: String
     val backupSuccess: String
     val restoreSuccess: String
@@ -178,13 +148,9 @@ interface StringsBundle {
     val pasteJsonFallback: String
     val lastBackupLabel: String
     val neverBackedUp: String
-    val googleDriveSynced: String
-    val syncWithDrive: String
 
-    val aboutApp: String
     val developer: String
     val version: String
-    val emptyRecords: String
     val emptyTransactionsTitle: String
     val emptyTransactionsDesc: String
     val emptyIncomeTitle: String
@@ -197,35 +163,15 @@ interface StringsBundle {
     val addFirstIncome: String
     val addFirstExpense: String
     val addFirstDebt: String
-    val stealthModeTitle: String
-    val stealthModeDesc: String
-    val stealthModeActive: String
-    val stealthModeDisabled: String
-    val stealthDoubleTapHint: String
 
-    val aiInsightsTitle: String
-    val aiInsightsSubtitle: String
     val spendingVelocity: String
     val salaryRunway: String
     val debtPressure: String
     val savingsMilestone: String
-    val smartTip: String
 
-    val balanceProjectionTitle: String
-    val balanceProjectionSubtitle: String
-    val forecast7Days: String
-    val forecast30Days: String
-    val forecast6Months: String
-    val projectedEndingBalance: String
-    val dailyBurnRate: String
-    val expectedInflow: String
-    val expectedOutflow: String
-    val tapToScrub: String
     val searchPlaceholder: String
     val allFilter: String
 
-    val savingsWalletTitle: String
-    val savingsWalletDesc: String
     val transferToSavings: String
     val withdrawFromSavings: String
     val spendFromSavings: String
@@ -233,9 +179,7 @@ interface StringsBundle {
 
     // In-App Update Strings
     val checkForUpdates: String
-    val updateAvailableTitle: String
     val updateBadgeLabel: String
-    val updateAvailableDesc: String
     val updateActionButton: String
     val downloadingUpdate: String
     val installUpdateButton: String
@@ -256,20 +200,14 @@ object EnglishStrings : StringsBundle {
     override val navIncome = "Income"
     override val navExpenses = "Expenses"
     override val navDebts = "Debts"
-    override val navSettings = "Settings"
 
     override val cardsHubTitle = "Cards Hub"
     override val cardsHubSubtitle = "Manage your payment cards & accounts"
     override val edahabiaCardTitle = "Classic Card"
-    override val edahabiaCardSubtitle = "Algérie Poste • Current Account"
-    override val algeriePoste = "Algérie Poste"
-    override val edahabiaName = "CLASSIC"
     override val visaCardTitle = "Visa Premier"
     override val visaCardSubtitle = "International Multi-Currency Card"
     override val comingSoon = "Coming Soon"
-    override val visaComingSoonTitle = "Coming Soon"
     override val visaComingSoonDesc = "International payments, online subscriptions and multi-currency balances will be available very soon in Vaultix."
-    override val tapToViewDashboard = "Tap card to open full financial dashboard"
     override val backToCards = "Back to Cards"
     override val activeCardsCount = "2 Cards Active"
     override val currentAccount = "Current Account • CCP"
@@ -294,17 +232,12 @@ object EnglishStrings : StringsBundle {
     override val salaryPayday = "Payday (Day of Month)"
     override val salaryEmployer = "Employer / Source"
     override val salaryAutoCredit = "Auto-credit wallet on payday"
-    override val salaryCreditedNotice = "Salary credited automatically"
-    override val salaryNextPayday = "Next Payday: Day %d of this month"
     override val salaryDepositNow = "Deposit Salary Now"
-    override val salaryDepositedToday = "Salary Deposited Today!"
 
-    override val debtManagement = "Debt Management"
     override val debtsOwedByMe = "I Owe (Payable)"
     override val debtsOwedToMe = "Owed to Me (Receivable)"
     override val debtAutoPay = "Auto-payment on due date"
     override val debtDueDate = "Due Date"
-    override val debtPending = "Pending"
     override val debtPaid = "Paid"
     override val markAsPaid = "Mark as Paid"
     override val executePayment = "Pay Now"
@@ -327,10 +260,7 @@ object EnglishStrings : StringsBundle {
     override val filterActive = "Active"
     override val filterSettled = "Settled"
     override val filterAll = "All"
-    override val debtProgress = "Progress"
     override val fullySettled = "Fully Settled"
-    override val debtDueReminderTitle = "Debt Due Tomorrow"
-    override val debtDueReminderBody = "Reminder: Payment of %s for %s is due tomorrow."
 
     override val addTransaction = "Add Transaction"
     override val addIncome = "Add Income"
@@ -344,8 +274,6 @@ object EnglishStrings : StringsBundle {
     override val pickFromCalendar = "Pick from Calendar"
     override val pickFromContacts = "Pick from Contacts"
     override val initialPaidAmountHelp = "Amount already paid previously (if any)"
-    override val selectDueDate = "Select Due Date"
-    override val selectPayday = "Select Payday (Day of Month)"
     override val note = "Note (Optional)"
     override val date = "Date"
     override val save = "Save"
@@ -355,33 +283,24 @@ object EnglishStrings : StringsBundle {
 
     override val settingsTitle = "Settings"
     override val appLanguage = "Language"
-    override val langEnglish = "English"
-    override val langArabic = "العربية"
     override val themeMode = "Mode"
     override val themeDark = "Dark"
     override val themeLight = "Light"
     override val themeSystem = "System"
-    override val designStyleTitle = "Themes"
     override val styleLiquidGlass = "Liquid Glass"
     override val styleNeumorphism = "Neumorphism"
 
-    override val securityTitle = "Security & Privacy"
     override val patternLock = "Pattern Gesture Lock"
-    override val patternLockDesc = "Protect Vaultix with 3x3 gesture matrix"
-    override val setPattern = "Set Gesture Pattern"
-    override val changePattern = "Change Pattern"
     override val drawPattern = "Draw your unlock gesture pattern"
     override val confirmPattern = "Draw the pattern again to confirm"
     override val patternSaved = "Gesture pattern saved securely"
     override val patternMismatch = "Patterns do not match. Try again."
     override val patternTooShort = "Connect at least 4 dots."
     override val unlockApp = "Unlock Vaultix"
-    override val incorrectPattern = "Incorrect pattern! Try again."
     override val biometricUnlock = "Biometric Unlock (Fingerprint / Face)"
     override val biometricUnlockDesc = "Quick authentication via fingerprint or facial recognition"
     override val biometricPromptTitle = "Unlock Vaultix"
     override val biometricPromptSubtitle = "Touch fingerprint sensor or verify face to continue"
-    override val biometricUsePattern = "Use Pattern Instead"
     override val biometricUnlockAction = "Unlock with Biometrics"
     override val biometricNotAvailable = "Biometric hardware unavailable or not enrolled"
     override val biometricSettingsTitle = "Fingerprint Authentication"
@@ -395,11 +314,9 @@ object EnglishStrings : StringsBundle {
     override val screenshotProtectionActive = "Enabled • Blocked on Cards Hub"
     override val screenshotProtectionDisabled = "Disabled • Screenshots allowed"
 
-    override val backupRestore = "Backup & Restore"
     override val backupDriveTitle = "Google Drive Backups"
     override val backupToDrive = "Backup to Google Drive"
     override val restoreFromDrive = "Restore from Google Drive"
-    override val exportBackup = "Export & Backup Data"
     override val restoreBackup = "Restore Data"
     override val backupSuccess = "Backup created! Choose Google Drive to save file."
     override val restoreSuccess = "Data restored successfully from Google Drive"
@@ -408,13 +325,9 @@ object EnglishStrings : StringsBundle {
     override val pasteJsonFallback = "Or paste raw JSON directly"
     override val lastBackupLabel = "Last Backup: %s"
     override val neverBackedUp = "No backup performed yet"
-    override val googleDriveSynced = "Google Drive Manual Storage"
-    override val syncWithDrive = "Backup to Google Drive"
 
-    override val aboutApp = "About"
     override val developer = "Developer"
     override val version = "Version"
-    override val emptyRecords = "No records found. Tap + to add one."
     override val emptyTransactionsTitle = "No Transactions Yet"
     override val emptyTransactionsDesc = "Start tracking your financial balance by logging your first transaction."
     override val emptyIncomeTitle = "No Income Records"
@@ -427,44 +340,22 @@ object EnglishStrings : StringsBundle {
     override val addFirstIncome = "Add Income"
     override val addFirstExpense = "Add Expense"
     override val addFirstDebt = "Add Debt"
-    override val stealthModeTitle = "Stealth Mode (Shake to Hide)"
-    override val stealthModeDesc = "Mask all balances and sensitive amounts for public privacy"
-    override val stealthModeActive = "Stealth Mode Active • Balances Masked"
-    override val stealthModeDisabled = "Stealth Mode Off"
-    override val stealthDoubleTapHint = "Double-tap icon or shake device to toggle"
 
-    override val aiInsightsTitle = "AI Financial Insights"
-    override val aiInsightsSubtitle = "Smart spending velocity & cashflow intelligence"
     override val spendingVelocity = "Spending Velocity"
     override val salaryRunway = "Salary Runway"
     override val debtPressure = "Debt Pressure"
     override val savingsMilestone = "Savings Milestone"
-    override val smartTip = "Smart Tip"
 
-    override val balanceProjectionTitle = "Future Balance Projection"
-    override val balanceProjectionSubtitle = "Forecasted cashflow based on salary, debts & daily burn"
-    override val forecast7Days = "7 Days"
-    override val forecast30Days = "30 Days"
-    override val forecast6Months = "6 Months"
-    override val projectedEndingBalance = "Projected Ending Balance"
-    override val dailyBurnRate = "Avg Daily Burn"
-    override val expectedInflow = "Scheduled Inflow"
-    override val expectedOutflow = "Estimated Outflow"
-    override val tapToScrub = "Drag across chart to inspect projected dates"
     override val searchPlaceholder = "Search transactions or notes..."
     override val allFilter = "All"
 
-    override val savingsWalletTitle = "Savings Wallet"
-    override val savingsWalletDesc = "Protected savings segregated from spendable balance"
     override val transferToSavings = "Deposit to Savings"
     override val withdrawFromSavings = "Withdraw to Available"
     override val spendFromSavings = "Spend from Savings"
     override val paidFromSavingsBadge = "Savings Wallet"
 
     override val checkForUpdates = "Check for Updates"
-    override val updateAvailableTitle = "New Update Available"
     override val updateBadgeLabel = "New Update"
-    override val updateAvailableDesc = "A new release is ready with performance boosts and visual upgrades."
     override val updateActionButton = "Update"
     override val downloadingUpdate = "Downloading update..."
     override val installUpdateButton = "Install Update"
@@ -510,20 +401,14 @@ object ArabicStrings : StringsBundle {
     override val navIncome = "المداخيل"
     override val navExpenses = "المصاريف"
     override val navDebts = "الديون"
-    override val navSettings = "الإعدادات"
 
     override val cardsHubTitle = "محفظة البطاقات"
     override val cardsHubSubtitle = "إدارة بطاقات الدفع والحسابات المالية"
     override val edahabiaCardTitle = "البطاقة الكلاسيكية"
-    override val edahabiaCardSubtitle = "بريد الجزائر • الحساب الجاري"
-    override val algeriePoste = "بريد الجزائر"
-    override val edahabiaName = "كلاسيكية"
     override val visaCardTitle = "بطاقة فيزا بريميير"
     override val visaCardSubtitle = "بطاقة دولية متعددة العملات"
     override val comingSoon = "قريباً"
-    override val visaComingSoonTitle = "قريباً"
     override val visaComingSoonDesc = "خدمات الدفع الدولي، الاشتراكات العالمية وحسابات العملات الأجنبية ستتوفر قريباً جداً في Vaultix."
-    override val tapToViewDashboard = "اضغط على البطاقة لفتح لوحة التحكم الكاملة"
     override val backToCards = "العودة إلى البطاقات"
     override val activeCardsCount = "بطاقتان نشطتان"
     override val currentAccount = "حساب جاري • CCP"
@@ -548,17 +433,12 @@ object ArabicStrings : StringsBundle {
     override val salaryPayday = "يوم استلام الراتب (يوم من الشهر)"
     override val salaryEmployer = "جهة العمل / المصدر"
     override val salaryAutoCredit = "إضافة تلقائية للرصيد في يوم الراتب"
-    override val salaryCreditedNotice = "تم إيداع الراتب تلقائياً في الرصيد"
-    override val salaryNextPayday = "موعد الراتب القادم: يوم %d من هذا الشهر"
     override val salaryDepositNow = "إيداع الراتب الآن"
-    override val salaryDepositedToday = "تم إيداع الراتب اليوم!"
 
-    override val debtManagement = "إدارة الديون"
     override val debtsOwedByMe = "ديون عليّ (مستحقة للدفع)"
     override val debtsOwedToMe = "ديون لي (مستحقة للقبض)"
     override val debtAutoPay = "دفع تلقائي في تاريخ الاستحقاق"
     override val debtDueDate = "تاريخ الاستحقاق"
-    override val debtPending = "قيد الانتظار"
     override val debtPaid = "تم السداد"
     override val markAsPaid = "سداد كامل"
     override val executePayment = "سداد كامل"
@@ -580,10 +460,7 @@ object ArabicStrings : StringsBundle {
     override val filterActive = "الجارية"
     override val filterSettled = "المسددة"
     override val filterAll = "الكل"
-    override val debtProgress = "نسبة الإنجاز"
     override val fullySettled = "مسدد بالكامل"
-    override val debtDueReminderTitle = "موعد استحقاق دين غداً"
-    override val debtDueReminderBody = "تذكير: سداد بقيمة %s لـ %s مستحق غداً."
 
     override val addTransaction = "إضافة معاملة"
     override val addIncome = "إضافة دخل"
@@ -597,8 +474,6 @@ object ArabicStrings : StringsBundle {
     override val pickFromCalendar = "اختيار من التقويم"
     override val pickFromContacts = "اختيار من جهات الاتصال"
     override val initialPaidAmountHelp = "المبلغ المسدد مسبقاً (إن وجد)"
-    override val selectDueDate = "تحديد تاريخ الاستحقاق"
-    override val selectPayday = "تحديد يوم استلام الراتب"
     override val note = "ملاحظة (اختياري)"
     override val date = "التاريخ"
     override val save = "حفظ"
@@ -608,33 +483,24 @@ object ArabicStrings : StringsBundle {
 
     override val settingsTitle = "الإعدادات"
     override val appLanguage = "اللغة"
-    override val langEnglish = "English"
-    override val langArabic = "العربية"
     override val themeMode = "الوضع"
     override val themeDark = "داكن"
     override val themeLight = "فاتح"
     override val themeSystem = "تلقائي"
-    override val designStyleTitle = "الثيمات"
     override val styleLiquidGlass = "زجاج سائل"
     override val styleNeumorphism = "نيومورفيزم"
 
-    override val securityTitle = "الأمان والخصوصية"
     override val patternLock = "قفل النمط (Gesture Lock)"
-    override val patternLockDesc = "حماية Vaultix بمصفوفة إيماءات 3x3"
-    override val setPattern = "تعيين نمط جديد"
-    override val changePattern = "تغيير النمط"
     override val drawPattern = "ارسم نمط إيماءة فتح القفل"
     override val confirmPattern = "أعد رسم النمط للتأكيد"
     override val patternSaved = "تم حفظ نمط الإيماءة بنجاح"
     override val patternMismatch = "الأنماط غير متطابقة. أعد المحاولة."
     override val patternTooShort = "صل 4 نقاط على الأقل."
     override val unlockApp = "فتح قفل Vaultix"
-    override val incorrectPattern = "النمط غير صحيح! حاول ثانية."
     override val biometricUnlock = "فتح القفل بالبصمة (Fingerprint / Face ID)"
     override val biometricUnlockDesc = "دخول سريع وآمن باستخدام بصمة الإصبع أو التعرف على الوجه"
     override val biometricPromptTitle = "فتح قفل Vaultix"
     override val biometricPromptSubtitle = "المس مستشعر البصمة أو تحقق من الوجه للمتابعة"
-    override val biometricUsePattern = "استخدام النمط بدلاً من ذلك"
     override val biometricUnlockAction = "فتح القفل بالبصمة"
     override val biometricNotAvailable = "ميزة البصمة غير متوفرة أو غير مسجلة بالجهاز"
     override val biometricSettingsTitle = "إعدادات التحقق بالبصمة"
@@ -648,11 +514,9 @@ object ArabicStrings : StringsBundle {
     override val screenshotProtectionActive = "مفعل • التصوير محظور في البطاقات"
     override val screenshotProtectionDisabled = "معطل • مسموح بتصوير الشاشة"
 
-    override val backupRestore = "النسخ الاحتياطي والاستعادة"
     override val backupDriveTitle = "إعدادات النسخ الإحتياطي"
     override val backupToDrive = "نسخ احتياطي إلى Google Drive"
     override val restoreFromDrive = "استعادة من Google Drive"
-    override val exportBackup = "تصدير وحفظ نسخة احتياطية"
     override val restoreBackup = "استعادة البيانات"
     override val backupSuccess = "تم إنشاء النسخة! اختر Google Drive للحفظ."
     override val restoreSuccess = "تمت استعادة البيانات بنجاح من Google Drive"
@@ -661,13 +525,9 @@ object ArabicStrings : StringsBundle {
     override val pasteJsonFallback = "أو لصق نص JSON مباشرة"
     override val lastBackupLabel = "آخر نسخة: %s"
     override val neverBackedUp = "لم يتم النسخ بعد"
-    override val googleDriveSynced = "تخزين يدوي عبر Google Drive"
-    override val syncWithDrive = "نسخ احتياطي إلى Google Drive"
 
-    override val aboutApp = "حول التطبيق"
     override val developer = "المطور"
     override val version = "الإصدار"
-    override val emptyRecords = "لا توجد سجلات حالياً. انقر على + للإضافة."
     override val emptyTransactionsTitle = "لا توجد معاملات بعد"
     override val emptyTransactionsDesc = "ابدأ بتتبع رصيدك المالي عبر تسجيل أول معاملة لك."
     override val emptyIncomeTitle = "لا توجد مداخيل مسجلة"
@@ -680,44 +540,22 @@ object ArabicStrings : StringsBundle {
     override val addFirstIncome = "إضافة دخل"
     override val addFirstExpense = "إضافة مصروف"
     override val addFirstDebt = "إضافة دين"
-    override val stealthModeTitle = "الوضع السري (هز الهاتف للإخفاء)"
-    override val stealthModeDesc = "إخفاء كل الأرصدة والمبالغ لحماية الخصوصية في الأماكن العامة"
-    override val stealthModeActive = "الوضع السري مفعل • الأرصدة مخفية"
-    override val stealthModeDisabled = "تم إيقاف الوضع السري"
-    override val stealthDoubleTapHint = "انقر مرتين على الشعار أو هز الهاتف للتبديل"
 
-    override val aiInsightsTitle = "التحليل المالي الذكي"
-    override val aiInsightsSubtitle = "تحليل ذكي لسرعة الإنفاق والتدفقات النقدية"
     override val spendingVelocity = "سرعة الإنفاق"
     override val salaryRunway = "مدرج الراتب"
     override val debtPressure = "ضغط الديون"
     override val savingsMilestone = "معدل الادخار"
-    override val smartTip = "نصيحة ذكية"
 
-    override val balanceProjectionTitle = "توقع الرصيد المستقبلي"
-    override val balanceProjectionSubtitle = "توقعات التدفق المالي بناءً على الراتب، الديون ومعدل الحرق اليومي"
-    override val forecast7Days = "7 أيام"
-    override val forecast30Days = "30 يوم"
-    override val forecast6Months = "6 أشهر"
-    override val projectedEndingBalance = "الرصيد المتوقع نهاية الفترة"
-    override val dailyBurnRate = "متوسط الحرق اليومي"
-    override val expectedInflow = "المداخيل المجدولة"
-    override val expectedOutflow = "المصاريف المتوقعة"
-    override val tapToScrub = "اسحب فوق المخطط لمعاينة الرصيد في تواريخ محددة"
     override val searchPlaceholder = "البحث في المعاملات أو الملاحظات..."
     override val allFilter = "الكل"
 
-    override val savingsWalletTitle = "محفظة الادخار"
-    override val savingsWalletDesc = "مدخراتك المحمية بمعزل عن الرصيد المتاح للصرف اليومي"
     override val transferToSavings = "تحويل للادخار"
     override val withdrawFromSavings = "سحب للمتاح"
     override val spendFromSavings = "صرف من الادخار"
     override val paidFromSavingsBadge = "محفظة الادخار"
 
     override val checkForUpdates = "التحقق من التحديثات"
-    override val updateAvailableTitle = "تحديث جديد متاح"
     override val updateBadgeLabel = "تحديث جديد"
-    override val updateAvailableDesc = "تحديث جديد متاح بتحسينات جديدة وأداء أسرع"
     override val updateActionButton = "تحديث"
     override val downloadingUpdate = "جاري تحميل التحديث..."
     override val installUpdateButton = "تثبيت التحديث"
@@ -797,15 +635,6 @@ fun formatDzd(
     currencyText: String = LocalStrings.current.currencyCode, 
     isStealth: Boolean = LocalStealthMode.current
 ): String {
-    return formatDzdAmount(amount, currencyText, isStealth)
-}
-
-@Composable
-fun formatCurrency(
-    amount: Double, 
-    currencyText: String = LocalStrings.current.currencyCode
-): String {
-    val isStealth = LocalStealthMode.current
     return formatDzdAmount(amount, currencyText, isStealth)
 }
 

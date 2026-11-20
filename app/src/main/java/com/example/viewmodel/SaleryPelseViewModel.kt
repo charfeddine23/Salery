@@ -290,15 +290,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             delay(800L)
             while (isActive) {
                 val cfg = settings.value
+                val hasGoldHoldings = GoldAssetCodec.parseHoldings(cfg.goldAssetHoldingsJson).isNotEmpty()
                 val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
                     (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
                     BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty() ||
-                    cfg.savingsAssetsSyncEnabled ||
+                    hasGoldHoldings ||
                     cfg.includeAssetsInSavingsTotal
                 if (usesBinance) {
                     refreshCryptoMarketPrices(force = false, showFeedback = false)
                 }
-                if (cfg.savingsAssetsSyncEnabled || cfg.includeAssetsInSavingsTotal) {
+                if (hasGoldHoldings || cfg.includeAssetsInSavingsTotal) {
                     refreshSquareMarketData(force = false, showFeedback = false)
                 }
                 delay(CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS)
@@ -1193,10 +1194,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         return next
     }
 
-    fun setStealthMode(enabled: Boolean) {
-        prefsManager.updateSettings { it.copy(stealthMode = enabled) }
-    }
-
     // Savings Wallet (محفظة الادخار) Actions
     fun transferToSavings(amount: Double, note: String = "") {
         if (amount <= 0.0) return
@@ -1332,15 +1329,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Keep vault aliases for dashboard compatibility
     fun lockToVault(amount: Double) = transferToSavings(amount)
     fun unlockFromVault(amount: Double) = withdrawFromSavings(amount)
-    fun setVaultLockedAmount(amount: Double) {
-        val safe = amount.coerceAtLeast(0.0)
-        prefsManager.updateSettings { current ->
-            current.copy(
-                savingsWalletBalance = safe,
-                vaultLockedAmount = safe
-            )
-        }
-    }
 
     // Backup & Restore
     suspend fun exportBackupJson(): String {
@@ -1398,18 +1386,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         reanalyzePermanentSmsArchive(showFeedback = false)
         _toastEvent.emit("Restored ${payload.transactions.size} transactions and ${payload.debts.size} debts")
         return true
-    }
-
-    fun syncGoogleDrive() {
-        viewModelScope.launch {
-            prefsManager.updateSettings {
-                it.copy(
-                    googleDriveConnected = true,
-                    lastBackupTimestamp = System.currentTimeMillis()
-                )
-            }
-            _toastEvent.emit("Synced successfully with Google Drive")
-        }
     }
 
     private var lastUpdateCheckElapsedMillis: Long = 0L
@@ -1544,15 +1520,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             _updateUiState.value = AppUpdateUiState.Error(msg, current.release)
         }
         return launched
-    }
-
-    fun openUpdateDialog() {
-        dismissedUpdateVersionTag = null
-        if (_updateUiState.value is AppUpdateUiState.Idle) {
-            checkForUpdates(manual = true)
-        } else {
-            _showUpdateDialog.value = true
-        }
     }
 
     fun dismissUpdateDialog() {
@@ -2377,27 +2344,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     // ==================== Assets & Saving (Gold via Square + Crypto via Binance) ====================
 
-    fun setSavingsAssetsSyncEnabled(enabled: Boolean) {
-        val isAr = settings.value.language == "ar"
-        prefsManager.updateSettings { current ->
-            current.copy(savingsAssetsSyncEnabled = enabled)
-        }
-        if (enabled) {
-            syncAssetsMarketPrices(force = false, showFeedback = false)
-        }
-        viewModelScope.launch {
-            _toastEvent.emit(
-                if (enabled) {
-                    if (isAr) "تم تفعيل تخزين الأصول والمزامنة التلقائية مع Square و Binance ✓"
-                    else "Assets tracking & auto-sync (Square + Binance) enabled ✓"
-                } else {
-                    if (isAr) "تم إيقاف عرض الأصول في صفحة الادخار"
-                    else "Assets tracking hidden on Assets & Saving"
-                }
-            )
-        }
-    }
-
     fun setIncludeAssetsInSavingsTotal(enabled: Boolean) {
         val isAr = settings.value.language == "ar"
         prefsManager.updateSettings { current ->
@@ -2518,5 +2464,3 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 }
-
-typealias SaleryPulseViewModel = SaleryPelseViewModel

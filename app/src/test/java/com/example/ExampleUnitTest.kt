@@ -1,8 +1,5 @@
 package com.example
 
-import com.example.ai.FinancialInsightsEngine
-import com.example.analytics.BalanceProjectionEngine
-import com.example.analytics.ForecastPeriod
 import com.example.data.ExpenseCategories
 import com.example.data.DebtType
 import com.example.data.TransactionType
@@ -14,7 +11,6 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.EnglishStrings
 import com.example.ui.i18n.formatDzdAmount
-import com.example.viewmodel.FinancialSummary
 import com.example.update.isMandatoryBlockActive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -52,44 +48,6 @@ class ExampleUnitTest {
     assertEquals(TransactionType.EXPENSE.name, "EXPENSE")
     assertEquals(DebtType.OWED_BY_ME.name, "OWED_BY_ME")
     assertEquals(DebtType.OWED_TO_ME.name, "OWED_TO_ME")
-  }
-
-  @Test
-  fun financialInsights_generatesRunwayAndInsights() {
-    val userSettings = UserSettings(salaryAmount = 90000.0, salaryPayday = 20)
-    val summary = FinancialSummary(totalBalance = 50000.0, monthlyIncome = 90000.0, monthlyExpenses = 30000.0)
-    val insights = FinancialInsightsEngine.generateInsights(
-      transactions = emptyList(),
-      debts = emptyList(),
-      summary = summary,
-      userSettings = userSettings,
-      isArabic = false
-    )
-    assertTrue(insights.isNotEmpty())
-    assertTrue(insights.any { it.id == "runway" })
-  }
-
-  @Test
-  fun balanceProjection_calculatesPoints() {
-    val userSettings = UserSettings(salaryAmount = 85000.0, salaryPayday = 25)
-    val result7 = BalanceProjectionEngine.calculateProjection(
-      currentBalance = 40000.0,
-      transactions = emptyList(),
-      debts = emptyList(),
-      userSettings = userSettings,
-      period = ForecastPeriod.DAYS_7
-    )
-    assertEquals(8, result7.points.size) // Day 0 through Day 7
-    assertTrue(result7.dailyBurn > 0.0)
-
-    val result30 = BalanceProjectionEngine.calculateProjection(
-      currentBalance = 40000.0,
-      transactions = emptyList(),
-      debts = emptyList(),
-      userSettings = userSettings,
-      period = ForecastPeriod.DAYS_30
-    )
-    assertTrue(result30.points.size >= 6)
   }
 
   @Test

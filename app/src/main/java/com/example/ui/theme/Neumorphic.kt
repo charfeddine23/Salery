@@ -1,22 +1,10 @@
 package com.example.ui.theme
 
 import android.graphics.BlurMaskFilter
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ripple
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -27,11 +15,11 @@ import androidx.compose.ui.unit.dp
 val NeuLightBackground = Color(0xFFE8EEF5) // Soft tactile off-white/slate
 val NeuLightCard = Color(0xFFE8EEF5)
 val NeuLightDarkShadow = Color(0xFFB8C5D6) // Soft ambient dark shadow
-val NeuLightHighlight = Color(0xFFFFFFFF)  // Pure light highlight
+private val NeuLightHighlight = Color(0xFFFFFFFF)  // Pure light highlight
 
 val NeuDarkBackground = Color(0xFF13151A)  // Deep matte obsidian backdrop
 val NeuDarkCard = Color(0xFF202530)        // Tactile dark charcoal card surface with clear contrast
-val NeuDarkDarkShadow = Color(0xFF06070A)  // Deep soft shadow
+private val NeuDarkDarkShadow = Color(0xFF06070A)  // Deep soft shadow
 val NeuDarkHighlight = Color(0xFF384050)   // Subtle ambient light highlight on top-left edge
 
 // Tactile Neumorphic Accents
@@ -130,62 +118,6 @@ fun Modifier.neumorphicDepth(
             paint.maskFilter = BlurMaskFilter(elevPx * 0.8f, BlurMaskFilter.Blur.INNER)
             canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, cornerPx, cornerPx, paint)
             paint.maskFilter = null
-        }
-    }
-}
-
-/**
- * Tactile Neumorphic Card container with dual-shadow depth.
- */
-@Composable
-fun NeumorphicCard(
-    modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
-    elevation: Dp = 4.dp,
-    isDark: Boolean = LiquidGlassTheme.colors.isDark,
-    isPressed: Boolean = false,
-    backgroundColor: Color = if (isDark) NeuDarkCard else NeuLightCard,
-    onClick: (() -> Unit)? = null,
-    content: @Composable BoxScope.() -> Unit
-) {
-    val shape = RoundedCornerShape(cornerRadius)
-    val clickModifier = if (onClick != null) {
-        Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = ripple(color = if (isDark) NeuRoyalBlueDark else NeuRoyalBlue),
-            onClick = onClick
-        )
-    } else Modifier
-
-    Box(
-        modifier = modifier
-            .neumorphicDepth(
-                cornerRadius = cornerRadius,
-                elevation = elevation,
-                isDark = isDark,
-                isPressed = isPressed,
-                backgroundColor = backgroundColor
-            )
-            .then(clickModifier)
-    ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clip(shape)
-                .border(
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = 1.dp,
-                        color = if (isDark) NeuDarkHighlight.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.60f)
-                    ),
-                    shape = shape
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-        ) {
-            content()
         }
     }
 }

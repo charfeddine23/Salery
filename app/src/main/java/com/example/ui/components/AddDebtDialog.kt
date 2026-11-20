@@ -1,10 +1,6 @@
 package com.example.ui.components
 
-import android.Manifest
 import android.app.DatePickerDialog
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,7 +31,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -53,9 +48,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
@@ -128,81 +120,10 @@ fun AddDebtDialog(
     }
     var installmentDay by remember { mutableIntStateOf(existingDebt?.installmentDayOfMonth ?: 15) }
 
-    var showInAppContactsPicker by remember { mutableStateOf(false) }
-    var contactsPermissionDeniedHint by remember { mutableStateOf(false) }
-    var hasContactsPerm by remember { mutableStateOf(hasReadContactsPermission(context)) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                val granted = hasReadContactsPermission(context)
-                hasContactsPerm = granted
-                if (granted) {
-                    contactsPermissionDeniedHint = false
-                }
-            }
+    val contactPicker = rememberContactPickerFlow(secureScreenshots = false) { resolvedName, _, _ ->
+        if (resolvedName.isNotBlank()) {
+            personNameText = resolvedName
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    // Contacts Picker Launcher (fallback when using system Contacts app)
-    val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { contactUri: Uri? ->
-        contactUri?.let { uri ->
-            val (resolvedName, _, _) = resolvePickedContactSafely(context, uri)
-            if (resolvedName.isNotBlank()) {
-                personNameText = resolvedName
-                contactsPermissionDeniedHint = false
-            } else if (hasReadContactsPermission(context)) {
-                showInAppContactsPicker = true
-            } else {
-                contactsPermissionDeniedHint = true
-            }
-        }
-    }
-
-    fun launchSystemContactPickerWithFallback() {
-        try {
-            contactPickerLauncher.launch(null)
-        } catch (_: Throwable) {
-            if (hasReadContactsPermission(context)) {
-                showInAppContactsPicker = true
-            } else {
-                contactsPermissionDeniedHint = true
-            }
-        }
-    }
-
-    val readContactsPermLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasContactsPerm = isGranted || hasReadContactsPermission(context)
-        if (hasContactsPerm) {
-            contactsPermissionDeniedHint = false
-            showInAppContactsPicker = true
-        } else {
-            contactsPermissionDeniedHint = true
-            launchSystemContactPickerWithFallback()
-        }
-    }
-
-    if (showInAppContactsPicker) {
-        InAppContactsPickerDialog(
-            secureScreenshots = false,
-            onDismiss = { showInAppContactsPicker = false },
-            onSelectContact = { item ->
-                showInAppContactsPicker = false
-                personNameText = item.displayName
-                contactsPermissionDeniedHint = false
-            },
-            onOpenSystemPicker = {
-                showInAppContactsPicker = false
-                launchSystemContactPickerWithFallback()
-            }
-        )
     }
 
     fun openInstallmentDayPicker() {
@@ -352,15 +273,7 @@ fun AddDebtDialog(
                     label = { Text(strings.titleOrPerson) },
                     trailingIcon = {
                         IconButton(
-                            onClick = {
-                                if (hasReadContactsPermission(context)) {
-                                    hasContactsPerm = true
-                                    contactsPermissionDeniedHint = false
-                                    showInAppContactsPicker = true
-                                } else {
-                                    readContactsPermLauncher.launch(Manifest.permission.READ_CONTACTS)
-                                }
-                            },
+                            onClick = { contactPicker.openPicker() },
                             modifier = Modifier
                                 .size(48.dp)
                                 .testTag("debt_pick_contact_button")
@@ -385,7 +298,7 @@ fun AddDebtDialog(
                     singleLine = true
                 )
 
-                if (contactsPermissionDeniedHint && !hasContactsPerm) {
+                if (contactPicker.permissionDeniedHint && !contactPicker.hasPermission) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier

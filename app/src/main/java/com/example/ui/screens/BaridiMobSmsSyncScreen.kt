@@ -88,7 +88,6 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
-import com.example.ui.i18n.formatDzdAmount
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon

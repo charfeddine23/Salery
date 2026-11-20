@@ -81,10 +81,3 @@ fun SaleryPulseTheme(
         }
     }
 }
-
-@Composable
-fun SaleryPelseTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    designStyle: String = "LIQUID_GLASS",
-    content: @Composable () -> Unit
-) = SaleryPulseTheme(darkTheme = darkTheme, designStyle = designStyle, content = content)

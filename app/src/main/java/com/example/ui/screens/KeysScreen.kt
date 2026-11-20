@@ -78,7 +78,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -120,7 +119,6 @@ import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.components.VaultAppBrandBackdrop
 import com.example.ui.components.VaultAppEmblemBadge
 import com.example.ui.components.VaultHoldActionDialog
-import com.example.ui.components.accentColor
 import com.example.ui.components.primaryColor
 import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings

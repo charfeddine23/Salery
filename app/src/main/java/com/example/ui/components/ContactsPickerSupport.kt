@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,7 +41,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +67,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.CyanNeon
@@ -76,6 +83,122 @@ data class DeviceContactItem(
     val phoneNumber: String,
     val contactUri: String
 )
+
+@Stable
+class ContactPickerFlowState internal constructor(
+    hasPermissionInitial: Boolean,
+    private val onLaunchPicker: () -> Unit
+) {
+    var hasPermission by mutableStateOf(hasPermissionInitial)
+        internal set
+    var permissionDeniedHint by mutableStateOf(false)
+        internal set
+
+    fun openPicker() = onLaunchPicker()
+}
+
+@Composable
+fun rememberContactPickerFlow(
+    secureScreenshots: Boolean = false,
+    onContactResolved: (name: String, phone: String, uri: String) -> Unit
+): ContactPickerFlowState {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var showInAppContactsPicker by remember { mutableStateOf(false) }
+    var launchAction by remember { mutableStateOf({}) }
+    val state = remember {
+        ContactPickerFlowState(
+            hasPermissionInitial = hasReadContactsPermission(context),
+            onLaunchPicker = { launchAction() }
+        )
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = hasReadContactsPermission(context)
+                state.hasPermission = granted
+                if (granted) {
+                    state.permissionDeniedHint = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { pickedUri: Uri? ->
+        pickedUri?.let { uri ->
+            val (resolvedName, resolvedPhone, resolvedUriStr) = resolvePickedContactSafely(context, uri)
+            if (resolvedName.isBlank() && resolvedPhone.isBlank()) {
+                if (hasReadContactsPermission(context)) {
+                    showInAppContactsPicker = true
+                } else {
+                    state.permissionDeniedHint = true
+                }
+            } else {
+                state.permissionDeniedHint = false
+                onContactResolved(resolvedName, resolvedPhone, resolvedUriStr)
+            }
+        }
+    }
+
+    fun launchSystemContactPickerWithFallback() {
+        try {
+            contactPickerLauncher.launch(null)
+        } catch (_: Throwable) {
+            if (hasReadContactsPermission(context)) {
+                showInAppContactsPicker = true
+            } else {
+                state.permissionDeniedHint = true
+            }
+        }
+    }
+
+    val readContactsPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val granted = isGranted || hasReadContactsPermission(context)
+        state.hasPermission = granted
+        if (granted) {
+            state.permissionDeniedHint = false
+            showInAppContactsPicker = true
+        } else {
+            state.permissionDeniedHint = true
+            launchSystemContactPickerWithFallback()
+        }
+    }
+
+    launchAction = {
+        if (hasReadContactsPermission(context)) {
+            state.hasPermission = true
+            state.permissionDeniedHint = false
+            showInAppContactsPicker = true
+        } else {
+            readContactsPermLauncher.launch(Manifest.permission.READ_CONTACTS)
+        }
+    }
+
+    if (showInAppContactsPicker) {
+        InAppContactsPickerDialog(
+            secureScreenshots = secureScreenshots,
+            onDismiss = { showInAppContactsPicker = false },
+            onSelectContact = { item ->
+                showInAppContactsPicker = false
+                state.permissionDeniedHint = false
+                onContactResolved(item.displayName, item.phoneNumber, item.contactUri)
+            },
+            onOpenSystemPicker = {
+                showInAppContactsPicker = false
+                launchSystemContactPickerWithFallback()
+            }
+        )
+    }
+
+    return state
+}
 
 @Composable
 fun InAppContactsPickerDialog(
