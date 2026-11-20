@@ -634,7 +634,6 @@ private fun BaridiMobSmsSuggestionBanner(
 ) {
     val latest = suggestions.firstOrNull() ?: return
     val isArabic = strings is ArabicStrings
-    val isStealth = LocalStealthMode.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
     val isExpense = latest.isExpense
@@ -731,7 +730,7 @@ private fun BaridiMobSmsSuggestionBanner(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isStealth) "••••••" else latest.rawBody,
+                        text = latest.rawBody,
                         color = colors.textSecondary,
                         fontSize = typo.caption,
                         maxLines = 1,

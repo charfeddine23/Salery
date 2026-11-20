@@ -190,14 +190,6 @@ interface StringsBundle {
     val updateCheckFailed: String
     val updateInstallPermNote: String
 
-    // Vault Encryption & Recovery Strings
-    val vaultSecurityIssueTitle: String
-    val vaultSecurityIssueKeystoreDesc: String
-    val vaultSecurityIssueCorruptedDesc: String
-    val vaultSecurityRetryButton: String
-    val vaultSecurityResetButton: String
-    val vaultSecurityResetConfirmDesc: String
-
     fun categoryName(cat: String): String
 }
 
@@ -373,13 +365,6 @@ object EnglishStrings : StringsBundle {
     override val alreadyUpToDate = "You are on the latest version"
     override val updateCheckFailed = "Could not connect to check for updates"
     override val updateInstallPermNote = "Allow installing apps from Vaultix to complete the update."
-
-    override val vaultSecurityIssueTitle = "Vault Protection Notice"
-    override val vaultSecurityIssueKeystoreDesc = "Some protected items could not be unlocked because device security keys changed or are temporarily unavailable. Your unaffected records remain safe."
-    override val vaultSecurityIssueCorruptedDesc = "Some saved records appear unreadable or modified on disk. You can retry unlocking or clear only the unreadable items."
-    override val vaultSecurityRetryButton = "Retry Unlock"
-    override val vaultSecurityResetButton = "Clear Unreadable"
-    override val vaultSecurityResetConfirmDesc = "Only the unreadable entries will be cleared. Your readable data stays untouched."
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
@@ -581,13 +566,6 @@ object ArabicStrings : StringsBundle {
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
     override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
     override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
-
-    override val vaultSecurityIssueTitle = "تنبيه حماية الخزنة"
-    override val vaultSecurityIssueKeystoreDesc = "تعذر فتح بعض العناصر المحمية بسبب تغير مفاتيح أمان الجهاز أو عدم توفرها مؤقتاً. باقي بياناتك سليمة ومحفوظة بأمان."
-    override val vaultSecurityIssueCorruptedDesc = "يبدو أن بعض السجلات المحفوظة تالفة أو غير قابلة للقراءة. يمكنك إعادة المحاولة أو تصفية العناصر المتعذرة فقط."
-    override val vaultSecurityRetryButton = "إعادة المحاولة"
-    override val vaultSecurityResetButton = "مسح المتعذر فقط"
-    override val vaultSecurityResetConfirmDesc = "سيتم مسح السجلات غير القابلة للقراءة فقط، مع الحفاظ التام على بقية بياناتك."
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

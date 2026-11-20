@@ -53,7 +53,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -118,15 +117,6 @@ fun EditVisaCardDialog(
     }
     var cvcDigits by remember {
         mutableStateOf(currentCvc.filter { it.isDigit() }.take(4))
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            holderName = ""
-            cardNumberDigits = ""
-            expiryDigits = ""
-            cvcDigits = ""
-        }
     }
 
     val isNameValid = holderName.trim().isNotEmpty()

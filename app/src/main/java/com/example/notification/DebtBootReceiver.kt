@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.data.AppDatabase
-import com.example.security.VaultCryptoManager
 import com.example.update.AppUpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,8 +35,7 @@ class DebtBootReceiver : BroadcastReceiver() {
                         AppUpdateManager.cleanupObsoleteUpdates(context)
                     }
                     val db = AppDatabase.getDatabase(context)
-                    val crypto = VaultCryptoManager.getInstance(context.applicationContext)
-                    val allDebts = db.appDao().getAllDebtsList().map { crypto.decryptDebt(it) }
+                    val allDebts = db.appDao().getAllDebtsList()
                     DebtReminderScheduler.rescheduleAllReminders(context, allDebts)
                 } catch (t: Throwable) {
                     Log.e(TAG, "Error handling boot/package-replace broadcast", t)

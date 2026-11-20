@@ -899,9 +899,8 @@ private fun EdahabiaCardRealistic(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            val holderRaw = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase()
                             Text(
-                                text = if (isStealth) "••••  ••••" else holderRaw,
+                                text = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
                                 color = Color.White,
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -933,13 +932,9 @@ private fun EdahabiaCardRealistic(
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp
                                 )
-                                val expFormatted = if (isStealth) {
-                                    "•• / ••"
-                                } else {
-                                    userSettings.classicCardExpiry
-                                        .ifBlank { "11/29" }
-                                        .replace("/", " / ")
-                                }
+                                val expFormatted = userSettings.classicCardExpiry
+                                    .ifBlank { "11/29" }
+                                    .replace("/", " / ")
                                 Text(
                                     text = expFormatted,
                                     color = Color.White,
@@ -1678,9 +1673,8 @@ private fun VisaCardRealistic(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.4.sp
                             )
-                            val visaHolderRaw = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase()
                             Text(
-                                text = if (isStealth) "••••  ••••" else visaHolderRaw,
+                                text = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
                                 color = primaryTextColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,

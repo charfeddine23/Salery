@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
-import com.example.security.SecureMemoryUtils
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -73,7 +75,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -143,9 +144,9 @@ private enum class CcpFilter {
 fun CcpsScreen(
     userSettings: UserSettings,
     expandedCcpIds: Set<String> = emptySet(),
-    revealedCcpIds: Set<String> = emptySet(),
+    hiddenCcpIds: Set<String> = emptySet(),
     onToggleExpandCcp: (String) -> Unit = {},
-    onToggleRevealCcp: (String) -> Unit = {},
+    onToggleHideCcp: (String) -> Unit = {},
     onCollapseAllCcps: () -> Unit = {},
     onAddCcpAccount: (
         firstName: String,
@@ -251,12 +252,11 @@ fun CcpsScreen(
             VaultAppPresets.resolveForCcpEntry(targetAcc)
         }
         VaultHoldActionDialog(
-            title = if (isStealth) "••••••" else targetAcc.displayFullName,
+            title = targetAcc.displayFullName,
             subtitle = buildString {
                 append(if (isArabic) preset.nameAr else preset.nameEn)
                 if (targetAcc.ccpNumber.isNotBlank()) {
-                    val maskedCcp = if (isStealth) "••••••" else "••••${targetAcc.ccpNumber.takeLast(4)}"
-                    append(" • $maskedCcp")
+                    append(" • ${targetAcc.ccpNumber}")
                 }
             },
             preset = preset,
@@ -303,7 +303,8 @@ fun CcpsScreen(
     }
 
     fun copyText(label: String, text: String, @Suppress("UNUSED_PARAMETER") toastMessage: String) {
-        SecureMemoryUtils.copySensitiveText(context, label, text)
+        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cb.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 
     val ccpHeader: @Composable () -> Unit = {
@@ -602,7 +603,7 @@ fun CcpsScreen(
                 } else {
                     items(filteredAccounts, key = { it.id }) { acc ->
                         val isExpanded = acc.id in expandedCcpIds
-                        val isDigitsVisible = !isStealth && (acc.id in revealedCcpIds)
+                        val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
                         CcpAccountCard(
                             account = acc,
                             isExpanded = isExpanded,
@@ -610,7 +611,7 @@ fun CcpsScreen(
                             isStealth = isStealth,
                             isArabic = isArabic,
                             onToggleExpand = { onToggleExpandCcp(acc.id) },
-                            onToggleDigitsVisibility = { onToggleRevealCcp(acc.id) },
+                            onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
                             onTogglePin = { onTogglePinCcpAccount(acc.id) },
                             onHoldActions = { holdActionTargetAccount = acc },
                             onCopyName = {
@@ -704,7 +705,7 @@ fun CcpsScreen(
             } else {
                 items(filteredAccounts, key = { it.id }) { acc ->
                     val isExpanded = acc.id in expandedCcpIds
-                    val isDigitsVisible = !isStealth && (acc.id in revealedCcpIds)
+                    val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
                     CcpAccountCard(
                         account = acc,
                         isExpanded = isExpanded,
@@ -712,7 +713,7 @@ fun CcpsScreen(
                         isStealth = isStealth,
                         isArabic = isArabic,
                         onToggleExpand = { onToggleExpandCcp(acc.id) },
-                        onToggleDigitsVisibility = { onToggleRevealCcp(acc.id) },
+                        onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
                         onTogglePin = { onTogglePinCcpAccount(acc.id) },
                         onHoldActions = { holdActionTargetAccount = acc },
                         onCopyName = {
@@ -1007,9 +1008,9 @@ private fun CcpAccountCard(
                         if (account.hasLinkedContact) {
                             Spacer(modifier = Modifier.height(3.dp))
                             val contactMeta = buildString {
-                                append(if (isStealth) "••••••" else account.contactName)
+                                append(account.contactName)
                                 if (account.contactPhone.isNotBlank()) {
-                                    append(" • ${if (!isDigitsVisible) "••••••" else account.contactPhone}")
+                                    append(" • ${if (isStealth || !isExpanded) "••••••" else account.contactPhone}")
                                 }
                             }
                             Row(
@@ -1268,7 +1269,7 @@ private fun CcpAccountCard(
                         ) {
                             if (account.agencyNote.isNotBlank()) {
                                 Text(
-                                    text = if (isStealth) "••••••" else account.agencyNote,
+                                    text = account.agencyNote,
                                     color = colors.textSecondary,
                                     fontSize = 11.5.sp,
                                     maxLines = 2,
@@ -1400,21 +1401,6 @@ private fun AddOrEditCcpAccountDialog(
     var isPinned by remember(existing) { mutableStateOf(existing?.isPinned ?: false) }
 
     var lastAutoFilledContactName by remember { mutableStateOf("") }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            firstName = ""
-            lastName = ""
-            ccpNumber = ""
-            ccpKey = ""
-            ripNumber = ""
-            agencyNote = ""
-            contactName = ""
-            contactUri = ""
-            contactPhone = ""
-            lastAutoFilledContactName = ""
-        }
-    }
 
     if (showAppPickerModal) {
         AppPresetPickerDialog(
