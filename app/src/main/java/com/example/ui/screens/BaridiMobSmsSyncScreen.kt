@@ -309,7 +309,7 @@ fun BaridiMobSmsSyncScreen(
                     if (balanceHistory.isNotEmpty()) {
                         IconButton(
                             onClick = onClearBalanceHistory,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
@@ -351,6 +351,7 @@ fun BaridiMobSmsSyncScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clickable { showAllBalanceHistory = !showAllBalanceHistory }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -455,12 +456,12 @@ fun BaridiMobSmsSyncScreen(
 
                     Box(
                         modifier = Modifier
-                            .defaultMinSize(minHeight = 38.dp)
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(CyanNeon.copy(alpha = 0.15f))
                             .border(0.8.dp, CyanNeon.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
                             .clickable(onClick = onReanalyzePermanentArchive)
-                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                             .testTag("reanalyze_permanent_archive_btn"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -512,6 +513,7 @@ fun BaridiMobSmsSyncScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clickable { showAllPermanentArchive = !showAllPermanentArchive }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -719,10 +721,12 @@ private fun SectionActionHeader(
         Spacer(modifier = Modifier.width(8.dp))
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(9.dp))
+                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(actionColor.copy(alpha = 0.13f))
                 .clickable(onClick = onActionClick)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = actionLabel,
@@ -810,18 +814,21 @@ fun SmsSuggestionCard(
                         )
                     }
                     if (suggestion.extractedBalance != null) {
-                        Text(
-                            text = if (isArabic) "رصيد: ${formatDzd(suggestion.extractedBalance)}"
-                            else "Bal: ${formatDzd(suggestion.extractedBalance)}",
-                            color = colors.textMuted,
-                            fontSize = 10.sp
-                        )
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Text(
+                                text = if (isArabic) "رصيد: ${formatDzd(suggestion.extractedBalance)}"
+                                else "Bal: ${formatDzd(suggestion.extractedBalance)}",
+                                color = colors.textMuted,
+                                fontSize = 10.sp,
+                                style = TextStyle(fontFeatureSettings = "tnum")
+                            )
+                        }
                     }
                 }
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -846,7 +853,7 @@ fun SmsSuggestionCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .clickable { showRawText = !showRawText }
-                        .padding(vertical = 2.dp, horizontal = 2.dp)
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
                 )
                 AnimatedVisibility(visible = showRawText) {
                     Text(
@@ -873,7 +880,7 @@ fun SmsSuggestionCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 44.dp)
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(colors.glassSurface)
                         .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
@@ -911,7 +918,7 @@ fun SmsSuggestionCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .defaultMinSize(minHeight = 44.dp)
+                        .defaultMinSize(minHeight = 48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(accent.copy(alpha = 0.20f))
                         .border(0.9.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))

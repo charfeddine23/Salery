@@ -963,7 +963,7 @@ fun InstantSavingsTransferStudio(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .defaultMinSize(minHeight = 40.dp)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                                 .background(if (isSelected) modeColor.copy(alpha = 0.20f) else colors.glassSurface)
                                 .border(
@@ -1001,7 +1001,7 @@ fun InstantSavingsTransferStudio(
                 quickSteps.forEach { step ->
                     Box(
                         modifier = Modifier
-                            .defaultMinSize(minHeight = 40.dp)
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                             .background(colors.glassSurface)
                             .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusSm))
@@ -1062,7 +1062,7 @@ fun InstantSavingsTransferStudio(
                             val isSelected = cat.id == spendCategory
                             Box(
                                 modifier = Modifier
-                                    .defaultMinSize(minHeight = 38.dp)
+                                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                     .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                                     .background(if (isSelected) RoseNeon.copy(alpha = 0.20f) else colors.glassSurface)
                                     .border(
@@ -1457,19 +1457,20 @@ fun SavingsGoalDialog(
                     listOf(50000.0, 100000.0, 250000.0, 500000.0, 1000000.0).forEach { preset ->
                         Box(
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 38.dp)
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                 .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                                 .background(colors.glassSurface)
                                 .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(dimens.cornerRadiusSm))
                                 .clickable { goalInput = preset.toLong().toString() }
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = formatDzdAmount(preset),
                                 color = AmberNeon,
                                 fontSize = typo.bodyXs,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                style = TextStyle(fontFeatureSettings = "tnum")
                             )
                         }
                     }

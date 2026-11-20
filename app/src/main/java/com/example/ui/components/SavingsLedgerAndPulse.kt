@@ -277,12 +277,12 @@ fun SavingsActivityLedgerCard(
                 if (entries.isNotEmpty()) {
                     Box(
                         modifier = Modifier
-                            .defaultMinSize(minHeight = 36.dp)
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(50))
                             .background(colors.glassSurface)
                             .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(50))
                             .clickable(onClick = onClearHistory)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -348,11 +348,11 @@ fun SavingsActivityLedgerCard(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 40.dp)
+                            .defaultMinSize(minHeight = 48.dp)
                             .clip(RoundedCornerShape(dimens.cornerRadiusSm))
                             .background(colors.glassSurface)
                             .clickable { showAll = !showAll }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

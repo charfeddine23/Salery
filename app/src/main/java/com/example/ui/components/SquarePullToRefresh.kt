@@ -434,86 +434,70 @@ fun SquareTopAnchoredPullToRefresh(
                 )
             }
 
-            // Subtle unboxed visual pull-down gesture hint at top edge when idle
+            // Sleek, fluid micro-indicator pill aligned cleanly above header/list when idle
             val idleHintAlpha = if (isRefreshing) {
                 0f
             } else {
-                (1f - (effectiveTopGlowHeightPx / 24f)).coerceIn(0f, 1f)
+                (1f - (effectiveTopGlowHeightPx / 22f)).coerceIn(0f, 1f)
             }
 
             if (idleHintAlpha > 0.02f) {
-                val chevronOffsetDp = (glidePhase * 3.5f).dp
-                val chevronPulse = if (glidePhase < 0.5f) {
-                    0.35f + (glidePhase / 0.5f) * 0.55f
-                } else {
-                    0.90f - ((glidePhase - 0.5f) / 0.5f) * 0.55f
-                }
+                val trackShiftPx = with(density) { ((glidePhase - 0.5f) * 5.dp.toPx()) }
+                val shimmerPulse = 0.55f + 0.45f * ambientWave
 
-                Column(
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 6.dp)
+                        .padding(top = 5.dp)
                         .alpha(idleHintAlpha)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (colors.isDark) colors.glassCard.copy(alpha = 0.56f)
+                            else colors.glassCard.copy(alpha = 0.78f)
+                        )
+                        .border(
+                            width = 0.8.dp,
+                            color = colors.glassBorderSubtle.copy(alpha = 0.75f),
+                            shape = RoundedCornerShape(50)
+                        )
+                        .padding(horizontal = 11.dp, vertical = 3.5.dp)
                         .testTag("square_pull_hint_cue"),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // Micro vertical glide track with smooth animated bead
                     Box(
                         modifier = Modifier
-                            .width(34.dp)
-                            .height(3.dp)
+                            .width(4.dp)
+                            .height(11.dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        SquareGoldAccent.copy(alpha = 0.25f),
-                                        SquareGoldAccent.copy(alpha = 0.75f + 0.20f * ambientWave),
-                                        CyanNeon.copy(alpha = 0.65f + 0.20f * ambientWave),
-                                        CyanNeon.copy(alpha = 0.25f)
+                            .background(colors.glassBorderSubtle.copy(alpha = 0.55f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(3.5.dp)
+                                .graphicsLayer { translationY = trackShiftPx * 0.55f }
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            SquareGoldAccent.copy(alpha = shimmerPulse),
+                                            CyanNeon.copy(alpha = shimmerPulse)
+                                        )
                                     )
                                 )
-                            )
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier.graphicsLayer {
-                            translationY = chevronOffsetDp.toPx() * 0.6f
-                        }
-                    ) {
-                        Canvas(modifier = Modifier.size(width = 12.dp, height = 11.dp)) {
-                            val w = size.width
-                            val h = size.height
-                            val strokeW = 1.5.dp.toPx()
-                            val topChevron = Path().apply {
-                                moveTo(w * 0.15f, h * 0.15f)
-                                lineTo(w * 0.50f, h * 0.48f)
-                                lineTo(w * 0.85f, h * 0.15f)
-                            }
-                            drawPath(
-                                path = topChevron,
-                                color = SquareGoldAccent.copy(alpha = (0.45f + 0.40f * chevronPulse).coerceIn(0f, 0.9f)),
-                                style = Stroke(width = strokeW, cap = StrokeCap.Round)
-                            )
-                            val bottomChevron = Path().apply {
-                                moveTo(w * 0.15f, h * 0.56f)
-                                lineTo(w * 0.50f, h * 0.90f)
-                                lineTo(w * 0.85f, h * 0.56f)
-                            }
-                            drawPath(
-                                path = bottomChevron,
-                                color = CyanNeon.copy(alpha = (0.35f + 0.50f * (1f - chevronPulse + 0.35f)).coerceIn(0f, 0.9f)),
-                                style = Stroke(width = strokeW, cap = StrokeCap.Round)
-                            )
-                        }
-                        Text(
-                            text = if (isArabic) "اسحب للأسفل" else "Pull down",
-                            color = colors.textMuted.copy(alpha = 0.72f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
                         )
                     }
+
+                    Text(
+                        text = if (isArabic) "اسحب للتحديث" else "Pull to refresh",
+                        color = colors.textSecondary.copy(alpha = 0.85f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.2.sp,
+                        maxLines = 1
+                    )
                 }
             }
 

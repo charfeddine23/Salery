@@ -273,8 +273,8 @@ fun MainAppScreen(
     // Determine current localized strings bundle
     val isArabic = userSettings.language == "ar"
     val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
-    // Responsive layout direction: Full RTL when Arabic is selected, LTR for English
-    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+    // Strict LTR layout orientation across both Arabic and English locales
+    val layoutDirection = LayoutDirection.Ltr
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
@@ -722,6 +722,10 @@ fun MainAppScreen(
                                 )
                                 "expenses" -> ExpenseScreen(
                                     transactions = transactions,
+                                    unloggedTaxesCount = remember(detectedSmsTaxes) {
+                                        detectedSmsTaxes.count { !it.isRecordedAsExpense && it.taxAmount > 0.0 }
+                                    },
+                                    onAutoAddTaxes = { viewModel.autoAddUnloggedTaxes(context) },
                                     onAddExpenseClick = {
                                         addTransactionType = TransactionType.EXPENSE
                                         showAddTransactionDialog = true

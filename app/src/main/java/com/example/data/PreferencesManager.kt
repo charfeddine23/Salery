@@ -164,10 +164,10 @@ class PreferencesManager(context: Context) {
     }
 
     private fun loadSettings(): UserSettings {
-        val vaultFallback = safeFloat("vault_locked_amount", 0.0f)
-        val savedSavings = safeFloat("savings_wallet_balance", vaultFallback).toDouble()
+        val vaultFallback = safeDouble("vault_locked_amount", 0.0)
+        val savedSavings = safeDouble("savings_wallet_balance", vaultFallback)
         return UserSettings(
-            salaryAmount = safeFloat("salary_amount", 85000.0f).toDouble(),
+            salaryAmount = safeDouble("salary_amount", 85000.0),
             salaryPayday = safeInt("salary_payday", 25),
             salaryEmployer = safeString("salary_employer", "Enterprise Algiers"),
             salaryAutoCredit = safeBoolean("salary_auto_credit", true),
@@ -240,7 +240,7 @@ class PreferencesManager(context: Context) {
         isSelfUpdating = true
         try {
             prefs.edit()
-                .putFloat("salary_amount", finalUpdated.salaryAmount.toFloat())
+                .putString("salary_amount", finalUpdated.salaryAmount.toString())
                 .putInt("salary_payday", finalUpdated.salaryPayday)
                 .putString("salary_employer", finalUpdated.salaryEmployer)
                 .putBoolean("salary_auto_credit", finalUpdated.salaryAutoCredit)
@@ -254,8 +254,8 @@ class PreferencesManager(context: Context) {
                 .putBoolean("gdrive_connected", finalUpdated.googleDriveConnected)
                 .putLong("last_backup_time", finalUpdated.lastBackupTimestamp)
                 .putBoolean("stealth_mode", finalUpdated.stealthMode)
-                .putFloat("vault_locked_amount", finalUpdated.savingsWalletBalance.toFloat())
-                .putFloat("savings_wallet_balance", finalUpdated.savingsWalletBalance.toFloat())
+                .putString("vault_locked_amount", finalUpdated.savingsWalletBalance.toString())
+                .putString("savings_wallet_balance", finalUpdated.savingsWalletBalance.toString())
                 .putString("savings_goal_amount", finalUpdated.savingsGoalAmount.toString())
                 .putString("savings_history_json", finalUpdated.savingsHistoryJson)
                 .putBoolean("include_assets_in_savings_total", finalUpdated.includeAssetsInSavingsTotal)

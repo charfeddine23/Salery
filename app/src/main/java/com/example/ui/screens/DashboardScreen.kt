@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -426,14 +427,17 @@ private fun ActiveDebtsBanner(
             Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             val isArabic = strings is ArabicStrings
-            Text(
-                text = (if (isArabic) "ديون عليّ: " else "I Owe: ") + formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode),
-                color = AmberNeon,
-                fontSize = typo.bodySm,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Text(
+                    text = (if (isArabic) "ديون عليّ: " else "I Owe: ") + formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode),
+                    color = AmberNeon,
+                    fontSize = typo.bodySm,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(fontFeatureSettings = "tnum"),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -461,17 +465,22 @@ private fun RecentTransactionsHeader(
             modifier = Modifier.weight(1f)
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = strings.seeAll,
-            color = colors.primaryNeon,
-            fontSize = typo.body,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
+        Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .clickable { onSeeAllClick() }
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        )
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = strings.seeAll,
+                color = colors.primaryNeon,
+                fontSize = typo.body,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -550,14 +559,17 @@ fun TransactionRowItem(
             Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$prefix ${formatDzd(transaction.amount, currencyCode)}",
-                    color = amountColor,
-                    fontSize = typo.body,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = "$prefix ${formatDzd(transaction.amount, currencyCode)}",
+                        color = amountColor,
+                        fontSize = typo.body,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(fontFeatureSettings = "tnum"),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (transaction.isSalaryCredit) {
                     Text(
                         text = "Salary Credit",
@@ -594,11 +606,11 @@ fun TransactionRowItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(2.dp))
 
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
@@ -688,10 +700,11 @@ private fun BaridiMobSmsSuggestionBanner(
 
                 Box(
                     modifier = Modifier
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(colors.glassSurface)
                         .clickable(onClick = onOpenSync)
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -725,24 +738,30 @@ private fun BaridiMobSmsSuggestionBanner(
                     )
                     if (latest.previousBalance != null && latest.extractedBalance != null) {
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "${formatDzd(latest.previousBalance, strings.currencyCode)} → ${formatDzd(latest.extractedBalance, strings.currencyCode)}",
-                            color = CyanNeon,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Text(
+                                text = "${formatDzd(latest.previousBalance, strings.currencyCode)} → ${formatDzd(latest.extractedBalance, strings.currencyCode)}",
+                                color = CyanNeon,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.SemiBold,
+                                style = TextStyle(fontFeatureSettings = "tnum"),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = (if (isExpense) "-" else "+") + formatDzd(latest.amount, strings.currencyCode),
-                    color = accent,
-                    fontSize = typo.body,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1
-                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = (if (isExpense) "-" else "+") + formatDzd(latest.amount, strings.currencyCode),
+                        color = accent,
+                        fontSize = typo.body,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = TextStyle(fontFeatureSettings = "tnum"),
+                        maxLines = 1
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(9.dp))
@@ -756,7 +775,7 @@ private fun BaridiMobSmsSuggestionBanner(
                 Box(
                     modifier = Modifier
                         .weight(1.35f)
-                        .defaultMinSize(minHeight = 44.dp)
+                        .defaultMinSize(minHeight = 48.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(accent.copy(alpha = 0.2f))
                         .border(0.8.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
@@ -783,7 +802,7 @@ private fun BaridiMobSmsSuggestionBanner(
                 Box(
                     modifier = Modifier
                         .weight(0.95f)
-                        .defaultMinSize(minHeight = 44.dp)
+                        .defaultMinSize(minHeight = 48.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(oppositeAccent.copy(alpha = 0.12f))
                         .border(0.8.dp, oppositeAccent.copy(alpha = 0.3f), RoundedCornerShape(11.dp))
@@ -809,7 +828,7 @@ private fun BaridiMobSmsSuggestionBanner(
                 // Explicit Dismiss / Ignore button
                 Box(
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 44.dp)
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .background(colors.glassSurface)
                         .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(11.dp))
@@ -993,6 +1012,7 @@ private fun CcpBalanceCard(
                                 color = balanceAccentColor,
                                 fontSize = typo.titleLg,
                                 fontWeight = FontWeight.ExtraBold,
+                                style = TextStyle(fontFeatureSettings = "tnum"),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

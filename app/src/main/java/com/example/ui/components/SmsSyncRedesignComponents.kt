@@ -453,12 +453,12 @@ fun SmsHeroBalanceCard(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Box(
                                     modifier = Modifier
-                                        .defaultMinSize(minHeight = 36.dp)
+                                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(CyanNeon.copy(alpha = 0.16f))
                                         .border(0.8.dp, CyanNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                                         .clickable(onClick = onSkipOldSms)
-                                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
                                         .testTag("skip_old_sms_button"),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -483,12 +483,12 @@ fun SmsHeroBalanceCard(
                                 if (hasFreshBaseline) {
                                     Box(
                                         modifier = Modifier
-                                            .defaultMinSize(minHeight = 36.dp)
+                                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(colors.glassCard)
                                             .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(10.dp))
                                             .clickable(onClick = onResetBaseline)
-                                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
                                             .testTag("reset_sms_baseline_button"),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -782,6 +782,7 @@ fun SmsAnnualTaxSummaryCard(
                             color = EmeraldNeon,
                             fontSize = typo.bodyXs,
                             fontWeight = FontWeight.Bold,
+                            style = tnum,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -888,7 +889,7 @@ fun SmsTaxFeeCompactCard(
                     }
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -1242,7 +1243,7 @@ fun SmsManualTestAccordion(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = 40.dp)
+                    .defaultMinSize(minHeight = 48.dp)
                     .clickable { expanded = !expanded },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -1313,6 +1314,7 @@ fun SmsManualTestAccordion(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(RoseNeon.copy(alpha = 0.14f))
                                 .clickable {
@@ -1331,6 +1333,7 @@ fun SmsManualTestAccordion(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(EmeraldNeon.copy(alpha = 0.14f))
                                 .clickable {

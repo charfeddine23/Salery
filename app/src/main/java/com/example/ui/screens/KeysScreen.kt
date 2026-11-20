@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -67,6 +68,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -507,13 +509,13 @@ fun KeysScreen(
                     if (searchQuery.isNotEmpty()) {
                         IconButton(
                             onClick = { searchQuery = "" },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = if (isArabic) "مسح" else "Clear",
                                 tint = colors.textMuted,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -618,8 +620,6 @@ fun KeysScreen(
                             isExpanded = isExpanded,
                             isStealth = isStealth,
                             isArabic = isArabic,
-                            shimmerPhase = shimmerPhase,
-                            pulsePhase = pulsePhase,
                             onToggleExpand = { onToggleExpandKey(entry.id) },
                             onToggleReveal = { onToggleRevealKey(entry.id) },
                             onTogglePin = { onTogglePinKey(entry.id) },
@@ -691,8 +691,6 @@ fun KeysScreen(
                         isExpanded = isExpanded,
                         isStealth = isStealth,
                         isArabic = isArabic,
-                        shimmerPhase = shimmerPhase,
-                        pulsePhase = pulsePhase,
                         onToggleExpand = { onToggleExpandKey(entry.id) },
                         onToggleReveal = { onToggleRevealKey(entry.id) },
                         onTogglePin = { onTogglePinKey(entry.id) },
@@ -758,8 +756,6 @@ private fun VaultKeyRowCard(
     isExpanded: Boolean,
     isStealth: Boolean,
     isArabic: Boolean,
-    shimmerPhase: Float,
-    pulsePhase: Float,
     onToggleExpand: () -> Unit,
     onToggleReveal: () -> Unit,
     onTogglePin: () -> Unit,
@@ -772,13 +768,13 @@ private fun VaultKeyRowCard(
     val preset = remember(entry.appPresetId, entry.label) {
         VaultAppPresets.resolveForEntry(entry)
     }
-    val brandPrimary by animateColorAsState(preset.primaryColor(), tween(400), label = "card_bp")
-    val brandSecondary by animateColorAsState(preset.secondaryColor(), tween(400), label = "card_bs")
+    val brandPrimary by animateColorAsState(preset.primaryColor(), tween(320), label = "card_bp")
     val (strengthColor, strengthLabel) = strengthMeta(analysis.level, isArabic)
 
     var copiedUsernameRecently by remember { mutableStateOf(false) }
     var copiedSecretRecently by remember { mutableStateOf(false) }
 
+    // Standardized 0.5s hold (~100ms TapTimeout + 400ms linear fill)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val holdAnim = remember { Animatable(0f) }
@@ -788,8 +784,6 @@ private fun VaultKeyRowCard(
         if (isPressed) {
             didTriggerLongPress = false
             holdAnim.snapTo(0f)
-            // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
-            // so 400ms animation equals 0.5 full seconds of holding.
             holdAnim.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 400, easing = LinearEasing)
@@ -819,31 +813,18 @@ private fun VaultKeyRowCard(
         }
     }
 
-    val cardShape = RoundedCornerShape(24.dp)
-    val cardScale = 1f - (holdAnim.value * 0.02f)
+    val cardScale = 1f - (holdAnim.value * 0.015f)
+    val borderCol = when {
+        holdAnim.value > 0.05f -> brandPrimary
+        entry.isPinned -> AmberNeon.copy(alpha = if (colors.isDark) 0.65f else 0.72f)
+        else -> colors.glassBorder
+    }
 
-    Box(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
-            .shadow(
-                elevation = if (colors.isDark) 14.dp else 8.dp,
-                shape = cardShape,
-                spotColor = brandPrimary.copy(alpha = 0.40f),
-                ambientColor = brandSecondary.copy(alpha = 0.25f)
-            )
-            .clip(cardShape)
-            .border(
-                width = if (entry.isPinned) 1.55.dp else 1.25.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        if (entry.isPinned) AmberNeon.copy(alpha = 0.85f) else brandPrimary.copy(alpha = 0.72f),
-                        brandSecondary.copy(alpha = 0.45f),
-                        brandPrimary.copy(alpha = 0.25f + 0.35f * pulsePhase)
-                    )
-                ),
-                shape = cardShape
-            )
+            .clip(RoundedCornerShape(18.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true, color = brandPrimary),
@@ -861,53 +842,64 @@ private fun VaultKeyRowCard(
                     stiffness = Spring.StiffnessMediumLow
                 )
             )
-            .testTag("vault_key_card_${preset.id}")
+            .testTag("vault_key_card_${preset.id}"),
+        shape = RoundedCornerShape(18.dp),
+        cornerRadius = 18.dp,
+        backgroundColor = colors.glassCard,
+        borderColor = borderCol,
+        borderWidth = if (entry.isPinned || holdAnim.value > 0.05f) 1.4.dp else 1.dp,
+        breathingGlow = false
     ) {
-        // Animated App-Specific Vector Shapes & Gradient Backdrop
-        Box(modifier = Modifier.matchParentSize()) {
-            VaultAppBrandBackdrop(
-                preset = preset,
-                shimmerPhase = shimmerPhase,
-                pulsePhase = pulsePhase
-            )
-        }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Top 0.5s hold progress indicator
+            if (holdAnim.value > 0.04f) {
+                LinearProgressIndicator(
+                    progress = { holdAnim.value },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = brandPrimary,
+                    trackColor = colors.glassBorderSubtle.copy(alpha = 0.4f)
+                )
+            }
 
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row: Real App Emblem + Label + App Tag + Strength Pill + Pin & Expand
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                // 1. Clean Utility Header Row: Accent Rail + Brand Badge + Title + Status Chips + 48dp Actions
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    VaultAppEmblemBadge(preset = preset, size = 46.dp)
-
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(3.5.dp)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (entry.isPinned) AmberNeon else brandPrimary)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    VaultAppEmblemBadge(preset = preset, size = 40.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = entry.label,
                             color = colors.textPrimary,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // App / Category Pill
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(brandPrimary.copy(alpha = 0.20f))
-                                    .border(0.6.dp, brandPrimary.copy(alpha = 0.45f), RoundedCornerShape(7.dp))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(brandPrimary.copy(alpha = if (colors.isDark) 0.16f else 0.12f))
+                                    .border(0.6.dp, brandPrimary.copy(alpha = 0.36f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = if (preset.id == "custom") entry.category else {
@@ -915,121 +907,218 @@ private fun VaultKeyRowCard(
                                     },
                                     color = brandPrimary,
                                     fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(strengthColor.copy(alpha = if (colors.isDark) 0.16f else 0.13f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "$strengthLabel ${analysis.score}%",
+                                    color = strengthColor,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    style = TextStyle(fontFeatureSettings = "tnum")
                                 )
                             }
 
                             if (entry.isPinned) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(AmberNeon.copy(alpha = 0.20f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AmberNeon.copy(alpha = 0.18f))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (isArabic) "مثبت" else "PINNED",
+                                        text = if (isArabic) "مثبت" else "PIN",
                                         color = AmberNeon,
-                                        fontSize = 9.5.sp,
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             }
 
-                            // Strength Pill
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(strengthColor.copy(alpha = 0.18f))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "$strengthLabel ${analysis.score}%",
-                                    color = strengthColor,
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-
                             if (analysis.isReused) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(RoseNeon.copy(alpha = 0.18f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(RoseNeon.copy(alpha = 0.16f))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = if (isArabic) "مكررة" else "REUSED",
                                         color = RoseNeon,
-                                        fontSize = 9.5.sp,
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             }
                         }
                     }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onTogglePin,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("pin_key_${entry.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (entry.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
+                                tint = if (entry.isPinned) AmberNeon else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onToggleExpand,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("expand_key_${entry.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("pin_key_${entry.id}")
-                    ) {
-                        Icon(
-                            imageVector = if (entry.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                            contentDescription = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
-                            tint = if (entry.isPinned) AmberNeon else colors.textMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("expand_key_${entry.id}")
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                // 2. Scannable Preview & 0.5s Hold Cue Row
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    color = colors.glassBorderSubtle.copy(alpha = 0.55f),
+                    thickness = 0.75.dp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when {
+                            isStealth -> "••••••••"
+                            entry.username.isNotBlank() -> entry.username
+                            else -> if (isArabic) "اضغط لعرض كلمة السر" else "Tap to reveal credentials"
+                        },
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = if (isArabic) "اضغط 0.5ث للتعديل" else "Hold 0.5s • Edit",
+                        color = colors.textMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
                 }
-            }
 
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn(tween(220)) + expandVertically(tween(260)),
-                exit = fadeOut(tween(180)) + shrinkVertically(tween(220))
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                // 3. Structured Expanded Utility Panel
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = fadeIn(tween(200)) + expandVertically(tween(240)),
+                    exit = fadeOut(tween(160)) + shrinkVertically(tween(200))
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    // Username Pill with Instant Tactile Copy Feedback
-                    if (entry.username.isNotBlank()) {
+                        // Structured Username Row
+                        if (entry.username.isNotBlank()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.glassSurface)
+                                    .border(
+                                        width = 0.9.dp,
+                                        color = if (copiedUsernameRecently) EmeraldNeon.copy(alpha = 0.75f)
+                                        else colors.glassBorderSubtle,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        copiedUsernameRecently = true
+                                        onCopyUsername()
+                                    }
+                                    .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = brandPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (isArabic) "اسم المستخدم" else "USERNAME",
+                                            color = colors.textMuted,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = if (isStealth) "••••••••" else entry.username,
+                                            color = colors.textPrimary,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        copiedUsernameRecently = true
+                                        onCopyUsername()
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (copiedUsernameRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                        contentDescription = if (isArabic) "نسخ اسم المستخدم" else "Copy username",
+                                        tint = if (copiedUsernameRecently) EmeraldNeon else brandPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Structured Secret Row with 48dp Reveal & Copy Actions
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.62f)
-                                    else Color.White.copy(alpha = 0.78f)
-                                )
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.glassSurface)
                                 .border(
-                                    width = 0.9.dp,
-                                    color = if (copiedUsernameRecently) EmeraldNeon.copy(alpha = 0.75f)
-                                    else brandPrimary.copy(alpha = 0.30f),
-                                    shape = RoundedCornerShape(14.dp)
+                                    width = 1.dp,
+                                    color = when {
+                                        copiedSecretRecently -> EmeraldNeon.copy(alpha = 0.80f)
+                                        isVisible -> brandPrimary.copy(alpha = 0.65f)
+                                        else -> colors.glassBorderSubtle
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
                                 )
-                                .clickable {
-                                    copiedUsernameRecently = true
-                                    onCopyUsername()
-                                }
-                                .padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                                .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1038,172 +1127,122 @@ private fun VaultKeyRowCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Person,
+                                    imageVector = Icons.Default.Lock,
                                     contentDescription = null,
-                                    tint = brandPrimary,
+                                    tint = if (isVisible) EmeraldNeon else brandPrimary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isStealth) "••••••••" else entry.username,
-                                    color = colors.textPrimary,
-                                    fontSize = 13.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isArabic) "كلمة المرور" else "SECRET",
+                                        color = colors.textMuted,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    AnimatedContent(
+                                        targetState = isVisible,
+                                        transitionSpec = {
+                                            fadeIn(tween(200)) togetherWith fadeOut(tween(160))
+                                        },
+                                        label = "secret_reveal_anim"
+                                    ) { revealed ->
+                                        Text(
+                                            text = if (revealed) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
+                                            color = colors.textPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            letterSpacing = 1.1.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
-                            IconButton(
-                                onClick = {
-                                    copiedUsernameRecently = true
-                                    onCopyUsername()
-                                },
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (copiedUsernameRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                    contentDescription = if (isArabic) "نسخ اسم المستخدم" else "Copy username",
-                                    tint = if (copiedUsernameRecently) EmeraldNeon else brandPrimary,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
 
-                    // Password Secret Pill with Smooth AnimatedContent Reveal + Copy Feedback
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.70f)
-                                else Color.White.copy(alpha = 0.84f)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = when {
-                                    copiedSecretRecently -> EmeraldNeon.copy(alpha = 0.85f)
-                                    isVisible -> brandPrimary.copy(alpha = 0.65f)
-                                    else -> brandPrimary.copy(alpha = 0.28f)
-                                },
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = if (isVisible) EmeraldNeon else brandPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            AnimatedContent(
-                                targetState = isVisible,
-                                transitionSpec = {
-                                    fadeIn(tween(220)) togetherWith fadeOut(tween(180))
-                                },
-                                label = "secret_reveal_anim"
-                            ) { revealed ->
-                                Text(
-                                    text = if (revealed) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
-                                    color = colors.textPrimary,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 1.2.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onToggleReveal, modifier = Modifier.size(48.dp)) {
+                                    Icon(
+                                        imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (isArabic) "إظهار/إخفاء" else "Reveal/Hide",
+                                        tint = brandPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        copiedSecretRecently = true
+                                        onCopySecret()
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (copiedSecretRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                        contentDescription = if (isArabic) "نسخ كلمة السر" else "Copy password",
+                                        tint = EmeraldNeon,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onToggleReveal, modifier = Modifier.size(44.dp)) {
-                                Icon(
-                                    imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (isArabic) "إظهار/إخفاء" else "Reveal/Hide",
-                                    tint = brandPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    copiedSecretRecently = true
-                                    onCopySecret()
-                                },
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (copiedSecretRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                    contentDescription = if (isArabic) "نسخ كلمة السر" else "Copy password",
-                                    tint = EmeraldNeon,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Smooth Animated Strength Bar inside container
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { (analysis.score / 100f).coerceIn(0f, 1f) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(50)),
-                        color = strengthColor,
-                        trackColor = colors.glassSurface.copy(alpha = 0.55f)
-                    )
-
-                    // Smart Audit Tip (when weak/fair/reused)
-                    val showAuditWarning = analysis.level == PasswordStrengthLevel.WEAK ||
-                        analysis.level == PasswordStrengthLevel.FAIR ||
-                        analysis.isReused
-                    if (showAuditWarning) {
-                        val primaryTip = if (isArabic) analysis.tipsAr.firstOrNull() else analysis.tipsEn.firstOrNull()
-                        if (!primaryTip.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(strengthColor.copy(alpha = 0.14f))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = strengthColor,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = primaryTip,
-                                    color = strengthColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-
-                    if (entry.note.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = entry.note,
-                            color = colors.textSecondary,
-                            fontSize = 11.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                        // Strength Meter & Optional Audit Warning
+                        Spacer(modifier = Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            progress = { (analysis.score / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(50)),
+                            color = strengthColor,
+                            trackColor = colors.glassBorderSubtle.copy(alpha = 0.5f)
                         )
+
+                        val showAuditWarning = analysis.level == PasswordStrengthLevel.WEAK ||
+                            analysis.level == PasswordStrengthLevel.FAIR ||
+                            analysis.isReused
+                        if (showAuditWarning) {
+                            val primaryTip = if (isArabic) analysis.tipsAr.firstOrNull() else analysis.tipsEn.firstOrNull()
+                            if (!primaryTip.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(strengthColor.copy(alpha = 0.13f))
+                                        .border(0.7.dp, strengthColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = strengthColor,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = primaryTip,
+                                        color = strengthColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        if (entry.note.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = entry.note,
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

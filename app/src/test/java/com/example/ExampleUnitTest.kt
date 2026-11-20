@@ -1571,4 +1571,124 @@ class ExampleUnitTest {
     assertEquals("Gold Sync", parsedMd.features[0].titleEn)
     assertEquals("Live valuation from Square", parsedMd.features[0].descEn)
   }
+
+  @Test
+  fun autoAddTaxes_deduplicatesLoggedRefTagsAndLegacyEntries_withoutDuplicates() {
+    val t1 = 1_763_500_000_000L
+    val t2 = 1_763_500_100_000L
+    val t3 = 1_763_500_200_000L
+    val t4 = 1_763_500_300_000L
+
+    val anomalies = listOf(
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_flagged",
+        taxAmount = 30.0,
+        detectedAtMillis = t1,
+        isRecordedAsExpense = true
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_ref_logged",
+        taxAmount = 50.0,
+        detectedAtMillis = t2,
+        isRecordedAsExpense = false
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_legacy_logged",
+        taxAmount = 120.0,
+        detectedAtMillis = t3,
+        isRecordedAsExpense = false
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_unlogged_valid",
+        taxAmount = 75.5,
+        detectedAtMillis = t4,
+        isRecordedAsExpense = false
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_unlogged_valid",
+        taxAmount = 75.5,
+        detectedAtMillis = t4,
+        isRecordedAsExpense = false
+      ),
+      com.example.sms.SmsTaxAnomalyEntry(
+        id = "tax_over_cap",
+        taxAmount = 1500.0,
+        detectedAtMillis = t4 + 10_000L,
+        isRecordedAsExpense = false
+      )
+    )
+
+    val existingTransactions = listOf(
+      com.example.data.TransactionEntity(
+        id = 1,
+        title = "SMS Fee",
+        amount = 50.0,
+        type = TransactionType.EXPENSE,
+        category = "taxes_fees",
+        note = "Auto fee [tax_ref:tax_ref_logged]",
+        dateMillis = t2 + 20_000L
+      ),
+      com.example.data.TransactionEntity(
+        id = 2,
+        title = "Legacy Fee",
+        amount = 120.0,
+        type = TransactionType.EXPENSE,
+        category = "taxes_fees",
+        note = "BaridiMob deduction",
+        dateMillis = t3 + 1_500L
+      )
+    )
+
+    val unlogged = com.example.viewmodel.findUnloggedTaxAnomaliesForExpenses(
+      anomalies = anomalies,
+      existingTransactions = existingTransactions
+    )
+
+    assertEquals(1, unlogged.size)
+    assertEquals("tax_unlogged_valid", unlogged[0].id)
+    assertEquals(75.5, unlogged[0].taxAmount, 0.001)
+  }
+
+  @Test
+  fun deleteTransaction_refundsSavingsWalletOnlyForPaidFromSavingsExpense() {
+    val savingsExpense = com.example.data.TransactionEntity(
+      id = 10,
+      title = "Emergency",
+      amount = 4500.0,
+      type = TransactionType.EXPENSE,
+      category = "other",
+      dateMillis = 1_763_500_000_000L,
+      isPaidFromSavings = true
+    )
+    assertEquals(
+      14_500.0,
+      com.example.viewmodel.computeSavingsBalanceAfterTransactionDelete(savingsExpense, 10_000.0),
+      0.001
+    )
+
+    val normalExpense = savingsExpense.copy(id = 11, isPaidFromSavings = false)
+    assertEquals(
+      10_000.0,
+      com.example.viewmodel.computeSavingsBalanceAfterTransactionDelete(normalExpense, 10_000.0),
+      0.001
+    )
+
+    val incomeTx = savingsExpense.copy(id = 12, type = TransactionType.INCOME, isPaidFromSavings = true)
+    assertEquals(
+      10_000.0,
+      com.example.viewmodel.computeSavingsBalanceAfterTransactionDelete(incomeTx, 10_000.0),
+      0.001
+    )
+  }
+
+  @Test
+  fun localizedStrings_includeTaxesFeesCategoryAndHalfSecondHoldHint() {
+    assertEquals("Taxes & Fees", EnglishStrings.categoryName("taxes_fees"))
+    assertEquals("ضرائب ورسوم", ArabicStrings.categoryName("taxes_fees"))
+    assertTrue(EnglishStrings.holdToEditCardHint.contains("0.5s"))
+    assertTrue(
+      ArabicStrings.holdToEditCardHint.contains("نصف ثانية") ||
+        ArabicStrings.holdToEditCardHint.contains("0.5")
+    )
+  }
 }

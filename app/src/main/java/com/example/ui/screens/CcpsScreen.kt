@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +65,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -498,13 +500,13 @@ fun CcpsScreen(
                     if (searchQuery.isNotEmpty()) {
                         IconButton(
                             onClick = { searchQuery = "" },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = if (isArabic) "مسح البحث" else "Clear search",
                                 tint = colors.textMuted,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -608,8 +610,6 @@ fun CcpsScreen(
                             isDigitsVisible = isDigitsVisible,
                             isStealth = isStealth,
                             isArabic = isArabic,
-                            shimmerPhase = shimmerPhase,
-                            pulsePhase = pulsePhase,
                             onToggleExpand = { onToggleExpandCcp(acc.id) },
                             onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
                             onTogglePin = { onTogglePinCcpAccount(acc.id) },
@@ -712,8 +712,6 @@ fun CcpsScreen(
                         isDigitsVisible = isDigitsVisible,
                         isStealth = isStealth,
                         isArabic = isArabic,
-                        shimmerPhase = shimmerPhase,
-                        pulsePhase = pulsePhase,
                         onToggleExpand = { onToggleExpandCcp(acc.id) },
                         onToggleDigitsVisibility = { onToggleHideCcp(acc.id) },
                         onTogglePin = { onTogglePinCcpAccount(acc.id) },
@@ -810,8 +808,6 @@ private fun CcpAccountCard(
     isDigitsVisible: Boolean,
     isStealth: Boolean,
     isArabic: Boolean,
-    shimmerPhase: Float,
-    pulsePhase: Float,
     onToggleExpand: () -> Unit,
     onToggleDigitsVisibility: () -> Unit,
     onTogglePin: () -> Unit,
@@ -827,13 +823,13 @@ private fun CcpAccountCard(
     val preset = remember(account.appPresetId, account.displayFullName, account.agencyNote) {
         VaultAppPresets.resolveForCcpEntry(account)
     }
-    val brandPrimary by animateColorAsState(preset.primaryColor(), tween(400), label = "ccp_bp")
-    val brandSecondary by animateColorAsState(preset.secondaryColor(), tween(400), label = "ccp_bs")
+    val brandPrimary by animateColorAsState(preset.primaryColor(), tween(320), label = "ccp_bp")
 
     var copiedCcpRecently by remember { mutableStateOf(false) }
     var copiedRipRecently by remember { mutableStateOf(false) }
     var copiedAllRecently by remember { mutableStateOf(false) }
 
+    // Standardized 0.5s hold (~100ms TapTimeout + 400ms linear progress)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val holdAnim = remember { Animatable(0f) }
@@ -843,8 +839,6 @@ private fun CcpAccountCard(
         if (isPressed) {
             didTriggerLongPress = false
             holdAnim.snapTo(0f)
-            // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
-            // so 400ms animation equals 0.5 full seconds of holding.
             holdAnim.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 400, easing = LinearEasing)
@@ -880,31 +874,18 @@ private fun CcpAccountCard(
         }
     }
 
-    val cardShape = RoundedCornerShape(24.dp)
-    val cardScale = 1f - (holdAnim.value * 0.02f)
+    val cardScale = 1f - (holdAnim.value * 0.015f)
+    val borderCol = when {
+        holdAnim.value > 0.05f -> brandPrimary
+        account.isPinned -> AmberNeon.copy(alpha = if (colors.isDark) 0.65f else 0.72f)
+        else -> colors.glassBorder
+    }
 
-    Box(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
-            .shadow(
-                elevation = if (colors.isDark) 14.dp else 8.dp,
-                shape = cardShape,
-                spotColor = brandPrimary.copy(alpha = 0.40f),
-                ambientColor = brandSecondary.copy(alpha = 0.25f)
-            )
-            .clip(cardShape)
-            .border(
-                width = if (account.isPinned) 1.55.dp else 1.25.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        if (account.isPinned) AmberNeon.copy(alpha = 0.85f) else brandPrimary.copy(alpha = 0.72f),
-                        brandSecondary.copy(alpha = 0.45f),
-                        brandPrimary.copy(alpha = 0.25f + 0.35f * pulsePhase)
-                    )
-                ),
-                shape = cardShape
-            )
+            .clip(RoundedCornerShape(18.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true, color = brandPrimary),
@@ -922,87 +903,103 @@ private fun CcpAccountCard(
                     stiffness = Spring.StiffnessMediumLow
                 )
             )
-            .testTag("ccp_vault_card_${account.id}")
+            .testTag("ccp_vault_card_${account.id}"),
+        shape = RoundedCornerShape(18.dp),
+        cornerRadius = 18.dp,
+        backgroundColor = colors.glassCard,
+        borderColor = borderCol,
+        borderWidth = if (account.isPinned || holdAnim.value > 0.05f) 1.4.dp else 1.dp,
+        breathingGlow = false
     ) {
-        // Animated App/Brand Vector Shapes & Metallic Shimmer Backdrop
-        Box(modifier = Modifier.matchParentSize()) {
-            VaultAppBrandBackdrop(
-                preset = preset,
-                shimmerPhase = shimmerPhase,
-                pulsePhase = pulsePhase
-            )
-        }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Top 0.5s hold progress indicator
+            if (holdAnim.value > 0.04f) {
+                LinearProgressIndicator(
+                    progress = { holdAnim.value },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = brandPrimary,
+                    trackColor = colors.glassBorderSubtle.copy(alpha = 0.4f)
+                )
+            }
 
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Top Collapsible Header Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                // 1. Clean Utility Header Row: Accent Rail + Brand Badge + Name + Status Badges + 48dp Actions
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    VaultAppEmblemBadge(preset = preset, size = 46.dp)
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(3.5.dp)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (account.isPinned) AmberNeon else brandPrimary)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    VaultAppEmblemBadge(preset = preset, size = 40.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = account.displayFullName,
                             color = colors.textPrimary,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(brandPrimary.copy(alpha = 0.20f))
-                                    .border(0.6.dp, brandPrimary.copy(alpha = 0.45f), RoundedCornerShape(7.dp))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(brandPrimary.copy(alpha = if (colors.isDark) 0.16f else 0.12f))
+                                    .border(0.6.dp, brandPrimary.copy(alpha = 0.36f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = if (isArabic) preset.nameAr else preset.nameEn,
                                     color = brandPrimary,
                                     fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+
                             if (account.isPinned) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(AmberNeon.copy(alpha = 0.20f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AmberNeon.copy(alpha = 0.18f))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (isArabic) "مثبت" else "PINNED",
+                                        text = if (isArabic) "مثبت" else "PIN",
                                         color = AmberNeon,
-                                        fontSize = 9.5.sp,
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             }
+
                             if (account.ripFull.isNotBlank()) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(EmeraldNeon.copy(alpha = 0.18f))
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(EmeraldNeon.copy(alpha = if (colors.isDark) 0.16f else 0.13f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = "RIP",
                                         color = EmeraldNeon,
                                         fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -1011,293 +1008,343 @@ private fun CcpAccountCard(
                         if (account.hasLinkedContact) {
                             Spacer(modifier = Modifier.height(3.dp))
                             val contactMeta = buildString {
-                                append(if (isArabic) "مرتبط: ${account.contactName}" else "Contact: ${account.contactName}")
+                                append(account.contactName)
                                 if (account.contactPhone.isNotBlank()) {
                                     append(" • ${if (isStealth || !isExpanded) "••••••" else account.contactPhone}")
                                 }
                             }
-                            Text(
-                                text = contactMeta,
-                                color = EmeraldNeon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = if (isExpanded && account.contactPhone.isNotBlank()) {
                                     Modifier.clickable { onCopyPhone() }
                                 } else Modifier
-                            )
-                        }
-                    }
-                }
-
-                // Compact Action Icons (Pin + Expand/Collapse; Edit & Delete via 0.5s hold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("pin_ccp_${account.id}")
-                    ) {
-                        Icon(
-                            imageVector = if (account.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                            contentDescription = if (isArabic) "تثبيت في الأعلى" else "Pin to top",
-                            tint = if (account.isPinned) AmberNeon else colors.textMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("expand_ccp_${account.id}")
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            // Expandable Body with Smooth Fade + Vertical Expand (Auto-Collapsed on App Exit)
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn(tween(220)) + expandVertically(tween(260)),
-                exit = fadeOut(tween(180)) + shrinkVertically(tween(220))
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // CCP & Clé Pill with AnimatedContent & Instant Checkmark Copy Feedback
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        if (account.ccpNumber.isNotBlank()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.66f)
-                                        else Color.White.copy(alpha = 0.80f)
-                                    )
-                                    .border(
-                                        width = 0.9.dp,
-                                        color = if (copiedCcpRecently) EmeraldNeon.copy(alpha = 0.80f)
-                                        else brandPrimary.copy(alpha = 0.32f),
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .clickable {
-                                        copiedCcpRecently = true
-                                        onCopyCcp()
-                                    }
-                                    .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "CCP • CLÉ",
-                                        color = brandPrimary,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    val ccpDisplay = if (!isDigitsVisible) "••••••••••" else buildString {
-                                        append(account.ccpNumber)
-                                        if (account.ccpKey.isNotBlank()) append("   Clé ${account.ccpKey}")
-                                    }
-                                    AnimatedContent(
-                                        targetState = ccpDisplay,
-                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-                                        label = "ccp_digits_anim"
-                                    ) { textVal ->
-                                        Text(
-                                            text = textVal,
-                                            color = colors.textPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = onToggleDigitsVisibility, modifier = Modifier.size(42.dp)) {
-                                        Icon(
-                                            imageVector = if (isDigitsVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = if (isArabic) "إظهار/إخفاء" else "Show/Hide",
-                                            tint = brandPrimary,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            copiedCcpRecently = true
-                                            onCopyCcp()
-                                        },
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (copiedCcpRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                            contentDescription = "Copy CCP",
-                                            tint = if (copiedCcpRecently) EmeraldNeon else brandPrimary,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Manual RIP Pill
-                        if (account.ripFull.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (colors.isDark) Color(0xFF070C16).copy(alpha = 0.70f)
-                                        else Color.White.copy(alpha = 0.84f)
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (copiedRipRecently) EmeraldNeon.copy(alpha = 0.85f)
-                                        else EmeraldNeon.copy(alpha = 0.30f),
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .clickable {
-                                        copiedRipRecently = true
-                                        onCopyRip()
-                                    }
-                                    .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "RIP (ALGÉRIE POSTE)",
-                                        color = EmeraldNeon,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    val ripDisplay = if (!isDigitsVisible) "007 99999 •••••••••• ••" else {
-                                        HubVaultCodec.formatRipGrouped(account.ripFull)
-                                    }
-                                    AnimatedContent(
-                                        targetState = ripDisplay,
-                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-                                        label = "rip_digits_anim"
-                                    ) { textVal ->
-                                        Text(
-                                            text = textVal,
-                                            color = colors.textPrimary,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = {
-                                        copiedRipRecently = true
-                                        onCopyRip()
-                                    },
-                                    modifier = Modifier.size(44.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (copiedRipRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                        contentDescription = "Copy RIP",
-                                        tint = EmeraldNeon,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Note (الملاحظة) + Copy Name / Copy All actions
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (account.agencyNote.isNotBlank()) {
-                            Text(
-                                text = account.agencyNote,
-                                color = colors.textSecondary,
-                                fontSize = 11.5.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
-                            )
-                        } else {
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(colors.glassSurface.copy(alpha = 0.55f))
-                                    .clickable { onCopyName() }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Person,
+                                    imageVector = Icons.Default.ContactPhone,
                                     contentDescription = null,
-                                    tint = brandPrimary,
-                                    modifier = Modifier.size(13.dp)
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isArabic) "نسخ الاسم" else "Copy Name",
-                                    color = colors.textSecondary,
+                                    text = contactMeta,
+                                    color = EmeraldNeon,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Spacer(modifier = Modifier.weight(1f))
                         }
+                    }
 
-                        Row(
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onTogglePin,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (copiedAllRecently) EmeraldNeon.copy(alpha = 0.22f)
-                                    else brandPrimary.copy(alpha = 0.16f)
-                                )
-                                .border(
-                                    0.8.dp,
-                                    if (copiedAllRecently) EmeraldNeon.copy(alpha = 0.55f)
-                                    else brandPrimary.copy(alpha = 0.40f),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable {
-                                    copiedAllRecently = true
-                                    onCopyAll()
-                                }
-                                .padding(horizontal = 11.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .size(48.dp)
+                                .testTag("pin_ccp_${account.id}")
                         ) {
                             Icon(
-                                imageVector = if (copiedAllRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                contentDescription = null,
-                                tint = if (copiedAllRecently) EmeraldNeon else brandPrimary,
-                                modifier = Modifier.size(14.dp)
+                                imageVector = if (account.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = if (isArabic) "تثبيت في الأعلى" else "Pin to top",
+                                tint = if (account.isPinned) AmberNeon else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (copiedAllRecently) {
-                                    if (isArabic) "تم النسخ ✓" else "Copied ✓"
-                                } else {
-                                    if (isArabic) "نسخ الكل" else "Copy All"
-                                },
-                                color = if (copiedAllRecently) EmeraldNeon else brandPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                        }
+                        IconButton(
+                            onClick = onToggleExpand,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("expand_ccp_${account.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
+                        }
+                    }
+                }
+
+                // 2. Scannable Utility Summary Strip & 0.5s Hold Cue
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    color = colors.glassBorderSubtle.copy(alpha = 0.55f),
+                    thickness = 0.75.dp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val quickPreview = when {
+                        isStealth -> "CCP ••••••"
+                        account.ccpNumber.isNotBlank() -> {
+                            val tail = account.ccpNumber.takeLast(4)
+                            if (account.ccpKey.isNotBlank()) "CCP ••••$tail (${account.ccpKey})" else "CCP ••••$tail"
+                        }
+                        account.ripFull.isNotBlank() -> "RIP ••••${account.ripFull.takeLast(4)}"
+                        else -> if (isArabic) "اضغط لعرض التفاصيل" else "Tap to view details"
+                    }
+                    Text(
+                        text = quickPreview,
+                        color = colors.textSecondary,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        style = TextStyle(fontFeatureSettings = "tnum"),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = if (isArabic) "اضغط 0.5ث للتعديل" else "Hold 0.5s • Edit",
+                        color = colors.textMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+
+                // 3. Expanded Structured Utility Rows
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = fadeIn(tween(200)) + expandVertically(tween(240)),
+                    exit = fadeOut(tween(160)) + shrinkVertically(tween(200))
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            if (account.ccpNumber.isNotBlank()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.glassSurface)
+                                        .border(
+                                            width = 0.9.dp,
+                                            color = if (copiedCcpRecently) EmeraldNeon.copy(alpha = 0.80f)
+                                            else colors.glassBorderSubtle,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            copiedCcpRecently = true
+                                            onCopyCcp()
+                                        }
+                                        .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "CCP • CLÉ",
+                                            color = brandPrimary,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        val ccpDisplay = if (!isDigitsVisible) "••••••••••" else buildString {
+                                            append(account.ccpNumber)
+                                            if (account.ccpKey.isNotBlank()) append("   Clé ${account.ccpKey}")
+                                        }
+                                        AnimatedContent(
+                                            targetState = ccpDisplay,
+                                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+                                            label = "ccp_digits_anim"
+                                        ) { textVal ->
+                                            Text(
+                                                text = textVal,
+                                                color = colors.textPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                style = TextStyle(fontFeatureSettings = "tnum")
+                                            )
+                                        }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = onToggleDigitsVisibility, modifier = Modifier.size(48.dp)) {
+                                            Icon(
+                                                imageVector = if (isDigitsVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = if (isArabic) "إظهار/إخفاء" else "Show/Hide",
+                                                tint = brandPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                copiedCcpRecently = true
+                                                onCopyCcp()
+                                            },
+                                            modifier = Modifier.size(48.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (copiedCcpRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                                contentDescription = "Copy CCP",
+                                                tint = if (copiedCcpRecently) EmeraldNeon else brandPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (account.ripFull.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.glassSurface)
+                                        .border(
+                                            width = 0.9.dp,
+                                            color = if (copiedRipRecently) EmeraldNeon.copy(alpha = 0.85f)
+                                            else colors.glassBorderSubtle,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            copiedRipRecently = true
+                                            onCopyRip()
+                                        }
+                                        .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "RIP (ALGÉRIE POSTE)",
+                                            color = EmeraldNeon,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        val ripDisplay = if (!isDigitsVisible) "007 99999 •••••••••• ••" else {
+                                            HubVaultCodec.formatRipGrouped(account.ripFull)
+                                        }
+                                        AnimatedContent(
+                                            targetState = ripDisplay,
+                                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+                                            label = "rip_digits_anim"
+                                        ) { textVal ->
+                                            Text(
+                                                text = textVal,
+                                                color = colors.textPrimary,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                style = TextStyle(fontFeatureSettings = "tnum"),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            copiedRipRecently = true
+                                            onCopyRip()
+                                        },
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (copiedRipRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                            contentDescription = "Copy RIP",
+                                            tint = EmeraldNeon,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Note + Quick Utility Footer Actions (48dp touch targets)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (account.agencyNote.isNotBlank()) {
+                                Text(
+                                    text = account.agencyNote,
+                                    color = colors.textSecondary,
+                                    fontSize = 11.5.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
+                                )
+                            } else {
+                                Row(
+                                    modifier = Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.glassSurface)
+                                        .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                                        .clickable { onCopyName() }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = brandPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = if (isArabic) "نسخ الاسم" else "Copy Name",
+                                        color = colors.textSecondary,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (copiedAllRecently) EmeraldNeon.copy(alpha = 0.20f)
+                                        else brandPrimary.copy(alpha = 0.14f)
+                                    )
+                                    .border(
+                                        0.8.dp,
+                                        if (copiedAllRecently) EmeraldNeon.copy(alpha = 0.55f)
+                                        else brandPrimary.copy(alpha = 0.38f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        copiedAllRecently = true
+                                        onCopyAll()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (copiedAllRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    tint = if (copiedAllRecently) EmeraldNeon else brandPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (copiedAllRecently) {
+                                        if (isArabic) "تم النسخ ✓" else "Copied ✓"
+                                    } else {
+                                        if (isArabic) "نسخ الكل" else "Copy All"
+                                    },
+                                    color = if (copiedAllRecently) EmeraldNeon else brandPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

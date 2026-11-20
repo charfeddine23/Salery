@@ -658,10 +658,10 @@ private fun EdahabiaCardRealistic(
             didTriggerLongPress = false
             holdAnim.snapTo(0f)
             // clickable waits ~100ms TapTimeout before emitting Press inside LazyColumn,
-            // so 900ms animation equals 1.0 full second of holding.
+            // so 400ms animation equals 0.5s full hold.
             holdAnim.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 900, easing = LinearEasing)
+                animationSpec = tween(durationMillis = 400, easing = LinearEasing)
             )
             didTriggerLongPress = true
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1067,9 +1067,10 @@ private fun VisaCardRealistic(
         if (isPressed) {
             didTriggerLongPress = false
             holdAnim.snapTo(0f)
+            // 400ms animation after ~100ms TapTimeout = 0.5s unified hold
             holdAnim.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 900, easing = LinearEasing)
+                animationSpec = tween(durationMillis = 400, easing = LinearEasing)
             )
             didTriggerLongPress = true
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1723,6 +1724,47 @@ private fun VisaCardRealistic(
                     }
                 }
             }
+
+            // Floating Hold-to-Edit Progress Badge while holding 0.5s
+            if (holdAnim.value > 0.10f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF0F172A).copy(alpha = 0.88f))
+                        .border(1.dp, glowPrimary, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = glowPrimary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = AppStrings.current.holdingToEditLabel,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { holdAnim.value },
+                            modifier = Modifier
+                                .width(130.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = glowPrimary,
+                            trackColor = Color.White.copy(alpha = 0.2f)
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -1737,8 +1779,8 @@ private fun VisaCardRealistic(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط مطولاً على البطاقة لإضافة RedotPay أو Bybit أو Binance"
-            else "Hold card 1s to choose RedotPay, Bybit or Binance",
+            text = if (isArabic) "اضغط مطولاً 0.5 ثانية على البطاقة لاختيار RedotPay أو Bybit أو Binance"
+            else "Hold card 0.5s to choose RedotPay, Bybit or Binance",
             color = when (provider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
                 "BYBIT" -> Color(0xFFF7A600)

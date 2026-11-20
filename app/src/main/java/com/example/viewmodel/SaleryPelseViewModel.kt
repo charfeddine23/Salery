@@ -78,6 +78,55 @@ data class FinancialSummary(
     val pendingDebtsOwedToMe: Double = 0.0
 )
 
+internal fun isTaxAnomalyAlreadyLoggedInTransactions(
+    anomaly: SmsTaxAnomalyEntry,
+    existingTransactions: List<TransactionEntity>
+): Boolean {
+    if (anomaly.isRecordedAsExpense) return true
+    val refTag = "[tax_ref:${anomaly.id}]"
+    return existingTransactions.any { tx ->
+        tx.type == TransactionType.EXPENSE && (
+            tx.note.contains(refTag) ||
+                (tx.category.equals("taxes_fees", ignoreCase = true) &&
+                    kotlin.math.abs(tx.amount - anomaly.taxAmount) < 0.01 &&
+                    kotlin.math.abs(tx.dateMillis - anomaly.detectedAtMillis) <= 5_000L)
+            )
+    }
+}
+
+internal fun findUnloggedTaxAnomaliesForExpenses(
+    anomalies: List<SmsTaxAnomalyEntry>,
+    existingTransactions: List<TransactionEntity>
+): List<SmsTaxAnomalyEntry> {
+    return anomalies
+        .asSequence()
+        .filter { entry ->
+            entry.taxAmount.isFinite() &&
+                entry.taxAmount > 0.0 &&
+                entry.taxAmount <= AlgPosteSmsAnalyzer.MAX_CAUGHT_TAX_AMOUNT_DZD &&
+                !isTaxAnomalyAlreadyLoggedInTransactions(entry, existingTransactions)
+        }
+        .distinctBy { it.id }
+        .toList()
+}
+
+internal fun computeSavingsBalanceAfterTransactionDelete(
+    transaction: TransactionEntity,
+    currentSavings: Double
+): Double {
+    val safeSavings = if (currentSavings.isFinite()) currentSavings.coerceAtLeast(0.0) else 0.0
+    return if (
+        transaction.type == TransactionType.EXPENSE &&
+        transaction.isPaidFromSavings &&
+        transaction.amount.isFinite() &&
+        transaction.amount > 0.0
+    ) {
+        safeSavings + transaction.amount
+    } else {
+        safeSavings
+    }
+}
+
 class SaleryPelseViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val dao = database.appDao()
@@ -396,7 +445,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     } else debt.remainingAmount
 
                     val newRemaining = (debt.remainingAmount - payNow).coerceAtLeast(0.0)
-                    val isFullySettled = newRemaining <= 0.0
+                    val isFullySettled = newRemaining <= 0.001
 
                     dao.updateDebt(
                         debt.copy(
@@ -473,6 +522,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     // Transaction Actions
     fun addTransaction(type: TransactionType, amount: Double, category: String, title: String, note: String, dateMillis: Long) {
+        if (!amount.isFinite() || amount <= 0.0) return
         viewModelScope.launch {
             dao.insertTransaction(
                 TransactionEntity(
@@ -490,6 +540,37 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun deleteTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
             dao.deleteTransaction(transaction)
+            if (
+                transaction.type == TransactionType.EXPENSE &&
+                transaction.isPaidFromSavings &&
+                transaction.amount.isFinite() &&
+                transaction.amount > 0.0
+            ) {
+                val isAr = settings.value.language == "ar"
+                val refundTitle = if (isAr) {
+                    "استرجاع مصروف ملغى: ${transaction.title}".take(80)
+                } else {
+                    "Refunded Deleted Expense: ${transaction.title}".take(80)
+                }
+                val entry = SavingsMovementEntry(
+                    type = SavingsMovementType.DEPOSIT,
+                    amount = transaction.amount,
+                    title = refundTitle,
+                    note = transaction.note
+                )
+                prefsManager.updateSettings { current ->
+                    val updated = computeSavingsBalanceAfterTransactionDelete(transaction, current.savingsWalletBalance)
+                    current.copy(
+                        savingsWalletBalance = updated,
+                        vaultLockedAmount = updated,
+                        savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
+                    )
+                }
+                _toastEvent.emit(
+                    if (isAr) "تم حذف المصروف وإرجاع ${formatDzdAmount(transaction.amount)} دج إلى محفظة الادخار ✓"
+                    else "Deleted expense and refunded ${formatDzdAmount(transaction.amount)} DZD to Savings Wallet ✓"
+                )
+            }
         }
     }
 
@@ -506,8 +587,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         installmentDay: Int = 1,
         initialPaidAmount: Double = 0.0
     ) {
+        if (!amount.isFinite() || amount <= 0.0) return
         viewModelScope.launch {
-            val validPaid = initialPaidAmount.coerceIn(0.0, amount)
+            val safePaidInput = if (initialPaidAmount.isFinite()) initialPaidAmount else 0.0
+            val validPaid = safePaidInput.coerceIn(0.0, amount)
             val remaining = (amount - validPaid).coerceAtLeast(0.0)
             val isSettled = remaining <= 0.001
             val now = System.currentTimeMillis()
@@ -588,7 +671,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun makePartialPayment(debt: DebtEntity, paymentAmount: Double, recordTransaction: Boolean = true) {
         viewModelScope.launch {
-            if (paymentAmount <= 0) return@launch
+            if (!paymentAmount.isFinite() || paymentAmount <= 0.0) return@launch
             val now = System.currentTimeMillis()
             val actualPay = minOf(paymentAmount, debt.remainingAmount)
             val newRemaining = (debt.remainingAmount - actualPay).coerceAtLeast(0.0)
@@ -1196,7 +1279,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     // Savings Wallet (محفظة الادخار) Actions
     fun transferToSavings(amount: Double, note: String = "") {
-        if (amount <= 0.0) return
+        if (!amount.isFinite() || amount <= 0.0) return
         val isAr = settings.value.language == "ar"
         val currentAvailable = financialSummary.value.totalBalance
         if (amount > currentAvailable && currentAvailable > 0) {
@@ -1230,7 +1313,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun withdrawFromSavings(amount: Double, note: String = "") {
-        if (amount <= 0.0) return
+        if (!amount.isFinite() || amount <= 0.0) return
         val isAr = settings.value.language == "ar"
         val currentSavings = settings.value.savingsWalletBalance
         val actualWithdraw = amount.coerceAtMost(currentSavings)
@@ -1258,7 +1341,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun spendFromSavings(amount: Double, title: String, category: String, note: String) {
-        if (amount <= 0.0) return
+        if (!amount.isFinite() || amount <= 0.0) return
         val currentSavings = settings.value.savingsWalletBalance
         if (amount > currentSavings) {
             viewModelScope.launch {
@@ -2007,6 +2090,134 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private val isAutoAddingTaxes = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun autoAddUnloggedTaxes(context: Context = getApplication()) {
+        if (!isAutoAddingTaxes.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val isAr = settings.value.language == "ar"
+                val summaryOutcome = withContext(Dispatchers.IO) {
+                    // 1. Refresh snapshots from live SMS inbox (if granted) + permanent archive
+                    val liveSnaps = if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+                        val rawList = AlgPosteSmsInboxScanner.scanAllRawAlgPosteSms(context)
+                        val toArchive = rawList.mapNotNull { raw ->
+                            AlgPosteSmsAnalyzer.toArchivedEntity(
+                                sender = raw.sender,
+                                body = raw.body,
+                                timestampMillis = raw.dateMillis,
+                                captureSource = "INBOX",
+                                allowAnySenderForManualTest = false
+                            )
+                        }
+                        if (toArchive.isNotEmpty()) {
+                            dao.insertArchivedSmsIfMissing(toArchive)
+                        }
+                        AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
+                    } else {
+                        emptyList()
+                    }
+                    val archivedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
+                        dao.getAllArchivedAlgPosteSmsList()
+                    )
+
+                    // 2. Detect & merge tax anomalies against balance timeline
+                    var mergedTaxes: List<SmsTaxAnomalyEntry> = emptyList()
+                    prefsManager.updateSettings { current ->
+                        val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
+                        val mergedHistory = (existingHistory + archivedSnaps + liveSnaps)
+                            .distinctBy { it.id }
+                            .sortedBy { it.timestampMillis }
+                        val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                        val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
+                        mergedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
+                            snapshots = mergedHistory,
+                            existingAnomalies = existingTaxes
+                        )
+                        current.copy(
+                            smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
+                            detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(mergedTaxes),
+                            latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
+                            latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
+                            latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
+                        )
+                    }
+
+                    // 3. Deduplicate against existing expense transactions
+                    val existingTransactions = dao.getAllTransactionsList()
+                    val unlogged = findUnloggedTaxAnomaliesForExpenses(
+                        anomalies = mergedTaxes,
+                        existingTransactions = existingTransactions
+                    )
+
+                    val newlyLoggedIds = mutableSetOf<String>()
+                    var addedTotal = 0.0
+                    for (tax in unlogged) {
+                        val rawExplanation = (if (isAr) tax.explanationAr else tax.explanationEn)
+                            .ifBlank { tax.rawBody }
+                            .trim()
+                        val refTag = "[tax_ref:${tax.id}]"
+                        val composedNote = if (rawExplanation.isBlank()) {
+                            refTag
+                        } else {
+                            "${rawExplanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
+                        }
+                        dao.insertTransaction(
+                            TransactionEntity(
+                                type = TransactionType.EXPENSE,
+                                amount = tax.taxAmount,
+                                category = "taxes_fees",
+                                title = if (isAr) tax.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
+                                else tax.titleEn.ifBlank { "BaridiMob Tax / Fee" },
+                                note = composedNote.take(240),
+                                dateMillis = tax.detectedAtMillis
+                            )
+                        )
+                        newlyLoggedIds.add(tax.id)
+                        addedTotal += tax.taxAmount
+                    }
+
+                    // 4. Mark newly added + already-matched taxes as recorded so UI count drops cleanly
+                    val allMatchedIds = mergedTaxes
+                        .filter { it.id in newlyLoggedIds || isTaxAnomalyAlreadyLoggedInTransactions(it, existingTransactions) }
+                        .map { it.id }
+                        .toSet()
+
+                    if (allMatchedIds.isNotEmpty()) {
+                        prefsManager.updateSettings { current ->
+                            val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
+                                if (item.id in allMatchedIds) item.copy(isRecordedAsExpense = true) else item
+                            }
+                            current.copy(detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updated))
+                        }
+                    }
+
+                    Triple(unlogged.size, addedTotal, mergedTaxes.size)
+                }
+
+                val (addedCount, addedTotal, totalDetectedCount) = summaryOutcome
+                val msg = when {
+                    addedCount > 0 -> {
+                        val formattedTotal = formatDzdAmount(addedTotal, if (isAr) "دج" else "DA")
+                        if (isAr) "تمت إضافة $addedCount ضرائب ($formattedTotal) إلى المصاريف ✓"
+                        else "Added $addedCount tax entries ($formattedTotal) to Expenses ✓"
+                    }
+                    totalDetectedCount > 0 -> {
+                        if (isAr) "جميع الضرائب المرصودة ($totalDetectedCount) مسجلة مسبقاً ✓"
+                        else "All $totalDetectedCount detected bank taxes are already logged ✓"
+                    }
+                    else -> {
+                        if (isAr) "لم يتم العثور على ضرائب أو رسوم بنكية غير مسجلة"
+                        else "No unlogged bank fees or taxes detected"
+                    }
+                }
+                _toastEvent.emit(msg)
+            } finally {
+                isAutoAddingTaxes.set(false)
+            }
+        }
+    }
+
     fun recordTaxAnomalyAsExpense(anomalyId: String) {
         viewModelScope.launch {
             val currentSettings = settings.value
@@ -2014,7 +2225,24 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val taxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
             val target = taxes.firstOrNull { it.id == anomalyId } ?: return@launch
             if (target.isRecordedAsExpense) return@launch
+            val existingTransactions = withContext(Dispatchers.IO) { dao.getAllTransactionsList() }
+            if (isTaxAnomalyAlreadyLoggedInTransactions(target, existingTransactions)) {
+                prefsManager.updateSettings { current ->
+                    val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
+                        if (item.id == anomalyId) item.copy(isRecordedAsExpense = true) else item
+                    }
+                    current.copy(detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updated))
+                }
+                return@launch
+            }
 
+            val refTag = "[tax_ref:${target.id}]"
+            val explanation = if (isAr) target.explanationAr else target.explanationEn
+            val composedNote = if (explanation.isBlank()) {
+                refTag
+            } else {
+                "${explanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
+            }
             dao.insertTransaction(
                 TransactionEntity(
                     type = TransactionType.EXPENSE,
@@ -2022,7 +2250,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     category = "taxes_fees",
                     title = if (isAr) target.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
                     else target.titleEn.ifBlank { "BaridiMob Tax / Fee" },
-                    note = (if (isAr) target.explanationAr else target.explanationEn).take(240),
+                    note = composedNote.take(240),
                     dateMillis = target.detectedAtMillis
                 )
             )
@@ -2192,7 +2420,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun upsertCryptoHolding(symbol: String, quantity: Double) {
         val cleanSym = symbol.trim().uppercase()
-        if (cleanSym.isBlank()) return
+        if (cleanSym.isBlank() || !quantity.isFinite()) return
         val isAr = settings.value.language == "ar"
 
         prefsManager.updateSettings { current ->
