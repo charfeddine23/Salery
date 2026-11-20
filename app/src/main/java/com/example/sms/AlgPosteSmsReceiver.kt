@@ -14,6 +14,7 @@ import com.example.R
 import com.example.data.AppDatabase
 import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.PreferencesManager
+import com.example.security.VaultCryptoManager
 import com.example.ui.i18n.formatDzdAmount
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,8 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         }
 
         val appContext = context.applicationContext
-        val prefsManager = PreferencesManager(appContext)
+        val crypto = VaultCryptoManager.getInstance(appContext)
+        val prefsManager = PreferencesManager(appContext, crypto)
         val currentSettings = prefsManager.settingsFlow.value
         val baselineMillis = currentSettings.smsSyncBaselineTimestampMillis
         val allowSuggestionForTimestamp = baselineMillis <= 0L || latestTimestamp > baselineMillis
@@ -103,9 +105,11 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             try {
                 val dao = AppDatabase.getDatabase(appContext).appDao()
                 if (newlyArchivedEntities.isNotEmpty()) {
-                    dao.insertArchivedSmsIfMissing(newlyArchivedEntities)
+                    dao.insertArchivedSmsIfMissing(newlyArchivedEntities.map { crypto.encryptArchivedSms(it) })
                 }
-                val archivedEntities = runCatching { dao.getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                val archivedEntities = runCatching { dao.getAllArchivedAlgPosteSmsList() }
+                    .getOrDefault(emptyList())
+                    .map { crypto.decryptArchivedSms(it) }
                 val archivedSnapshots = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(archivedEntities)
 
                 val inboxBaselineSnapshots = try {
@@ -124,7 +128,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                             )
                         }
                         if (inboxArchived.isNotEmpty()) {
-                            dao.insertArchivedSmsIfMissing(inboxArchived)
+                            dao.insertArchivedSmsIfMissing(inboxArchived.map { crypto.encryptArchivedSms(it) })
                         }
                         AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(
                             context = appContext,

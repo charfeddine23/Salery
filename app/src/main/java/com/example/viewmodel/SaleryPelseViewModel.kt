@@ -65,6 +65,10 @@ import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketFetcher
 import com.example.market.SquareMarketSnapshot
+import com.example.security.CryptoIssue
+import com.example.security.CryptoIssueType
+import com.example.security.DecryptOutcome
+import com.example.security.VaultCryptoManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -130,14 +134,48 @@ internal fun computeSavingsBalanceAfterTransactionDelete(
 class SaleryPelseViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val dao = database.appDao()
-    private val prefsManager = PreferencesManager(application)
+    private val crypto = VaultCryptoManager.getInstance(application)
+    private val prefsManager = PreferencesManager(application, crypto)
+
+    private val _roomCryptoIssue = MutableStateFlow<CryptoIssue?>(null)
+
+    val cryptoIssue: StateFlow<CryptoIssue?> = combine(
+        prefsManager.cryptoIssue,
+        _roomCryptoIssue
+    ) { prefIssue, roomIssue ->
+        when {
+            prefIssue == null && roomIssue == null -> null
+            prefIssue != null && roomIssue == null -> prefIssue
+            prefIssue == null && roomIssue != null -> roomIssue
+            else -> {
+                val mergedType = listOf(prefIssue!!.type, roomIssue!!.type).minByOrNull { it.ordinal }
+                    ?: prefIssue.type
+                CryptoIssue(
+                    type = mergedType,
+                    affectedScopes = prefIssue.affectedScopes + roomIssue.affectedScopes,
+                    timestampMillis = maxOf(prefIssue.timestampMillis, roomIssue.timestampMillis)
+                )
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), prefsManager.cryptoIssue.value)
+
+    private fun reportRoomCryptoIssue(type: CryptoIssueType, scope: String) {
+        val current = _roomCryptoIssue.value
+        val nextType = if (current == null || type.ordinal < current.type.ordinal) type else current.type
+        val nextScopes = (current?.affectedScopes ?: emptySet()) + scope
+        _roomCryptoIssue.value = CryptoIssue(type = nextType, affectedScopes = nextScopes)
+    }
 
     val settings: StateFlow<UserSettings> = prefsManager.settingsFlow
 
     val allTransactions: StateFlow<List<TransactionEntity>> = dao.getAllTransactions()
+        .map { list -> list.map { crypto.decryptTransaction(it, ::reportRoomCryptoIssue) } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allDebts: StateFlow<List<DebtEntity>> = dao.getAllDebts()
+        .map { list -> list.map { crypto.decryptDebt(it, ::reportRoomCryptoIssue) } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Live financial calculations: Balance = Total Income - Total Expenses - Savings Wallet
@@ -211,8 +249,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     private val _expandedCcpIds = MutableStateFlow<Set<String>>(emptySet())
     val expandedCcpIds: StateFlow<Set<String>> = _expandedCcpIds.asStateFlow()
 
-    private val _hiddenCcpIds = MutableStateFlow<Set<String>>(emptySet())
-    val hiddenCcpIds: StateFlow<Set<String>> = _hiddenCcpIds.asStateFlow()
+    private val _revealedCcpIds = MutableStateFlow<Set<String>>(emptySet())
+    val revealedCcpIds: StateFlow<Set<String>> = _revealedCcpIds.asStateFlow()
 
     // In-App GitHub Update state
     private val _updateUiState = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
@@ -243,6 +281,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     // Permanent non-deletable archive of every ALG Poste SMS (survives phone SMS deletion)
     val archivedAlgPosteSms: StateFlow<List<ArchivedAlgPosteSmsEntity>> = dao.getAllArchivedAlgPosteSms()
+        .map { list -> list.map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Live algorithm study metrics computed from the permanent archive & caught taxes
@@ -315,9 +355,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
             try {
                 cleanExistingMockDataIfPresent()
+                migrateLegacyPlaintextRoomRecords()
                 checkAndApplySalaryScheduler()
                 checkAndExecuteAutoPayDebts()
                 val currentDebts = dao.getAllDebtsList()
+                    .map { crypto.decryptDebt(it, ::reportRoomCryptoIssue) }
                 DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
             } catch (_: Throwable) {
             }
@@ -360,7 +402,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val prefs = getApplication<Application>().getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
         val cleaned = prefs.getBoolean("mock_data_cleaned_permanent_v2", false)
         if (!cleaned) {
-            val allTrans = dao.getAllTransactionsList()
+            val allTrans = dao.getAllTransactionsList().map { crypto.decryptTransaction(it) }
             val mockTitles = setOf(
                 "Monthly Salary Deposit",
                 "Supermarket & Groceries",
@@ -373,7 +415,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
 
-            val allDebts = dao.getAllDebtsList()
+            val allDebts = dao.getAllDebtsList().map { crypto.decryptDebt(it) }
             val mockPersons = setOf("Mohamed Lamine", "Karim Benali")
             for (d in allDebts) {
                 if (d.personName in mockPersons && (d.note.contains("spare parts") || d.note.contains("Laptop sale"))) {
@@ -381,6 +423,124 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
             prefs.edit().putBoolean("mock_data_cleaned_permanent_v2", true).apply()
+        }
+    }
+
+    private suspend fun migrateLegacyPlaintextRoomRecords() {
+        val transactionsToUpgrade = dao.getAllTransactionsList().mapNotNull { tx ->
+            val needsTitle = tx.title.isNotBlank() && !crypto.isEncryptedEnvelope(tx.title)
+            val needsNote = tx.note.isNotBlank() && !crypto.isEncryptedEnvelope(tx.note)
+            if (needsTitle || needsNote) {
+                crypto.encryptTransaction(tx, ::reportRoomCryptoIssue)
+            } else {
+                null
+            }
+        }
+        if (transactionsToUpgrade.isNotEmpty()) {
+            dao.insertTransactions(transactionsToUpgrade)
+        }
+
+        val debtsToUpgrade = dao.getAllDebtsList().mapNotNull { debt ->
+            val needsPerson = debt.personName.isNotBlank() && !crypto.isEncryptedEnvelope(debt.personName)
+            val needsNote = debt.note.isNotBlank() && !crypto.isEncryptedEnvelope(debt.note)
+            if (needsPerson || needsNote) {
+                crypto.encryptDebt(debt, ::reportRoomCryptoIssue)
+            } else {
+                null
+            }
+        }
+        if (debtsToUpgrade.isNotEmpty()) {
+            dao.insertDebts(debtsToUpgrade)
+        }
+
+        val smsToUpgrade = dao.getAllArchivedAlgPosteSmsList().mapNotNull { sms ->
+            if (sms.rawBody.isNotBlank() && !crypto.isEncryptedEnvelope(sms.rawBody)) {
+                crypto.encryptArchivedSms(sms, ::reportRoomCryptoIssue)
+            } else {
+                null
+            }
+        }
+        if (smsToUpgrade.isNotEmpty()) {
+            dao.updateArchivedSmsAnalysis(smsToUpgrade)
+        }
+    }
+
+    fun retryVaultCryptoRecovery() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _roomCryptoIssue.value = null
+            prefsManager.retryCryptoRecovery()
+            migrateLegacyPlaintextRoomRecords()
+            dao.getAllTransactionsList().forEach { crypto.decryptTransaction(it, ::reportRoomCryptoIssue) }
+            dao.getAllDebtsList().forEach { crypto.decryptDebt(it, ::reportRoomCryptoIssue) }
+            dao.getAllArchivedAlgPosteSmsList().forEach { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
+            val isAr = settings.value.language == "ar"
+            val stillHasIssue = cryptoIssue.value != null
+            _toastEvent.emit(
+                if (!stillHasIssue) {
+                    if (isAr) "تمت استعادة مفاتيح الخزنة بنجاح ✓" else "Vault protection restored ✓"
+                } else {
+                    if (isAr) "لا تزال بعض السجلات متعذرة القراءة" else "Some protected items still could not be unlocked"
+                }
+            )
+        }
+    }
+
+    fun resetCorruptedVaultData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            prefsManager.resetCorruptedEncryptedEntries(resetMasterKeyIfInvalidated = true)
+
+            val repairedTxs = dao.getAllTransactionsList().mapNotNull { tx ->
+                val titleOut = crypto.decryptField(tx.title, VaultCryptoManager.AAD_ROOM_TX_TITLE)
+                val noteOut = crypto.decryptField(tx.note, VaultCryptoManager.AAD_ROOM_TX_NOTE)
+                val badTitle = titleOut is DecryptOutcome.Failure
+                val badNote = noteOut is DecryptOutcome.Failure
+                if (badTitle || badNote) {
+                    val fixedTitle = if (badTitle) "" else (titleOut as DecryptOutcome.Success).plaintext
+                    val fixedNote = if (badNote) "" else (noteOut as DecryptOutcome.Success).plaintext
+                    crypto.encryptTransaction(tx.copy(title = fixedTitle, note = fixedNote), ::reportRoomCryptoIssue)
+                } else {
+                    null
+                }
+            }
+            if (repairedTxs.isNotEmpty()) {
+                dao.insertTransactions(repairedTxs)
+            }
+
+            val repairedDebts = dao.getAllDebtsList().mapNotNull { debt ->
+                val personOut = crypto.decryptField(debt.personName, VaultCryptoManager.AAD_ROOM_DEBT_PERSON)
+                val noteOut = crypto.decryptField(debt.note, VaultCryptoManager.AAD_ROOM_DEBT_NOTE)
+                val badPerson = personOut is DecryptOutcome.Failure
+                val badNote = noteOut is DecryptOutcome.Failure
+                if (badPerson || badNote) {
+                    val fixedPerson = if (badPerson) "" else (personOut as DecryptOutcome.Success).plaintext
+                    val fixedNote = if (badNote) "" else (noteOut as DecryptOutcome.Success).plaintext
+                    crypto.encryptDebt(debt.copy(personName = fixedPerson, note = fixedNote), ::reportRoomCryptoIssue)
+                } else {
+                    null
+                }
+            }
+            if (repairedDebts.isNotEmpty()) {
+                dao.insertDebts(repairedDebts)
+            }
+
+            val repairedSms = dao.getAllArchivedAlgPosteSmsList().mapNotNull { sms ->
+                val bodyOut = crypto.decryptField(sms.rawBody, VaultCryptoManager.AAD_ROOM_SMS_BODY)
+                if (bodyOut is DecryptOutcome.Failure) {
+                    sms.copy(rawBody = "")
+                } else {
+                    null
+                }
+            }
+            if (repairedSms.isNotEmpty()) {
+                dao.updateArchivedSmsAnalysis(repairedSms)
+            }
+
+            _roomCryptoIssue.value = null
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تمت تصفية العناصر غير القابلة للقراءة بأمان ✓"
+                else "Unreadable entries cleared safely ✓"
+            )
         }
     }
 
@@ -401,14 +561,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
         if (force || (currentDay >= userConfig.salaryPayday && userConfig.lastCreditedMonthYear != monthYearKey)) {
             dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.INCOME,
-                    amount = userConfig.salaryAmount,
-                    category = "salary",
-                    title = "${userConfig.salaryEmployer} Salary",
-                    note = "Smart Salary Scheduler automatic deposit ($monthYearKey)",
-                    dateMillis = System.currentTimeMillis(),
-                    isSalaryCredit = true
+                crypto.encryptTransaction(
+                    TransactionEntity(
+                        type = TransactionType.INCOME,
+                        amount = userConfig.salaryAmount,
+                        category = "salary",
+                        title = "${userConfig.salaryEmployer} Salary",
+                        note = "Smart Salary Scheduler automatic deposit ($monthYearKey)",
+                        dateMillis = System.currentTimeMillis(),
+                        isSalaryCredit = true
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
             prefsManager.updateSettings {
@@ -435,6 +598,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val monthYearKey = "$currentYear-$currentMonth"
 
         val autoDebts = dao.getPendingAutoPayDebts()
+            .map { crypto.decryptDebt(it, ::reportRoomCryptoIssue) }
 
         for (debt in autoDebts) {
             if (debt.isRecurringMonthlyInstallment) {
@@ -448,34 +612,43 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     val isFullySettled = newRemaining <= 0.001
 
                     dao.updateDebt(
-                        debt.copy(
-                            remainingAmount = newRemaining,
-                            lastInstallmentCreditedMonth = monthYearKey,
-                            isPaid = isFullySettled,
-                            paidDateMillis = if (isFullySettled) now else null
+                        crypto.encryptDebt(
+                            debt.copy(
+                                remainingAmount = newRemaining,
+                                lastInstallmentCreditedMonth = monthYearKey,
+                                isPaid = isFullySettled,
+                                paidDateMillis = if (isFullySettled) now else null
+                            ),
+                            ::reportRoomCryptoIssue
                         )
                     )
 
                     if (debt.type == DebtType.OWED_BY_ME) {
                         dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = payNow,
-                                category = "debt_payment",
-                                title = "Auto-Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
-                                dateMillis = now
+                            crypto.encryptTransaction(
+                                TransactionEntity(
+                                    type = TransactionType.EXPENSE,
+                                    amount = payNow,
+                                    category = "debt_payment",
+                                    title = "Auto-Installment: ${debt.personName}",
+                                    note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
+                                    dateMillis = now
+                                ),
+                                ::reportRoomCryptoIssue
                             )
                         )
                     } else {
                         dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.INCOME,
-                                amount = payNow,
-                                category = "debt_collection",
-                                title = "Auto-Collected Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
-                                dateMillis = now
+                            crypto.encryptTransaction(
+                                TransactionEntity(
+                                    type = TransactionType.INCOME,
+                                    amount = payNow,
+                                    category = "debt_collection",
+                                    title = "Auto-Collected Installment: ${debt.personName}",
+                                    note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
+                                    dateMillis = now
+                                ),
+                                ::reportRoomCryptoIssue
                             )
                         )
                     }
@@ -486,32 +659,41 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 if (debt.dueDateMillis <= now) {
                     val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
                     dao.updateDebt(
-                        debt.copy(
-                            remainingAmount = 0.0,
-                            isPaid = true,
-                            paidDateMillis = now
+                        crypto.encryptDebt(
+                            debt.copy(
+                                remainingAmount = 0.0,
+                                isPaid = true,
+                                paidDateMillis = now
+                            ),
+                            ::reportRoomCryptoIssue
                         )
                     )
                     if (debt.type == DebtType.OWED_BY_ME) {
                         dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = payAmount,
-                                category = "debt_payment",
-                                title = "Auto-Paid Debt: ${debt.personName}",
-                                note = "Automatic debt execution on due date (${debt.note})",
-                                dateMillis = now
+                            crypto.encryptTransaction(
+                                TransactionEntity(
+                                    type = TransactionType.EXPENSE,
+                                    amount = payAmount,
+                                    category = "debt_payment",
+                                    title = "Auto-Paid Debt: ${debt.personName}",
+                                    note = "Automatic debt execution on due date (${debt.note})",
+                                    dateMillis = now
+                                ),
+                                ::reportRoomCryptoIssue
                             )
                         )
                     } else {
                         dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.INCOME,
-                                amount = payAmount,
-                                category = "debt_collection",
-                                title = "Auto-Received Debt: ${debt.personName}",
-                                note = "Automatic debt collection on due date (${debt.note})",
-                                dateMillis = now
+                            crypto.encryptTransaction(
+                                TransactionEntity(
+                                    type = TransactionType.INCOME,
+                                    amount = payAmount,
+                                    category = "debt_collection",
+                                    title = "Auto-Received Debt: ${debt.personName}",
+                                    note = "Automatic debt collection on due date (${debt.note})",
+                                    dateMillis = now
+                                ),
+                                ::reportRoomCryptoIssue
                             )
                         )
                     }
@@ -525,13 +707,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         if (!amount.isFinite() || amount <= 0.0) return
         viewModelScope.launch {
             dao.insertTransaction(
-                TransactionEntity(
-                    type = type,
-                    amount = amount,
-                    category = category,
-                    title = title,
-                    note = note,
-                    dateMillis = dateMillis
+                crypto.encryptTransaction(
+                    TransactionEntity(
+                        type = type,
+                        amount = amount,
+                        category = category,
+                        title = title,
+                        note = note,
+                        dateMillis = dateMillis
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
         }
@@ -609,7 +794,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 isPaid = isSettled,
                 paidDateMillis = if (isSettled) now else null
             )
-            val newId = dao.insertDebt(newEntity)
+            val newId = dao.insertDebt(crypto.encryptDebt(newEntity, ::reportRoomCryptoIssue))
             if (!isSettled) {
                 DebtReminderScheduler.scheduleDebtReminder(getApplication(), newEntity.copy(id = newId))
             }
@@ -622,34 +807,43 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val now = System.currentTimeMillis()
             val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
             dao.updateDebt(
-                debt.copy(
-                    remainingAmount = 0.0,
-                    isPaid = true,
-                    paidDateMillis = now
+                crypto.encryptDebt(
+                    debt.copy(
+                        remainingAmount = 0.0,
+                        isPaid = true,
+                        paidDateMillis = now
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
             DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             // Record wallet impact
             if (debt.type == DebtType.OWED_BY_ME) {
                 dao.insertTransaction(
-                    TransactionEntity(
-                        type = TransactionType.EXPENSE,
-                        amount = payAmount,
-                        category = "debt_payment",
-                        title = "Paid Debt: ${debt.personName}",
-                        note = "Manual settlement: ${debt.note}",
-                        dateMillis = now
+                    crypto.encryptTransaction(
+                        TransactionEntity(
+                            type = TransactionType.EXPENSE,
+                            amount = payAmount,
+                            category = "debt_payment",
+                            title = "Paid Debt: ${debt.personName}",
+                            note = "Manual settlement: ${debt.note}",
+                            dateMillis = now
+                        ),
+                        ::reportRoomCryptoIssue
                     )
                 )
             } else {
                 dao.insertTransaction(
-                    TransactionEntity(
-                        type = TransactionType.INCOME,
-                        amount = payAmount,
-                        category = "debt_collection",
-                        title = "Collected Debt: ${debt.personName}",
-                        note = "Manual settlement: ${debt.note}",
-                        dateMillis = now
+                    crypto.encryptTransaction(
+                        TransactionEntity(
+                            type = TransactionType.INCOME,
+                            amount = payAmount,
+                            category = "debt_collection",
+                            title = "Collected Debt: ${debt.personName}",
+                            note = "Manual settlement: ${debt.note}",
+                            dateMillis = now
+                        ),
+                        ::reportRoomCryptoIssue
                     )
                 )
             }
@@ -659,7 +853,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateDebt(debt: DebtEntity) {
         viewModelScope.launch {
-            dao.updateDebt(debt)
+            dao.updateDebt(crypto.encryptDebt(debt, ::reportRoomCryptoIssue))
             if (debt.isPaid || debt.remainingAmount <= 0.001) {
                 DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             } else {
@@ -682,7 +876,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 isPaid = isFullySettled,
                 paidDateMillis = if (isFullySettled) now else debt.paidDateMillis
             )
-            dao.updateDebt(updatedDebt)
+            dao.updateDebt(crypto.encryptDebt(updatedDebt, ::reportRoomCryptoIssue))
             if (isFullySettled) {
                 DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             } else {
@@ -692,26 +886,32 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (recordTransaction) {
                 if (debt.type == DebtType.OWED_BY_ME) {
                     dao.insertTransaction(
-                        TransactionEntity(
-                            type = TransactionType.EXPENSE,
-                            amount = actualPay,
-                            category = "debt_payment",
-                            title = "Partial Payment: ${debt.personName}",
-                            note = if (isFullySettled) "Final settlement (${debt.note})" 
-                                   else "Partial payment - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
-                            dateMillis = now
+                        crypto.encryptTransaction(
+                            TransactionEntity(
+                                type = TransactionType.EXPENSE,
+                                amount = actualPay,
+                                category = "debt_payment",
+                                title = "Partial Payment: ${debt.personName}",
+                                note = if (isFullySettled) "Final settlement (${debt.note})" 
+                                       else "Partial payment - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                                dateMillis = now
+                            ),
+                            ::reportRoomCryptoIssue
                         )
                     )
                 } else {
                     dao.insertTransaction(
-                        TransactionEntity(
-                            type = TransactionType.INCOME,
-                            amount = actualPay,
-                            category = "debt_collection",
-                            title = "Partial Collection: ${debt.personName}",
-                            note = if (isFullySettled) "Final collection (${debt.note})"
-                                   else "Partial collection - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
-                            dateMillis = now
+                        crypto.encryptTransaction(
+                            TransactionEntity(
+                                type = TransactionType.INCOME,
+                                amount = actualPay,
+                                category = "debt_collection",
+                                title = "Partial Collection: ${debt.personName}",
+                                note = if (isFullySettled) "Final collection (${debt.note})"
+                                       else "Partial collection - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                                dateMillis = now
+                            ),
+                            ::reportRoomCryptoIssue
                         )
                     )
                 }
@@ -958,13 +1158,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun collapseAllCcps() {
         _expandedCcpIds.value = emptySet()
+        _revealedCcpIds.value = emptySet()
     }
 
-    fun toggleCcpHidden(accountId: String) {
-        _hiddenCcpIds.value = if (accountId in _hiddenCcpIds.value) {
-            _hiddenCcpIds.value - accountId
+    fun toggleCcpRevealed(accountId: String) {
+        _revealedCcpIds.value = if (accountId in _revealedCcpIds.value) {
+            _revealedCcpIds.value - accountId
         } else {
-            _hiddenCcpIds.value + accountId
+            _revealedCcpIds.value + accountId
         }
     }
 
@@ -972,6 +1173,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         _expandedKeyIds.value = emptySet()
         _revealedKeyIds.value = emptySet()
         _expandedCcpIds.value = emptySet()
+        _revealedCcpIds.value = emptySet()
     }
 
     fun saveNewPattern(pattern: List<Int>) {
@@ -1255,7 +1457,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun deleteCcpAccount(accountId: String) {
         _expandedCcpIds.value = _expandedCcpIds.value - accountId
-        _hiddenCcpIds.value = _hiddenCcpIds.value - accountId
+        _revealedCcpIds.value = _revealedCcpIds.value - accountId
         prefsManager.updateSettings { current ->
             val updated = HubVaultCodec.parseCcpAccounts(current.ccpAccountsJson).filterNot { it.id == accountId }
             current.copy(ccpAccountsJson = HubVaultCodec.encodeCcpAccounts(updated))
@@ -1266,6 +1468,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleStealthMode(): Boolean {
         val current = settings.value.stealthMode
         val next = !current
+        if (next) {
+            collapseAllVaultContainersForSecurity()
+        }
         prefsManager.updateSettings { it.copy(stealthMode = next) }
         viewModelScope.launch {
             if (next) {
@@ -1382,14 +1587,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.EXPENSE,
-                    amount = amount,
-                    category = category.ifBlank { "savings_expense" },
-                    title = resolvedTitle,
-                    note = savingsTagNote,
-                    dateMillis = System.currentTimeMillis(),
-                    isPaidFromSavings = true
+                crypto.encryptTransaction(
+                    TransactionEntity(
+                        type = TransactionType.EXPENSE,
+                        amount = amount,
+                        category = category.ifBlank { "savings_expense" },
+                        title = resolvedTitle,
+                        note = savingsTagNote,
+                        dateMillis = System.currentTimeMillis(),
+                        isPaidFromSavings = true
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
 
@@ -1416,8 +1624,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     // Backup & Restore
     suspend fun exportBackupJson(): String {
         val trans = dao.getAllTransactionsList()
+            .map { crypto.decryptTransaction(it, ::reportRoomCryptoIssue) }
         val debts = dao.getAllDebtsList()
+            .map { crypto.decryptDebt(it, ::reportRoomCryptoIssue) }
         val archivedSms = dao.getAllArchivedAlgPosteSmsList()
+            .map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
         val userConfig = settings.value
 
         val payload = BackupPayload(
@@ -1447,11 +1658,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         dao.clearAllTransactions()
         dao.clearAllDebts()
 
-        dao.insertTransactions(payload.transactions)
-        dao.insertDebts(payload.debts)
+        dao.insertTransactions(payload.transactions.map { crypto.encryptTransaction(it, ::reportRoomCryptoIssue) })
+        dao.insertDebts(payload.debts.map { crypto.encryptDebt(it, ::reportRoomCryptoIssue) })
         if (payload.archivedAlgPosteSms.isNotEmpty()) {
             // Merge into permanent archive without deleting existing permanent SMS records
-            dao.insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
+            dao.insertArchivedSmsIfMissing(
+                payload.archivedAlgPosteSms.map { crypto.encryptArchivedSms(it, ::reportRoomCryptoIssue) }
+            )
         }
 
         prefsManager.updateSettings {
@@ -1701,11 +1914,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 }
                 if (toArchive.isNotEmpty()) {
-                    dao.insertArchivedSmsIfMissing(toArchive)
+                    dao.insertArchivedSmsIfMissing(
+                        toArchive.map { crypto.encryptArchivedSms(it, ::reportRoomCryptoIssue) }
+                    )
                 }
                 val liveSnaps = AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
                 val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
                     dao.getAllArchivedAlgPosteSmsList()
+                        .map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
                 )
                 liveSnaps to permanentSnaps
             }
@@ -1802,9 +2018,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val isAr = settings.value.language == "ar"
             val reanalyzed = withContext(Dispatchers.IO) {
                 val existing = dao.getAllArchivedAlgPosteSmsList()
+                    .map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
                 val updated = existing.map { AlgPosteSmsAnalyzer.reanalyzeArchivedEntity(it) }
                 if (updated.isNotEmpty()) {
-                    dao.updateArchivedSmsAnalysis(updated)
+                    dao.updateArchivedSmsAnalysis(
+                        updated.map { crypto.encryptArchivedSms(it, ::reportRoomCryptoIssue) }
+                    )
                 }
                 updated
             }
@@ -1884,10 +2103,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 }
                 if (toArchive.isNotEmpty()) {
-                    dao.insertArchivedSmsIfMissing(toArchive)
+                    dao.insertArchivedSmsIfMissing(
+                        toArchive.map { crypto.encryptArchivedSms(it, ::reportRoomCryptoIssue) }
+                    )
                 }
                 val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
                     dao.getAllArchivedAlgPosteSmsList()
+                        .map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
                 )
                 res to permanentSnaps
             }
@@ -2015,7 +2237,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     allowAnySenderForManualTest = true
                 )
                 if (archivedEntity != null) {
-                    dao.insertArchivedSmsIfMissing(listOf(archivedEntity))
+                    dao.insertArchivedSmsIfMissing(
+                        listOf(crypto.encryptArchivedSms(archivedEntity, ::reportRoomCryptoIssue))
+                    )
                 }
                 p to s
             }
@@ -2111,7 +2335,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             )
                         }
                         if (toArchive.isNotEmpty()) {
-                            dao.insertArchivedSmsIfMissing(toArchive)
+                            dao.insertArchivedSmsIfMissing(
+                                toArchive.map { crypto.encryptArchivedSms(it, ::reportRoomCryptoIssue) }
+                            )
                         }
                         AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
                     } else {
@@ -2119,6 +2345,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     }
                     val archivedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
                         dao.getAllArchivedAlgPosteSmsList()
+                            .map { crypto.decryptArchivedSms(it, ::reportRoomCryptoIssue) }
                     )
 
                     // 2. Detect & merge tax anomalies against balance timeline
@@ -2145,6 +2372,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
                     // 3. Deduplicate against existing expense transactions
                     val existingTransactions = dao.getAllTransactionsList()
+                        .map { crypto.decryptTransaction(it, ::reportRoomCryptoIssue) }
                     val unlogged = findUnloggedTaxAnomaliesForExpenses(
                         anomalies = mergedTaxes,
                         existingTransactions = existingTransactions
@@ -2163,14 +2391,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             "${rawExplanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
                         }
                         dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = tax.taxAmount,
-                                category = "taxes_fees",
-                                title = if (isAr) tax.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
-                                else tax.titleEn.ifBlank { "BaridiMob Tax / Fee" },
-                                note = composedNote.take(240),
-                                dateMillis = tax.detectedAtMillis
+                            crypto.encryptTransaction(
+                                TransactionEntity(
+                                    type = TransactionType.EXPENSE,
+                                    amount = tax.taxAmount,
+                                    category = "taxes_fees",
+                                    title = if (isAr) tax.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
+                                    else tax.titleEn.ifBlank { "BaridiMob Tax / Fee" },
+                                    note = composedNote.take(240),
+                                    dateMillis = tax.detectedAtMillis
+                                ),
+                                ::reportRoomCryptoIssue
                             )
                         )
                         newlyLoggedIds.add(tax.id)
@@ -2225,7 +2456,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val taxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
             val target = taxes.firstOrNull { it.id == anomalyId } ?: return@launch
             if (target.isRecordedAsExpense) return@launch
-            val existingTransactions = withContext(Dispatchers.IO) { dao.getAllTransactionsList() }
+            val existingTransactions = withContext(Dispatchers.IO) {
+                dao.getAllTransactionsList().map { crypto.decryptTransaction(it, ::reportRoomCryptoIssue) }
+            }
             if (isTaxAnomalyAlreadyLoggedInTransactions(target, existingTransactions)) {
                 prefsManager.updateSettings { current ->
                     val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
@@ -2244,14 +2477,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 "${explanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
             }
             dao.insertTransaction(
-                TransactionEntity(
-                    type = TransactionType.EXPENSE,
-                    amount = target.taxAmount,
-                    category = "taxes_fees",
-                    title = if (isAr) target.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
-                    else target.titleEn.ifBlank { "BaridiMob Tax / Fee" },
-                    note = composedNote.take(240),
-                    dateMillis = target.detectedAtMillis
+                crypto.encryptTransaction(
+                    TransactionEntity(
+                        type = TransactionType.EXPENSE,
+                        amount = target.taxAmount,
+                        category = "taxes_fees",
+                        title = if (isAr) target.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
+                        else target.titleEn.ifBlank { "BaridiMob Tax / Fee" },
+                        note = composedNote.take(240),
+                        dateMillis = target.detectedAtMillis
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
 
@@ -2310,13 +2546,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
             dao.insertTransaction(
-                TransactionEntity(
-                    type = finalType,
-                    amount = target.amount,
-                    category = resolvedCategory,
-                    title = title,
-                    note = "${target.sender}: ${target.rawBody}".take(240),
-                    dateMillis = target.receivedAtMillis
+                crypto.encryptTransaction(
+                    TransactionEntity(
+                        type = finalType,
+                        amount = target.amount,
+                        category = resolvedCategory,
+                        title = title,
+                        note = "${target.sender}: ${target.rawBody}".take(240),
+                        dateMillis = target.receivedAtMillis
+                    ),
+                    ::reportRoomCryptoIssue
                 )
             )
 

@@ -1,10 +1,8 @@
 package com.example.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.example.security.SecureMemoryUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -49,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,6 +95,13 @@ fun BackupRestoreDialog(
     var showManualPaste by remember { mutableStateOf(false) }
     var manualJsonText by remember { mutableStateOf("") }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            manualJsonText = ""
+            pendingExportJson = null
+        }
+    }
 
     // 1. SAF Create Document Launcher: Save backup directly into Google Drive folder or local storage
     val createDocumentLauncher = rememberLauncherForActivityResult(
@@ -280,9 +286,8 @@ fun BackupRestoreDialog(
                                 val json = onExportBackup()
                                 pendingExportJson = json
 
-                                // Copy to clipboard as quick safety backup
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Vaultix Backup", json))
+                                // Copy to clipboard as quick safety backup with sensitive flag
+                                SecureMemoryUtils.copySensitiveText(context, "Vaultix Backup", json)
 
                                 // Launch Storage Access Framework Document Creator: user selects Google Drive folder or device storage
                                 createDocumentLauncher.launch("Vaultix_Backup.json")

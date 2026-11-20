@@ -1,8 +1,6 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import com.example.security.SecureMemoryUtils
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -77,6 +75,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -307,8 +306,7 @@ fun KeysScreen(
     }
 
     fun copyToClipboard(label: String, text: String, @Suppress("UNUSED_PARAMETER") msg: String) {
-        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cb.setPrimaryClip(ClipData.newPlainText(label, text))
+        SecureMemoryUtils.copySensitiveText(context, label, text)
     }
 
     val keysHeader: @Composable () -> Unit = {
@@ -1236,7 +1234,7 @@ private fun VaultKeyRowCard(
                         if (entry.note.isNotBlank()) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = entry.note,
+                                text = if (isStealth) "••••••" else entry.note,
                                 color = colors.textSecondary,
                                 fontSize = 11.sp,
                                 maxLines = 2,
@@ -1277,6 +1275,15 @@ private fun AddOrEditVaultKeyDialog(
     var note by remember(existing) { mutableStateOf(existing?.note ?: "") }
     var isPinned by remember(existing) { mutableStateOf(existing?.isPinned ?: false) }
     var showPasswordInDialog by remember { mutableStateOf(true) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            label = ""
+            username = ""
+            secret = ""
+            note = ""
+        }
+    }
 
     val activePreset = remember(selectedPresetId) { VaultAppPresets.findById(selectedPresetId) }
     val presetAccent = activePreset.primaryColor()

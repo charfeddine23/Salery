@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -108,6 +109,15 @@ fun EditCardDialog(
     }
     var cvcDigits by remember {
         mutableStateOf(currentCvc.filter { it.isDigit() }.take(4))
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            holderName = ""
+            cardNumberDigits = ""
+            expiryDigits = ""
+            cvcDigits = ""
+        }
     }
 
     val isNameValid = holderName.trim().isNotEmpty()
