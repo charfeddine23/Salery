@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -119,6 +122,7 @@ fun BaridiMobSmsSyncScreen(
     onRecordTaxAsExpense: (anomalyId: String) -> Unit = {},
     onDismissTaxAnomaly: (anomalyId: String) -> Unit = {},
     onClearAllTaxes: () -> Unit = {},
+    onToggleAutoAddTaxes: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -548,6 +552,15 @@ fun BaridiMobSmsSyncScreen(
                     )
                 }
 
+                item {
+                    AutoAddTaxesPreferenceCard(
+                        enabled = userSettings.autoAddTaxesEnabled,
+                        baselineMillis = userSettings.autoAddTaxesBaselineMillis,
+                        isArabic = isArabic,
+                        onToggle = onToggleAutoAddTaxes
+                    )
+                }
+
                 if (detectedTaxes.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(2.dp))
@@ -950,6 +963,104 @@ fun SmsSuggestionCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AutoAddTaxesPreferenceCard(
+    enabled: Boolean,
+    baselineMillis: Long,
+    isArabic: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("baridimob_auto_add_taxes_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = if (enabled) EmeraldNeon.copy(alpha = 0.45f) else colors.glassBorderSubtle,
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        cornerRadius = dimens.cornerRadiusLg,
+        breathingGlow = false
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle(!enabled) }
+                .padding(horizontal = dimens.cardPadding, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            if (enabled) EmeraldNeon.copy(alpha = 0.16f)
+                            else AmberNeon.copy(alpha = 0.14f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = if (enabled) EmeraldNeon else AmberNeon,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isArabic) "إضافة الضرائب تلقائياً (Auto Add Taxes)"
+                        else "Auto Add Taxes",
+                        color = colors.textPrimary,
+                        fontSize = typo.bodyLg,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = when {
+                            enabled && baselineMillis > 0L -> if (isArabic) {
+                                "مفعّل منذ ${formatDate(baselineMillis)} • تُضاف المستقبلية فقط (بدون السابقة)"
+                            } else {
+                                "Active since ${formatDate(baselineMillis)} • Future taxes only (past skipped)"
+                            }
+                            enabled -> if (isArabic) {
+                                "مفعّل • تُضاف الضرائب المستقبلية فقط إلى المصاريف"
+                            } else {
+                                "Enabled • Only future taxes are logged to Expenses"
+                            }
+                            else -> if (isArabic) {
+                                "معطّل • عند التفعيل تُسجّل الضرائب المستقبلية فقط"
+                            } else {
+                                "Disabled • Enabling auto-logs future taxes only"
+                            }
+                        },
+                        color = colors.textMuted,
+                        fontSize = typo.bodyXs
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                modifier = Modifier.testTag("baridimob_auto_add_taxes_switch"),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = EmeraldNeon,
+                    checkedTrackColor = EmeraldNeon.copy(alpha = 0.35f)
+                )
+            )
         }
     }
 }

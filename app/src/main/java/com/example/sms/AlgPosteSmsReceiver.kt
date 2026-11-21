@@ -193,18 +193,29 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 }
 
                 val isAr = currentSettings.language == "ar"
+                val autoTaxLogResult = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                    dao = dao,
+                    prefsManager = prefsManager,
+                    isArabic = isAr,
+                    candidateAnomalies = updatedTaxes
+                )
+                val wasCaughtTaxAutoLogged = newlyCaughtTax != null &&
+                    newlyCaughtTax.id in autoTaxLogResult.newlyLoggedIds
+
                 val primarySuggestion = pendingToAdd.firstOrNull()
                 if (primarySuggestion != null) {
                     postSuggestionNotification(
                         context = appContext,
                         suggestion = primarySuggestion,
                         caughtTax = newlyCaughtTax,
+                        wasTaxAutoLogged = wasCaughtTaxAutoLogged,
                         isArabic = isAr
                     )
                 } else if (newlyCaughtTax != null) {
                     postTaxDetectedNotification(
                         context = appContext,
                         caughtTax = newlyCaughtTax,
+                        wasTaxAutoLogged = wasCaughtTaxAutoLogged,
                         isArabic = isAr
                     )
                 }
@@ -232,6 +243,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         context: Context,
         suggestion: SmsSuggestionEntry,
         caughtTax: SmsTaxAnomalyEntry?,
+        wasTaxAutoLogged: Boolean = false,
         isArabic: Boolean
     ) {
         try {
@@ -257,8 +269,13 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             }
             val taxNote = caughtTax?.let {
                 val formattedTax = formatDzdAmount(it.taxAmount, if (isArabic) "دج" else "DA")
-                if (isArabic) "\n⚠ تم تصيّد ضريبة/فارق: $formattedTax"
-                else "\n⚠ Hidden fee/tax caught: $formattedTax"
+                if (wasTaxAutoLogged) {
+                    if (isArabic) "\n✓ تمت إضافة ضريبة تلقائياً للمصاريف: $formattedTax"
+                    else "\n✓ Auto-logged bank tax to Expenses: $formattedTax"
+                } else {
+                    if (isArabic) "\n⚠ تم تصيّد ضريبة/فارق: $formattedTax"
+                    else "\n⚠ Hidden fee/tax caught: $formattedTax"
+                }
             } ?: ""
             val bodyText = (if (suggestion.isExpense) {
                 if (isArabic) "اضغط لمراجعة الرسالة وإضافتها إلى المصاريف" else "Tap to review and add to Expense"
@@ -283,6 +300,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
     private fun postTaxDetectedNotification(
         context: Context,
         caughtTax: SmsTaxAnomalyEntry,
+        wasTaxAutoLogged: Boolean = false,
         isArabic: Boolean
     ) {
         try {
@@ -301,8 +319,13 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             )
 
             val formattedTax = formatDzdAmount(caughtTax.taxAmount, if (isArabic) "دج" else "DA")
-            val title = if (isArabic) "كاشف الضرائب: فارق -$formattedTax"
-            else "Tax Radar: Difference -$formattedTax"
+            val title = if (wasTaxAutoLogged) {
+                if (isArabic) "إضافة ضريبة تلقائياً: -$formattedTax ✓"
+                else "Tax Auto-Logged: -$formattedTax ✓"
+            } else {
+                if (isArabic) "كاشف الضرائب: فارق -$formattedTax"
+                else "Tax Radar: Difference -$formattedTax"
+            }
             val summary = if (isArabic) caughtTax.explanationAr else caughtTax.explanationEn
 
             val notification = NotificationCompat.Builder(context, channelId)

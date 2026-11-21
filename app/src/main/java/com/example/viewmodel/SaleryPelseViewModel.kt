@@ -49,6 +49,7 @@ import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
+import com.example.sms.TaxExpenseAutoLogger
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
@@ -88,34 +89,17 @@ enum class BackupRestoreOutcome {
 internal fun isTaxAnomalyAlreadyLoggedInTransactions(
     anomaly: SmsTaxAnomalyEntry,
     existingTransactions: List<TransactionEntity>
-): Boolean {
-    if (anomaly.isRecordedAsExpense) return true
-    val refTag = "[tax_ref:${anomaly.id}]"
-    return existingTransactions.any { tx ->
-        tx.type == TransactionType.EXPENSE && (
-            tx.note.contains(refTag) ||
-                (tx.category.equals("taxes_fees", ignoreCase = true) &&
-                    kotlin.math.abs(tx.amount - anomaly.taxAmount) < 0.01 &&
-                    kotlin.math.abs(tx.dateMillis - anomaly.detectedAtMillis) <= 5_000L)
-            )
-    }
-}
+): Boolean = TaxExpenseAutoLogger.isTaxAnomalyAlreadyLogged(anomaly, existingTransactions)
 
 internal fun findUnloggedTaxAnomaliesForExpenses(
     anomalies: List<SmsTaxAnomalyEntry>,
-    existingTransactions: List<TransactionEntity>
-): List<SmsTaxAnomalyEntry> {
-    return anomalies
-        .asSequence()
-        .filter { entry ->
-            entry.taxAmount.isFinite() &&
-                entry.taxAmount > 0.0 &&
-                entry.taxAmount <= AlgPosteSmsAnalyzer.MAX_CAUGHT_TAX_AMOUNT_DZD &&
-                !isTaxAnomalyAlreadyLoggedInTransactions(entry, existingTransactions)
-        }
-        .distinctBy { it.id }
-        .toList()
-}
+    existingTransactions: List<TransactionEntity>,
+    minTimestampMillis: Long = 0L
+): List<SmsTaxAnomalyEntry> = TaxExpenseAutoLogger.findUnloggedTaxAnomalies(
+    anomalies = anomalies,
+    existingTransactions = existingTransactions,
+    minTimestampMillis = minTimestampMillis
+)
 
 internal fun computeSavingsBalanceAfterTransactionDelete(
     transaction: TransactionEntity,
@@ -1872,6 +1856,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
                     )
                 }
+                TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                    dao = dao,
+                    prefsManager = prefsManager,
+                    isArabic = isAr
+                )
             }
             val extractedBal = latestBalance
             if (showFeedback && extractedBal != null) {
@@ -1941,6 +1930,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                     )
                 }
+                TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                    dao = dao,
+                    prefsManager = prefsManager,
+                    isArabic = isAr
+                )
                 taxesCount
             }
 
@@ -1994,6 +1988,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             var addedCount = 0
             var newTaxCount = 0
             var newSnapshotCount = 0
+            var autoLoggedTaxCount = 0
             withContext(Dispatchers.IO) {
                 prefsManager.updateSettings { current ->
                     val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
@@ -2045,6 +2040,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                     )
                 }
+                autoLoggedTaxCount = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                    dao = dao,
+                    prefsManager = prefsManager,
+                    isArabic = isAr
+                ).addedCount
             }
 
             if (showFeedback) {
@@ -2053,6 +2053,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         "تم اكتشاف $addedCount معاملة و $newTaxCount فارق ضرائب/رسوم!"
                     } else {
                         "Found $addedCount transactions & $newTaxCount tax/fee discrepancies!"
+                    }
+                    autoLoggedTaxCount > 0 -> if (isAr) {
+                        "تم تسجيل $autoLoggedTaxCount ضرائب مستقبلية تلقائياً في المصاريف ✓"
+                    } else {
+                        "Auto-added $autoLoggedTaxCount future taxes to Expenses ✓"
                     }
                     addedCount > 0 -> if (isAr) {
                         "تم اكتشاف $addedCount معاملة جديدة من رسائل ALG Poste"
@@ -2126,7 +2131,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            val caughtNewTaxAmount = withContext(Dispatchers.IO) {
+            val (caughtNewTaxAmount, autoAddedFutureTaxCount) = withContext(Dispatchers.IO) {
                 var taxAmt = 0.0
                 prefsManager.updateSettings { current ->
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
@@ -2164,7 +2169,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
                     )
                 }
-                taxAmt
+                val autoResult = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                    dao = dao,
+                    prefsManager = prefsManager,
+                    isArabic = isAr
+                )
+                taxAmt to autoResult.addedCount
             }
 
             val msg = buildString {
@@ -2184,8 +2194,50 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     val taxLabel = formatDzdAmount(caughtNewTaxAmount, if (isAr) "دج" else "DA")
                     append(if (isAr) " • تم تصيّد ضرائب/فارق: $taxLabel!" else " • Caught fee/tax: $taxLabel!")
                 }
+                if (autoAddedFutureTaxCount > 0) {
+                    append(
+                        if (isAr) " • أُضيفت للمصاريف تلقائياً ✓"
+                        else " • Auto-added to Expenses ✓"
+                    )
+                }
             }
             _toastEvent.emit(msg)
+        }
+    }
+
+    /**
+     * Enables or disables automatic logging of detected BaridiMob/ALG Poste taxes into Expenses.
+     * When enabled, records a fresh activation baseline timestamp so ONLY future detected taxes
+     * are automatically added — previously detected/historical taxes are never swept in.
+     */
+    fun setAutoAddTaxesEnabled(
+        enabled: Boolean,
+        activationTimestampMillis: Long = System.currentTimeMillis()
+    ) {
+        val isAr = settings.value.language == "ar"
+        prefsManager.updateSettings { current ->
+            if (enabled) {
+                current.copy(
+                    autoAddTaxesEnabled = true,
+                    autoAddTaxesBaselineMillis = activationTimestampMillis.coerceAtLeast(1L)
+                )
+            } else {
+                current.copy(
+                    autoAddTaxesEnabled = false,
+                    autoAddTaxesBaselineMillis = 0L
+                )
+            }
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (enabled) {
+                    if (isAr) "تم تفعيل الإضافة التلقائية للضرائب — المستقبلية فقط (بدون السابقة) ✓"
+                    else "Auto Add Taxes enabled — future taxes only (past skipped) ✓"
+                } else {
+                    if (isAr) "تم تعطيل الإضافة التلقائية للضرائب"
+                    else "Auto Add Taxes disabled"
+                }
+            )
         }
     }
 
@@ -2195,7 +2247,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         if (!isAutoAddingTaxes.compareAndSet(false, true)) return
         viewModelScope.launch {
             try {
-                val isAr = settings.value.language == "ar"
+                val cfg = settings.value
+                val isAr = cfg.language == "ar"
+                if (!cfg.autoAddTaxesEnabled || cfg.autoAddTaxesBaselineMillis <= 0L) {
+                    _toastEvent.emit(
+                        if (isAr) "الإضافة التلقائية للضرائب معطّلة حالياً"
+                        else "Auto Add Taxes is currently disabled"
+                    )
+                    return@launch
+                }
                 val summaryOutcome = withContext(Dispatchers.IO) {
                     // 1. Refresh snapshots from live SMS inbox (if granted) + permanent archive
                     val liveSnaps = if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
@@ -2242,72 +2302,32 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         )
                     }
 
-                    // 3. Deduplicate against existing expense transactions
-                    val existingTransactions = dao.getAllTransactionsList()
-                    val unlogged = findUnloggedTaxAnomaliesForExpenses(
-                        anomalies = mergedTaxes,
-                        existingTransactions = existingTransactions
+                    // 3. Log ONLY future unlogged taxes (detectedAtMillis >= autoAddTaxesBaselineMillis)
+                    val autoResult = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                        dao = dao,
+                        prefsManager = prefsManager,
+                        isArabic = isAr,
+                        candidateAnomalies = mergedTaxes
                     )
-
-                    val newlyLoggedIds = mutableSetOf<String>()
-                    var addedTotal = 0.0
-                    for (tax in unlogged) {
-                        val rawExplanation = (if (isAr) tax.explanationAr else tax.explanationEn)
-                            .ifBlank { tax.rawBody }
-                            .trim()
-                        val refTag = "[tax_ref:${tax.id}]"
-                        val composedNote = if (rawExplanation.isBlank()) {
-                            refTag
-                        } else {
-                            "${rawExplanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
-                        }
-                        dao.insertTransaction(
-                            TransactionEntity(
-                                type = TransactionType.EXPENSE,
-                                amount = tax.taxAmount,
-                                category = "taxes_fees",
-                                title = if (isAr) tax.titleAr.ifBlank { "ضرائب ورسوم بريدي موب" }
-                                else tax.titleEn.ifBlank { "BaridiMob Tax / Fee" },
-                                note = composedNote.take(240),
-                                dateMillis = tax.detectedAtMillis
-                            )
-                        )
-                        newlyLoggedIds.add(tax.id)
-                        addedTotal += tax.taxAmount
-                    }
-
-                    // 4. Mark newly added + already-matched taxes as recorded so UI count drops cleanly
-                    val allMatchedIds = mergedTaxes
-                        .filter { it.id in newlyLoggedIds || isTaxAnomalyAlreadyLoggedInTransactions(it, existingTransactions) }
-                        .map { it.id }
-                        .toSet()
-
-                    if (allMatchedIds.isNotEmpty()) {
-                        prefsManager.updateSettings { current ->
-                            val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
-                                if (item.id in allMatchedIds) item.copy(isRecordedAsExpense = true) else item
-                            }
-                            current.copy(detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updated))
-                        }
-                    }
-
-                    Triple(unlogged.size, addedTotal, mergedTaxes.size)
+                    val baseline = settings.value.autoAddTaxesBaselineMillis
+                    val futureTaxesCount = mergedTaxes.count { it.detectedAtMillis >= baseline }
+                    Triple(autoResult.addedCount, autoResult.addedTotalDzd, futureTaxesCount)
                 }
 
-                val (addedCount, addedTotal, totalDetectedCount) = summaryOutcome
+                val (addedCount, addedTotal, futureDetectedCount) = summaryOutcome
                 val msg = when {
                     addedCount > 0 -> {
                         val formattedTotal = formatDzdAmount(addedTotal, if (isAr) "دج" else "DA")
-                        if (isAr) "تمت إضافة $addedCount ضرائب ($formattedTotal) إلى المصاريف ✓"
-                        else "Added $addedCount tax entries ($formattedTotal) to Expenses ✓"
+                        if (isAr) "تمت إضافة $addedCount ضرائب مستقبلية ($formattedTotal) إلى المصاريف ✓"
+                        else "Added $addedCount future tax entries ($formattedTotal) to Expenses ✓"
                     }
-                    totalDetectedCount > 0 -> {
-                        if (isAr) "جميع الضرائب المرصودة ($totalDetectedCount) مسجلة مسبقاً ✓"
-                        else "All $totalDetectedCount detected bank taxes are already logged ✓"
+                    futureDetectedCount > 0 -> {
+                        if (isAr) "جميع الضرائب المستقبلية ($futureDetectedCount) مسجلة مسبقاً ✓"
+                        else "All $futureDetectedCount future bank taxes are already logged ✓"
                     }
                     else -> {
-                        if (isAr) "لم يتم العثور على ضرائب أو رسوم بنكية غير مسجلة"
-                        else "No unlogged bank fees or taxes detected"
+                        if (isAr) "لا توجد ضرائب مستقبلية جديدة بعد تفعيل الميزة"
+                        else "No new future bank taxes detected since enabling"
                     }
                 }
                 _toastEvent.emit(msg)

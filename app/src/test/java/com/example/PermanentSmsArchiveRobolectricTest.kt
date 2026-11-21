@@ -261,4 +261,111 @@ class PermanentSmsArchiveRobolectricTest {
         vm.clearSavingsHistory()
         assertEquals("[]", vm.settings.value.savingsHistoryJson)
     }
+
+    @Test
+    fun autoAddTaxes_toggleOnLogsOnlyFutureTaxesAndSkipsPreviousTaxes() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val prefs = PreferencesManager(app)
+        val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = db.appDao()
+            val pastTime = 1_760_000_000_000L
+            val activationTime = 1_765_000_000_000L
+            val futureTime = 1_766_000_000_000L
+
+            val pastTax = com.example.sms.SmsTaxAnomalyEntry(
+                id = "past_fee_1",
+                taxAmount = 30.0,
+                detectedAtMillis = pastTime,
+                titleEn = "Old Bank Fee",
+                explanationEn = "Before activation",
+                isRecordedAsExpense = false
+            )
+            val futureTax = com.example.sms.SmsTaxAnomalyEntry(
+                id = "future_fee_2",
+                taxAmount = 55.0,
+                detectedAtMillis = futureTime,
+                titleEn = "Future Bank Fee",
+                explanationEn = "After activation",
+                isRecordedAsExpense = false
+            )
+
+            // Initially disabled: logs nothing even if taxes exist
+            prefs.updateSettings {
+                it.copy(
+                    autoAddTaxesEnabled = false,
+                    autoAddTaxesBaselineMillis = 0L,
+                    detectedSmsTaxesJson = com.example.sms.AlgPosteSmsCodec.encodeTaxAnomalies(
+                        listOf(pastTax, futureTax)
+                    )
+                )
+            }
+            val disabledResult = com.example.sms.TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                dao = dao,
+                prefsManager = prefs,
+                isArabic = false
+            )
+            assertEquals(0, disabledResult.addedCount)
+            assertTrue(dao.getAllTransactionsList().isEmpty())
+
+            // Enable Auto Add Taxes at activationTime -> MUST skip past_fee_1 and log ONLY future_fee_2
+            val vm = SaleryPelseViewModel(app)
+            vm.setAutoAddTaxesEnabled(true, activationTimestampMillis = activationTime)
+            assertTrue(prefs.settingsFlow.value.autoAddTaxesEnabled)
+            assertEquals(activationTime, prefs.settingsFlow.value.autoAddTaxesBaselineMillis)
+
+            val enabledResult = com.example.sms.TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                dao = dao,
+                prefsManager = prefs,
+                isArabic = false
+            )
+            assertEquals(1, enabledResult.addedCount)
+            assertEquals(55.0, enabledResult.addedTotalDzd, 0.01)
+
+            val txs = dao.getAllTransactionsList()
+            assertEquals(1, txs.size)
+            assertEquals(55.0, txs[0].amount, 0.01)
+            assertTrue(txs[0].note.contains("[tax_ref:future_fee_2]"))
+
+            val updatedAnomalies = com.example.sms.AlgPosteSmsCodec.parseTaxAnomalies(
+                prefs.settingsFlow.value.detectedSmsTaxesJson
+            )
+            assertEquals(false, updatedAnomalies.first { it.id == "past_fee_1" }.isRecordedAsExpense)
+            assertEquals(true, updatedAnomalies.first { it.id == "future_fee_2" }.isRecordedAsExpense)
+
+            // Re-running must be idempotent (zero duplicates)
+            val duplicateRun = com.example.sms.TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                dao = dao,
+                prefsManager = prefs,
+                isArabic = false
+            )
+            assertEquals(0, duplicateRun.addedCount)
+            assertEquals(1, dao.getAllTransactionsList().size)
+
+            // Disabling must block subsequent future taxes until re-enabled
+            vm.setAutoAddTaxesEnabled(false)
+            assertEquals(false, prefs.settingsFlow.value.autoAddTaxesEnabled)
+            assertEquals(0L, prefs.settingsFlow.value.autoAddTaxesBaselineMillis)
+
+            val evenLaterTax = futureTax.copy(id = "even_later_fee_3", detectedAtMillis = futureTime + 60_000L)
+            prefs.updateSettings {
+                it.copy(
+                    detectedSmsTaxesJson = com.example.sms.AlgPosteSmsCodec.encodeTaxAnomalies(
+                        updatedAnomalies + evenLaterTax
+                    )
+                )
+            }
+            val afterDisableResult = com.example.sms.TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
+                dao = dao,
+                prefsManager = prefs,
+                isArabic = false
+            )
+            assertEquals(0, afterDisableResult.addedCount)
+            assertEquals(1, dao.getAllTransactionsList().size)
+        } finally {
+            db.close()
+        }
+    }
 }

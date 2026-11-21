@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -60,8 +61,10 @@ import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.StringsBundle
+import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.AmberNeon
+import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
@@ -75,8 +78,10 @@ fun ExpenseScreen(
     transactions: List<TransactionEntity>,
     onAddExpenseClick: () -> Unit,
     onDeleteTransaction: (TransactionEntity) -> Unit,
+    autoAddTaxesEnabled: Boolean = false,
+    autoAddTaxesBaselineMillis: Long = 0L,
+    onToggleAutoAddTaxes: (Boolean) -> Unit = {},
     unloggedTaxesCount: Int = 0,
-    onAutoAddTaxes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -126,13 +131,15 @@ fun ExpenseScreen(
                 item {
                     TotalExpenseHeroCard(
                         totalExpense = totalExpense,
+                        autoAddTaxesEnabled = autoAddTaxesEnabled,
+                        autoAddTaxesBaselineMillis = autoAddTaxesBaselineMillis,
                         unloggedTaxesCount = unloggedTaxesCount,
                         isArabic = isArabic,
                         strings = strings,
                         dimens = dimens,
                         typo = typo,
                         onAddExpenseClick = onAddExpenseClick,
-                        onAutoAddTaxes = onAutoAddTaxes
+                        onToggleAutoAddTaxes = onToggleAutoAddTaxes
                     )
                 }
 
@@ -228,13 +235,15 @@ fun ExpenseScreen(
             item {
                 TotalExpenseHeroCard(
                     totalExpense = totalExpense,
+                    autoAddTaxesEnabled = autoAddTaxesEnabled,
+                    autoAddTaxesBaselineMillis = autoAddTaxesBaselineMillis,
                     unloggedTaxesCount = unloggedTaxesCount,
                     isArabic = isArabic,
                     strings = strings,
                     dimens = dimens,
                     typo = typo,
                     onAddExpenseClick = onAddExpenseClick,
-                    onAutoAddTaxes = onAutoAddTaxes
+                    onToggleAutoAddTaxes = onToggleAutoAddTaxes
                 )
             }
 
@@ -301,13 +310,15 @@ fun ExpenseScreen(
 @Composable
 private fun TotalExpenseHeroCard(
     totalExpense: Double,
+    autoAddTaxesEnabled: Boolean,
+    autoAddTaxesBaselineMillis: Long,
     unloggedTaxesCount: Int,
     isArabic: Boolean,
     strings: StringsBundle,
     dimens: com.example.ui.theme.AdaptiveDimens,
     typo: com.example.ui.theme.AdaptiveTypography,
     onAddExpenseClick: () -> Unit,
-    onAutoAddTaxes: () -> Unit
+    onToggleAutoAddTaxes: (Boolean) -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
 
@@ -344,17 +355,54 @@ private fun TotalExpenseHeroCard(
                     text = strings.addExpense,
                     icon = Icons.Default.Add,
                     containerColor = RoseNeon,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.95f),
                     onClick = onAddExpenseClick
                 )
 
                 AutoAddTaxesActionButton(
+                    enabled = autoAddTaxesEnabled,
                     unloggedCount = unloggedTaxesCount,
                     isArabic = isArabic,
                     dimens = dimens,
                     typo = typo,
-                    onClick = onAutoAddTaxes,
-                    modifier = Modifier.weight(1f)
+                    onClick = { onToggleAutoAddTaxes(!autoAddTaxesEnabled) },
+                    modifier = Modifier.weight(1.05f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (autoAddTaxesEnabled) EmeraldNeon else colors.textMuted.copy(alpha = 0.5f))
+                )
+                Text(
+                    text = when {
+                        autoAddTaxesEnabled && autoAddTaxesBaselineMillis > 0L -> {
+                            if (isArabic) {
+                                "الضرائب التلقائية مفعّلة منذ ${formatDate(autoAddTaxesBaselineMillis)} (المستقبلية فقط)"
+                            } else {
+                                "Auto Add Taxes ON since ${formatDate(autoAddTaxesBaselineMillis)} • Future only"
+                            }
+                        }
+                        autoAddTaxesEnabled -> {
+                            if (isArabic) "الضرائب التلقائية مفعّلة • المستقبلية فقط"
+                            else "Auto Add Taxes ON • Future taxes only"
+                        }
+                        else -> {
+                            if (isArabic) "الضرائب التلقائية معطّلة • عند التفعيل تُضاف المستقبلية فقط"
+                            else "Auto Add Taxes OFF • Past taxes won't be added"
+                        }
+                    },
+                    color = if (autoAddTaxesEnabled) colors.textSecondary else colors.textMuted,
+                    fontSize = typo.caption,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -363,6 +411,7 @@ private fun TotalExpenseHeroCard(
 
 @Composable
 private fun AutoAddTaxesActionButton(
+    enabled: Boolean,
     unloggedCount: Int,
     isArabic: Boolean,
     dimens: com.example.ui.theme.AdaptiveDimens,
@@ -373,47 +422,65 @@ private fun AutoAddTaxesActionButton(
     val colors = LiquidGlassTheme.colors
     val shape = RoundedCornerShape(16.dp)
     val accent = AmberNeon
-    val bgBrush = if (colors.isDark) {
-        Brush.horizontalGradient(
-            listOf(
-                accent.copy(alpha = 0.22f),
-                accent.copy(alpha = 0.14f)
+    val bgBrush = if (enabled) {
+        if (colors.isDark) {
+            Brush.horizontalGradient(
+                listOf(
+                    accent.copy(alpha = 0.24f),
+                    EmeraldNeon.copy(alpha = 0.14f)
+                )
             )
-        )
+        } else {
+            Brush.horizontalGradient(
+                listOf(
+                    accent.copy(alpha = 0.20f),
+                    EmeraldNeon.copy(alpha = 0.11f)
+                )
+            )
+        }
     } else {
         Brush.horizontalGradient(
             listOf(
-                accent.copy(alpha = 0.18f),
-                accent.copy(alpha = 0.10f)
+                colors.glassSurface,
+                colors.glassSurface.copy(alpha = 0.85f)
             )
         )
     }
-    val textColor = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E)
+    val textColor = when {
+        enabled && colors.isDark -> Color(0xFFFDE68A)
+        enabled -> Color(0xFF92400E)
+        else -> colors.textSecondary
+    }
+    val borderColor = if (enabled) {
+        accent.copy(alpha = 0.65f)
+    } else {
+        colors.glassBorderSubtle
+    }
 
     val depthModifier = if (colors.isNeumorphic) {
         modifier
             .defaultMinSize(minHeight = dimens.buttonHeight)
             .neumorphicDepth(
                 cornerRadius = 16.dp,
-                elevation = 3.dp,
+                elevation = if (enabled) 3.dp else 2.dp,
                 isDark = colors.isDark,
                 backgroundColor = colors.glassSurface
             )
             .clip(shape)
-            .border(BorderStroke(1.dp, accent.copy(alpha = if (unloggedCount > 0) 0.55f else 0.35f)), shape)
+            .border(BorderStroke(1.dp, borderColor), shape)
     } else {
         modifier
             .defaultMinSize(minHeight = dimens.buttonHeight)
             .clip(shape)
             .background(bgBrush, shape)
-            .border(BorderStroke(1.dp, accent.copy(alpha = if (unloggedCount > 0) 0.60f else 0.38f)), shape)
+            .border(BorderStroke(1.dp, borderColor), shape)
     }
 
     Box(
         modifier = depthModifier
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = accent),
+                indication = ripple(color = if (enabled) accent else colors.textSecondary),
                 onClick = onClick
             )
             .padding(horizontal = 10.dp, vertical = 10.dp)
@@ -426,36 +493,43 @@ private fun AutoAddTaxesActionButton(
         ) {
             Icon(
                 imageVector = Icons.Default.AutoFixHigh,
-                contentDescription = if (isArabic) "إضافة الضرائب تلقائياً" else "Auto Add Taxes",
-                tint = textColor,
+                contentDescription = if (isArabic) "تبديل إضافة الضرائب تلقائياً" else "Toggle Auto Add Taxes",
+                tint = if (enabled) accent else colors.textMuted,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isArabic) "إضافة الضرائب" else "Auto Add Taxes",
+                text = if (isArabic) "ضرائب تلقائية" else "Auto Taxes",
                 color = textColor,
                 fontSize = typo.bodySm,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            if (unloggedCount > 0) {
-                Spacer(modifier = Modifier.width(5.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(accent)
-                        .padding(horizontal = 6.dp, vertical = 1.5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = unloggedCount.toString(),
-                        color = Color(0xFF0A1220),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        style = TextStyle(fontFeatureSettings = "tnum")
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (enabled) EmeraldNeon
+                        else colors.textMuted.copy(alpha = 0.22f)
                     )
-                }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (enabled) {
+                        if (unloggedCount > 0) "ON $unloggedCount"
+                        else if (isArabic) "مفعّل" else "ON"
+                    } else {
+                        if (isArabic) "معطّل" else "OFF"
+                    },
+                    color = if (enabled) Color(0xFF042419) else colors.textMuted,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
+                )
             }
         }
     }

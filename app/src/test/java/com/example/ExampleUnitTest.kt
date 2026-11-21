@@ -1691,4 +1691,41 @@ class ExampleUnitTest {
         ArabicStrings.holdToEditCardHint.contains("0.5")
     )
   }
+
+  @Test
+  fun autoAddTaxes_defaultsOffAndStrictlySkipsPastTaxesWhenBaselineProvided() {
+    val defaults = com.example.data.UserSettings()
+    assertEquals(false, defaults.autoAddTaxesEnabled)
+    assertEquals(0L, defaults.autoAddTaxesBaselineMillis)
+
+    val baseline = 1_765_000_000_000L
+    val pastTax = com.example.sms.SmsTaxAnomalyEntry(
+      id = "tax_past",
+      taxAmount = 35.0,
+      detectedAtMillis = baseline - 60_000L,
+      isRecordedAsExpense = false
+    )
+    val futureTaxAtBoundary = com.example.sms.SmsTaxAnomalyEntry(
+      id = "tax_future_boundary",
+      taxAmount = 40.0,
+      detectedAtMillis = baseline,
+      isRecordedAsExpense = false
+    )
+    val futureTaxLater = com.example.sms.SmsTaxAnomalyEntry(
+      id = "tax_future_later",
+      taxAmount = 85.0,
+      detectedAtMillis = baseline + 120_000L,
+      isRecordedAsExpense = false
+    )
+
+    val eligible = com.example.viewmodel.findUnloggedTaxAnomaliesForExpenses(
+      anomalies = listOf(pastTax, futureTaxAtBoundary, futureTaxLater),
+      existingTransactions = emptyList(),
+      minTimestampMillis = baseline
+    )
+
+    assertEquals(2, eligible.size)
+    assertTrue(eligible.none { it.id == "tax_past" })
+    assertEquals(listOf("tax_future_boundary", "tax_future_later"), eligible.map { it.id })
+  }
 }

@@ -654,6 +654,9 @@ fun MainAppScreen(
                                     },
                                     onClearAllTaxes = {
                                         viewModel.clearAllTaxAnomalies()
+                                    },
+                                    onToggleAutoAddTaxes = { enabled ->
+                                        viewModel.setAutoAddTaxesEnabled(enabled)
                                     }
                                 )
                                 "access_permissions" -> AccessPermissionsScreen(
@@ -759,10 +762,24 @@ fun MainAppScreen(
                                 )
                                 "expenses" -> ExpenseScreen(
                                     transactions = transactions,
-                                    unloggedTaxesCount = remember(detectedSmsTaxes) {
-                                        detectedSmsTaxes.count { !it.isRecordedAsExpense && it.taxAmount > 0.0 }
+                                    autoAddTaxesEnabled = userSettings.autoAddTaxesEnabled,
+                                    autoAddTaxesBaselineMillis = userSettings.autoAddTaxesBaselineMillis,
+                                    onToggleAutoAddTaxes = { enabled ->
+                                        viewModel.setAutoAddTaxesEnabled(enabled)
                                     },
-                                    onAutoAddTaxes = { viewModel.autoAddUnloggedTaxes(context) },
+                                    unloggedTaxesCount = remember(
+                                        detectedSmsTaxes,
+                                        userSettings.autoAddTaxesEnabled,
+                                        userSettings.autoAddTaxesBaselineMillis
+                                    ) {
+                                        if (userSettings.autoAddTaxesEnabled && userSettings.autoAddTaxesBaselineMillis > 0L) {
+                                            detectedSmsTaxes.count {
+                                                !it.isRecordedAsExpense &&
+                                                    it.taxAmount > 0.0 &&
+                                                    it.detectedAtMillis >= userSettings.autoAddTaxesBaselineMillis
+                                            }
+                                        } else 0
+                                    },
                                     onAddExpenseClick = {
                                         addTransactionType = TransactionType.EXPENSE
                                         showAddTransactionDialog = true

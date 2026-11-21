@@ -66,6 +66,8 @@ data class UserSettings(
     val latestSmsBalanceRawSnippet: String = "",
     val smsBalanceHistoryJson: String = "[]",
     val detectedSmsTaxesJson: String = "[]",
+    val autoAddTaxesEnabled: Boolean = false,
+    val autoAddTaxesBaselineMillis: Long = 0L,
     val hasCompletedPermissionsOnboarding: Boolean = false
 )
 
@@ -222,6 +224,8 @@ class PreferencesManager(context: Context) {
             latestSmsBalanceRawSnippet = safeString(all, "latest_sms_balance_snippet", ""),
             smsBalanceHistoryJson = safeString(all, "sms_balance_history_json", "[]"),
             detectedSmsTaxesJson = safeString(all, "detected_sms_taxes_json", "[]"),
+            autoAddTaxesEnabled = safeBoolean(all, "auto_add_taxes_enabled", false),
+            autoAddTaxesBaselineMillis = safeLong(all, "auto_add_taxes_baseline_millis", 0L),
             hasCompletedPermissionsOnboarding = safeBoolean(all, "has_completed_permissions_onboarding", false)
         )
     }
@@ -296,6 +300,8 @@ class PreferencesManager(context: Context) {
                 .putString("latest_sms_balance_snippet", finalUpdated.latestSmsBalanceRawSnippet)
                 .putString("sms_balance_history_json", finalUpdated.smsBalanceHistoryJson)
                 .putString("detected_sms_taxes_json", finalUpdated.detectedSmsTaxesJson)
+                .putBoolean("auto_add_taxes_enabled", finalUpdated.autoAddTaxesEnabled)
+                .putLong("auto_add_taxes_baseline_millis", finalUpdated.autoAddTaxesBaselineMillis)
                 .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
                 .apply()
             _settingsFlow.value = finalUpdated
