@@ -48,6 +48,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
@@ -56,6 +58,7 @@ import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import java.util.Calendar
 
 @Composable
@@ -120,7 +123,8 @@ fun AddDebtDialog(
     }
     var installmentDay by remember { mutableIntStateOf(existingDebt?.installmentDayOfMonth ?: 15) }
 
-    val contactPicker = rememberContactPickerFlow(secureScreenshots = false) { resolvedName, _, _ ->
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    val contactPicker = rememberContactPickerFlow(secureScreenshots = isScreenshotProtected) { resolvedName, _, _ ->
         if (resolvedName.isNotBlank()) {
             personNameText = resolvedName
         }
@@ -162,7 +166,12 @@ fun AddDebtDialog(
         datePicker.show()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)

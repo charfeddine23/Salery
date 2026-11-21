@@ -37,7 +37,7 @@ class DebtReminderReceiver : BroadcastReceiver() {
         val remainingAmount = intent.getDoubleExtra(EXTRA_REMAINING_AMOUNT, 0.0)
         val isOwedByMe = intent.getBooleanExtra(EXTRA_IS_OWED_BY_ME, true)
 
-        Log.d(TAG, "Debt reminder received for ID: $debtId, person: $personName, amount: $remainingAmount")
+        Log.d(TAG, "Debt reminder received for ID: $debtId")
 
         // Make sure notification channel exists
         DebtReminderScheduler.createNotificationChannel(context)

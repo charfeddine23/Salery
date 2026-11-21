@@ -70,12 +70,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.core.graphics.drawable.toBitmap
 import com.example.data.VaultAppMotif
 import com.example.data.VaultAppPreset
 import com.example.data.VaultAppPresets
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -756,7 +759,13 @@ fun VaultHoldActionDialog(
     val primary = preset.primaryColor()
     var confirmingDelete by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 420.dp)
@@ -968,7 +977,13 @@ fun AppPresetPickerDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 460.dp)

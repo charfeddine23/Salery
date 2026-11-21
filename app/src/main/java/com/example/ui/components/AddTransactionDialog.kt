@@ -42,11 +42,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.ExpenseCategories
 import com.example.data.TransactionType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -73,7 +76,13 @@ fun AddTransactionDialog(
         mutableStateOf(if (initialType == TransactionType.INCOME) "salary" else "food")
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)

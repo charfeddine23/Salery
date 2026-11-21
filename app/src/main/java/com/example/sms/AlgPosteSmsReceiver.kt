@@ -105,7 +105,8 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 if (newlyArchivedEntities.isNotEmpty()) {
                     dao.insertArchivedSmsIfMissing(newlyArchivedEntities)
                 }
-                val archivedEntities = runCatching { dao.getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                val archivedEntities = runCatching { dao.getAllArchivedAlgPosteSmsList() }
+                    .getOrDefault(emptyList())
                 val archivedSnapshots = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(archivedEntities)
 
                 val inboxBaselineSnapshots = try {

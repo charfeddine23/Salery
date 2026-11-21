@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
@@ -92,6 +93,7 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 import com.example.update.AppUpdateUiState
 import com.example.update.LatestChangelogBundle
@@ -167,12 +169,14 @@ fun AppUpdateDialog(
         ReleaseChangelogProvider.resolveForUpdateDialog(context, release)
     }
 
+    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = !isDownloading
+            dismissOnClickOutside = !isDownloading,
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
         Box(

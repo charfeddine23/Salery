@@ -283,15 +283,15 @@ fun ScreenshotProtectionDialog(
                             Text(
                                 text = if (isProtected) {
                                     if (isArabic) {
-                                        "لقطات الشاشة وتسجيل الشاشة ممنوعان إطلاقاً في صفحة البطاقات لحماية بياناتك ومعلوماتك المصرفية ورمز الأمان CVC."
+                                        "لقطات الشاشة، تسجيل الشاشة ومعاينة التطبيقات الأخيرة ممنوعة في جميع شاشات التطبيق لحماية كلمات المرور وحسابات CCP والبطاقات البنكية."
                                     } else {
-                                        "Screenshots and screen recording are strictly disabled on the Cards Hub to protect your card details and sensitive banking information."
+                                        "Screenshots, screen recording, and Recents thumbnails are strictly blocked across the entire app to protect your passwords, CCP accounts, and cards."
                                     }
                                 } else {
                                     if (isArabic) {
-                                        "تم تعطيل حظر التصوير مؤقتاً في صفحة البطاقات؛ يمكنك التقاط لقطات الشاشة الآن أو إعادة تفعيل الحماية في أي وقت."
+                                        "تم تعطيل حظر التصوير مؤقتاً؛ يمكنك التقاط لقطات الشاشة الآن أو إعادة تفعيل الحماية الشاملة في أي وقت."
                                     } else {
-                                        "Screenshot blocking is currently paused on the Cards Hub. You can capture screenshots or re-enable protection anytime."
+                                        "Screenshot blocking is currently paused across the app. You can capture screenshots or re-enable protection anytime."
                                     }
                                 },
                                 color = colors.textSecondary,

@@ -96,11 +96,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.market.SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES
 import com.example.ui.i18n.AppStrings
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -638,9 +640,13 @@ fun SquareSyncIntervalSettingsDialog(
         label = "square_sync_dialog_scale"
     )
 
+    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
     ) {
         Box(
             modifier = Modifier

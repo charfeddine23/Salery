@@ -18,7 +18,7 @@ data class BackupPayload(
     val classicCardCvc: String = "",
     val archivedAlgPosteSms: List<ArchivedAlgPosteSmsEntity> = emptyList()
 ) {
-    fun toJsonString(): String {
+    fun toJsonString(includeSensitiveCardFields: Boolean = false): String {
         val root = JSONObject()
         root.put("appName", "Vaultix")
         root.put("appVersion", appVersion)
@@ -32,12 +32,12 @@ data class BackupPayload(
         salaryObj.put("employer", salaryEmployer)
         root.put("salarySettings", salaryObj)
 
-        // Classic Card Details
+        // Classic Card Details (sensitive PAN/CVC are excluded from plaintext JSON backups)
         val cardObj = JSONObject()
         cardObj.put("holderName", classicCardHolderName)
-        cardObj.put("cardNumber", classicCardNumber)
+        cardObj.put("cardNumber", if (includeSensitiveCardFields) classicCardNumber else "")
         cardObj.put("expiryDate", classicCardExpiry)
-        cardObj.put("cvc", classicCardCvc)
+        cardObj.put("cvc", if (includeSensitiveCardFields) classicCardCvc else "")
         root.put("classicCardSettings", cardObj)
 
         // Transactions
@@ -104,7 +104,10 @@ data class BackupPayload(
     }
 
     companion object {
+        private const val MAX_BACKUP_JSON_CHARS = 10 * 1024 * 1024 // 10 MB safety cap
+
         fun fromJsonString(jsonStr: String): BackupPayload? {
+            if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
             return runCatching {
                 val root = JSONObject(jsonStr)
                 val appVersion = root.optString("appVersion", "1.0.0")
@@ -112,8 +115,9 @@ data class BackupPayload(
                 val exportTimestamp = root.optLong("exportTimestamp", System.currentTimeMillis())
 
                 val salaryObj = root.optJSONObject("salarySettings")
-                val salaryAmount = salaryObj?.optDouble("amount", 85000.0) ?: 85000.0
-                val salaryPayday = salaryObj?.optInt("payday", 25) ?: 25
+                val rawSalary = salaryObj?.optDouble("amount", 85000.0) ?: 85000.0
+                val salaryAmount = if (rawSalary.isFinite() && rawSalary >= 0.0) rawSalary else 85000.0
+                val salaryPayday = (salaryObj?.optInt("payday", 25) ?: 25).coerceIn(1, 31)
                 val salaryEmployer = salaryObj?.optString("employer", "Enterprise Algiers") ?: "Enterprise Algiers"
 
                 val cardObj = root.optJSONObject("classicCardSettings")
@@ -127,11 +131,13 @@ data class BackupPayload(
                 if (transArray != null) {
                     for (i in 0 until transArray.length()) {
                         val obj = transArray.getJSONObject(i)
+                        val txAmount = obj.getDouble("amount")
+                        if (!txAmount.isFinite() || txAmount < 0.0) continue
                         transList.add(
                             TransactionEntity(
                                 id = 0, // Auto-generate new IDs on restore
                                 type = TransactionType.valueOf(obj.getString("type")),
-                                amount = obj.getDouble("amount"),
+                                amount = txAmount,
                                 category = obj.getString("category"),
                                 title = obj.getString("title"),
                                 note = obj.optString("note", ""),
@@ -148,12 +154,18 @@ data class BackupPayload(
                 if (debtsArray != null) {
                     for (i in 0 until debtsArray.length()) {
                         val obj = debtsArray.getJSONObject(i)
+                        val debtAmount = obj.getDouble("amount")
+                        if (!debtAmount.isFinite() || debtAmount < 0.0) continue
+                        val rawRemaining = obj.optDouble("remainingAmount", debtAmount)
+                        val safeRemaining = if (rawRemaining.isFinite() && rawRemaining >= 0.0) rawRemaining else debtAmount
+                        val rawMonthly = obj.optDouble("monthlyInstallmentAmount", 0.0)
+                        val safeMonthly = if (rawMonthly.isFinite() && rawMonthly >= 0.0) rawMonthly else 0.0
                         debtsList.add(
                             DebtEntity(
                                 id = 0,
                                 type = DebtType.valueOf(obj.getString("type")),
                                 personName = obj.getString("personName"),
-                                amount = obj.getDouble("amount"),
+                                amount = debtAmount,
                                 note = obj.optString("note", ""),
                                 dueDateMillis = obj.getLong("dueDateMillis"),
                                 autoPayOnDueDate = obj.optBoolean("autoPayOnDueDate", true),
@@ -161,9 +173,9 @@ data class BackupPayload(
                                 paidDateMillis = if (obj.has("paidDateMillis")) obj.getLong("paidDateMillis") else null,
                                 createdDateMillis = obj.optLong("createdDateMillis", System.currentTimeMillis()),
                                 isRecurringMonthlyInstallment = obj.optBoolean("isRecurringMonthlyInstallment", false),
-                                monthlyInstallmentAmount = obj.optDouble("monthlyInstallmentAmount", 0.0),
-                                installmentDayOfMonth = obj.optInt("installmentDayOfMonth", 1),
-                                remainingAmount = obj.optDouble("remainingAmount", obj.getDouble("amount")),
+                                monthlyInstallmentAmount = safeMonthly,
+                                installmentDayOfMonth = obj.optInt("installmentDayOfMonth", 1).coerceIn(1, 31),
+                                remainingAmount = safeRemaining,
                                 lastInstallmentCreditedMonth = obj.optString("lastInstallmentCreditedMonth", "")
                             )
                         )

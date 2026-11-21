@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -302,9 +300,10 @@ fun CcpsScreen(
         )
     }
 
-    fun copyText(label: String, text: String, @Suppress("UNUSED_PARAMETER") toastMessage: String) {
-        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cb.setPrimaryClip(ClipData.newPlainText(label, text))
+    fun copyText(label: String, text: String, toastMessage: String) {
+        com.example.security.ClipboardSecurityHelper.copySensitiveText(context, label, text)
+        val suffix = if (isArabic) "يُمسح بعد 45ث" else "auto-clears in 45s"
+        android.widget.Toast.makeText(context, "$toastMessage • $suffix", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     val ccpHeader: @Composable () -> Unit = {

@@ -1,8 +1,5 @@
 package com.example.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,16 +34,23 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.EnhancedEncryption
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,33 +63,45 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
+import com.example.security.StepUpAuthHelper
+import com.example.security.VaultCryptoManager
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDate
+import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
+import com.example.viewmodel.BackupRestoreOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Clean, explicit, user-triggered Google Drive & Local Storage Backup and Restore dialog.
- * Uses Android Storage Access Framework (SAF) contracts:
- * - CreateDocument for direct Google Drive / Storage saving
- * - OpenDocument for picking JSON files directly from Google Drive or local storage
+ * Supports optional AES-256-GCM passphrase encryption & automatic encrypted envelope decryption.
  */
 @Composable
 fun BackupRestoreDialog(
     lastBackupTimestamp: Long,
+    requireStepUpAuth: Boolean = false,
+    onBeforeExternalFlow: () -> Unit = {},
     onDismiss: () -> Unit,
-    onExportBackup: suspend () -> String,
-    onRestoreBackup: suspend (String) -> Boolean
+    onExportBackup: suspend (passphrase: String) -> String,
+    onRestoreBackup: suspend (rawContent: String, passphrase: String) -> BackupRestoreOutcome
 ) {
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val colors = LiquidGlassTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -97,7 +113,71 @@ fun BackupRestoreDialog(
     var manualJsonText by remember { mutableStateOf("") }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
 
-    // 1. SAF Create Document Launcher: Save backup directly into Google Drive folder or local storage
+    // Optional AES-256 backup encryption state
+    var encryptBackupWithPassword by remember { mutableStateOf(false) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var showExportPassphrase by remember { mutableStateOf(false) }
+
+    // Encrypted backup restore prompt state
+    var pendingEncryptedRestoreContent by remember { mutableStateOf<String?>(null) }
+    var restorePassphrase by remember { mutableStateOf("") }
+    var showRestorePassphrase by remember { mutableStateOf(false) }
+
+    fun handleRestoreInput(rawContent: String, passphrase: String = "") {
+        val trimmed = rawContent.trim()
+        if (trimmed.isBlank()) {
+            statusMessage = strings.restoreError
+            isErrorMessage = true
+            return
+        }
+        if (VaultCryptoManager.isEncryptedBackupEnvelope(trimmed) && passphrase.isBlank()) {
+            pendingEncryptedRestoreContent = trimmed
+            restorePassphrase = ""
+            statusMessage = if (isArabic) {
+                "هذه النسخة مشفّرة. أدخل كلمة المرور لفك التشفير والاستعادة."
+            } else {
+                "This backup is encrypted. Enter its password to decrypt & restore."
+            }
+            isErrorMessage = false
+            return
+        }
+
+        isLoading = true
+        scope.launch {
+            try {
+                when (onRestoreBackup(trimmed, passphrase)) {
+                    BackupRestoreOutcome.SUCCESS -> {
+                        statusMessage = strings.restoreSuccess
+                        isErrorMessage = false
+                        pendingEncryptedRestoreContent = null
+                        restorePassphrase = ""
+                        manualJsonText = ""
+                        showManualPaste = false
+                    }
+                    BackupRestoreOutcome.WRONG_PASSWORD_OR_TAMPERED -> {
+                        statusMessage = if (isArabic) {
+                            "كلمة مرور النسخة الاحتياطية غير صحيحة أو الملف معدّل."
+                        } else {
+                            "Incorrect backup password or file integrity check failed."
+                        }
+                        isErrorMessage = true
+                    }
+                    BackupRestoreOutcome.INVALID_FORMAT -> {
+                        statusMessage = strings.restoreError
+                        isErrorMessage = true
+                        pendingEncryptedRestoreContent = null
+                    }
+                }
+            } catch (e: Exception) {
+                statusMessage = "${strings.restoreError}: ${e.localizedMessage ?: "Failed"}"
+                isErrorMessage = true
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // 1. SAF Create Document Launcher
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -110,7 +190,12 @@ fun BackupRestoreDialog(
                             output.write(pendingExportJson!!.toByteArray(Charsets.UTF_8))
                         }
                     }
-                    statusMessage = strings.backupSuccess
+                    statusMessage = if (encryptBackupWithPassword) {
+                        if (isArabic) "تم حفظ النسخة المشفرة بأمان (AES-256) ✓"
+                        else "Encrypted backup saved securely (AES-256) ✓"
+                    } else {
+                        strings.backupSuccess
+                    }
                     isErrorMessage = false
                 } catch (e: Exception) {
                     statusMessage = "Write error: ${e.localizedMessage ?: "Failed to save"}"
@@ -121,11 +206,12 @@ fun BackupRestoreDialog(
                 }
             }
         } else {
+            isLoading = false
             pendingExportJson = null
         }
     }
 
-    // 2. SAF Open Document Launcher: Pick JSON backup file directly from Google Drive or local files
+    // 2. SAF Open Document Launcher
     val openDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -133,35 +219,95 @@ fun BackupRestoreDialog(
             isLoading = true
             scope.launch {
                 try {
-                    val jsonContent = withContext(Dispatchers.IO) {
+                    val content = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { stream ->
                             stream.bufferedReader().use { it.readText() }
                         }
                     }
-                    if (!jsonContent.isNullOrBlank()) {
-                        val success = onRestoreBackup(jsonContent.trim())
-                        if (success) {
-                            statusMessage = strings.restoreSuccess
-                            isErrorMessage = false
-                        } else {
-                            statusMessage = strings.restoreError
-                            isErrorMessage = true
-                        }
+                    isLoading = false
+                    if (!content.isNullOrBlank()) {
+                        handleRestoreInput(content)
                     } else {
                         statusMessage = strings.restoreError
                         isErrorMessage = true
                     }
                 } catch (e: Exception) {
+                    isLoading = false
                     statusMessage = "${strings.restoreError}: ${e.localizedMessage ?: "Failed to read"}"
                     isErrorMessage = true
-                } finally {
-                    isLoading = false
                 }
             }
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    fun executeVerifiedExport(shareMode: Boolean) {
+        if (encryptBackupWithPassword && exportPassphrase.length < 4) {
+            statusMessage = if (isArabic) {
+                "أدخل كلمة مرور من 4 أحرف على الأقل لتشفير النسخة."
+            } else {
+                "Enter at least a 4-character password to encrypt this backup."
+            }
+            isErrorMessage = true
+            return
+        }
+
+        StepUpAuthHelper.verifyIfEnabled(
+            context = context,
+            requireBiometric = requireStepUpAuth,
+            title = if (isArabic) "تأكيد الهوية لتصدير النسخة" else "Verify Identity to Export",
+            subtitle = if (isArabic) "تحقق بالبصمة قبل تصدير بياناتك المالية" else "Confirm biometrics before exporting your vault",
+            cancelText = strings.cancel,
+            onVerified = {
+                isLoading = true
+                scope.launch {
+                    try {
+                        val activePass = if (encryptBackupWithPassword) exportPassphrase else ""
+                        val exported = onExportBackup(activePass)
+                        if (shareMode) {
+                            isLoading = false
+                            onBeforeExternalFlow()
+                            val suffix = if (encryptBackupWithPassword) "Encrypted.json" else "Backup.json"
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, exported)
+                                putExtra(Intent.EXTRA_SUBJECT, "Vaultix Backup (${formatDate(System.currentTimeMillis())})")
+                                putExtra(Intent.EXTRA_TITLE, "Vaultix_$suffix")
+                                type = "application/json"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Backup to Google Drive / Apps"))
+                        } else {
+                            pendingExportJson = exported
+                            onBeforeExternalFlow()
+                            val filename = if (encryptBackupWithPassword) {
+                                "Vaultix_Encrypted_Backup.json"
+                            } else {
+                                "Vaultix_Backup.json"
+                            }
+                            createDocumentLauncher.launch(filename)
+                        }
+                    } catch (e: Exception) {
+                        isLoading = false
+                        statusMessage = "Backup error: ${e.localizedMessage ?: "Unknown"}"
+                        isErrorMessage = true
+                    }
+                }
+            },
+            onRejected = { err ->
+                if (!err.isNullOrBlank()) {
+                    statusMessage = err
+                    isErrorMessage = true
+                }
+            }
+        )
+    }
+
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -224,7 +370,7 @@ fun BackupRestoreDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Last Backup Status Card
                 Row(
@@ -264,7 +410,103 @@ fun BackupRestoreDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Optional AES-256 Password Encryption Card
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (encryptBackupWithPassword) EmeraldNeon.copy(alpha = 0.08f) else colors.glassCard
+                        )
+                        .border(
+                            1.dp,
+                            if (encryptBackupWithPassword) EmeraldNeon.copy(alpha = 0.45f) else colors.glassBorderSubtle,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { encryptBackupWithPassword = !encryptBackupWithPassword },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EnhancedEncryption,
+                            contentDescription = null,
+                            tint = if (encryptBackupWithPassword) EmeraldNeon else colors.textMuted,
+                            modifier = Modifier.size(19.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "تشفير النسخة بكلمة مرور (AES-256)" else "Encrypt backup with password",
+                                color = colors.textPrimary,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (isArabic) {
+                                    "يحفظ جميع البيانات وتفاصيل البطاقة مشفرة بالكامل"
+                                } else {
+                                    "Protects full records & card details via PBKDF2 + AES-256"
+                                },
+                                color = colors.textMuted,
+                                fontSize = 10.5.sp
+                            )
+                        }
+                        Switch(
+                            checked = encryptBackupWithPassword,
+                            onCheckedChange = { encryptBackupWithPassword = it },
+                            modifier = Modifier.testTag("encrypt_backup_switch"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = EmeraldNeon,
+                                checkedTrackColor = EmeraldNeon.copy(alpha = 0.35f),
+                                uncheckedThumbColor = colors.textMuted,
+                                uncheckedTrackColor = colors.glassCard
+                            )
+                        )
+                    }
+
+                    AnimatedVisibility(visible = encryptBackupWithPassword) {
+                        OutlinedTextField(
+                            value = exportPassphrase,
+                            onValueChange = { exportPassphrase = it },
+                            singleLine = true,
+                            label = {
+                                Text(
+                                    text = if (isArabic) "كلمة مرور التشفير" else "Encryption password",
+                                    fontSize = 12.sp
+                                )
+                            },
+                            visualTransformation = if (showExportPassphrase) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showExportPassphrase = !showExportPassphrase }) {
+                                    Icon(
+                                        imageVector = if (showExportPassphrase) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = colors.textSecondary
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .testTag("export_passphrase_input"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary,
+                                focusedBorderColor = EmeraldNeon,
+                                unfocusedBorderColor = colors.glassBorderSubtle
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Explicit Manual Action 1: Backup to Google Drive (SAF Document Creator)
                 GlassButton(
@@ -273,69 +515,109 @@ fun BackupRestoreDialog(
                     containerColor = colors.primaryNeon,
                     contentColor = if (colors.isDark) Color(0xFF0F172A) else Color.White,
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        isLoading = true
-                        scope.launch {
-                            try {
-                                val json = onExportBackup()
-                                pendingExportJson = json
-
-                                // Copy to clipboard as quick safety backup
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Vaultix Backup", json))
-
-                                // Launch Storage Access Framework Document Creator: user selects Google Drive folder or device storage
-                                createDocumentLauncher.launch("Vaultix_Backup.json")
-                            } catch (e: Exception) {
-                                statusMessage = "Backup error: ${e.localizedMessage ?: "Unknown"}"
-                                isErrorMessage = true
-                                isLoading = false
-                            }
-                        }
-                    }
+                    enabled = !isLoading,
+                    onClick = { executeVerifiedExport(shareMode = false) }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Explicit Manual Action 2: Restore from Google Drive (SAF Document Picker filtered for JSON)
+                // Explicit Manual Action 2: Restore from Google Drive
                 GlassButton(
                     text = strings.restoreFromDrive,
                     icon = Icons.Default.CloudDownload,
                     containerColor = colors.glassCard,
                     contentColor = colors.textPrimary,
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
                     onClick = {
-                        // Open system document picker filtered for JSON documents
+                        onBeforeExternalFlow()
                         openDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                     }
                 )
 
+                // Encrypted Restore Passphrase Prompt (shown automatically if selected/pasted file is encrypted)
+                AnimatedVisibility(visible = pendingEncryptedRestoreContent != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(AmberNeon.copy(alpha = 0.09f))
+                            .border(1.dp, AmberNeon.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                            .padding(14.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = AmberNeon,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isArabic) "مطلوب كلمة مرور فك التشفير" else "Decryption Password Required",
+                                color = colors.textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = restorePassphrase,
+                            onValueChange = { restorePassphrase = it },
+                            singleLine = true,
+                            placeholder = {
+                                Text(
+                                    text = if (isArabic) "أدخل كلمة مرور النسخة المشفرة..." else "Enter backup password...",
+                                    fontSize = 12.sp
+                                )
+                            },
+                            visualTransformation = if (showRestorePassphrase) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showRestorePassphrase = !showRestorePassphrase }) {
+                                    Icon(
+                                        imageVector = if (showRestorePassphrase) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = colors.textSecondary
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("restore_passphrase_input"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary,
+                                focusedBorderColor = AmberNeon,
+                                unfocusedBorderColor = colors.glassBorderSubtle
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        GlassButton(
+                            text = if (isArabic) "فك التشفير والاستعادة" else "Decrypt & Restore",
+                            icon = Icons.Default.LockOpen,
+                            containerColor = AmberNeon,
+                            contentColor = Color(0xFF0F172A),
+                            enabled = restorePassphrase.isNotBlank() && !isLoading,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                pendingEncryptedRestoreContent?.let { raw ->
+                                    handleRestoreInput(raw, restorePassphrase)
+                                }
+                            }
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Quick Share Intent Action (Direct share to Google Drive app or email)
+                // Quick Share Intent Action
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            scope.launch {
-                                try {
-                                    val json = onExportBackup()
-                                    val sendIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, json)
-                                        putExtra(Intent.EXTRA_SUBJECT, "Vaultix Backup (${formatDate(System.currentTimeMillis())})")
-                                        putExtra(Intent.EXTRA_TITLE, "Vaultix_Backup.json")
-                                        type = "application/json"
-                                    }
-                                    val shareIntent = Intent.createChooser(sendIntent, "Share Backup to Google Drive / Apps")
-                                    context.startActivity(shareIntent)
-                                } catch (e: Exception) {
-                                    statusMessage = e.localizedMessage
-                                    isErrorMessage = true
-                                }
-                            }
-                        }
+                        .clickable(enabled = !isLoading) { executeVerifiedExport(shareMode = true) }
                         .padding(vertical = 6.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
@@ -348,7 +630,8 @@ fun BackupRestoreDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Or share backup via Google Drive app",
+                        text = if (isArabic) "أو مشاركة النسخة عبر Google Drive / التطبيقات"
+                        else "Or share backup via Google Drive app",
                         color = colors.textSecondary,
                         fontSize = 11.5.sp
                     )
@@ -356,7 +639,6 @@ fun BackupRestoreDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Loading Indicator
                 if (isLoading) {
                     Row(
                         modifier = Modifier
@@ -372,14 +654,13 @@ fun BackupRestoreDialog(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Processing...",
+                            text = if (isArabic) "جاري المعالجة..." else "Processing...",
                             color = colors.textSecondary,
                             fontSize = 12.sp
                         )
                     }
                 }
 
-                // Status / Error message banner
                 if (statusMessage != null) {
                     Row(
                         modifier = Modifier
@@ -485,22 +766,7 @@ fun BackupRestoreDialog(
                             contentColor = if (colors.isDark) Color(0xFF0F172A) else Color.White,
                             enabled = manualJsonText.isNotBlank() && !isLoading,
                             modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                isLoading = true
-                                scope.launch {
-                                    val success = onRestoreBackup(manualJsonText.trim())
-                                    if (success) {
-                                        statusMessage = strings.restoreSuccess
-                                        isErrorMessage = false
-                                        manualJsonText = ""
-                                        showManualPaste = false
-                                    } else {
-                                        statusMessage = strings.restoreError
-                                        isErrorMessage = true
-                                    }
-                                    isLoading = false
-                                }
-                            }
+                            onClick = { handleRestoreInput(manualJsonText) }
                         )
                     }
                 }

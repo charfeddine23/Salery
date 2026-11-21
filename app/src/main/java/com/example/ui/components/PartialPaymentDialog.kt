@@ -44,6 +44,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
@@ -51,6 +53,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 
 @Composable
 fun PartialPaymentDialog(
@@ -88,7 +91,13 @@ fun PartialPaymentDialog(
 
     val accentColor = if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark)
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier
                 .fillMaxWidth()

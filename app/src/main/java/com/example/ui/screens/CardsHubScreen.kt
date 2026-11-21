@@ -1,10 +1,5 @@
 package com.example.ui.screens
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.os.Build
-import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -41,7 +36,6 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,9 +63,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -139,51 +130,22 @@ fun CardsHubScreen(
     val typo = LocalAdaptiveTypography.current
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val isScreenshotBlocked = userSettings.screenshotProtectionEnabled
-
-    // Strictly block (or allow when disabled) screenshots, screen recording, and Recents thumbnails while viewing Cards Hub
-    DisposableEffect(context, lifecycleOwner, isScreenshotBlocked) {
-        val activity = context.findHostActivity()
-        val syncSecureFlags: () -> Unit = {
-            activity?.let { act ->
-                if (isScreenshotBlocked) {
-                    act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                } else {
-                    act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        act.setRecentsScreenshotEnabled(!isScreenshotBlocked)
-                    } catch (_: Throwable) {
-                    }
-                }
-            }
-        }
-        syncSecureFlags()
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
-                syncSecureFlags()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            activity?.let { act ->
-                act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        act.setRecentsScreenshotEnabled(true)
-                    } catch (_: Throwable) {
-                    }
-                }
-            }
-        }
-    }
 
     var showEditClassicCardDialog by remember { mutableStateOf(false) }
     var showEditVisaCardDialog by remember { mutableStateOf(false) }
     var showEditThirdCardDialog by remember { mutableStateOf(false) }
+
+    fun openCardEditorWithStepUp(onVerified: () -> Unit) {
+        com.example.security.StepUpAuthHelper.verifyIfEnabled(
+            context = context,
+            requireBiometric = userSettings.biometricEnabled,
+            title = if (isArabic) "تأكيد الهوية لعرض بيانات البطاقة" else "Verify Identity for Card Details",
+            subtitle = if (isArabic) "تحقق بالبصمة قبل عرض أو تعديل رقم البطاقة ورمز CVC" else "Confirm biometrics before viewing or editing card number & CVC",
+            cancelText = strings.cancel,
+            onVerified = onVerified
+        )
+    }
 
     if (showEditClassicCardDialog) {
         EditCardDialog(
@@ -276,7 +238,7 @@ fun CardsHubScreen(
                 isArabic = isArabic,
                 isDark = isDark,
                 onClick = onOpenDashboard,
-                onLongPressEdit = { showEditClassicCardDialog = true }
+                onLongPressEdit = { openCardEditorWithStepUp { showEditClassicCardDialog = true } }
             )
         }
     }
@@ -351,7 +313,7 @@ fun CardsHubScreen(
                 onClick = {
                     if (visaProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
                 },
-                onLongPressEdit = { showEditVisaCardDialog = true }
+                onLongPressEdit = { openCardEditorWithStepUp { showEditVisaCardDialog = true } }
             )
         }
     }
@@ -395,7 +357,7 @@ fun CardsHubScreen(
                             .clip(RoundedCornerShape(8.dp))
                             .background(thirdBadgeColor.copy(alpha = 0.15f))
                             .border(1.dp, thirdBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                            .clickable { showEditThirdCardDialog = true }
+                            .clickable { openCardEditorWithStepUp { showEditThirdCardDialog = true } }
                             .testTag("edit_third_card_badge")
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
@@ -425,7 +387,7 @@ fun CardsHubScreen(
                     onClick = {
                         if (thirdProvider == "BINANCE") onOpenBinanceWallet() else onOpenVisaDetails()
                     },
-                    onLongPressEdit = { showEditThirdCardDialog = true }
+                    onLongPressEdit = { openCardEditorWithStepUp { showEditThirdCardDialog = true } }
                 )
             }
         } else {
@@ -2423,11 +2385,5 @@ private fun DrawScope.drawAlgerianBankArtwork(
             cornerRadius = CornerRadius(4f, 4f)
         )
     }
-}
-
-private tailrec fun Context.findHostActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findHostActivity()
-    else -> null
 }
 

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -25,6 +26,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -34,6 +36,14 @@ const val GITHUB_REPO_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_
 private const val GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 private const val GITHUB_RELEASES_LIST_API = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases?per_page=10"
 private const val MIN_VALID_APK_BYTES = 100_000L
+private const val MAX_VALID_APK_BYTES = 200L * 1024L * 1024L
+private val TRUSTED_UPDATE_HOSTS = setOf(
+    "github.com",
+    "api.github.com",
+    "objects.githubusercontent.com",
+    "github-releases.githubusercontent.com",
+    "release-assets.githubusercontent.com"
+)
 
 data class GitHubReleaseInfo(
     val tagName: String,
@@ -211,6 +221,10 @@ object AppUpdateManager {
             emit(DownloadState.Failed("No APK asset attached to this release"))
             return@flow
         }
+        if (!isTrustedUpdateUrl(downloadUrl)) {
+            emit(DownloadState.Failed("Untrusted update download URL"))
+            return@flow
+        }
 
         // Clear any legacy cache updates folder to avoid stale/corrupted cache files
         try {
@@ -241,12 +255,20 @@ object AppUpdateManager {
                     emit(DownloadState.Failed("HTTP ${response.code}"))
                     return@flow
                 }
+                if (!isTrustedUpdateUrl(response.request.url.toString())) {
+                    emit(DownloadState.Failed("Redirected to an untrusted host"))
+                    return@flow
+                }
                 val body = response.body ?: run {
                     emit(DownloadState.Failed("Empty response body"))
                     return@flow
                 }
 
                 val streamLength = body.contentLength()
+                if (streamLength > MAX_VALID_APK_BYTES) {
+                    emit(DownloadState.Failed("Update package exceeds allowed size limit"))
+                    return@flow
+                }
                 val expectedLength = if (streamLength > 0L) streamLength else release.apkSizeBytes
                 emit(DownloadState.Progress(0L, expectedLength))
 
@@ -259,8 +281,13 @@ object AppUpdateManager {
                         while (true) {
                             val read = input.read(buffer)
                             if (read == -1) break
-                            output.write(buffer, 0, read)
                             totalRead += read
+                            if (totalRead > MAX_VALID_APK_BYTES) {
+                                tempFile.delete()
+                                emit(DownloadState.Failed("Update package exceeds allowed size limit"))
+                                return@flow
+                            }
+                            output.write(buffer, 0, read)
 
                             val now = System.currentTimeMillis()
                             if (now - lastEmitTime >= 80L || (expectedLength > 0 && totalRead >= expectedLength)) {
@@ -302,16 +329,25 @@ object AppUpdateManager {
         }
     }.flowOn(Dispatchers.IO)
 
+    fun isTrustedUpdateUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val parsed = url.trim().toHttpUrlOrNull() ?: return false
+        if (!parsed.isHttps) return false
+        val host = parsed.host.lowercase(Locale.US)
+        return host in TRUSTED_UPDATE_HOSTS
+    }
+
     fun isValidUpdateApk(context: Context, apkFile: File, expectedMinSize: Long = 0L): Boolean {
         if (!hasValidApkHeaderAndSize(apkFile, expectedMinSize)) return false
         val pkgInfo = readApkPackageInfo(context, apkFile) ?: return false
-        return pkgInfo.packageName == context.packageName
+        if (pkgInfo.packageName != context.packageName) return false
+        return verifyApkMatchesInstalledSigner(context, apkFile)
     }
 
     fun hasValidApkHeaderAndSize(apkFile: File, expectedSizeBytes: Long = 0L): Boolean {
         if (!apkFile.exists() || !apkFile.isFile) return false
         val len = apkFile.length()
-        if (len < MIN_VALID_APK_BYTES) return false
+        if (len < MIN_VALID_APK_BYTES || len > MAX_VALID_APK_BYTES) return false
         if (expectedSizeBytes > 0L && len != expectedSizeBytes) return false
 
         return try {
@@ -343,6 +379,62 @@ object AppUpdateManager {
         } catch (_: Throwable) {
             null
         }
+    }
+
+    private fun verifyApkMatchesInstalledSigner(context: Context, apkFile: File): Boolean {
+        return try {
+            val pm = context.packageManager
+            val installedInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(
+                    context.packageName,
+                    PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+            } ?: return false
+            val installedHashes = readPackageSignerDigests(installedInfo)
+            if (installedHashes.isEmpty()) return false
+
+            val archiveInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageArchiveInfo(
+                    apkFile.absolutePath,
+                    PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
+            } ?: return false
+
+            val archiveHashes = readPackageSignerDigests(archiveInfo)
+            archiveHashes.isNotEmpty() && archiveHashes.any { it in installedHashes }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun readPackageSignerDigests(info: PackageInfo?): Set<String> {
+        if (info == null) return emptySet()
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: return emptySet()
+            if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners
+            else signingInfo.signingCertificateHistory
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures
+        } ?: return emptySet()
+
+        val md = MessageDigest.getInstance("SHA-256")
+        return signatures.map { sig ->
+            md.reset()
+            md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+        }.toSet()
     }
 
     private fun getCurrentAppVersionCode(context: Context): Long {

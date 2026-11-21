@@ -20,6 +20,7 @@ import com.example.data.TransactionType
 import com.example.data.UserSettings
 import com.example.data.VaultAppPresets
 import com.example.data.VaultKeyEntry
+import com.example.security.VaultCryptoManager
 import com.example.ui.components.toPatternHash
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.DEVELOPER_NAME
@@ -77,6 +78,12 @@ data class FinancialSummary(
     val pendingDebtsOwedByMe: Double = 0.0,
     val pendingDebtsOwedToMe: Double = 0.0
 )
+
+enum class BackupRestoreOutcome {
+    SUCCESS,
+    WRONG_PASSWORD_OR_TAMPERED,
+    INVALID_FORMAT
+}
 
 internal fun isTaxAnomalyAlreadyLoggedInTransactions(
     anomaly: SmsTaxAnomalyEntry,
@@ -910,19 +917,71 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    // Pattern Lock Security
+    // Pattern Lock Security with brute-force throttling
+    private var failedPatternAttempts: Int = 0
+    private var patternLockoutUntilMillis: Long = 0L
+
     fun unlockApp(pattern: List<Int>): Boolean {
-        val hash = pattern.toPatternHash()
-        if (hash == settings.value.patternLockHash) {
+        val now = System.currentTimeMillis()
+        if (now < patternLockoutUntilMillis) return false
+        val rawPattern = pattern.toPatternHash()
+        val storedHash = settings.value.patternLockHash
+        if (VaultCryptoManager.verifyPattern(rawPattern, storedHash)) {
+            failedPatternAttempts = 0
+            patternLockoutUntilMillis = 0L
+            if (!VaultCryptoManager.isSaltedPatternHash(storedHash)) {
+                val upgradedHash = VaultCryptoManager.hashPattern(rawPattern)
+                prefsManager.updateSettings { it.copy(patternLockHash = upgradedHash) }
+            }
             _isAppLocked.value = false
             return true
+        }
+        failedPatternAttempts += 1
+        if (failedPatternAttempts >= 5) {
+            patternLockoutUntilMillis = now + 30_000L
+            failedPatternAttempts = 0
         }
         return false
     }
 
+    // App Lock & Auto-Lock Lifecycle Security
+    private var backgroundedAtMillis: Long = 0L
+    @Volatile
+    private var suppressNextAutoLockOnce: Boolean = false
+
+    fun suppressNextAutoLockForExternalFlow() {
+        suppressNextAutoLockOnce = true
+    }
+
+    fun onAppBackgrounded() {
+        collapseAllVaultContainersForSecurity()
+        backgroundedAtMillis = System.currentTimeMillis()
+    }
+
+    fun onAppForegrounded() {
+        if (suppressNextAutoLockOnce) {
+            suppressNextAutoLockOnce = false
+            backgroundedAtMillis = 0L
+            return
+        }
+        val cfg = settings.value
+        val hasActiveLock = cfg.biometricEnabled || (cfg.patternLockEnabled && cfg.patternLockHash.isNotBlank())
+        val timeoutSeconds = cfg.autoLockTimeoutSeconds
+        val bgAt = backgroundedAtMillis
+        backgroundedAtMillis = 0L
+        if (hasActiveLock && timeoutSeconds >= 0 && bgAt > 0L) {
+            val elapsedMs = System.currentTimeMillis() - bgAt
+            if (elapsedMs >= timeoutSeconds * 1000L) {
+                lockApp()
+            }
+        }
+    }
+
     fun lockApp() {
         collapseAllVaultContainersForSecurity()
-        if (settings.value.patternLockEnabled && settings.value.patternLockHash.isNotBlank()) {
+        com.example.security.ClipboardSecurityHelper.clearIfSensitiveActive(getApplication())
+        val cfg = settings.value
+        if (cfg.biometricEnabled || (cfg.patternLockEnabled && cfg.patternLockHash.isNotBlank())) {
             _isAppLocked.value = true
         }
     }
@@ -975,13 +1034,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun saveNewPattern(pattern: List<Int>) {
-        val hash = pattern.toPatternHash()
+        val hash = VaultCryptoManager.hashPattern(pattern.toPatternHash())
         prefsManager.updateSettings {
             it.copy(
                 patternLockEnabled = true,
                 patternLockHash = hash
             )
         }
+        failedPatternAttempts = 0
+        patternLockoutUntilMillis = 0L
         _isAppLocked.value = false
     }
 
@@ -999,7 +1060,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         prefsManager.updateSettings { it.copy(biometricEnabled = enabled) }
     }
 
+    fun setAutoLockTimeoutSeconds(seconds: Int) {
+        val normalized = when (seconds) {
+            -1, 0, 30, 60, 300 -> seconds
+            else -> 30
+        }
+        prefsManager.updateSettings { it.copy(autoLockTimeoutSeconds = normalized) }
+    }
+
     fun unlockAppByBiometrics() {
+        backgroundedAtMillis = 0L
         _isAppLocked.value = false
     }
 
@@ -1413,12 +1483,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun lockToVault(amount: Double) = transferToSavings(amount)
     fun unlockFromVault(amount: Double) = withdrawFromSavings(amount)
 
-    // Backup & Restore
-    suspend fun exportBackupJson(): String {
+    // Backup & Restore (Supports both sanitized JSON and AES-256-GCM passphrase-encrypted backups)
+    suspend fun exportBackupJson(passphrase: String = ""): String {
         val trans = dao.getAllTransactionsList()
         val debts = dao.getAllDebtsList()
         val archivedSms = dao.getAllArchivedAlgPosteSmsList()
         val userConfig = settings.value
+        val usePassphraseEncryption = passphrase.isNotBlank()
 
         val payload = BackupPayload(
             exportTimestamp = System.currentTimeMillis(),
@@ -1436,14 +1507,42 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             archivedAlgPosteSms = archivedSms
         )
 
+        val output = if (usePassphraseEncryption) {
+            withContext(Dispatchers.Default) {
+                val fullJson = payload.toJsonString(includeSensitiveCardFields = true)
+                VaultCryptoManager.encryptBackupWithPassphrase(fullJson, passphrase)
+            }
+        } else {
+            payload.toJsonString(includeSensitiveCardFields = false)
+        }
+
         prefsManager.updateSettings {
             it.copy(lastBackupTimestamp = System.currentTimeMillis())
         }
-        return payload.toJsonString()
+        return output
     }
 
     suspend fun restoreFromJson(jsonStr: String): Boolean {
-        val payload = BackupPayload.fromJsonString(jsonStr) ?: return false
+        return restoreFromBackupWithOutcome(jsonStr, "") == BackupRestoreOutcome.SUCCESS
+    }
+
+    suspend fun restoreFromBackupWithOutcome(
+        rawContent: String,
+        passphrase: String = ""
+    ): BackupRestoreOutcome {
+        val plainJson = if (VaultCryptoManager.isEncryptedBackupEnvelope(rawContent)) {
+            if (passphrase.isBlank()) return BackupRestoreOutcome.WRONG_PASSWORD_OR_TAMPERED
+            val decrypted = withContext(Dispatchers.Default) {
+                VaultCryptoManager.decryptBackupWithPassphrase(rawContent, passphrase)
+            } ?: return BackupRestoreOutcome.WRONG_PASSWORD_OR_TAMPERED
+            decrypted
+        } else {
+            rawContent
+        }
+
+        val payload = BackupPayload.fromJsonString(plainJson)
+            ?: return BackupRestoreOutcome.INVALID_FORMAT
+
         dao.clearAllTransactions()
         dao.clearAllDebts()
 
@@ -1460,15 +1559,15 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 salaryPayday = payload.salaryPayday,
                 salaryEmployer = payload.salaryEmployer,
                 classicCardHolderName = payload.classicCardHolderName,
-                classicCardNumber = payload.classicCardNumber,
+                classicCardNumber = payload.classicCardNumber.ifBlank { it.classicCardNumber },
                 classicCardExpiry = payload.classicCardExpiry,
-                classicCardCvc = payload.classicCardCvc,
+                classicCardCvc = payload.classicCardCvc.ifBlank { it.classicCardCvc },
                 lastBackupTimestamp = System.currentTimeMillis()
             )
         }
         reanalyzePermanentSmsArchive(showFeedback = false)
         _toastEvent.emit("Restored ${payload.transactions.size} transactions and ${payload.debts.size} debts")
-        return true
+        return BackupRestoreOutcome.SUCCESS
     }
 
     private var lastUpdateCheckElapsedMillis: Long = 0L

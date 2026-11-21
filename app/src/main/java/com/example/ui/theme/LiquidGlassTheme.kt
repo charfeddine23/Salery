@@ -153,6 +153,7 @@ val LightNeumorphicColors = LiquidGlassColors(
 
 val LocalLiquidGlass = staticCompositionLocalOf { DarkLiquidGlassColors }
 val LocalBreathingGlowEnabled = compositionLocalOf { true }
+val LocalScreenshotProtection = compositionLocalOf { false }
 
 object LiquidGlassTheme {
     val colors: LiquidGlassColors

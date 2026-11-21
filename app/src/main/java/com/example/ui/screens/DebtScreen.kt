@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.components.AddDebtDialog
@@ -56,6 +58,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
+import com.example.ui.theme.LocalScreenshotProtection
 
 @Composable
 fun DebtScreen(
@@ -413,8 +416,14 @@ fun DebtScreen(
     }
 
     // Dialog 3: Delete Single Debt Confirmation
+    val isScreenshotProtected = LocalScreenshotProtection.current
     debtToDelete?.let { targetDebt ->
-        Dialog(onDismissRequest = { debtToDelete = null }) {
+        Dialog(
+            onDismissRequest = { debtToDelete = null },
+            properties = DialogProperties(
+                securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            )
+        ) {
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -486,7 +495,12 @@ fun DebtScreen(
 
     // Dialog 4: Clear All Settled Debts Confirmation
     if (showClearSettledConfirm) {
-        Dialog(onDismissRequest = { showClearSettledConfirm = false }) {
+        Dialog(
+            onDismissRequest = { showClearSettledConfirm = false },
+            properties = DialogProperties(
+                securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            )
+        ) {
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()

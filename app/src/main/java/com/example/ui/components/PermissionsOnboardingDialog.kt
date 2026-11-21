@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -89,6 +90,7 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.update.AppUpdateManager
 import kotlin.math.PI
 import kotlin.math.cos
@@ -188,12 +190,14 @@ fun PermissionsOnboardingDialog(
         label = "onboarding_btn_sheen"
     )
 
+    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onSkip,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = false
+            dismissOnClickOutside = false,
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
         Box(

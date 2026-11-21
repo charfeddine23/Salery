@@ -3,6 +3,8 @@ package com.example.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -119,6 +121,7 @@ import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalBreathingGlowEnabled
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 import com.example.viewmodel.SaleryPelseViewModel
 import kotlinx.coroutines.launch
@@ -191,8 +194,10 @@ fun MainAppScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
                 if (!context.isHostActivityChangingConfigurations()) {
-                    viewModel.collapseAllVaultContainersForSecurity()
+                    viewModel.onAppBackgrounded()
                 }
+            } else if (event == Lifecycle.Event.ON_START) {
+                viewModel.onAppForegrounded()
             } else if (event == Lifecycle.Event.ON_RESUME) {
                 val allowed = AppUpdateManager.canRequestPackageInstalls(context)
                 canInstallPackages = allowed
@@ -254,6 +259,7 @@ fun MainAppScreen(
     fun openInstallUnknownAppsSettings(pendingAction: String) {
         pendingActionAfterInstallPerm = pendingAction
         try {
+            viewModel.suppressNextAutoLockForExternalFlow()
             installPermissionLauncher.launch(
                 AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
             )
@@ -310,21 +316,49 @@ fun MainAppScreen(
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
     var showScreenshotShieldDialog by remember { mutableStateOf(false) }
 
+    // Enforce FLAG_SECURE & Android Recents preview blocking across the entire app when enabled
+    val isScreenshotProtected = userSettings.screenshotProtectionEnabled
+    DisposableEffect(context, lifecycleOwner, isScreenshotProtected) {
+        val activity = context.findHostActivity()
+        val applySecureWindowState: () -> Unit = {
+            activity?.let { act ->
+                if (isScreenshotProtected) {
+                    act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        act.setRecentsScreenshotEnabled(!isScreenshotProtected)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+        applySecureWindowState()
+        val windowObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                applySecureWindowState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(windowObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(windowObserver)
+        }
+    }
+
     CompositionLocalProvider(
         LocalStrings provides activeStrings,
         LocalLayoutDirection provides layoutDirection,
         LocalStealthMode provides userSettings.stealthMode,
-        LocalBreathingGlowEnabled provides userSettings.breathingGlowEnabled
+        LocalBreathingGlowEnabled provides userSettings.breathingGlowEnabled,
+        LocalScreenshotProtection provides isScreenshotProtected
     ) {
         if (isAppLocked) {
             LockScreen(
-                onUnlockAttempt = { pattern ->
-                    viewModel.unlockApp(pattern)
-                },
                 onBiometricUnlock = {
                     viewModel.unlockAppByBiometrics()
-                },
-                isBiometricEnabled = userSettings.biometricEnabled
+                }
             )
         } else {
             // Respect the active language's layout direction for the entire interface and drawer
@@ -360,6 +394,9 @@ fun MainAppScreen(
                                 },
                                 onToggleBiometric = { enabled ->
                                     viewModel.setBiometricEnabled(enabled)
+                                },
+                                onSelectAutoLockTimeoutSeconds = { seconds ->
+                                    viewModel.setAutoLockTimeoutSeconds(seconds)
                                 },
                                 onToggleBreathingGlow = { enabled ->
                                     viewModel.setBreathingGlowEnabled(enabled)
@@ -877,9 +914,11 @@ fun MainAppScreen(
             if (showBackupRestoreDialog) {
                 BackupRestoreDialog(
                     lastBackupTimestamp = userSettings.lastBackupTimestamp,
+                    requireStepUpAuth = userSettings.biometricEnabled,
+                    onBeforeExternalFlow = { viewModel.suppressNextAutoLockForExternalFlow() },
                     onDismiss = { showBackupRestoreDialog = false },
-                    onExportBackup = { viewModel.exportBackupJson() },
-                    onRestoreBackup = { json -> viewModel.restoreFromJson(json) }
+                    onExportBackup = { passphrase -> viewModel.exportBackupJson(passphrase) },
+                    onRestoreBackup = { raw, passphrase -> viewModel.restoreFromBackupWithOutcome(raw, passphrase) }
                 )
             }
 
@@ -1569,4 +1608,10 @@ private tailrec fun Context.isHostActivityChangingConfigurations(): Boolean = wh
     is Activity -> isChangingConfigurations
     is ContextWrapper -> baseContext.isHostActivityChangingConfigurations()
     else -> false
+}
+
+private tailrec fun Context.findHostActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findHostActivity()
+    else -> null
 }

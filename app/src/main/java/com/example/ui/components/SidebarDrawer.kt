@@ -1,7 +1,9 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,6 +79,7 @@ fun SidebarDrawer(
     onOpenAccessPermissions: () -> Unit = {},
     onOpenThemeEngine: () -> Unit = {},
     onToggleBiometric: (Boolean) -> Unit = {},
+    onSelectAutoLockTimeoutSeconds: (Int) -> Unit = {},
     onToggleBreathingGlow: (Boolean) -> Unit = {},
     onToggleScreenshotProtection: (Boolean) -> Unit = {},
     onSelectThemeMode: (String) -> Unit,
@@ -302,6 +305,65 @@ fun SidebarDrawer(
                         uncheckedTrackColor = colors.glassCard
                     )
                 )
+            }
+
+            if (userSettings.biometricEnabled || userSettings.patternLockEnabled) {
+                val timeoutOptions = listOf(
+                    0 to (if (isArabic) "فوري" else "Instant"),
+                    30 to (if (isArabic) "30 ث" else "30s"),
+                    60 to (if (isArabic) "1 د" else "1m"),
+                    300 to (if (isArabic) "5 د" else "5m"),
+                    -1 to (if (isArabic) "إيقاف" else "Off")
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.glassCard.copy(alpha = 0.55f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = if (isArabic) "القفل التلقائي عند الخلفية" else "Auto-Lock Timeout",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timeoutOptions.forEach { (sec, label) ->
+                            val selected = userSettings.autoLockTimeoutSeconds == sec
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (selected) colors.primaryNeon.copy(alpha = 0.22f)
+                                        else colors.glassCard
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (selected) colors.primaryNeon else colors.glassBorderSubtle,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { onSelectAutoLockTimeoutSeconds(sec) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .testTag("auto_lock_option_$sec")
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (selected) colors.primaryNeon else colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Card Breathing Glow Toggle (تأثير التوهج التنفسي للبطاقات)

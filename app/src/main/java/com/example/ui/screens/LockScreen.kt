@@ -66,9 +66,7 @@ import com.example.ui.theme.RoseNeon
 
 @Composable
 fun LockScreen(
-    onUnlockAttempt: (List<Int>) -> Boolean = { false },
     onBiometricUnlock: () -> Unit = {},
-    isBiometricEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current

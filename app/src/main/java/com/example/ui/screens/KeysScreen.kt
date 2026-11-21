@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -306,9 +304,26 @@ fun KeysScreen(
         )
     }
 
-    fun copyToClipboard(label: String, text: String, @Suppress("UNUSED_PARAMETER") msg: String) {
-        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cb.setPrimaryClip(ClipData.newPlainText(label, text))
+    fun copyToClipboard(label: String, text: String, msg: String) {
+        com.example.security.ClipboardSecurityHelper.copySensitiveText(context, label, text)
+        val suffix = if (isArabic) "يُمسح بعد 45ث" else "auto-clears in 45s"
+        android.widget.Toast.makeText(context, "$msg • $suffix", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun toggleRevealWithStepUp(keyId: String) {
+        val isCurrentlyRevealed = keyId in revealedKeyIds
+        if (isCurrentlyRevealed || !userSettings.biometricEnabled) {
+            onToggleRevealKey(keyId)
+            return
+        }
+        com.example.security.StepUpAuthHelper.verifyIfEnabled(
+            context = context,
+            requireBiometric = true,
+            title = if (isArabic) "تأكيد الهوية لعرض كلمة السر" else "Verify Identity to Reveal Password",
+            subtitle = if (isArabic) "تحقق بالبصمة لكشف كلمة المرور المحفوظة" else "Confirm biometrics to reveal this stored secret",
+            cancelText = strings.cancel,
+            onVerified = { onToggleRevealKey(keyId) }
+        )
     }
 
     val keysHeader: @Composable () -> Unit = {
@@ -621,7 +636,7 @@ fun KeysScreen(
                             isStealth = isStealth,
                             isArabic = isArabic,
                             onToggleExpand = { onToggleExpandKey(entry.id) },
-                            onToggleReveal = { onToggleRevealKey(entry.id) },
+                            onToggleReveal = { toggleRevealWithStepUp(entry.id) },
                             onTogglePin = { onTogglePinKey(entry.id) },
                             onHoldActions = { holdActionTargetKey = entry },
                             onCopyUsername = {
@@ -692,7 +707,7 @@ fun KeysScreen(
                         isStealth = isStealth,
                         isArabic = isArabic,
                         onToggleExpand = { onToggleExpandKey(entry.id) },
-                        onToggleReveal = { onToggleRevealKey(entry.id) },
+                        onToggleReveal = { toggleRevealWithStepUp(entry.id) },
                         onTogglePin = { onTogglePinKey(entry.id) },
                         onHoldActions = { holdActionTargetKey = entry },
                         onCopyUsername = {

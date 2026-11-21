@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.ExpenseCategories
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
@@ -93,6 +94,7 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveTypography
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.breathingGlow
@@ -637,9 +639,13 @@ fun SavingsTransferDialog(
     onWithdraw: (Double) -> Unit,
     onSpend: (amount: Double, title: String, category: String, note: String) -> Unit
 ) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
     ) {
         Box(
             modifier = Modifier
@@ -1407,7 +1413,13 @@ fun SavingsGoalDialog(
         mutableStateOf(if (currentGoal > 0.0) currentGoal.toLong().toString() else "")
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isScreenshotProtected = LocalScreenshotProtection.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(dimens.cornerRadiusXl),
