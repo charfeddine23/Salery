@@ -57,6 +57,7 @@ data class UserSettings(
     val squareDailyBaselineJson: String = "",
     val squarePinnedIdsJson: String = "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]",
     val squareSyncIntervalMinutes: Int = 60,
+    val squareEnabledSourceIdsJson: String = "",
     val baridiMobSmsSyncEnabled: Boolean = true,
     val pendingSmsSuggestionsJson: String = "[]",
     val processedSmsKeysJson: String = "[]",
@@ -215,6 +216,7 @@ class PreferencesManager(context: Context) {
             squareDailyBaselineJson = safeString(all, "square_daily_baseline_json", ""),
             squarePinnedIdsJson = safeString(all, "square_pinned_ids_json", "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]"),
             squareSyncIntervalMinutes = safeInt(all, "square_sync_interval_minutes", 60).coerceIn(0, 1440),
+            squareEnabledSourceIdsJson = safeString(all, "square_enabled_source_ids_json", ""),
             baridiMobSmsSyncEnabled = safeBoolean(all, "baridimob_sms_sync_enabled", true),
             pendingSmsSuggestionsJson = safeString(all, "pending_sms_suggestions_json", "[]"),
             processedSmsKeysJson = safeString(all, "processed_sms_keys_json", "[]"),
@@ -291,6 +293,7 @@ class PreferencesManager(context: Context) {
                 .putString("square_daily_baseline_json", finalUpdated.squareDailyBaselineJson)
                 .putString("square_pinned_ids_json", finalUpdated.squarePinnedIdsJson)
                 .putInt("square_sync_interval_minutes", finalUpdated.squareSyncIntervalMinutes.coerceIn(0, 1440))
+                .putString("square_enabled_source_ids_json", finalUpdated.squareEnabledSourceIdsJson)
                 .putBoolean("baridimob_sms_sync_enabled", finalUpdated.baridiMobSmsSyncEnabled)
                 .putString("pending_sms_suggestions_json", finalUpdated.pendingSmsSuggestionsJson)
                 .putString("processed_sms_keys_json", finalUpdated.processedSmsKeysJson)

@@ -988,7 +988,7 @@ private fun TickerExpandedTray(
                 } else ""
                 val srcText = if (row.rate.parallelSource.isNotBlank()) {
                     (if (isArabic) "المصادر: " else "Sources: ") +
-                        if (isArabic) row.rate.parallelSource.replace("sites", "مواقع", ignoreCase = true) else row.rate.parallelSource
+                        SquareMarketCatalog.localizeSquareSourceLabel(row.rate.parallelSource, isArabic)
                 } else ""
                 val footerLine = listOf(gapText, srcText).filter { it.isNotBlank() }.joinToString(" • ")
                 if (footerLine.isNotBlank()) {

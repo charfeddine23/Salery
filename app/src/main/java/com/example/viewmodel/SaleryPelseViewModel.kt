@@ -2665,10 +2665,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
+        val enabledSourceIds = SquareMarketCodec.parseEnabledSourceIds(currentSettings.squareEnabledSourceIdsJson)
+
         viewModelScope.launch {
             _isRefreshingSquareMarket.value = true
             _squareMarketError.value = null
-            val result = SquareMarketFetcher.fetchLiveSnapshot()
+            val result = SquareMarketFetcher.fetchLiveSnapshot(enabledSourceIds)
             _isRefreshingSquareMarket.value = false
 
             val isAr = settings.value.language == "ar"
@@ -2745,6 +2747,23 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
             current.copy(squarePinnedIdsJson = SquareMarketCodec.encodePinnedIds(currentPins))
         }
+    }
+
+    fun updateSquareEnabledSourceIds(sourceIds: Set<String>) {
+        val cleanIds = sourceIds.filter { it in SquareMarketCatalog.ALL_SOURCE_IDS }.toSet()
+        if (cleanIds.isEmpty()) return
+        val encoded = SquareMarketCodec.encodeEnabledSourceIds(cleanIds)
+        prefsManager.updateSettings { current ->
+            current.copy(squareEnabledSourceIdsJson = encoded)
+        }
+        val isAr = settings.value.language == "ar"
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (isAr) "تم اعتماد ${cleanIds.size} موقع لتحديث الأسعار ✓"
+                else "Saved ${cleanIds.size} price update websites ✓"
+            )
+        }
+        refreshSquareMarketData(force = true, showFeedback = false)
     }
 
     // ==================== Assets & Saving (Gold via Square + Crypto via Binance) ====================

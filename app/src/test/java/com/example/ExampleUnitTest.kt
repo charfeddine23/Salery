@@ -1769,4 +1769,83 @@ class ExampleUnitTest {
     assertTrue(ArabicStrings.visaComingSoonDesc.contains("Vaultix"))
     assertTrue(ArabicStrings.unlockApp.contains("Vaultix"))
   }
+
+  @Test
+  fun squareMarket_fiveNewMajorSources_parsersAndCodec_workCorrectly() {
+    val allSources = com.example.market.SquareMarketCatalog.availableSources
+    assertEquals(18, allSources.size)
+
+    val newMajorIds = allSources.filter { it.isNewMajor }.map { it.id }.toSet()
+    assertEquals(
+      setOf(
+        com.example.market.SquareMarketCatalog.SOURCE_KRAKEN_GOLD,
+        com.example.market.SquareMarketCatalog.SOURCE_EXCHANGERATE_API_V4,
+        com.example.market.SquareMarketCatalog.SOURCE_FXRATES_API,
+        com.example.market.SquareMarketCatalog.SOURCE_OKX_MARKET,
+        com.example.market.SquareMarketCatalog.SOURCE_BYBIT_MARKET
+      ),
+      newMajorIds
+    )
+
+    // Default blank JSON returns all sources; custom subset round-trips cleanly
+    assertEquals(
+      com.example.market.SquareMarketCatalog.ALL_SOURCE_IDS,
+      com.example.market.SquareMarketCodec.parseEnabledSourceIds("")
+    )
+    val customSubset = setOf(
+      com.example.market.SquareMarketCatalog.SOURCE_KRAKEN_GOLD,
+      com.example.market.SquareMarketCatalog.SOURCE_OKX_MARKET
+    )
+    val encodedSubset = com.example.market.SquareMarketCodec.encodeEnabledSourceIds(customSubset)
+    assertEquals(customSubset, com.example.market.SquareMarketCodec.parseEnabledSourceIds(encodedSubset))
+
+    // Kraken Gold spot parser
+    val krakenJson = """{"error":[],"result":{"PAXGUSD":{"c":["2940.50","0.2"],"o":"2900.00"}}}"""
+    val krakenQuote = com.example.market.SquareMarketCatalog.parseKrakenPaxgResponse(krakenJson)
+    assertNotNull(krakenQuote)
+    assertEquals(2940.50, krakenQuote!!.priceOzUsd, 0.01)
+    assertEquals("Kraken", krakenQuote.source)
+
+    // Bybit PAXG spot parser
+    val bybitGoldJson = """{"retCode":0,"result":{"list":[{"lastPrice":"2935.0","price24hPcnt":"0.015"}]}}"""
+    val bybitQuote = com.example.market.SquareMarketCatalog.parseBybitPaxgResponse(bybitGoldJson)
+    assertNotNull(bybitQuote)
+    assertEquals(2935.0, bybitQuote!!.priceOzUsd, 0.01)
+    assertEquals(1.5, bybitQuote.change24hPercent, 0.01)
+
+    // OKX XAUT spot parser
+    val okxGoldJson = """{"code":"0","data":[{"last":"2938.2","open24h":"2910.0"}]}"""
+    val okxQuote = com.example.market.SquareMarketCatalog.parseOkxXautResponse(okxGoldJson)
+    assertNotNull(okxQuote)
+    assertEquals(2938.2, okxQuote!!.priceOzUsd, 0.01)
+
+    // ExchangeRate-API v4 & FXRatesAPI bank FX parsers
+    val erV4Json = """{"rates":{"DZD":134.0,"EUR":0.92,"GBP":0.79}}"""
+    val erV4Rates = com.example.market.SquareMarketCatalog.parseExchangeRateApiV4Response(erV4Json)
+    assertEquals(134.0, erV4Rates["USD"] ?: 0.0, 0.01)
+    assertEquals(134.0 / 0.92, erV4Rates["EUR"] ?: 0.0, 0.05)
+
+    val fxRatesJson = """{"success":true,"rates":{"DZD":134.5,"EUR":0.91}}"""
+    val fxRates = com.example.market.SquareMarketCatalog.parseFxRatesApiResponse(fxRatesJson)
+    assertEquals(134.5, fxRates["USD"] ?: 0.0, 0.01)
+    assertEquals(134.5 / 0.91, fxRates["EUR"] ?: 0.0, 0.05)
+
+    // OKX & Bybit P2P DZD parsers
+    val okxP2pJson = """{"data":{"sell":[{"price":"246.0"},{"price":"247.0"},{"price":"248.0"}]}}"""
+    assertEquals(247.0, com.example.market.SquareMarketCatalog.parseOkxP2pMedianDzd(okxP2pJson, "sell") ?: 0.0, 0.01)
+
+    val bybitP2pJson = """{"result":{"items":[{"price":"245.5"},{"price":"246.5"},{"price":"247.5"}]}}"""
+    assertEquals(246.5, com.example.market.SquareMarketCatalog.parseBybitP2pMedianDzd(bybitP2pJson) ?: 0.0, 0.01)
+
+    // Arabic source label translation for the new major websites
+    val localizedAr = com.example.market.SquareMarketCatalog.localizeSquareSourceLabel(
+      source = "Kraken + OKX + Bybit + ExchangeRate-API + FXRatesAPI",
+      isArabic = true
+    )
+    assertTrue(localizedAr.contains("كراكن"))
+    assertTrue(localizedAr.contains("أو كيه إكس"))
+    assertTrue(localizedAr.contains("بايبت"))
+    assertTrue(localizedAr.contains("إكستشينج ريت"))
+    assertTrue(localizedAr.contains("أف إكس ريتس"))
+  }
 }

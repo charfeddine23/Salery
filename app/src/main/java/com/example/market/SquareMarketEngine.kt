@@ -119,7 +119,239 @@ data class ParallelPairQuote(
     val source: String = ""
 )
 
+enum class SquareSourceCategory {
+    GOLD,
+    BANK,
+    PARALLEL
+}
+
+data class SquareMarketSourceSpec(
+    val id: String,
+    val nameEn: String,
+    val nameAr: String,
+    val domain: String,
+    val category: SquareSourceCategory,
+    val isNewMajor: Boolean = false,
+    val secondaryTagEn: String = "",
+    val secondaryTagAr: String = ""
+)
+
 object SquareMarketCatalog {
+    const val SOURCE_GOLDPRICE_ORG = "goldprice_org"
+    const val SOURCE_GOLD_API = "gold_api"
+    const val SOURCE_YAHOO_FINANCE = "yahoo_finance"
+    const val SOURCE_BINANCE_PAXG = "binance_paxg"
+    const val SOURCE_COINGECKO = "coingecko"
+    const val SOURCE_KRAKEN_GOLD = "kraken_gold"
+
+    const val SOURCE_OPEN_ER_API = "open_er_api"
+    const val SOURCE_FAWAZ_CURRENCY = "fawaz_currency_api"
+    const val SOURCE_FLOATRATES = "floatrates"
+    const val SOURCE_EXCHANGERATE_API_V4 = "exchangerate_api_v4"
+    const val SOURCE_FXRATES_API = "fxrates_api"
+
+    const val SOURCE_BINANCE_P2P = "binance_p2p"
+    const val SOURCE_OKX_MARKET = "okx_market"
+    const val SOURCE_BYBIT_MARKET = "bybit_market"
+    const val SOURCE_DEVISESQUARE = "devisesquare"
+    const val SOURCE_FOREXALGERIE = "forexalgerie"
+    const val SOURCE_EURODZ = "eurodz"
+    const val SOURCE_ALGERIANDINAR = "algeriandinar"
+
+    val availableSources: List<SquareMarketSourceSpec> = listOf(
+        // Gold Spot
+        SquareMarketSourceSpec(
+            id = SOURCE_GOLDPRICE_ORG,
+            nameEn = "GoldPrice.org",
+            nameAr = "غولد برايس",
+            domain = "goldprice.org",
+            category = SquareSourceCategory.GOLD
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_GOLD_API,
+            nameEn = "Gold-API",
+            nameAr = "غولد إيه بي آي",
+            domain = "api.gold-api.com",
+            category = SquareSourceCategory.GOLD
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_YAHOO_FINANCE,
+            nameEn = "Yahoo Finance",
+            nameAr = "ياهو المالية",
+            domain = "finance.yahoo.com",
+            category = SquareSourceCategory.GOLD
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_BINANCE_PAXG,
+            nameEn = "Binance Spot (PAXG)",
+            nameAr = "بينانس الفوري (ذهب)",
+            domain = "api.binance.com",
+            category = SquareSourceCategory.GOLD
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_COINGECKO,
+            nameEn = "CoinGecko",
+            nameAr = "كوين غيكو",
+            domain = "api.coingecko.com",
+            category = SquareSourceCategory.GOLD
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_KRAKEN_GOLD,
+            nameEn = "Kraken",
+            nameAr = "كراكن العالمية",
+            domain = "api.kraken.com",
+            category = SquareSourceCategory.GOLD,
+            isNewMajor = true
+        ),
+
+        // Official Bank FX
+        SquareMarketSourceSpec(
+            id = SOURCE_OPEN_ER_API,
+            nameEn = "Open ER-API",
+            nameAr = "أوبن إي آر للبنوك",
+            domain = "open.er-api.com",
+            category = SquareSourceCategory.BANK
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_FAWAZ_CURRENCY,
+            nameEn = "Currency-API",
+            nameAr = "شبكة العملات المفتوحة",
+            domain = "currency-api.pages.dev",
+            category = SquareSourceCategory.BANK,
+            secondaryTagEn = "Bank + Gold",
+            secondaryTagAr = "بنك + ذهب"
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_FLOATRATES,
+            nameEn = "FloatRates",
+            nameAr = "فلوت ريتس",
+            domain = "floatrates.com",
+            category = SquareSourceCategory.BANK
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_EXCHANGERATE_API_V4,
+            nameEn = "ExchangeRate-API",
+            nameAr = "إكستشينج ريت الدولية",
+            domain = "api.exchangerate-api.com",
+            category = SquareSourceCategory.BANK,
+            isNewMajor = true
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_FXRATES_API,
+            nameEn = "FXRatesAPI",
+            nameAr = "أف إكس ريتس",
+            domain = "api.fxratesapi.com",
+            category = SquareSourceCategory.BANK,
+            isNewMajor = true
+        ),
+
+        // Parallel & Algerian Square
+        SquareMarketSourceSpec(
+            id = SOURCE_BINANCE_P2P,
+            nameEn = "Binance P2P",
+            nameAr = "بينانس الموازي",
+            domain = "p2p.binance.com",
+            category = SquareSourceCategory.PARALLEL
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_OKX_MARKET,
+            nameEn = "OKX",
+            nameAr = "أو كيه إكس",
+            domain = "okx.com",
+            category = SquareSourceCategory.PARALLEL,
+            isNewMajor = true,
+            secondaryTagEn = "P2P + Gold",
+            secondaryTagAr = "موازي + ذهب"
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_BYBIT_MARKET,
+            nameEn = "Bybit",
+            nameAr = "بايبت",
+            domain = "bybit.com",
+            category = SquareSourceCategory.PARALLEL,
+            isNewMajor = true,
+            secondaryTagEn = "P2P + Gold",
+            secondaryTagAr = "موازي + ذهب"
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_DEVISESQUARE,
+            nameEn = "DeviseSquare",
+            nameAr = "دوفيز سكوار",
+            domain = "devisesquare.com",
+            category = SquareSourceCategory.PARALLEL
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_FOREXALGERIE,
+            nameEn = "ForexAlgérie",
+            nameAr = "فوركس الجزائر",
+            domain = "forexalgerie.com",
+            category = SquareSourceCategory.PARALLEL
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_EURODZ,
+            nameEn = "EuroDZ",
+            nameAr = "يورو ديزاد",
+            domain = "eurodz.com",
+            category = SquareSourceCategory.PARALLEL
+        ),
+        SquareMarketSourceSpec(
+            id = SOURCE_ALGERIANDINAR,
+            nameEn = "AlgerianDinar",
+            nameAr = "الدينار الجزائري",
+            domain = "algerian-dinar.com",
+            category = SquareSourceCategory.PARALLEL
+        )
+    )
+
+    val ALL_SOURCE_IDS: Set<String> = availableSources.map { it.id }.toSet()
+
+    val DEFAULT_REFERENCE_BANK_RATES: Map<String, Double> = mapOf(
+        "EUR" to 145.0,
+        "USD" to 134.0,
+        "GBP" to 170.0,
+        "CAD" to 96.0,
+        "CHF" to 152.0,
+        "TRY" to 4.0,
+        "AED" to 36.5,
+        "SAR" to 35.7,
+        "TND" to 43.0,
+        "MAD" to 13.5
+    )
+
+    fun localizeSquareSourceLabel(source: String, isArabic: Boolean): String {
+        if (!isArabic || source.isBlank()) return source
+        return source
+            .replace("Binance P2P USDT", "بينانس الموازي (تيثر)", ignoreCase = true)
+            .replace("Binance P2P USDC", "بينانس الموازي (دولار رقمي)", ignoreCase = true)
+            .replace("Binance P2P", "بينانس الموازي", ignoreCase = true)
+            .replace("Binance PAXG", "بينانس الفوري", ignoreCase = true)
+            .replace("Binance", "بينانس", ignoreCase = true)
+            .replace("OKX P2P USDT", "أو كيه إكس الموازي", ignoreCase = true)
+            .replace("OKX XAUT", "أو كيه إكس للذهب", ignoreCase = true)
+            .replace("OKX", "أو كيه إكس", ignoreCase = true)
+            .replace("Bybit P2P USDT", "بايبت الموازي", ignoreCase = true)
+            .replace("Bybit PAXG", "بايبت للذهب", ignoreCase = true)
+            .replace("Bybit", "بايبت", ignoreCase = true)
+            .replace("Kraken", "كراكن", ignoreCase = true)
+            .replace("ExchangeRate-API", "إكستشينج ريت", ignoreCase = true)
+            .replace("FXRatesAPI", "أف إكس ريتس", ignoreCase = true)
+            .replace("Open ER-API", "أوبن إي آر", ignoreCase = true)
+            .replace("Currency-Pages", "شبكة العملات", ignoreCase = true)
+            .replace("Currency-API", "شبكة العملات", ignoreCase = true)
+            .replace("FloatRates", "فلوت ريتس", ignoreCase = true)
+            .replace("GoldPrice.org", "غولد برايس", ignoreCase = true)
+            .replace("Gold-API", "غولد إيه بي آي", ignoreCase = true)
+            .replace("Yahoo Finance", "ياهو المالية", ignoreCase = true)
+            .replace("CoinGecko", "كوين غيكو", ignoreCase = true)
+            .replace("DeviseSquare", "دوفيز سكوار", ignoreCase = true)
+            .replace("ForexAlgérie", "فوركس الجزائر", ignoreCase = true)
+            .replace("EuroDZ", "يورو ديزاد", ignoreCase = true)
+            .replace("AlgerianDinar", "الدينار الجزائري", ignoreCase = true)
+            .replace("FX Cross", "معادلة الصرف", ignoreCase = true)
+            .replace("P2P/Square", "الموازي/السكوار", ignoreCase = true)
+            .replace("sites", "مواقع", ignoreCase = true)
+    }
+
     val karats: List<Triple<Int, String, Pair<String, String>>> = listOf(
         Triple(24, "99.9%", "24K Pure Gold" to "عيار 24 (ذهب خالص)"),
         Triple(22, "91.6%", "22K Gold" to "عيار 22"),
@@ -631,6 +863,114 @@ object SquareMarketCatalog {
         return medianOf(trimmed)
     }
 
+    fun parseKrakenPaxgResponse(jsonBody: String): GoldSpotQuote? {
+        val obj = parseJsonMap(jsonBody) ?: return null
+        val errors = obj["error"].asList()
+        if (!errors.isNullOrEmpty()) return null
+        val resultMap = obj["result"].asStringAnyMap() ?: return null
+        val pairObj = (resultMap["PAXGUSD"] ?: resultMap.values.firstOrNull()).asStringAnyMap() ?: return null
+        val lastPrice = pairObj["c"].asList()?.firstOrNull().asDouble() ?: return null
+        if (lastPrice <= 100.0) return null
+        val openPrice = pairObj["o"].asDouble()
+        val change = if (openPrice != null && openPrice > 0.0) {
+            ((lastPrice - openPrice) / openPrice) * 100.0
+        } else 0.0
+        return GoldSpotQuote(priceOzUsd = lastPrice, change24hPercent = change, source = "Kraken")
+    }
+
+    fun parseBybitPaxgResponse(jsonBody: String): GoldSpotQuote? {
+        val obj = parseJsonMap(jsonBody) ?: return null
+        if ((obj["retCode"].asDouble()?.toInt() ?: -1) != 0) return null
+        val list = obj["result"].asStringAnyMap()?.get("list").asList() ?: return null
+        val first = list.firstOrNull().asStringAnyMap() ?: return null
+        val price = first["lastPrice"].asDouble() ?: return null
+        if (price <= 100.0) return null
+        val ratioChange = first["price24hPcnt"].asDouble() ?: 0.0
+        return GoldSpotQuote(priceOzUsd = price, change24hPercent = ratioChange * 100.0, source = "Bybit PAXG")
+    }
+
+    fun parseOkxXautResponse(jsonBody: String): GoldSpotQuote? {
+        val obj = parseJsonMap(jsonBody) ?: return null
+        val codeStr = obj["code"]?.toString()?.trim()
+        if (codeStr != null && codeStr != "0") return null
+        val first = obj["data"].asList()?.firstOrNull().asStringAnyMap() ?: return null
+        val lastPrice = first["last"].asDouble() ?: return null
+        if (lastPrice <= 100.0) return null
+        val open24h = first["open24h"].asDouble()
+        val change = if (open24h != null && open24h > 0.0) {
+            ((lastPrice - open24h) / open24h) * 100.0
+        } else 0.0
+        return GoldSpotQuote(priceOzUsd = lastPrice, change24hPercent = change, source = "OKX XAUT")
+    }
+
+    fun parseExchangeRateApiV4Response(jsonBody: String): Map<String, Double> {
+        val obj = parseJsonMap(jsonBody) ?: return emptyMap()
+        val rates = obj["rates"].asStringAnyMap() ?: return emptyMap()
+        val dzdPerUsd = rates["DZD"].asDouble() ?: return emptyMap()
+        if (dzdPerUsd <= 0.0) return emptyMap()
+
+        val result = LinkedHashMap<String, Double>()
+        for (spec in trackedCurrencies) {
+            val perUsd = if (spec.code == "USD") 1.0 else (rates[spec.code].asDouble() ?: -1.0)
+            if (perUsd > 0.0) {
+                result[spec.code] = dzdPerUsd / perUsd
+            }
+        }
+        return result
+    }
+
+    fun parseFxRatesApiResponse(jsonBody: String): Map<String, Double> {
+        val obj = parseJsonMap(jsonBody) ?: return emptyMap()
+        if (obj["success"] == false) return emptyMap()
+        val rates = obj["rates"].asStringAnyMap() ?: return emptyMap()
+        val dzdPerUsd = rates["DZD"].asDouble() ?: return emptyMap()
+        if (dzdPerUsd <= 0.0) return emptyMap()
+
+        val result = LinkedHashMap<String, Double>()
+        for (spec in trackedCurrencies) {
+            val perUsd = if (spec.code == "USD") 1.0 else (rates[spec.code].asDouble() ?: -1.0)
+            if (perUsd > 0.0) {
+                result[spec.code] = dzdPerUsd / perUsd
+            }
+        }
+        return result
+    }
+
+    fun parseOkxP2pMedianDzd(jsonBody: String, sideKey: String): Double? {
+        val obj = parseJsonMap(jsonBody) ?: return null
+        val dataObj = obj["data"].asStringAnyMap() ?: return null
+        val rows = dataObj[sideKey].asList()
+            ?: dataObj["sell"].asList()
+            ?: dataObj["buy"].asList()
+            ?: return null
+        val prices = rows.mapNotNull { entry ->
+            entry.asStringAnyMap()?.get("price").asDouble()?.takeIf { it in 150.0..420.0 }
+        }.toMutableList()
+        if (prices.isEmpty()) return null
+        prices.sort()
+        val trimmed = if (prices.size >= 5) {
+            val cut = (prices.size * 0.2).toInt().coerceAtLeast(1)
+            prices.subList(cut, prices.size - cut)
+        } else prices
+        return medianOf(trimmed)
+    }
+
+    fun parseBybitP2pMedianDzd(jsonBody: String): Double? {
+        val obj = parseJsonMap(jsonBody) ?: return null
+        val resultObj = obj["result"].asStringAnyMap() ?: return null
+        val items = resultObj["items"].asList() ?: return null
+        val prices = items.mapNotNull { entry ->
+            entry.asStringAnyMap()?.get("price").asDouble()?.takeIf { it in 150.0..420.0 }
+        }.toMutableList()
+        if (prices.isEmpty()) return null
+        prices.sort()
+        val trimmed = if (prices.size >= 5) {
+            val cut = (prices.size * 0.2).toInt().coerceAtLeast(1)
+            prices.subList(cut, prices.size - cut)
+        } else prices
+        return medianOf(trimmed)
+    }
+
     private data class CurrencyMatchSpec(
         val code: String,
         val regexes: List<Regex>
@@ -805,6 +1145,30 @@ object SquareMarketCodec {
         }
     }
 
+    fun parseEnabledSourceIds(json: String): Set<String> {
+        if (json.isBlank()) return SquareMarketCatalog.ALL_SOURCE_IDS
+        return try {
+            val parsed = stringListAdapter.fromJson(json)
+                ?.map { it.trim() }
+                ?.filter { it in SquareMarketCatalog.ALL_SOURCE_IDS }
+                ?.toSet()
+                .orEmpty()
+            if (parsed.isEmpty()) SquareMarketCatalog.ALL_SOURCE_IDS else parsed
+        } catch (_: Throwable) {
+            SquareMarketCatalog.ALL_SOURCE_IDS
+        }
+    }
+
+    fun encodeEnabledSourceIds(ids: Set<String>): String {
+        val clean = ids.filter { it in SquareMarketCatalog.ALL_SOURCE_IDS }.toSet()
+        if (clean.isEmpty() || clean.size == SquareMarketCatalog.ALL_SOURCE_IDS.size) return ""
+        return try {
+            stringListAdapter.toJson(clean.toList())
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
     fun encodeSnapshot(snapshot: SquareMarketSnapshot): String {
         return try {
             snapshotAdapter.toJson(snapshot)
@@ -877,12 +1241,31 @@ object SquareMarketFetcher {
         }
     }
 
-    suspend fun fetchLiveSnapshot(): Result<SquareMarketSnapshot> = withContext(Dispatchers.IO) {
+    suspend fun fetchLiveSnapshot(
+        enabledSourceIds: Set<String> = SquareMarketCatalog.ALL_SOURCE_IDS
+    ): Result<SquareMarketSnapshot> = withContext(Dispatchers.IO) {
+        val activeSources = if (enabledSourceIds.isEmpty()) {
+            SquareMarketCatalog.ALL_SOURCE_IDS
+        } else {
+            enabledSourceIds.filterTo(mutableSetOf()) { it in SquareMarketCatalog.ALL_SOURCE_IDS }
+                .ifEmpty { SquareMarketCatalog.ALL_SOURCE_IDS }
+        }
         val now = System.currentTimeMillis()
         coroutineScope {
-            val goldDeferred = async { fetchGoldSpotMultiSource() }
-            val bankDeferred = async { fetchOfficialBankMultiSource() }
-            val binanceP2pDeferred = async { fetchAllBinanceP2pDzd() }
+            val goldDeferred = async { fetchGoldSpotMultiSource(activeSources) }
+            val bankDeferred = async { fetchOfficialBankMultiSource(activeSources) }
+            val binanceP2pDeferred = async {
+                if (SquareMarketCatalog.SOURCE_BINANCE_P2P in activeSources) fetchAllBinanceP2pDzd()
+                else emptyList()
+            }
+            val okxP2pDeferred = async {
+                if (SquareMarketCatalog.SOURCE_OKX_MARKET in activeSources) listOfNotNull(fetchOkxP2pDzd())
+                else emptyList()
+            }
+            val bybitP2pDeferred = async {
+                if (SquareMarketCatalog.SOURCE_BYBIT_MARKET in activeSources) listOfNotNull(fetchBybitP2pDzd())
+                else emptyList()
+            }
 
             val bankConsensus = bankDeferred.await()
             val bankRates = bankConsensus?.first.orEmpty()
@@ -893,26 +1276,23 @@ object SquareMarketFetcher {
             val goldQuote = goldConsensus?.first
             val goldSourceCount = goldConsensus?.second ?: 0
 
-            // Query all direct Algerian Square websites concurrently once official bank bounds are ready
-            val portalQuotesBySource = if (bankRates.isNotEmpty()) {
-                fetchAllSquarePortals(bankRates)
-            } else {
-                emptyList()
-            }
+            val boundsForParsing = bankRates.ifEmpty { SquareMarketCatalog.DEFAULT_REFERENCE_BANK_RATES }
+            // Query selected direct Algerian Square websites concurrently
+            val portalQuotesBySource = fetchAllSquarePortals(boundsForParsing, activeSources)
 
-            val p2pQuotes = binanceP2pDeferred.await()
+            val p2pQuotes = binanceP2pDeferred.await() + okxP2pDeferred.await() + bybitP2pDeferred.await()
 
             val hasBank = bankRates.isNotEmpty()
             val hasParallel = portalQuotesBySource.isNotEmpty() || p2pQuotes.isNotEmpty()
             if (goldQuote == null && !hasBank && !hasParallel) {
                 return@coroutineScope Result.failure(
-                    IllegalStateException("All market websites are currently unreachable")
+                    IllegalStateException("All selected market websites are currently unreachable")
                 )
             }
 
-            val usdBank = bankRates["USD"] ?: 0.0
+            val usdBank = bankRates["USD"] ?: boundsForParsing["USD"] ?: 134.0
 
-            // 1. Multi-site consensus for USD Parallel (direct Square sites + Binance P2P USDT/USDC)
+            // 1. Multi-site consensus for USD Parallel (direct Square sites + Binance/OKX/Bybit P2P)
             val usdSamples = mutableListOf<ParallelPairQuote>()
             portalQuotesBySource.forEach { (siteName, map) ->
                 map["USD"]?.let { usdSamples.add(it.copy(source = siteName)) }
@@ -945,9 +1325,10 @@ object SquareMarketFetcher {
             usdSamples.map { it.source }.filter { it.isNotBlank() }.forEach { allParallelSources.add(it) }
             portalQuotesBySource.forEach { (siteName, _) -> allParallelSources.add(siteName) }
 
-            val currencies = if (hasBank) {
+            val currencies = if (hasBank || hasParallel) {
                 SquareMarketCatalog.trackedCurrencies.mapNotNull { spec ->
-                    val bankRate = bankRates[spec.code] ?: return@mapNotNull null
+                    val actualBankRate = bankRates[spec.code] ?: 0.0
+                    val parityBankRef = if (actualBankRate > 0.0) actualBankRate else (boundsForParsing[spec.code] ?: 0.0)
 
                     val parallelResult: Pair<ParallelPairQuote, Int> = if (spec.code == "USD") {
                         if (usdConsensus != null) {
@@ -956,8 +1337,8 @@ object SquareMarketFetcher {
                             ParallelPairQuote(0.0, 0.0) to 0
                         }
                     } else {
-                        val crossParity = if (usdBank > 0.0 && usdConsensus != null) {
-                            val ratio = bankRate / usdBank
+                        val crossParity = if (usdBank > 0.0 && parityBankRef > 0.0 && usdConsensus != null) {
+                            val ratio = parityBankRef / usdBank
                             ParallelPairQuote(
                                 buyDzd = usdConsensus.buyDzd * ratio,
                                 sellDzd = usdConsensus.sellDzd * ratio,
@@ -986,7 +1367,6 @@ object SquareMarketFetcher {
                                 ) to srcNames.size
                             }
                             directSamples.size == 1 && crossParity != null -> {
-                                // Blend single direct scrape with live cross-parity so one site glitch cannot skew the rate
                                 val single = directSamples.first()
                                 val sellBlend = (single.sellDzd + crossParity.sellDzd) / 2.0
                                 val buyBlend = minOf((single.buyDzd + crossParity.buyDzd) / 2.0, sellBlend)
@@ -1006,13 +1386,17 @@ object SquareMarketFetcher {
                         }
                     }
 
+                    if (actualBankRate <= 0.0 && parallelResult.first.sellDzd <= 0.0) {
+                        return@mapNotNull null
+                    }
+
                     CurrencySquareRate(
                         code = spec.code,
                         nameEn = spec.nameEn,
                         nameAr = spec.nameAr,
                         flag = spec.flag,
                         symbol = spec.symbol,
-                        bankRateDzd = bankRate,
+                        bankRateDzd = actualBankRate,
                         parallelBuyDzd = parallelResult.first.buyDzd,
                         parallelSellDzd = parallelResult.first.sellDzd,
                         parallelSource = parallelResult.first.source,
@@ -1026,7 +1410,7 @@ object SquareMarketFetcher {
             val goldKarats = if (goldQuote != null) {
                 SquareMarketCatalog.buildGoldKarats(
                     goldOzUsd = goldQuote.priceOzUsd,
-                    usdBankDzd = usdBank,
+                    usdBankDzd = bankRates["USD"] ?: 0.0,
                     usdParallelDzd = usdParallelRef
                 )
             } else {
@@ -1061,90 +1445,157 @@ object SquareMarketFetcher {
         }
     }
 
-    private suspend fun fetchGoldSpotMultiSource(): Pair<GoldSpotQuote, Int>? = coroutineScope {
-        val jobs = listOf(
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseGoldPriceOrgResponse(
-                        getString("https://data-asg.goldprice.org/dbXRates/USD")
-                    )
-                }.getOrNull()
-            },
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseGoldApiResponse(
-                        getString("https://api.gold-api.com/price/XAU")
-                    )
-                }.getOrNull()
-            },
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseYahooGoldChartResponse(
-                        getString("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=2d")
-                    )
-                }.getOrNull()
-            },
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseFawazXauResponse(
-                        getString("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json")
-                    )
-                }.getOrNull() ?: runCatching {
-                    SquareMarketCatalog.parseFawazXauResponse(
-                        getString("https://latest.currency-api.pages.dev/v1/currencies/xau.json")
-                    )
-                }.getOrNull()
-            },
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseBinancePaxgResponse(
-                        getString("https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT")
-                    )
-                }.getOrNull()
-            },
-            async {
-                runCatching {
-                    SquareMarketCatalog.parseCoinGeckoGoldResponse(
-                        getString("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold,tether-gold&vs_currencies=usd&include_24hr_change=true")
-                    )
-                }.getOrNull()
+    private suspend fun fetchGoldSpotMultiSource(
+        enabledSourceIds: Set<String>
+    ): Pair<GoldSpotQuote, Int>? = coroutineScope {
+        val jobs = buildList {
+            if (SquareMarketCatalog.SOURCE_GOLDPRICE_ORG in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseGoldPriceOrgResponse(
+                            getString("https://data-asg.goldprice.org/dbXRates/USD")
+                        )
+                    }.getOrNull()
+                })
             }
-        )
+            if (SquareMarketCatalog.SOURCE_GOLD_API in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseGoldApiResponse(
+                            getString("https://api.gold-api.com/price/XAU")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_YAHOO_FINANCE in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseYahooGoldChartResponse(
+                            getString("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=2d")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_FAWAZ_CURRENCY in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseFawazXauResponse(
+                            getString("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json")
+                        )
+                    }.getOrNull() ?: runCatching {
+                        SquareMarketCatalog.parseFawazXauResponse(
+                            getString("https://latest.currency-api.pages.dev/v1/currencies/xau.json")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_BINANCE_PAXG in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseBinancePaxgResponse(
+                            getString("https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_COINGECKO in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseCoinGeckoGoldResponse(
+                            getString("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold,tether-gold&vs_currencies=usd&include_24hr_change=true")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_KRAKEN_GOLD in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseKrakenPaxgResponse(
+                            getString("https://api.kraken.com/0/public/Ticker?pair=PAXGUSD")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_BYBIT_MARKET in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseBybitPaxgResponse(
+                            getString("https://api.bybit.com/v5/market/tickers?category=spot&symbol=PAXGUSDT")
+                        )
+                    }.getOrNull()
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_OKX_MARKET in enabledSourceIds) {
+                add(async {
+                    runCatching {
+                        SquareMarketCatalog.parseOkxXautResponse(
+                            getString("https://www.okx.com/api/v5/market/ticker?instId=XAUT-USDT")
+                        )
+                    }.getOrNull()
+                })
+            }
+        }
         val quotes = jobs.awaitAll().filterNotNull()
         SquareMarketCatalog.computeGoldConsensus(quotes)
     }
 
-    private suspend fun fetchOfficialBankMultiSource(): Triple<Map<String, Double>, String, Int>? = coroutineScope {
-        val jobs = listOf(
-            async {
-                "Open ER-API" to runCatching {
-                    SquareMarketCatalog.parseOpenErRatesResponse(
-                        getString("https://open.er-api.com/v6/latest/USD")
-                    )
-                }.getOrDefault(emptyMap())
-            },
-            async {
-                "Currency-API" to runCatching {
-                    SquareMarketCatalog.parseFawazCurrencyResponse(
-                        getString("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json")
-                    )
-                }.getOrDefault(emptyMap())
-            },
-            async {
-                "Currency-Pages" to runCatching {
-                    SquareMarketCatalog.parseFawazCurrencyResponse(
-                        getString("https://latest.currency-api.pages.dev/v1/currencies/usd.json")
-                    )
-                }.getOrDefault(emptyMap())
-            },
-            async {
-                "FloatRates" to runCatching {
-                    SquareMarketCatalog.parseFloatRatesResponse(
-                        getString("https://www.floatrates.com/daily/usd.json")
-                    )
-                }.getOrDefault(emptyMap())
+    private suspend fun fetchOfficialBankMultiSource(
+        enabledSourceIds: Set<String>
+    ): Triple<Map<String, Double>, String, Int>? = coroutineScope {
+        val jobs = buildList {
+            if (SquareMarketCatalog.SOURCE_OPEN_ER_API in enabledSourceIds) {
+                add(async {
+                    "Open ER-API" to runCatching {
+                        SquareMarketCatalog.parseOpenErRatesResponse(
+                            getString("https://open.er-api.com/v6/latest/USD")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
             }
-        )
+            if (SquareMarketCatalog.SOURCE_FAWAZ_CURRENCY in enabledSourceIds) {
+                add(async {
+                    "Currency-API" to runCatching {
+                        SquareMarketCatalog.parseFawazCurrencyResponse(
+                            getString("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
+                add(async {
+                    "Currency-Pages" to runCatching {
+                        SquareMarketCatalog.parseFawazCurrencyResponse(
+                            getString("https://latest.currency-api.pages.dev/v1/currencies/usd.json")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_FLOATRATES in enabledSourceIds) {
+                add(async {
+                    "FloatRates" to runCatching {
+                        SquareMarketCatalog.parseFloatRatesResponse(
+                            getString("https://www.floatrates.com/daily/usd.json")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_EXCHANGERATE_API_V4 in enabledSourceIds) {
+                add(async {
+                    "ExchangeRate-API" to runCatching {
+                        SquareMarketCatalog.parseExchangeRateApiV4Response(
+                            getString("https://api.exchangerate-api.com/v4/latest/USD")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
+            }
+            if (SquareMarketCatalog.SOURCE_FXRATES_API in enabledSourceIds) {
+                add(async {
+                    "FXRatesAPI" to runCatching {
+                        SquareMarketCatalog.parseFxRatesApiResponse(
+                            getString("https://api.fxratesapi.com/latest?base=USD")
+                        )
+                    }.getOrDefault(emptyMap())
+                })
+            }
+        }
         val results = jobs.awaitAll()
         SquareMarketCatalog.computeBankRatesConsensus(results)
     }
@@ -1188,16 +1639,77 @@ object SquareMarketFetcher {
         listOfNotNull(usdtDeferred.await(), usdcDeferred.await())
     }
 
+    private fun fetchOkxP2pDzd(): ParallelPairQuote? {
+        fun querySide(side: String): Double? {
+            return runCatching {
+                val url = "https://www.okx.com/v3/c2c/tradingOrders/books?quoteCurrency=dzd&baseCurrency=usdt&side=$side&paymentMethod=all&userType=all&showTrade=false&receivingAds=false&noAds=false&limit=20"
+                val body = getString(url)
+                SquareMarketCatalog.parseOkxP2pMedianDzd(body, side)
+            }.getOrNull()
+        }
+        val sellSide = querySide("sell")
+        val buySide = querySide("buy")
+        return when {
+            buySide != null && sellSide != null -> ParallelPairQuote(
+                buyDzd = minOf(buySide, sellSide),
+                sellDzd = maxOf(buySide, sellSide),
+                source = "OKX P2P USDT"
+            )
+            sellSide != null -> ParallelPairQuote(
+                buyDzd = sellSide - 2.0,
+                sellDzd = sellSide,
+                source = "OKX P2P USDT"
+            )
+            buySide != null -> ParallelPairQuote(
+                buyDzd = buySide,
+                sellDzd = buySide + 2.0,
+                source = "OKX P2P USDT"
+            )
+            else -> null
+        }
+    }
+
+    private fun fetchBybitP2pDzd(): ParallelPairQuote? {
+        fun querySide(sideCode: String): Double? {
+            val payload = """{"userId":"","tokenId":"USDT","currencyId":"DZD","payment":[],"side":"$sideCode","size":"20","page":"1","amount":"","authMaker":false,"canTrade":false}"""
+            return runCatching {
+                val body = postJson("https://api2.bybit.com/fiat/otc/item/online", payload)
+                SquareMarketCatalog.parseBybitP2pMedianDzd(body)
+            }.getOrNull()
+        }
+        val sellSide = querySide("1")
+        val buySide = querySide("0")
+        return when {
+            buySide != null && sellSide != null -> ParallelPairQuote(
+                buyDzd = minOf(buySide, sellSide),
+                sellDzd = maxOf(buySide, sellSide),
+                source = "Bybit P2P USDT"
+            )
+            sellSide != null -> ParallelPairQuote(
+                buyDzd = sellSide - 2.0,
+                sellDzd = sellSide,
+                source = "Bybit P2P USDT"
+            )
+            buySide != null -> ParallelPairQuote(
+                buyDzd = buySide,
+                sellDzd = buySide + 2.0,
+                source = "Bybit P2P USDT"
+            )
+            else -> null
+        }
+    }
+
     private suspend fun fetchAllSquarePortals(
-        bankRates: Map<String, Double>
+        bankRates: Map<String, Double>,
+        enabledSourceIds: Set<String>
     ): List<Pair<String, Map<String, ParallelPairQuote>>> = coroutineScope {
         val portals = listOf(
-            "https://devisesquare.com/" to "DeviseSquare",
-            "https://www.forexalgerie.com/" to "ForexAlgérie",
-            "https://eurodz.com/" to "EuroDZ",
-            "https://www.algerian-dinar.com/" to "AlgerianDinar"
-        )
-        portals.map { (url, label) ->
+            Triple(SquareMarketCatalog.SOURCE_DEVISESQUARE, "https://devisesquare.com/", "DeviseSquare"),
+            Triple(SquareMarketCatalog.SOURCE_FOREXALGERIE, "https://www.forexalgerie.com/", "ForexAlgérie"),
+            Triple(SquareMarketCatalog.SOURCE_EURODZ, "https://eurodz.com/", "EuroDZ"),
+            Triple(SquareMarketCatalog.SOURCE_ALGERIANDINAR, "https://www.algerian-dinar.com/", "AlgerianDinar")
+        ).filter { it.first in enabledSourceIds }
+        portals.map { (_, url, label) ->
             async {
                 val parsed = runCatching {
                     val html = getString(url)

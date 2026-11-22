@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.GlassButton
@@ -42,6 +43,8 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.SquareCategoryTabStrip
 import com.example.ui.components.SquareExchangeTickerRow
 import com.example.ui.components.SquareGoldAccent
+import com.example.ui.components.SquareMarketSourcesDialog
+import com.example.ui.components.SquarePriceSourcesBottomButton
 import com.example.ui.components.SquarePrimaryTab
 import com.example.ui.components.SquareQuickConverterCard
 import com.example.ui.components.SquareSortColumn
@@ -76,10 +79,12 @@ fun SquareScreen(
     lastSyncMillis: Long,
     syncIntervalMinutes: Int = 60,
     pinnedIdsJson: String = SquareMarketCodec.DEFAULT_PINNED_JSON,
+    enabledSourceIdsJson: String = "",
     isRefreshing: Boolean,
     errorMessage: String?,
     onRefresh: (force: Boolean) -> Unit,
     onUpdateSyncIntervalMinutes: (Int) -> Unit = {},
+    onUpdateEnabledSourceIds: (Set<String>) -> Unit = {},
     onTogglePin: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -91,6 +96,7 @@ fun SquareScreen(
     val layoutInfo = LocalAdaptiveLayoutInfo.current
 
     var showSyncSettingsDialog by remember { mutableStateOf(false) }
+    var showSourcesDialog by remember { mutableStateOf(false) }
 
     // Initial check & continuous configurable auto-refresh timer while viewing Square
     LaunchedEffect(Unit) {
@@ -130,6 +136,9 @@ fun SquareScreen(
 
     val pinnedIds = remember(pinnedIdsJson) {
         SquareMarketCodec.parsePinnedIds(pinnedIdsJson)
+    }
+    val enabledSourceIds = remember(enabledSourceIdsJson) {
+        SquareMarketCodec.parseEnabledSourceIds(enabledSourceIdsJson)
     }
 
     val effectiveLastSync = remember(lastSyncMillis, snapshot) {
@@ -200,20 +209,7 @@ fun SquareScreen(
         }
     }
 
-    val sourcesSummary = remember(snapshot, isArabic) {
-        if (snapshot == null) ""
-        else listOfNotNull(
-            snapshot.goldSource.takeIf { it.isNotBlank() }?.let {
-                (if (isArabic) "الذهب: " else "Gold: ") + if (isArabic) localizeSquareSource(it) else it
-            },
-            snapshot.parallelSource.takeIf { it.isNotBlank() }?.let {
-                (if (isArabic) "سكوار: " else "Square: ") + if (isArabic) localizeSquareSource(it) else it
-            },
-            snapshot.bankSource.takeIf { it.isNotBlank() }?.let {
-                (if (isArabic) "البنك: " else "Bank: ") + if (isArabic) localizeSquareSource(it) else it
-            }
-        ).joinToString(" • ")
-    }
+    val totalSourcesCount = SquareMarketCatalog.availableSources.size
 
     val intervalLabel = remember(syncIntervalMinutes, isArabic) {
         formatSquareIntervalLabel(syncIntervalMinutes, isArabic)
@@ -496,28 +492,15 @@ fun SquareScreen(
                         ConverterSection()
                     }
 
-                    if (sourcesSummary.isNotBlank() || syncStatusFooter.isNotBlank()) {
-                        item {
-                            val combinedInfo = listOf(sourcesSummary, syncStatusFooter)
-                                .filter { it.isNotBlank() }
-                                .joinToString(" • ")
-                            GlassCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showSyncSettingsDialog = true },
-                                backgroundColor = colors.glassCard,
-                                shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                                cornerRadius = dimens.cornerRadiusMd,
-                                breathingGlow = false
-                            ) {
-                                Text(
-                                    text = combinedInfo,
-                                    color = EmeraldNeon.copy(alpha = 0.88f),
-                                    fontSize = typo.bodyXs,
-                                    modifier = Modifier.padding(dimens.cardPaddingSmall)
-                                )
-                            }
-                        }
+                    item {
+                        SquarePriceSourcesBottomButton(
+                            enabledCount = enabledSourceIds.size,
+                            totalCount = totalSourcesCount,
+                            syncStatusFooter = syncStatusFooter,
+                            isArabic = isArabic,
+                            colors = colors,
+                            onClick = { showSourcesDialog = true }
+                        )
                     }
 
                     item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
@@ -577,35 +560,33 @@ fun SquareScreen(
 
                     item { TickerSheetSection() }
 
-                    if (sourcesSummary.isNotBlank() || syncStatusFooter.isNotBlank()) {
-                        item {
-                            val footerLine = buildString {
-                                if (sourcesSummary.isNotBlank()) {
-                                    append(
-                                        if (isArabic) "تجميع موثق من عدة مواقع • $sourcesSummary"
-                                        else "Multi-source verified feed • $sourcesSummary"
-                                    )
-                                }
-                                if (syncStatusFooter.isNotBlank()) {
-                                    if (isNotEmpty()) append(" • ")
-                                    append(syncStatusFooter)
-                                }
-                            }
-                            Text(
-                                text = footerLine,
-                                color = EmeraldNeon.copy(alpha = 0.85f),
-                                fontSize = typo.bodyXs,
-                                modifier = Modifier
-                                    .clickable { showSyncSettingsDialog = true }
-                                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                            )
-                        }
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        SquarePriceSourcesBottomButton(
+                            enabledCount = enabledSourceIds.size,
+                            totalCount = totalSourcesCount,
+                            syncStatusFooter = syncStatusFooter,
+                            isArabic = isArabic,
+                            colors = colors,
+                            onClick = { showSourcesDialog = true }
+                        )
                     }
                 }
 
                 item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
             }
         }
+    }
+
+    if (showSourcesDialog) {
+        SquareMarketSourcesDialog(
+            initialSelectedIds = enabledSourceIds,
+            intervalLabel = intervalLabel,
+            isArabic = isArabic,
+            onSaveSelectedIds = onUpdateEnabledSourceIds,
+            onOpenSyncIntervalSettings = { showSyncSettingsDialog = true },
+            onDismiss = { showSourcesDialog = false }
+        )
     }
 
     if (showSyncSettingsDialog) {
@@ -618,16 +599,4 @@ fun SquareScreen(
             onDismiss = { showSyncSettingsDialog = false }
         )
     }
-}
-
-private fun localizeSquareSource(source: String): String {
-    return source
-        .replace("Yahoo Finance", "ياهو المالية", ignoreCase = true)
-        .replace("Binance", "بينانس", ignoreCase = true)
-        .replace("CoinGecko", "كوين غيكو", ignoreCase = true)
-        .replace("ExchangeRate-API", "أسعار الصرف", ignoreCase = true)
-        .replace("Official Bank", "البنك الرسمي", ignoreCase = true)
-        .replace("Parallel", "الموازي", ignoreCase = true)
-        .replace("Square", "سكوار", ignoreCase = true)
-        .replace("sites", "مواقع", ignoreCase = true)
 }
