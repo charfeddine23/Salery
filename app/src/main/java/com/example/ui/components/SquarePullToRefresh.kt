@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,9 +40,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Tune
@@ -55,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,6 +105,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.market.SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES
+import com.example.market.SquareMarketCatalog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
@@ -619,19 +624,32 @@ fun SquareTopAnchoredPullToRefresh(
 @Composable
 fun SquareSyncIntervalSettingsDialog(
     currentIntervalMinutes: Int,
+    initialSelectedSourceIds: Set<String> = SquareMarketCatalog.ALL_SOURCE_IDS,
     lastSyncLabel: String,
     isArabic: Boolean,
     onSaveInterval: (Int) -> Unit,
+    onSaveSelectedSourceIds: (Set<String>) -> Unit = {},
     onSyncNow: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
+    val allIds = SquareMarketCatalog.ALL_SOURCE_IDS
+    val totalSourcesCount = SquareMarketCatalog.availableSources.size
+
+    val normalizedInitialIds = remember(initialSelectedSourceIds) {
+        initialSelectedSourceIds.filter { it in allIds }.toSet().ifEmpty { allIds }
+    }
 
     var selectedMinutes by remember(currentIntervalMinutes) {
         mutableStateOf(currentIntervalMinutes)
     }
+    var selectedSourceIds by remember(normalizedInitialIds) {
+        mutableStateOf(normalizedInitialIds)
+    }
+    var minOneSourceWarning by remember { mutableStateOf(false) }
+    var activeSection by remember { mutableIntStateOf(0) } // 0 = Sync Timer, 1 = Price Update Websites
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
 
@@ -643,6 +661,19 @@ fun SquareSyncIntervalSettingsDialog(
         ),
         label = "square_sync_dialog_scale"
     )
+
+    val toggleSource: (String) -> Unit = { id ->
+        minOneSourceWarning = false
+        if (id in selectedSourceIds) {
+            if (selectedSourceIds.size <= 1) {
+                minOneSourceWarning = true
+            } else {
+                selectedSourceIds = selectedSourceIds - id
+            }
+        } else {
+            selectedSourceIds = selectedSourceIds + id
+        }
+    }
 
     val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
@@ -658,13 +689,14 @@ fun SquareSyncIntervalSettingsDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 16.dp, vertical = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 400.dp)
+                    .widthIn(max = 450.dp)
+                    .heightIn(max = 720.dp)
                     .scale(cardScale)
                     .testTag("square_sync_settings_dialog"),
                 shape = RoundedCornerShape(28.dp),
@@ -687,10 +719,10 @@ fun SquareSyncIntervalSettingsDialog(
                                 )
                             )
                         }
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Fixed Top Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -721,13 +753,13 @@ fun SquareSyncIntervalSettingsDialog(
 
                         Box(
                             modifier = Modifier
-                                .size(46.dp)
+                                .size(44.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
                                     Brush.linearGradient(
                                         listOf(
                                             SquareGoldAccent.copy(alpha = 0.22f),
-                                            CyanNeon.copy(alpha = 0.16f)
+                                            EmeraldNeon.copy(alpha = 0.16f)
                                         )
                                     )
                                 )
@@ -735,17 +767,17 @@ fun SquareSyncIntervalSettingsDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Schedule,
+                                imageVector = if (activeSection == 0) Icons.Default.Schedule else Icons.Default.Public,
                                 contentDescription = null,
-                                tint = SquareGoldAccent,
-                                modifier = Modifier.size(24.dp)
+                                tint = if (activeSection == 0) SquareGoldAccent else EmeraldNeon,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
                         Spacer(modifier = Modifier.size(48.dp))
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = if (isArabic) "إعدادات وقت المزامنة" else "Sync Interval Settings",
@@ -755,111 +787,292 @@ fun SquareSyncIntervalSettingsDialog(
                         textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
                         text = if (isArabic) {
-                            "اختر كل كم يتم تحديث أسعار الذهب والعملات تلقائياً • آخر مزامنة: $lastSyncLabel"
+                            "آخر مزامنة: $lastSyncLabel"
                         } else {
-                            "Choose how often Square gold & FX rates auto-sync • Last sync: $lastSyncLabel"
+                            "Last sync: $lastSyncLabel"
                         },
                         color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 18.sp
+                        fontSize = 11.5.sp,
+                        textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // Segmented Tab Switcher inside Sync Interval Settings: Sync Timer | Price Update Websites
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.glassSurface.copy(alpha = 0.65f))
+                            .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(16.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES.forEach { mins ->
-                            val selected = selectedMinutes == mins
-                            val label = formatSquareIntervalLabel(mins, isArabic)
-                            Row(
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (selected) SquareGoldAccent.copy(alpha = 0.20f)
-                                        else colors.glassCard
-                                    )
-                                    .border(
-                                        width = if (selected) 1.3.dp else 0.9.dp,
-                                        color = if (selected) SquareGoldAccent else colors.glassBorderSubtle,
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(color = SquareGoldAccent),
-                                        onClick = { selectedMinutes = mins }
-                                    )
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                                    .testTag("square_sync_option_$mins"),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                if (selected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = SquareGoldAccent,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                Text(
-                                    text = label,
-                                    color = if (selected) colors.textPrimary else colors.textSecondary,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                    maxLines = 1
+                        val timerSelected = activeSection == 0
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (timerSelected) SquareGoldAccent.copy(alpha = 0.20f)
+                                    else Color.Transparent
                                 )
-                            }
+                                .border(
+                                    width = if (timerSelected) 1.dp else 0.dp,
+                                    color = if (timerSelected) SquareGoldAccent.copy(alpha = 0.60f) else Color.Transparent,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { activeSection = 0 }
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                                .testTag("square_sync_tab_timer"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = if (timerSelected) SquareGoldAccent else colors.textSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isArabic) "وقت المزامنة" else "Sync Timer",
+                                color = if (timerSelected) colors.textPrimary else colors.textSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = if (timerSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        val websitesSelected = activeSection == 1
+                        Row(
+                            modifier = Modifier
+                                .weight(1.15f)
+                                .defaultMinSize(minHeight = 44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (websitesSelected) EmeraldNeon.copy(alpha = 0.18f)
+                                    else Color.Transparent
+                                )
+                                .border(
+                                    width = if (websitesSelected) 1.dp else 0.dp,
+                                    color = if (websitesSelected) EmeraldNeon.copy(alpha = 0.60f) else Color.Transparent,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { activeSection = 1 }
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                                .testTag("square_sync_tab_websites"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = if (websitesSelected) EmeraldNeon else colors.textSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isArabic) {
+                                    "مواقع الأسعار (${isolateLtr("${selectedSourceIds.size}/$totalSourcesCount")})"
+                                } else {
+                                    "Websites (${selectedSourceIds.size}/$totalSourcesCount)"
+                                },
+                                color = if (websitesSelected) colors.textPrimary else colors.textSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = if (websitesSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Helpful mode summary pill
-                    Box(
+                    // Scrollable Body Area
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.glassSurface.copy(alpha = 0.55f))
-                            .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = if (selectedMinutes <= 0) {
-                                if (isArabic) {
-                                    "الوضع اليدوي: لن يتم التحديث تلقائياً إلا عند السحب للأسفل."
-                                } else {
-                                    "Manual mode: Rates only refresh when you pull down."
+                        if (activeSection == 0) {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES.forEach { mins ->
+                                    val selected = selectedMinutes == mins
+                                    val label = formatSquareIntervalLabel(mins, isArabic)
+                                    Row(
+                                        modifier = Modifier
+                                            .defaultMinSize(minHeight = 48.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(
+                                                if (selected) SquareGoldAccent.copy(alpha = 0.20f)
+                                                else colors.glassCard
+                                            )
+                                            .border(
+                                                width = if (selected) 1.3.dp else 0.9.dp,
+                                                color = if (selected) SquareGoldAccent else colors.glassBorderSubtle,
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = ripple(color = SquareGoldAccent),
+                                                onClick = { selectedMinutes = mins }
+                                            )
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                            .testTag("square_sync_option_$mins"),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (selected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = SquareGoldAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = label,
+                                            color = if (selected) colors.textPrimary else colors.textSecondary,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
-                            } else {
-                                val intervalLabel = formatSquareIntervalLabel(selectedMinutes, isArabic)
-                                if (isArabic) {
-                                    "المزامنة التلقائية: سيتم تحديث الأسعار $intervalLabel مع إمكانية التحديث بالسحب في أي وقت."
-                                } else {
-                                    "Auto-sync: Rates refresh $intervalLabel, plus anytime you pull down."
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Helpful mode summary pill
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(colors.glassSurface.copy(alpha = 0.55f))
+                                    .border(0.8.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = if (selectedMinutes <= 0) {
+                                        if (isArabic) {
+                                            "الوضع اليدوي: لن يتم التحديث تلقائياً إلا عند السحب للأسفل."
+                                        } else {
+                                            "Manual mode: Rates only refresh when you pull down."
+                                        }
+                                    } else {
+                                        val intervalLabel = formatSquareIntervalLabel(selectedMinutes, isArabic)
+                                        if (isArabic) {
+                                            "المزامنة التلقائية: سيتم تحديث الأسعار $intervalLabel مع إمكانية التحديث بالسحب في أي وقت."
+                                        } else {
+                                            "Auto-sync: Rates refresh $intervalLabel, plus anytime you pull down."
+                                        }
+                                    },
+                                    color = colors.textSecondary,
+                                    fontSize = 11.5.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Direct shortcut card to Price Update Websites tab inside Sync Interval Settings
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = 56.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(EmeraldNeon.copy(alpha = 0.10f))
+                                    .border(1.dp, EmeraldNeon.copy(alpha = 0.36f), RoundedCornerShape(16.dp))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(color = EmeraldNeon),
+                                        onClick = { activeSection = 1 }
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("square_sync_open_websites_shortcut"),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(EmeraldNeon.copy(alpha = 0.18f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Public,
+                                        contentDescription = null,
+                                        tint = EmeraldNeon,
+                                        modifier = Modifier.size(19.dp)
+                                    )
                                 }
-                            },
-                            color = colors.textSecondary,
-                            fontSize = 11.5.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isArabic) "مواقع تحديث الأسعار" else "Price Update Websites",
+                                        color = colors.textPrimary,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isArabic) {
+                                            "${isolateLtr("${selectedSourceIds.size}/$totalSourcesCount")} مواقع مفعّلة • اضغط للاختيار"
+                                        } else {
+                                            "${selectedSourceIds.size}/$totalSourcesCount active websites • Tap to configure"
+                                        },
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        } else {
+                            SquarePriceWebsitesSelectorPanel(
+                                selectedIds = selectedSourceIds,
+                                minOneWarning = minOneSourceWarning,
+                                isArabic = isArabic,
+                                onToggleSource = toggleSource,
+                                onSelectAll = {
+                                    minOneSourceWarning = false
+                                    selectedSourceIds = allIds
+                                }
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    // Fixed Bottom Actions (saves both Timer + Selected Websites cleanly without double refresh)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        val intervalChanged = selectedMinutes != currentIntervalMinutes
+                        val sourcesChanged = selectedSourceIds != normalizedInitialIds
+
                         // Sync Now secondary action
                         Box(
                             modifier = Modifier
@@ -872,8 +1085,12 @@ fun SquareSyncIntervalSettingsDialog(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = ripple(color = CyanNeon),
                                     onClick = {
-                                        onSaveInterval(selectedMinutes)
-                                        onSyncNow()
+                                        if (intervalChanged) onSaveInterval(selectedMinutes)
+                                        if (sourcesChanged) {
+                                            onSaveSelectedSourceIds(selectedSourceIds)
+                                        } else {
+                                            onSyncNow()
+                                        }
                                         onDismiss()
                                     }
                                 )
@@ -919,7 +1136,12 @@ fun SquareSyncIntervalSettingsDialog(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = ripple(color = Color.White),
                                     onClick = {
-                                        onSaveInterval(selectedMinutes)
+                                        if (intervalChanged || !sourcesChanged) {
+                                            onSaveInterval(selectedMinutes)
+                                        }
+                                        if (sourcesChanged) {
+                                            onSaveSelectedSourceIds(selectedSourceIds)
+                                        }
                                         onDismiss()
                                     }
                                 )
@@ -927,7 +1149,7 @@ fun SquareSyncIntervalSettingsDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isArabic) "حفظ المدة" else "Save",
+                                text = if (isArabic) "حفظ الإعدادات" else "Save",
                                 color = Color(0xFF0A1220),
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.ExtraBold

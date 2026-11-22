@@ -227,83 +227,41 @@ fun AppUpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Top Row: Close Button, "New / الجديد" Toggle Pill, and Version Pill
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .testTag("close_update_dialog_button")
+                        // Top Row: Close Button (left), Version Pill (center), and "New / الجديد" Toggle Pill (top right)
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
+                                IconButton(
+                                    onClick = onDismiss,
                                     modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.glassCard)
-                                        .border(0.8.dp, colors.glassBorderSubtle, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .size(48.dp)
+                                        .testTag("close_update_dialog_button")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = strings.cancel,
-                                        tint = colors.textSecondary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            // "الجديد" / "New" button showing ONLY the latest update's features
-                            Box(
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(bounded = false, radius = 28.dp, color = AmberNeon),
-                                        onClick = { showWhatsNew = !showWhatsNew }
-                                    )
-                                    .testTag("update_whats_new_button"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(
-                                            if (showWhatsNew) AmberNeon.copy(alpha = 0.24f)
-                                            else CyanNeon.copy(alpha = 0.14f)
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (showWhatsNew) AmberNeon.copy(alpha = 0.70f)
-                                            else CyanNeon.copy(alpha = 0.45f),
-                                            shape = RoundedCornerShape(50)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (showWhatsNew) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.AutoAwesome,
-                                        contentDescription = if (isArabic) "الجديد" else "New",
-                                        tint = if (showWhatsNew) AmberNeon else CyanNeon,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Text(
-                                        text = if (isArabic) "الجديد" else "New",
-                                        color = if (showWhatsNew) AmberNeon else CyanNeon,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-                            }
-
-                            if (release != null) {
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Box(
                                         modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.glassCard)
+                                            .border(0.8.dp, colors.glassBorderSubtle, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = strings.cancel,
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                if (release != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f, fill = false)
+                                            .padding(horizontal = 6.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(colors.primaryNeon.copy(alpha = 0.12f))
                                             .border(0.8.dp, colors.primaryNeon.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
@@ -314,12 +272,62 @@ fun AppUpdateDialog(
                                             color = colors.primaryNeon,
                                             fontSize = 10.sp,
                                             fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
-                            } else {
-                                Spacer(modifier = Modifier.size(48.dp))
+
+                                // "الجديد" / "New" button positioned at top-right (in previous/new version pill slot)
+                                CompositionLocalProvider(
+                                    LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .defaultMinSize(minHeight = 48.dp)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = ripple(bounded = false, radius = 28.dp, color = AmberNeon),
+                                                onClick = { showWhatsNew = !showWhatsNew }
+                                            )
+                                            .testTag("update_whats_new_button"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(50))
+                                                .background(
+                                                    if (showWhatsNew) AmberNeon.copy(alpha = 0.24f)
+                                                    else CyanNeon.copy(alpha = 0.14f)
+                                                )
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = if (showWhatsNew) AmberNeon.copy(alpha = 0.70f)
+                                                    else CyanNeon.copy(alpha = 0.45f),
+                                                    shape = RoundedCornerShape(50)
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (showWhatsNew) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.AutoAwesome,
+                                                contentDescription = if (isArabic) "الجديد" else "New",
+                                                tint = if (showWhatsNew) AmberNeon else CyanNeon,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text(
+                                                text = if (isArabic) "الجديد" else "New",
+                                                color = if (showWhatsNew) AmberNeon else CyanNeon,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 

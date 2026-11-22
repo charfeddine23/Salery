@@ -43,8 +43,6 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.SquareCategoryTabStrip
 import com.example.ui.components.SquareExchangeTickerRow
 import com.example.ui.components.SquareGoldAccent
-import com.example.ui.components.SquareMarketSourcesDialog
-import com.example.ui.components.SquarePriceSourcesBottomButton
 import com.example.ui.components.SquarePrimaryTab
 import com.example.ui.components.SquareQuickConverterCard
 import com.example.ui.components.SquareSortColumn
@@ -56,7 +54,6 @@ import com.example.ui.components.SquareTopAnchoredPullToRefresh
 import com.example.ui.components.SquareVenueFilter
 import com.example.ui.components.SquareVenueSubFilterStrip
 import com.example.ui.components.buildSquareTickerRows
-import com.example.ui.components.formatSquareIntervalLabel
 import com.example.ui.components.sortSquareTickerRows
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -96,7 +93,6 @@ fun SquareScreen(
     val layoutInfo = LocalAdaptiveLayoutInfo.current
 
     var showSyncSettingsDialog by remember { mutableStateOf(false) }
-    var showSourcesDialog by remember { mutableStateOf(false) }
 
     // Initial check & continuous configurable auto-refresh timer while viewing Square
     LaunchedEffect(Unit) {
@@ -154,14 +150,6 @@ fun SquareScreen(
             if (isArabic) "بانتظار أول مزامنة" else "Pending initial sync"
         }
     }
-    val remainingMins = remember(effectiveLastSync, syncIntervalMinutes) {
-        if (effectiveLastSync <= 0L || syncIntervalMinutes <= 0) 0L
-        else {
-            val intervalMillis = syncIntervalMinutes.toLong() * 60_000L
-            ((effectiveLastSync + intervalMillis - System.currentTimeMillis()) / 60_000L)
-                .coerceAtLeast(0L)
-        }
-    }
 
     val effectiveTabForTable = if (layoutInfo.columns >= 2 && primaryTab == SquarePrimaryTab.CALC) {
         SquarePrimaryTab.ALL
@@ -205,23 +193,6 @@ fun SquareScreen(
                     sortDirection = SquareSortDirection.NONE
                 }
                 SquareSortDirection.NONE -> sortDirection = SquareSortDirection.DESC
-            }
-        }
-    }
-
-    val totalSourcesCount = SquareMarketCatalog.availableSources.size
-
-    val intervalLabel = remember(syncIntervalMinutes, isArabic) {
-        formatSquareIntervalLabel(syncIntervalMinutes, isArabic)
-    }
-    val syncStatusFooter = remember(effectiveLastSync, lastSyncLabel, intervalLabel, remainingMins, syncIntervalMinutes, isArabic) {
-        when {
-            effectiveLastSync <= 0L -> lastSyncLabel
-            syncIntervalMinutes <= 0 -> "$intervalLabel • $lastSyncLabel"
-            else -> if (isArabic) {
-                "$intervalLabel • $lastSyncLabel (بعد ${remainingMins}د)"
-            } else {
-                "$intervalLabel • $lastSyncLabel (${remainingMins}m left)"
             }
         }
     }
@@ -492,17 +463,6 @@ fun SquareScreen(
                         ConverterSection()
                     }
 
-                    item {
-                        SquarePriceSourcesBottomButton(
-                            enabledCount = enabledSourceIds.size,
-                            totalCount = totalSourcesCount,
-                            syncStatusFooter = syncStatusFooter,
-                            isArabic = isArabic,
-                            colors = colors,
-                            onClick = { showSourcesDialog = true }
-                        )
-                    }
-
                     item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
                 }
             }
@@ -559,18 +519,6 @@ fun SquareScreen(
                     }
 
                     item { TickerSheetSection() }
-
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        SquarePriceSourcesBottomButton(
-                            enabledCount = enabledSourceIds.size,
-                            totalCount = totalSourcesCount,
-                            syncStatusFooter = syncStatusFooter,
-                            isArabic = isArabic,
-                            colors = colors,
-                            onClick = { showSourcesDialog = true }
-                        )
-                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(dimens.spacingXxl)) }
@@ -578,23 +526,14 @@ fun SquareScreen(
         }
     }
 
-    if (showSourcesDialog) {
-        SquareMarketSourcesDialog(
-            initialSelectedIds = enabledSourceIds,
-            intervalLabel = intervalLabel,
-            isArabic = isArabic,
-            onSaveSelectedIds = onUpdateEnabledSourceIds,
-            onOpenSyncIntervalSettings = { showSyncSettingsDialog = true },
-            onDismiss = { showSourcesDialog = false }
-        )
-    }
-
     if (showSyncSettingsDialog) {
         SquareSyncIntervalSettingsDialog(
             currentIntervalMinutes = syncIntervalMinutes,
+            initialSelectedSourceIds = enabledSourceIds,
             lastSyncLabel = lastSyncLabel,
             isArabic = isArabic,
             onSaveInterval = onUpdateSyncIntervalMinutes,
+            onSaveSelectedSourceIds = onUpdateEnabledSourceIds,
             onSyncNow = { onRefresh(true) },
             onDismiss = { showSyncSettingsDialog = false }
         )
