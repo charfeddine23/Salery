@@ -57,6 +57,7 @@ import com.example.ui.components.formatSquareIntervalLabel
 import com.example.ui.components.sortSquareTickerRows
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -136,7 +137,10 @@ fun SquareScreen(
     }
     val lastSyncLabel = remember(effectiveLastSync, isArabic) {
         if (effectiveLastSync > 0L) {
-            SimpleDateFormat("dd/MM • HH:mm", Locale.getDefault()).format(Date(effectiveLastSync))
+            isolateLtr(
+                SimpleDateFormat("dd/MM • HH:mm", if (isArabic) Locale("ar") else Locale.US)
+                    .format(Date(effectiveLastSync))
+            )
         } else {
             if (isArabic) "بانتظار أول مزامنة" else "Pending initial sync"
         }
@@ -199,9 +203,15 @@ fun SquareScreen(
     val sourcesSummary = remember(snapshot, isArabic) {
         if (snapshot == null) ""
         else listOfNotNull(
-            snapshot.goldSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "الذهب: " else "Gold: ") + it },
-            snapshot.parallelSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "سكوار: " else "Square: ") + it },
-            snapshot.bankSource.takeIf { it.isNotBlank() }?.let { (if (isArabic) "البنك: " else "Bank: ") + it }
+            snapshot.goldSource.takeIf { it.isNotBlank() }?.let {
+                (if (isArabic) "الذهب: " else "Gold: ") + if (isArabic) localizeSquareSource(it) else it
+            },
+            snapshot.parallelSource.takeIf { it.isNotBlank() }?.let {
+                (if (isArabic) "سكوار: " else "Square: ") + if (isArabic) localizeSquareSource(it) else it
+            },
+            snapshot.bankSource.takeIf { it.isNotBlank() }?.let {
+                (if (isArabic) "البنك: " else "Bank: ") + if (isArabic) localizeSquareSource(it) else it
+            }
         ).joinToString(" • ")
     }
 
@@ -608,4 +618,16 @@ fun SquareScreen(
             onDismiss = { showSyncSettingsDialog = false }
         )
     }
+}
+
+private fun localizeSquareSource(source: String): String {
+    return source
+        .replace("Yahoo Finance", "ياهو المالية", ignoreCase = true)
+        .replace("Binance", "بينانس", ignoreCase = true)
+        .replace("CoinGecko", "كوين غيكو", ignoreCase = true)
+        .replace("ExchangeRate-API", "أسعار الصرف", ignoreCase = true)
+        .replace("Official Bank", "البنك الرسمي", ignoreCase = true)
+        .replace("Parallel", "الموازي", ignoreCase = true)
+        .replace("Square", "سكوار", ignoreCase = true)
+        .replace("sites", "مواقع", ignoreCase = true)
 }

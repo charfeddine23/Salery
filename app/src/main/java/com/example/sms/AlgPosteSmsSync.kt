@@ -786,9 +786,9 @@ object AlgPosteSmsAnalyzer {
                             isExpense = isOutcome,
                             suggestedCategory = if (isOutcome) "other" else "transfer",
                             suggestedTitleAr = if (isOutcome) {
-                                "عملية خصم في Alg Post Balance"
+                                "عملية خصم في رصيد بريد الجزائر"
                             } else {
-                                "عملية إيداع / دخل في Alg Post Balance"
+                                "عملية إيداع / دخل في رصيد بريد الجزائر"
                             },
                             suggestedTitleEn = if (isOutcome) {
                                 "Alg Post Balance Outcome"
@@ -975,23 +975,23 @@ object AlgPosteSmsAnalyzer {
         return if (isExpense) {
             when {
                 isExplicitFee ->
-                    Triple("taxes_fees", "ضرائب ورسوم (ALG Poste)", "Bank Tax / Fee (ALG Poste)")
+                    Triple("taxes_fees", "ضرائب ورسوم (بريد الجزائر)", "Bank Tax / Fee (ALG Poste)")
 
                 lowerBody.contains("mobilis") || lowerBody.contains("djezzy") ||
                     lowerBody.contains("ooredoo") || lowerBody.contains("internet") ||
                     lowerBody.contains("recharge") || lowerBody.contains("فليكسي") ->
-                    Triple("internet", "شحن واتصالات (ALG Poste)", "Telecom & Recharge (ALG Poste)")
+                    Triple("internet", "شحن واتصالات (بريد الجزائر)", "Telecom & Recharge (ALG Poste)")
 
                 lowerBody.contains("sonelgaz") || lowerBody.contains("ade") ||
                     lowerBody.contains("facture") || lowerBody.contains("فاتورة") ->
-                    Triple("utilities", "دفع فاتورة (ALG Poste)", "Bill Payment (ALG Poste)")
+                    Triple("utilities", "دفع فاتورة (بريد الجزائر)", "Bill Payment (ALG Poste)")
 
                 lowerBody.contains("tpe") || lowerBody.contains("achat") ||
                     lowerBody.contains("paiement") || lowerBody.contains("شراء") ->
-                    Triple("shopping", "دفع / شراء (ALG Poste)", "Card Payment (ALG Poste)")
+                    Triple("shopping", "دفع / شراء (بريد الجزائر)", "Card Payment (ALG Poste)")
 
                 lowerBody.contains("retrait") || lowerBody.contains("gab") || lowerBody.contains("سحب") ->
-                    Triple("other", "سحب نقدي (ALG Poste)", "ATM Withdrawal (ALG Poste)")
+                    Triple("other", "سحب نقدي (بريد الجزائر)", "ATM Withdrawal (ALG Poste)")
 
                 else ->
                     Triple("other", "سحب / مصروف بريدي موب", "BaridiMob Expense (ALG Poste)")
@@ -999,10 +999,10 @@ object AlgPosteSmsAnalyzer {
         } else {
             when {
                 lowerBody.contains("salaire") || lowerBody.contains("راتب") || lowerBody.contains("paie") ->
-                    Triple("salary", "راتب وارد (ALG Poste)", "Salary Credit (ALG Poste)")
+                    Triple("salary", "راتب وارد (بريد الجزائر)", "Salary Credit (ALG Poste)")
 
                 lowerBody.contains("virement") || lowerBody.contains("تحويل") ->
-                    Triple("transfer", "تحويل مالي وارد (ALG Poste)", "Incoming Transfer (ALG Poste)")
+                    Triple("transfer", "تحويل مالي وارد (بريد الجزائر)", "Incoming Transfer (ALG Poste)")
 
                 else ->
                     Triple("other_income", "إيداع / دخل بريدي موب", "BaridiMob Income (ALG Poste)")

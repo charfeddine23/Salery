@@ -70,12 +70,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DebtEntity
@@ -85,6 +87,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AdaptiveDimens
 import com.example.ui.theme.AdaptiveTypography
 import com.example.ui.theme.DebtColors
@@ -206,6 +209,7 @@ fun DebtBreathingHeroCard(
         borderColor = accentColor.copy(alpha = if (isDark) 0.28f + breathPhase * 0.20f else 0.20f + breathPhase * 0.14f),
         breathingGlow = false
     ) {
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -220,7 +224,7 @@ fun DebtBreathingHeroCard(
                                 accentColor.copy(alpha = (if (isDark) 0.16f else 0.10f) * (0.7f + 0.3f * breathPhase)),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.86f, size.height * 0.18f),
+                            center = Offset(size.width * (if (isRtl) 0.14f else 0.86f), size.height * 0.18f),
                             radius = orb1Radius.coerceAtLeast(1f)
                         )
                     )
@@ -230,7 +234,7 @@ fun DebtBreathingHeroCard(
                                 settledColor.copy(alpha = (if (isDark) 0.10f else 0.06f) * (0.6f + 0.4f * secondaryPhase)),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.14f, size.height * 0.85f),
+                            center = Offset(size.width * (if (isRtl) 0.86f else 0.14f), size.height * 0.85f),
                             radius = orb2Radius.coerceAtLeast(1f)
                         )
                     )
@@ -310,11 +314,11 @@ fun DebtBreathingHeroCard(
                     val netLabel = when {
                         abs(netBalance) <= 0.5 -> if (isArabic) "صافي: متوازن" else "Net: Balanced"
                         netBalance > 0 -> {
-                            val amt = formatDzd(netBalance, strings.currencyCode)
+                            val amt = isolateLtr(formatDzd(netBalance, strings.currencyCode))
                             if (isArabic) "صافي لك: +$amt" else "Net: +$amt"
                         }
                         else -> {
-                            val amt = formatDzd(abs(netBalance), strings.currencyCode)
+                            val amt = isolateLtr(formatDzd(abs(netBalance), strings.currencyCode))
                             if (isArabic) "صافي عليك: -$amt" else "Net: -$amt"
                         }
                     }
@@ -353,7 +357,7 @@ fun DebtBreathingHeroCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = formatDzd(activeRemaining, strings.currencyCode),
+                            text = isolateLtr(formatDzd(activeRemaining, strings.currencyCode)),
                             color = colors.textPrimary,
                             fontSize = typo.display,
                             fontWeight = FontWeight.ExtraBold,
@@ -366,7 +370,7 @@ fun DebtBreathingHeroCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "${strings.paidAmount}: ${formatDzd(totalPaidInTab, strings.currencyCode)}",
+                                text = "${strings.paidAmount}: ${isolateLtr(formatDzd(totalPaidInTab, strings.currencyCode))}",
                                 color = settledColor,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -379,7 +383,7 @@ fun DebtBreathingHeroCard(
                                 fontSize = 11.sp
                             )
                             Text(
-                                text = "${strings.totalAmount}: ${formatDzd(totalOriginalInTab, strings.currencyCode)}",
+                                text = "${strings.totalAmount}: ${isolateLtr(formatDzd(totalOriginalInTab, strings.currencyCode))}",
                                 color = colors.textMuted,
                                 fontSize = 11.sp,
                                 maxLines = 1,
@@ -412,7 +416,7 @@ fun DebtBreathingHeroCard(
                 ) {
                     LedgerSwitchTile(
                         title = strings.debtsOwedByMe,
-                        amountText = formatDzd(payableRemaining, strings.currencyCode),
+                        amountText = isolateLtr(formatDzd(payableRemaining, strings.currencyCode)),
                         count = payableCount,
                         selected = activeTab == DebtType.OWED_BY_ME,
                         accentColor = payableColor,
@@ -426,7 +430,7 @@ fun DebtBreathingHeroCard(
 
                     LedgerSwitchTile(
                         title = strings.debtsOwedToMe,
-                        amountText = formatDzd(receivableRemaining, strings.currencyCode),
+                        amountText = isolateLtr(formatDzd(receivableRemaining, strings.currencyCode)),
                         count = receivableCount,
                         selected = activeTab == DebtType.OWED_TO_ME,
                         accentColor = receivableColor,
@@ -519,7 +523,7 @@ private fun DebtBreathingProgressRing(
     isDark: Boolean
 ) {
     val pct = (progress * 100).toInt()
-    val pctLabel = if (isArabic) "$pct٪" else "$pct%"
+    val pctLabel = if (isArabic) isolateLtr("$pct٪") else "$pct%"
     val doneLabel = if (isArabic) "مسدد" else "Paid"
 
     Box(
@@ -966,11 +970,11 @@ fun ModernDebtCard(
 
     val scheduleSummary = when {
         debt.isPaid -> {
-            val dStr = formatDate(debt.paidDateMillis ?: debt.dueDateMillis)
+            val dStr = isolateLtr(formatDate(debt.paidDateMillis ?: debt.dueDateMillis, isArabic))
             if (isArabic) "مسدد في $dStr" else "Settled $dStr"
         }
         debt.isRecurringMonthlyInstallment -> {
-            val moAmt = formatDzd(debt.monthlyInstallmentAmount, currencyCode)
+            val moAmt = isolateLtr(formatDzd(debt.monthlyInstallmentAmount, currencyCode))
             if (isArabic) "قسط شهري $moAmt • يوم ${debt.installmentDayOfMonth}"
             else "$moAmt / mo • Day ${debt.installmentDayOfMonth}"
         }
@@ -981,7 +985,7 @@ fun ModernDebtCard(
         daysDiff <= 0L -> if (isArabic) "مستحق اليوم" else "Due today"
         daysDiff == 1L -> if (isArabic) "مستحق غداً" else "Due tomorrow"
         else -> {
-            val dStr = formatDate(debt.dueDateMillis)
+            val dStr = isolateLtr(formatDate(debt.dueDateMillis, isArabic))
             if (isArabic) "بعد $daysDiff يوم • $dStr" else "In ${daysDiff}d • $dStr"
         }
     }
@@ -1127,7 +1131,7 @@ fun ModernDebtCard(
                 Column(horizontalAlignment = Alignment.End) {
                     if (debt.isPaid) {
                         Text(
-                            text = formatDzd(debt.amount, currencyCode),
+                            text = isolateLtr(formatDzd(debt.amount, currencyCode)),
                             color = colors.textMuted,
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1154,7 +1158,7 @@ fun ModernDebtCard(
                         }
                     } else {
                         Text(
-                            text = formatDzd(remainingAmount, currencyCode),
+                            text = isolateLtr(formatDzd(remainingAmount, currencyCode)),
                             color = colors.textPrimary,
                             fontSize = 15.5.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -1162,12 +1166,12 @@ fun ModernDebtCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val pctText = if (isArabic) "$paidPercent٪" else "$paidPercent%"
+                            val pctText = if (isArabic) isolateLtr("$paidPercent٪") else "$paidPercent%"
                             Text(
                                 text = if (paidAmount > 0.5) {
                                     if (isArabic) "مدفوع $pctText" else "$pctText paid"
                                 } else {
-                                    if (isArabic) "من ${formatDzd(totalAmount, currencyCode)}"
+                                    if (isArabic) "من ${isolateLtr(formatDzd(totalAmount, currencyCode))}"
                                     else "of ${formatDzd(totalAmount, currencyCode)}"
                                 },
                                 color = statusColor,
@@ -1240,21 +1244,21 @@ fun ModernDebtCard(
                     ) {
                         MiniStatCol(
                             label = strings.totalAmount,
-                            value = formatDzd(totalAmount, currencyCode),
+                            value = isolateLtr(formatDzd(totalAmount, currencyCode)),
                             valueColor = colors.textPrimary,
                             labelColor = colors.textMuted,
                             modifier = Modifier.weight(1f)
                         )
                         MiniStatCol(
                             label = strings.paidAmount,
-                            value = formatDzd(paidAmount, currencyCode),
+                            value = isolateLtr(formatDzd(paidAmount, currencyCode)),
                             valueColor = DebtColors.settled(isDark),
                             labelColor = colors.textMuted,
                             modifier = Modifier.weight(1f)
                         )
                         MiniStatCol(
                             label = if (debt.isPaid) (if (isArabic) "تاريخ السداد" else "Settled") else strings.debtDueDate,
-                            value = formatDate(if (debt.isPaid) (debt.paidDateMillis ?: debt.dueDateMillis) else debt.dueDateMillis),
+                            value = isolateLtr(formatDate(if (debt.isPaid) (debt.paidDateMillis ?: debt.dueDateMillis) else debt.dueDateMillis, isArabic)),
                             valueColor = if (isOverdue) statusColor else colors.textSecondary,
                             labelColor = colors.textMuted,
                             modifier = Modifier.weight(1f),

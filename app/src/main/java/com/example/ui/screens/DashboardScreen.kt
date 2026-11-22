@@ -75,6 +75,7 @@ import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
 import com.example.ui.i18n.formatDzdAmount
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.DebtBtnGradient
@@ -427,17 +428,16 @@ private fun ActiveDebtsBanner(
             Spacer(modifier = Modifier.width(dimens.spacingSm))
 
             val isArabic = strings is ArabicStrings
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Text(
-                    text = (if (isArabic) "ديون عليّ: " else "I Owe: ") + formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode),
-                    color = AmberNeon,
-                    fontSize = typo.bodySm,
-                    fontWeight = FontWeight.Bold,
-                    style = TextStyle(fontFeatureSettings = "tnum"),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = (if (isArabic) "ديون عليّ: " else "I Owe: ") +
+                    com.example.ui.i18n.isolateLtr(formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode)),
+                color = AmberNeon,
+                fontSize = typo.bodySm,
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(fontFeatureSettings = "tnum"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -492,6 +492,7 @@ fun TransactionRowItem(
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
@@ -539,7 +540,7 @@ fun TransactionRowItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${strings.categoryName(transaction.category)} • ${formatDate(transaction.dateMillis)}",
+                    text = "${strings.categoryName(transaction.category)} • ${isolateLtr(formatDate(transaction.dateMillis, isArabic))}",
                     color = colors.textMuted,
                     fontSize = typo.caption,
                     maxLines = 1,
@@ -572,7 +573,7 @@ fun TransactionRowItem(
                 }
                 if (transaction.isSalaryCredit) {
                     Text(
-                        text = "Salary Credit",
+                        text = if (isArabic) "إيداع راتب" else "Salary Credit",
                         color = colors.primaryNeon,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.Medium,
@@ -614,7 +615,7 @@ fun TransactionRowItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = strings.delete,
                     tint = colors.textMuted.copy(alpha = 0.6f),
                     modifier = Modifier.size(dimens.iconSizeSm)
                 )
@@ -677,7 +678,7 @@ private fun BaridiMobSmsSuggestionBanner(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isArabic) {
-                                "عملية في Alg Post Balance (${suggestions.size})"
+                                "عملية في رصيد بريد الجزائر (${suggestions.size})"
                             } else {
                                 "Alg Post Balance Operation (${suggestions.size})"
                             },
@@ -896,7 +897,8 @@ private fun CcpBalanceCard(
     ) {
         if (!colors.isNeumorphic) {
             Canvas(modifier = Modifier.matchParentSize()) {
-                val glowCenter = Offset(size.width * 0.85f, size.height * 0.25f)
+                val isRtl = layoutDirection == LayoutDirection.Rtl
+                val glowCenter = Offset(if (isRtl) size.width * 0.15f else size.width * 0.85f, size.height * 0.25f)
                 val glowRadius = size.maxDimension * 0.52f
                 drawCircle(
                     brush = Brush.radialGradient(
@@ -932,7 +934,7 @@ private fun CcpBalanceCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccountBalanceWallet,
-                        contentDescription = "Alg Post Balance",
+                        contentDescription = if (isArabic) "رصيد بريد الجزائر" else "Alg Post Balance",
                         tint = Color(0xFF0B1F3A),
                         modifier = Modifier.size(22.dp)
                     )
@@ -946,7 +948,7 @@ private fun CcpBalanceCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "Alg Post Balance",
+                            text = if (isArabic) "رصيد بريد الجزائر" else "Alg Post Balance",
                             color = colors.textPrimary,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = typo.titleSm,
@@ -963,7 +965,7 @@ private fun CcpBalanceCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (isArabic) {
-                            "بريدي موب SMS • رادار الضرائب والأرصدة"
+                            "بريدي موب • رادار الضرائب والأرصدة"
                         } else {
                             "BaridiMob SMS & Tax Radar • ALG Poste"
                         },
@@ -1020,7 +1022,7 @@ private fun CcpBalanceCard(
                         }
                     } else {
                         Text(
-                            text = if (isArabic) "--- دج • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS",
+                            text = if (isArabic) "--- ${strings.currencyCode} • في انتظار رسالة أو اضغط للفتح" else "--- ${strings.currencyCode} • Waiting for SMS",
                             color = posteGold,
                             fontSize = typo.body,
                             fontWeight = FontWeight.ExtraBold,
@@ -1099,7 +1101,7 @@ private fun CcpBalanceCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = updatedText,
+                        text = com.example.ui.i18n.isolateLtr(updatedText),
                         color = CyanNeon,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.SemiBold,

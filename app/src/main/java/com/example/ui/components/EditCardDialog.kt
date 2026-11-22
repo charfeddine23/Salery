@@ -133,6 +133,9 @@ fun EditCardDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -249,10 +252,11 @@ fun EditCardDialog(
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
                                 Text(
-                                    text = if (bank.id == "EDAHABIA") {
-                                        if (isArabic) "الذهبية" else "Edahabia"
-                                    } else {
-                                        bank.shortCode
+                                    text = when {
+                                        isArabic && bank.id == "EDAHABIA" -> "الذهبية"
+                                        isArabic -> bank.nameAr
+                                        bank.id == "EDAHABIA" -> "Edahabia"
+                                        else -> bank.shortCode
                                     },
                                     color = if (isSelected) colors.textPrimary else colors.textSecondary,
                                     fontSize = 11.5.sp,
@@ -260,7 +264,7 @@ fun EditCardDialog(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = if (isArabic) bank.nameAr else bank.nameEn,
+                                    text = if (isArabic) bank.cardTypeLabel else bank.nameEn,
                                     color = colors.textMuted,
                                     fontSize = 9.sp,
                                     maxLines = 1
@@ -479,28 +483,27 @@ fun EditCardDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // 2. Card Number (رقم البطاقة - 16 digits)
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    CardInputBox(
-                        label = strings.cardNumberLabel,
-                        value = cardNumberDigits,
-                        onValueChange = { input ->
-                            cardNumberDigits = input.filter { it.isDigit() }.take(16)
-                        },
-                        placeholder = "6280 2600 0000 9842",
-                        icon = Icons.Default.CreditCard,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        visualTransformation = CardNumberVisualTransformation(),
-                        trailingBadge = "${cardNumberDigits.length}/16",
-                        trailingBadgeColor = when {
-                            cardNumberDigits.isEmpty() -> colors.textMuted
-                            cardNumberDigits.length == 16 -> EmeraldNeon
-                            else -> AmberNeon
-                        },
-                        isError = !isCardNumberValid,
-                        useMonospace = true,
-                        testTag = "card_number_input"
-                    )
-                }
+                CardInputBox(
+                    label = strings.cardNumberLabel,
+                    value = cardNumberDigits,
+                    onValueChange = { input ->
+                        cardNumberDigits = input.filter { it.isDigit() }.take(16)
+                    },
+                    placeholder = "6280 2600 0000 9842",
+                    icon = Icons.Default.CreditCard,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = CardNumberVisualTransformation(),
+                    trailingBadge = "${cardNumberDigits.length}/16",
+                    trailingBadgeColor = when {
+                        cardNumberDigits.isEmpty() -> colors.textMuted
+                        cardNumberDigits.length == 16 -> EmeraldNeon
+                        else -> AmberNeon
+                    },
+                    isError = !isCardNumberValid,
+                    useMonospace = true,
+                    ltrInput = true,
+                    testTag = "card_number_input"
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -510,40 +513,38 @@ fun EditCardDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(modifier = Modifier.weight(1.15f)) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            CardInputBox(
-                                label = strings.cardExpiryLabel,
-                                value = expiryDigits,
-                                onValueChange = { input ->
-                                    expiryDigits = input.filter { it.isDigit() }.take(4)
-                                },
-                                placeholder = "11/29",
-                                icon = Icons.Default.Event,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                visualTransformation = ExpiryDateVisualTransformation(),
-                                isError = !isExpiryValid,
-                                useMonospace = true,
-                                testTag = "card_expiry_input"
-                            )
-                        }
+                        CardInputBox(
+                            label = strings.cardExpiryLabel,
+                            value = expiryDigits,
+                            onValueChange = { input ->
+                                expiryDigits = input.filter { it.isDigit() }.take(4)
+                            },
+                            placeholder = "11/29",
+                            icon = Icons.Default.Event,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = ExpiryDateVisualTransformation(),
+                            isError = !isExpiryValid,
+                            useMonospace = true,
+                            ltrInput = true,
+                            testTag = "card_expiry_input"
+                        )
                     }
 
                     Box(modifier = Modifier.weight(0.85f)) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            CardInputBox(
-                                label = strings.cardCvcLabel,
-                                value = cvcDigits,
-                                onValueChange = { input ->
-                                    cvcDigits = input.filter { it.isDigit() }.take(4)
-                                },
-                                placeholder = "842",
-                                icon = Icons.Default.Lock,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                isError = !isCvcValid,
-                                useMonospace = true,
-                                testTag = "card_cvc_input"
-                            )
-                        }
+                        CardInputBox(
+                            label = strings.cardCvcLabel,
+                            value = cvcDigits,
+                            onValueChange = { input ->
+                                cvcDigits = input.filter { it.isDigit() }.take(4)
+                            },
+                            placeholder = "842",
+                            icon = Icons.Default.Lock,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = !isCvcValid,
+                            useMonospace = true,
+                            ltrInput = true,
+                            testTag = "card_cvc_input"
+                        )
                     }
                 }
 
@@ -554,7 +555,7 @@ fun EditCardDialog(
                         !isNameValid -> if (isArabic) "يرجى إدخال الاسم واللقب" else "Please enter cardholder name"
                         !isCardNumberValid -> if (isArabic) "رقم البطاقة يجب أن يتكون من 16 رقماً أو يُترك فارغاً" else "Card number must be 16 digits (or left blank)"
                         !isExpiryValid -> if (isArabic) "صيغة الصلاحية غير صحيحة (مثال: 11/29)" else "Enter valid expiry date (MM/YY, month 01-12)"
-                        else -> if (isArabic) "رمز CVC يجب أن يكون 3 أو 4 أرقام" else "CVC must be 3 or 4 digits"
+                        else -> if (isArabic) "رمز التحقق يجب أن يكون 3 أو 4 أرقام" else "CVC must be 3 or 4 digits"
                     }
                     Text(
                         text = errorMsg,
@@ -603,6 +604,7 @@ fun EditCardDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -619,6 +621,7 @@ private fun CardInputBox(
     trailingBadgeColor: Color = Color.Unspecified,
     isError: Boolean = false,
     useMonospace: Boolean = false,
+    ltrInput: Boolean = false,
     testTag: String
 ) {
     val colors = LiquidGlassTheme.colors
@@ -670,33 +673,36 @@ private fun CardInputBox(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Box(contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) {
-                Text(
-                    text = placeholder,
-                    color = colors.textMuted.copy(alpha = 0.55f),
-                    fontSize = 14.5.sp,
-                    fontFamily = if (useMonospace) FontFamily.Monospace else FontFamily.Default,
-                    fontWeight = FontWeight.Medium
+        val inputDirection = if (ltrInput) LayoutDirection.Ltr else LocalLayoutDirection.current
+        CompositionLocalProvider(LocalLayoutDirection provides inputDirection) {
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        color = colors.textMuted.copy(alpha = 0.55f),
+                        fontSize = 14.5.sp,
+                        fontFamily = if (useMonospace) FontFamily.Monospace else FontFamily.Default,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = if (useMonospace) FontFamily.Monospace else FontFamily.Default
+                    ),
+                    keyboardOptions = keyboardOptions,
+                    visualTransformation = visualTransformation,
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(testTag),
+                    cursorBrush = SolidColor(colors.primaryNeon)
                 )
             }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = TextStyle(
-                    color = colors.textPrimary,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = if (useMonospace) FontFamily.Monospace else FontFamily.Default
-                ),
-                keyboardOptions = keyboardOptions,
-                visualTransformation = visualTransformation,
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(testTag),
-                cursorBrush = SolidColor(colors.primaryNeon)
-            )
         }
     }
 }

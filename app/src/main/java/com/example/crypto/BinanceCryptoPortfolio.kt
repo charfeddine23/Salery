@@ -46,7 +46,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "XRP",
             nameEn = "XRP (Ripple)",
-            nameAr = "ريبل XRP",
+            nameAr = "ريبل",
             binancePair = "XRPUSDT",
             coingeckoId = "ripple",
             accentHex = 0xFF00AAE4
@@ -54,7 +54,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "BTC",
             nameEn = "Bitcoin",
-            nameAr = "بيتكوين BTC",
+            nameAr = "بيتكوين",
             binancePair = "BTCUSDT",
             coingeckoId = "bitcoin",
             accentHex = 0xFFF7931A
@@ -62,7 +62,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "ETH",
             nameEn = "Ethereum",
-            nameAr = "إيثيريوم ETH",
+            nameAr = "إيثيريوم",
             binancePair = "ETHUSDT",
             coingeckoId = "ethereum",
             accentHex = 0xFF627EEA
@@ -70,7 +70,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "BNB",
             nameEn = "BNB",
-            nameAr = "بينانس كوين BNB",
+            nameAr = "عملة بينانس",
             binancePair = "BNBUSDT",
             coingeckoId = "binancecoin",
             accentHex = 0xFFF0B90B
@@ -78,7 +78,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "SOL",
             nameEn = "Solana",
-            nameAr = "سولانا SOL",
+            nameAr = "سولانا",
             binancePair = "SOLUSDT",
             coingeckoId = "solana",
             accentHex = 0xFF14F195
@@ -86,7 +86,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "USDT",
             nameEn = "Tether USD",
-            nameAr = "تيثر USDT",
+            nameAr = "تيثر الدولارية",
             binancePair = "USDTUSDT",
             coingeckoId = "tether",
             accentHex = 0xFF26A17B,
@@ -95,7 +95,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "TON",
             nameEn = "Toncoin",
-            nameAr = "تون كوين TON",
+            nameAr = "تون كوين",
             binancePair = "TONUSDT",
             coingeckoId = "the-open-network",
             accentHex = 0xFF0098EA
@@ -103,7 +103,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "DOGE",
             nameEn = "Dogecoin",
-            nameAr = "دوجكوين DOGE",
+            nameAr = "دوجكوين",
             binancePair = "DOGEUSDT",
             coingeckoId = "dogecoin",
             accentHex = 0xFFC2A633
@@ -111,7 +111,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "ADA",
             nameEn = "Cardano",
-            nameAr = "كاردانو ADA",
+            nameAr = "كاردانو",
             binancePair = "ADAUSDT",
             coingeckoId = "cardano",
             accentHex = 0xFF3B82F6
@@ -119,7 +119,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "TRX",
             nameEn = "TRON",
-            nameAr = "ترون TRX",
+            nameAr = "ترون",
             binancePair = "TRXUSDT",
             coingeckoId = "tron",
             accentHex = 0xFFEF0027
@@ -127,7 +127,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "LTC",
             nameEn = "Litecoin",
-            nameAr = "لايتكوين LTC",
+            nameAr = "لايتكوين",
             binancePair = "LTCUSDT",
             coingeckoId = "litecoin",
             accentHex = 0xFF94A3B8
@@ -135,7 +135,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "AVAX",
             nameEn = "Avalanche",
-            nameAr = "أفالانش AVAX",
+            nameAr = "أفالانش",
             binancePair = "AVAXUSDT",
             coingeckoId = "avalanche-2",
             accentHex = 0xFFE84142
@@ -143,7 +143,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "LINK",
             nameEn = "Chainlink",
-            nameAr = "تشين لينك LINK",
+            nameAr = "تشين لينك",
             binancePair = "LINKUSDT",
             coingeckoId = "chainlink",
             accentHex = 0xFF2A5ADA
@@ -151,7 +151,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "SUI",
             nameEn = "Sui",
-            nameAr = "سوي SUI",
+            nameAr = "سوي",
             binancePair = "SUIUSDT",
             coingeckoId = "sui",
             accentHex = 0xFF4DA2FF
@@ -159,7 +159,7 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "PEPE",
             nameEn = "Pepe",
-            nameAr = "بيبي PEPE",
+            nameAr = "بيبي",
             binancePair = "PEPEUSDT",
             coingeckoId = "pepe",
             accentHex = 0xFF4C9540

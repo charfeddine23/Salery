@@ -391,13 +391,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val monthYearKey = "$currentYear-$currentMonth"
 
         if (force || (currentDay >= userConfig.salaryPayday && userConfig.lastCreditedMonthYear != monthYearKey)) {
+            val isAr = userConfig.language == "ar"
+            val formattedSalary = formatDzdAmount(userConfig.salaryAmount, if (isAr) "د.ج" else "DZD")
             dao.insertTransaction(
                 TransactionEntity(
                     type = TransactionType.INCOME,
                     amount = userConfig.salaryAmount,
                     category = "salary",
-                    title = "${userConfig.salaryEmployer} Salary",
-                    note = "Smart Salary Scheduler automatic deposit ($monthYearKey)",
+                    title = if (isAr) "راتب ${userConfig.salaryEmployer}" else "${userConfig.salaryEmployer} Salary",
+                    note = if (isAr) "إيداع تلقائي من مجدول الراتب الذكي ($monthYearKey)"
+                    else "Smart Salary Scheduler automatic deposit ($monthYearKey)",
                     dateMillis = System.currentTimeMillis(),
                     isSalaryCredit = true
                 )
@@ -405,7 +408,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             prefsManager.updateSettings {
                 it.copy(lastCreditedMonthYear = monthYearKey)
             }
-            _toastEvent.emit("Salary of ${userConfig.salaryAmount} DZD credited automatically!")
+            _toastEvent.emit(
+                if (isAr) "تم إيداع راتب $formattedSalary تلقائياً!"
+                else "Salary of ${userConfig.salaryAmount} DZD credited automatically!"
+            )
         }
     }
 
@@ -426,6 +432,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         val monthYearKey = "$currentYear-$currentMonth"
 
         val autoDebts = dao.getPendingAutoPayDebts()
+        val isAr = settings.value.language == "ar"
 
         for (debt in autoDebts) {
             if (debt.isRecurringMonthlyInstallment) {
@@ -453,8 +460,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                                 type = TransactionType.EXPENSE,
                                 amount = payNow,
                                 category = "debt_payment",
-                                title = "Auto-Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
+                                title = if (isAr) "قسط تلقائي: ${debt.personName}" else "Auto-Installment: ${debt.personName}",
+                                note = if (isAr) "قسط شهري تلقائي ($monthYearKey) - المتبقي: ${newRemaining.toLong()} د.ج"
+                                else "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
                                 dateMillis = now
                             )
                         )
@@ -464,13 +472,17 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                                 type = TransactionType.INCOME,
                                 amount = payNow,
                                 category = "debt_collection",
-                                title = "Auto-Collected Installment: ${debt.personName}",
-                                note = "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
+                                title = if (isAr) "تحصيل قسط تلقائي: ${debt.personName}" else "Auto-Collected Installment: ${debt.personName}",
+                                note = if (isAr) "قسط شهري تلقائي ($monthYearKey) - المتبقي: ${newRemaining.toLong()} د.ج"
+                                else "Monthly auto-installment ($monthYearKey) - Rem: ${newRemaining.toLong()} DZD",
                                 dateMillis = now
                             )
                         )
                     }
-                    _toastEvent.emit("Auto-installment of $payNow DZD processed for ${debt.personName}")
+                    _toastEvent.emit(
+                        if (isAr) "تمت معالجة قسط تلقائي بقيمة ${formatDzdAmount(payNow, "د.ج")} لـ ${debt.personName}"
+                        else "Auto-installment of $payNow DZD processed for ${debt.personName}"
+                    )
                 }
             } else {
                 // One-time full debt settlement on due date
@@ -489,8 +501,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                                 type = TransactionType.EXPENSE,
                                 amount = payAmount,
                                 category = "debt_payment",
-                                title = "Auto-Paid Debt: ${debt.personName}",
-                                note = "Automatic debt execution on due date (${debt.note})",
+                                title = if (isAr) "سداد دين تلقائي: ${debt.personName}" else "Auto-Paid Debt: ${debt.personName}",
+                                note = if (isAr) "تنفيذ تلقائي لسداد الدين عند الاستحقاق (${debt.note})"
+                                else "Automatic debt execution on due date (${debt.note})",
                                 dateMillis = now
                             )
                         )
@@ -500,8 +513,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                                 type = TransactionType.INCOME,
                                 amount = payAmount,
                                 category = "debt_collection",
-                                title = "Auto-Received Debt: ${debt.personName}",
-                                note = "Automatic debt collection on due date (${debt.note})",
+                                title = if (isAr) "تحصيل دين تلقائي: ${debt.personName}" else "Auto-Received Debt: ${debt.personName}",
+                                note = if (isAr) "تحصيل تلقائي للدين عند الاستحقاق (${debt.note})"
+                                else "Automatic debt collection on due date (${debt.note})",
                                 dateMillis = now
                             )
                         )
@@ -604,12 +618,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (!isSettled) {
                 DebtReminderScheduler.scheduleDebtReminder(getApplication(), newEntity.copy(id = newId))
             }
-            _toastEvent.emit("Debt recorded successfully")
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تم تسجيل الدين بنجاح" else "Debt recorded successfully"
+            )
         }
     }
 
     fun markDebtAsPaid(debt: DebtEntity) {
         viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
             val now = System.currentTimeMillis()
             val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
             dao.updateDebt(
@@ -627,8 +645,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         type = TransactionType.EXPENSE,
                         amount = payAmount,
                         category = "debt_payment",
-                        title = "Paid Debt: ${debt.personName}",
-                        note = "Manual settlement: ${debt.note}",
+                        title = if (isAr) "دين مسدّد: ${debt.personName}" else "Paid Debt: ${debt.personName}",
+                        note = if (isAr) "تسوية يدوية: ${debt.note}" else "Manual settlement: ${debt.note}",
                         dateMillis = now
                     )
                 )
@@ -638,31 +656,38 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         type = TransactionType.INCOME,
                         amount = payAmount,
                         category = "debt_collection",
-                        title = "Collected Debt: ${debt.personName}",
-                        note = "Manual settlement: ${debt.note}",
+                        title = if (isAr) "دين محصّل: ${debt.personName}" else "Collected Debt: ${debt.personName}",
+                        note = if (isAr) "تسوية يدوية: ${debt.note}" else "Manual settlement: ${debt.note}",
                         dateMillis = now
                     )
                 )
             }
-            _toastEvent.emit("Debt marked as paid and wallet updated")
+            _toastEvent.emit(
+                if (isAr) "تم تحديد الدين كمدفوع وتحديث المحفظة"
+                else "Debt marked as paid and wallet updated"
+            )
         }
     }
 
     fun updateDebt(debt: DebtEntity) {
         viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
             dao.updateDebt(debt)
             if (debt.isPaid || debt.remainingAmount <= 0.001) {
                 DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             } else {
                 DebtReminderScheduler.scheduleDebtReminder(getApplication(), debt)
             }
-            _toastEvent.emit("Debt updated successfully")
+            _toastEvent.emit(
+                if (isAr) "تم تحديث الدين بنجاح" else "Debt updated successfully"
+            )
         }
     }
 
     fun makePartialPayment(debt: DebtEntity, paymentAmount: Double, recordTransaction: Boolean = true) {
         viewModelScope.launch {
             if (!paymentAmount.isFinite() || paymentAmount <= 0.0) return@launch
+            val isAr = settings.value.language == "ar"
             val now = System.currentTimeMillis()
             val actualPay = minOf(paymentAmount, debt.remainingAmount)
             val newRemaining = (debt.remainingAmount - actualPay).coerceAtLeast(0.0)
@@ -687,9 +712,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             type = TransactionType.EXPENSE,
                             amount = actualPay,
                             category = "debt_payment",
-                            title = "Partial Payment: ${debt.personName}",
-                            note = if (isFullySettled) "Final settlement (${debt.note})" 
-                                   else "Partial payment - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                            title = if (isAr) "دفعة جزئية: ${debt.personName}" else "Partial Payment: ${debt.personName}",
+                            note = if (isAr) {
+                                if (isFullySettled) "تسوية نهائية (${debt.note})"
+                                else "دفعة جزئية - المتبقي: ${newRemaining.toLong()} د.ج (${debt.note})"
+                            } else {
+                                if (isFullySettled) "Final settlement (${debt.note})"
+                                else "Partial payment - Rem: ${newRemaining.toLong()} DZD (${debt.note})"
+                            },
                             dateMillis = now
                         )
                     )
@@ -699,9 +729,14 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             type = TransactionType.INCOME,
                             amount = actualPay,
                             category = "debt_collection",
-                            title = "Partial Collection: ${debt.personName}",
-                            note = if (isFullySettled) "Final collection (${debt.note})"
-                                   else "Partial collection - Rem: ${newRemaining.toLong()} DZD (${debt.note})",
+                            title = if (isAr) "تحصيل جزئي: ${debt.personName}" else "Partial Collection: ${debt.personName}",
+                            note = if (isAr) {
+                                if (isFullySettled) "تحصيل نهائي (${debt.note})"
+                                else "تحصيل جزئي - المتبقي: ${newRemaining.toLong()} د.ج (${debt.note})"
+                            } else {
+                                if (isFullySettled) "Final collection (${debt.note})"
+                                else "Partial collection - Rem: ${newRemaining.toLong()} DZD (${debt.note})"
+                            },
                             dateMillis = now
                         )
                     )
@@ -709,25 +744,37 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             if (isFullySettled) {
-                _toastEvent.emit("Debt with ${debt.personName} fully settled!")
+                _toastEvent.emit(
+                    if (isAr) "تمت تسوية الدين مع ${debt.personName} بالكامل!"
+                    else "Debt with ${debt.personName} fully settled!"
+                )
             } else {
-                _toastEvent.emit("Payment of ${actualPay.toLong()} DZD recorded. Remaining: ${newRemaining.toLong()} DZD")
+                _toastEvent.emit(
+                    if (isAr) "تم تسجيل دفعة بقيمة ${actualPay.toLong()} د.ج • المتبقي: ${newRemaining.toLong()} د.ج"
+                    else "Payment of ${actualPay.toLong()} DZD recorded. Remaining: ${newRemaining.toLong()} DZD"
+                )
             }
         }
     }
 
     fun deleteDebt(debt: DebtEntity) {
         viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
             dao.deleteDebt(debt)
             DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
-            _toastEvent.emit("Debt record removed")
+            _toastEvent.emit(
+                if (isAr) "تم حذف سجل الدين" else "Debt record removed"
+            )
         }
     }
 
     fun clearSettledDebts() {
         viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
             val count = dao.clearSettledDebts()
-            _toastEvent.emit("$count settled debts deleted")
+            _toastEvent.emit(
+                if (isAr) "تم حذف $count ديون مسددة" else "$count settled debts deleted"
+            )
         }
     }
 
@@ -824,10 +871,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             val label = when (cleanProvider) {
-                "REDOTPAY" -> "RedotPay"
-                "BYBIT" -> "Bybit"
-                "BINANCE" -> "Binance"
-                else -> "Visa"
+                "REDOTPAY" -> if (isAr) "ريدوت باي" else "RedotPay"
+                "BYBIT" -> if (isAr) "بايبت" else "Bybit"
+                "BINANCE" -> if (isAr) "بينانس" else "Binance"
+                else -> if (isAr) "فيزا" else "Visa"
             }
             _toastEvent.emit(
                 if (isAr) "تم حفظ بطاقة $label بنجاح 💳"
@@ -872,10 +919,10 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             val label = when (cleanProvider) {
-                "REDOTPAY" -> "RedotPay"
-                "BYBIT" -> "Bybit"
-                "BINANCE" -> "Binance"
-                else -> "Visa"
+                "REDOTPAY" -> if (isAr) "ريدوت باي" else "RedotPay"
+                "BYBIT" -> if (isAr) "بايبت" else "Bybit"
+                "BINANCE" -> if (isAr) "بينانس" else "Binance"
+                else -> if (isAr) "فيزا" else "Visa"
             }
             _toastEvent.emit(
                 if (isAr) "تم حفظ البطاقة الثالثة ($label) بنجاح 💳"
@@ -1320,12 +1367,19 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleStealthMode(): Boolean {
         val current = settings.value.stealthMode
         val next = !current
+        val isAr = settings.value.language == "ar"
         prefsManager.updateSettings { it.copy(stealthMode = next) }
         viewModelScope.launch {
             if (next) {
-                _toastEvent.emit("Stealth Mode Active • Financial amounts masked")
+                _toastEvent.emit(
+                    if (isAr) "وضع التخفي نشط • المبالغ المالية مخفية"
+                    else "Stealth Mode Active • Financial amounts masked"
+                )
             } else {
-                _toastEvent.emit("Stealth Mode Disabled • Amounts revealed")
+                _toastEvent.emit(
+                    if (isAr) "تم إيقاف وضع التخفي • المبالغ ظاهرة"
+                    else "Stealth Mode Disabled • Amounts revealed"
+                )
             }
         }
         return next
@@ -1550,7 +1604,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             )
         }
         reanalyzePermanentSmsArchive(showFeedback = false)
-        _toastEvent.emit("Restored ${payload.transactions.size} transactions and ${payload.debts.size} debts")
+        val isAr = settings.value.language == "ar"
+        _toastEvent.emit(
+            if (isAr) "تمت استعادة ${payload.transactions.size} معاملة و ${payload.debts.size} ديون"
+            else "Restored ${payload.transactions.size} transactions and ${payload.debts.size} debts"
+        )
         return BackupRestoreOutcome.SUCCESS
     }
 
@@ -1591,7 +1649,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 if (manual) {
                     val isAr = settings.value.language == "ar"
                     val msg = err.localizedMessage?.takeIf { it.isNotBlank() }
-                        ?: if (isAr) "تعذر الاتصال بـ GitHub" else "Unable to reach GitHub"
+                        ?: if (isAr) "تعذر الاتصال بجيت هب" else "Unable to reach GitHub"
                     _updateUiState.value = AppUpdateUiState.Error(msg)
                     _showUpdateDialog.value = true
                 }
@@ -1766,7 +1824,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
+                        if (isAr) "يرجى منح صلاحية قراءة الرسائل النصية أولاً"
                         else "Please grant SMS read permission first"
                     )
                 }
@@ -1795,7 +1853,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (snapshots.isEmpty() && archivedSnapshots.isEmpty()) {
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "لم يتم العثور على أرصدة في رسائل ALG Poste / BaridiMob"
+                        if (isAr) "لم يتم العثور على أرصدة في رسائل بريد الجزائر أو بريدي موب"
                         else "No balances found in ALG Poste / BaridiMob SMS inbox"
                     )
                 }
@@ -1899,7 +1957,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (reanalyzed.isEmpty()) {
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "السجل الدائم لرسائل ALG Poste فارغ حالياً"
+                        if (isAr) "السجل الدائم لرسائل بريد الجزائر فارغ حالياً"
                         else "Permanent ALG Poste SMS archive is currently empty"
                     )
                 }
@@ -1953,7 +2011,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "يرجى منح صلاحية قراءة الرسائل SMS أولاً"
+                        if (isAr) "يرجى منح صلاحية قراءة الرسائل النصية أولاً"
                         else "Please grant SMS read permission first"
                     )
                 }
@@ -2060,7 +2118,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         "Auto-added $autoLoggedTaxCount future taxes to Expenses ✓"
                     }
                     addedCount > 0 -> if (isAr) {
-                        "تم اكتشاف $addedCount معاملة جديدة من رسائل ALG Poste"
+                        "تم اكتشاف $addedCount معاملة جديدة من رسائل بريد الجزائر"
                     } else {
                         "Found $addedCount new ALG Poste transaction suggestions"
                     }
@@ -2076,13 +2134,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     }
                     scanResult.suggestions.isEmpty() && scanResult.snapshots.isEmpty() -> if (isAr) {
                         if (baselineMillis > 0L) "لا توجد رسائل جديدة منذ البدء من الصفر"
-                        else "لم يتم العثور على رسائل معاملات من ALG Poste في صندوق الوارد"
+                        else "لم يتم العثور على رسائل معاملات من بريد الجزائر في صندوق الوارد"
                     } else {
                         if (baselineMillis > 0L) "No new ALG Poste SMS since Fresh Start"
                         else "No ALG Poste transaction messages found in SMS inbox"
                     }
                     else -> if (isAr) {
-                        "جميع رسائل وأرصدة ALG Poste محدثة بالفعل"
+                        "جميع رسائل وأرصدة بريد الجزائر محدثة بالفعل"
                     } else {
                         "All ALG Poste SMS & balances are already synced"
                     }
@@ -2180,9 +2238,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val msg = buildString {
                 if (parsed != null) {
                     val kindLabel = if (parsed.isExpense) {
-                        if (isAr) "مصروف (Expense)" else "Expense"
+                        if (isAr) "مصروف" else "Expense"
                     } else {
-                        if (isAr) "دخل (Income)" else "Income"
+                        if (isAr) "دخل" else "Income"
                     }
                     val amtLabel = formatDzdAmount(parsed.amount, if (isAr) "دج" else "DA")
                     append(if (isAr) "$kindLabel: $amtLabel" else "$kindLabel: $amtLabel")
@@ -2417,9 +2475,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
             val title = if (isAr) {
                 if (finalType == TransactionType.EXPENSE) {
-                    target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (ALG Poste)" }
+                    target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (بريد الجزائر)" }
                 } else {
-                    target.suggestedTitleAr.ifBlank { "دخل بريدي موب (ALG Poste)" }
+                    target.suggestedTitleAr.ifBlank { "دخل بريدي موب (بريد الجزائر)" }
                 }
             } else {
                 if (finalType == TransactionType.EXPENSE) {
@@ -2570,7 +2628,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _toastEvent.emit(
                 if (quantity > 0.0) {
-                    if (isAr) "تم حفظ رصيد $cleanSym في محفظة Binance ✅"
+                    if (isAr) "تم حفظ رصيد $cleanSym في محفظة بينانس ✅"
                     else "Saved $cleanSym holding to Binance Wallet ✅"
                 } else {
                     if (isAr) "تمت إزالة $cleanSym من المحفظة"
@@ -2702,7 +2760,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _toastEvent.emit(
                 if (enabled) {
-                    if (isAr) "تم دمج الأصول (الذهب + الكريبتو) مع إجمالي المدخرات ✓"
+                    if (isAr) "تم دمج الأصول (الذهب والعملات الرقمية) مع إجمالي المدخرات ✓"
                     else "Combined Gold & Crypto assets into Total Reserved Savings ✓"
                 } else {
                     if (isAr) "عرض الرصيد النقدي المدّخر فقط"

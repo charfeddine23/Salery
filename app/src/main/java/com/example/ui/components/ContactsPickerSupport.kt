@@ -241,6 +241,9 @@ fun InAppContactsPickerDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 480.dp)
@@ -436,6 +439,7 @@ fun InAppContactsPickerDialog(
                     onClick = onOpenSystemPicker
                 )
             }
+        }
         }
     }
 }

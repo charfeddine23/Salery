@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.GlassCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -210,7 +211,7 @@ fun VisaComingSoonScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "4532  ••••  ••••  8829",
+                            text = isolateLtr("4532  ••••  ••••  8829"),
                             color = Color(0xFFE2E8F0),
                             fontSize = typo.titleSm,
                             fontWeight = FontWeight.SemiBold,
@@ -237,7 +238,7 @@ fun VisaComingSoonScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "CARDHOLDER",
+                                text = if (isArabic) "صاحب البطاقة" else "CARDHOLDER",
                                 color = Color(0xFF94A3B8),
                                 fontSize = typo.caption,
                                 fontWeight = FontWeight.Bold
@@ -254,12 +255,12 @@ fun VisaComingSoonScreen(
                         }
 
                         Text(
-                            text = "VISA",
+                            text = if (isArabic) "فيزا" else "VISA",
                             color = Color.White,
                             fontSize = typo.titleLg,
                             fontWeight = FontWeight.Black,
-                            fontStyle = FontStyle.Italic,
-                            letterSpacing = 2.sp
+                            fontStyle = if (isArabic) FontStyle.Normal else FontStyle.Italic,
+                            letterSpacing = if (isArabic) 0.sp else 2.sp
                         )
                     }
                 }
@@ -337,19 +338,19 @@ fun VisaComingSoonScreen(
             FeaturePreviewItem(
                 icon = Icons.Default.CurrencyExchange,
                 iconTint = EmeraldNeon,
-                title = if (isArabic) "محافظ متعددة العملات (USD / EUR)" else "Multi-Currency Wallets (USD / EUR)",
+                title = if (isArabic) "محافظ متعددة العملات (دولار / يورو)" else "Multi-Currency Wallets (USD / EUR)",
                 subtitle = if (isArabic) "شحن مباشر بالدينار الجزائري والدفع بالدولار واليورو" else "Direct top-up with DZD and spend in USD / EUR without hidden fees"
             )
             FeaturePreviewItem(
                 icon = Icons.Default.ShoppingBag,
                 iconTint = CyanNeon,
                 title = if (isArabic) "الدفع الإلكتروني والاشتراكات" else "Online Subscriptions & Purchases",
-                subtitle = if (isArabic) "تفعيل اشتراكات Netflix و Spotify والشراء من AliExpress و Google Play" else "Seamless payments on Google Play, AliExpress, Spotify & Netflix"
+                subtitle = if (isArabic) "تفعيل اشتراكات نتفليكس وسبوتيفاي والشراء من علي إكسبريس وجوجل بلاي" else "Seamless payments on Google Play, AliExpress, Spotify & Netflix"
             )
             FeaturePreviewItem(
                 icon = Icons.Default.Security,
                 iconTint = Color(0xFF60A5FA),
-                title = if (isArabic) "حماية ثلاثية الأبعاد 3D Secure" else "3D Secure Fraud Protection",
+                title = if (isArabic) "حماية ثلاثية الأبعاد للمدفوعات" else "3D Secure Fraud Protection",
                 subtitle = if (isArabic) "تأكيد فوري للعمليات عبر إشعار الهاتف مع إمكانية التجميد اللحظي" else "Instant OTP notifications and one-tap in-app card freeze"
             )
         }

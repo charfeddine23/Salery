@@ -62,6 +62,7 @@ data class VaultAppPreset(
     val nameEn: String,
     val nameAr: String,
     val monogram: String,
+    val monogramAr: String = monogram,
     val defaultCategory: String,
     val primaryColorHex: Long,
     val secondaryColorHex: Long,
@@ -80,6 +81,7 @@ object VaultAppPresets {
             nameEn = "BaridiMob",
             nameAr = "بريدي موب",
             monogram = "BM",
+            monogramAr = "ب م",
             defaultCategory = "BANK",
             primaryColorHex = 0xFFF59E0B,
             secondaryColorHex = 0xFF1D4ED8,
@@ -93,8 +95,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "algerie_poste",
             nameEn = "Algérie Poste / ECCP",
-            nameAr = "بريد الجزائر / ECCP",
+            nameAr = "بريد الجزائر / الحساب البريدي",
             monogram = "CCP",
+            monogramAr = "ب ج",
             defaultCategory = "BANK",
             primaryColorHex = 0xFFEAB308,
             secondaryColorHex = 0xFF2563EB,
@@ -108,8 +111,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "redotpay",
             nameEn = "RedotPay",
-            nameAr = "RedotPay",
+            nameAr = "ريدوت باي",
             monogram = "RP",
+            monogramAr = "ر ب",
             defaultCategory = "BANK",
             primaryColorHex = 0xFFEF4444,
             secondaryColorHex = 0xFF991B1B,
@@ -123,8 +127,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "bybit",
             nameEn = "Bybit",
-            nameAr = "Bybit",
+            nameAr = "بايبت",
             monogram = "BY",
+            monogramAr = "ب ت",
             defaultCategory = "BANK",
             primaryColorHex = 0xFFF59E0B,
             secondaryColorHex = 0xFF334155,
@@ -138,8 +143,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "binance",
             nameEn = "Binance",
-            nameAr = "Binance",
+            nameAr = "بينانس",
             monogram = "BNB",
+            monogramAr = "ب ن",
             defaultCategory = "BANK",
             primaryColorHex = 0xFFFACC15,
             secondaryColorHex = 0xFFCA8A04,
@@ -153,8 +159,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "google",
             nameEn = "Google / Gmail",
-            nameAr = "جوجل / Gmail",
+            nameAr = "جوجل / البريد الإلكتروني",
             monogram = "G",
+            monogramAr = "ج",
             defaultCategory = "EMAIL",
             primaryColorHex = 0xFF4285F4,
             secondaryColorHex = 0xFF34A853,
@@ -170,6 +177,7 @@ object VaultAppPresets {
             nameEn = "YouTube",
             nameAr = "يوتيوب",
             monogram = "YT",
+            monogramAr = "ي",
             defaultCategory = "APP",
             primaryColorHex = 0xFFFF0000,
             secondaryColorHex = 0xFF991B1B,
@@ -185,6 +193,7 @@ object VaultAppPresets {
             nameEn = "Instagram",
             nameAr = "إنستغرام",
             monogram = "IG",
+            monogramAr = "إ",
             defaultCategory = "APP",
             primaryColorHex = 0xFFE1306C,
             secondaryColorHex = 0xFF833AB4,
@@ -200,6 +209,7 @@ object VaultAppPresets {
             nameEn = "Facebook",
             nameAr = "فيسبوك",
             monogram = "f",
+            monogramAr = "ف",
             defaultCategory = "APP",
             primaryColorHex = 0xFF1877F2,
             secondaryColorHex = 0xFF0EA5E9,
@@ -215,6 +225,7 @@ object VaultAppPresets {
             nameEn = "TikTok",
             nameAr = "تيك توك",
             monogram = "TT",
+            monogramAr = "ت ت",
             defaultCategory = "APP",
             primaryColorHex = 0xFF22D3EE,
             secondaryColorHex = 0xFFFE2C55,
@@ -230,6 +241,7 @@ object VaultAppPresets {
             nameEn = "WhatsApp",
             nameAr = "واتساب",
             monogram = "WA",
+            monogramAr = "و أ",
             defaultCategory = "APP",
             primaryColorHex = 0xFF25D366,
             secondaryColorHex = 0xFF075E54,
@@ -245,6 +257,7 @@ object VaultAppPresets {
             nameEn = "Telegram",
             nameAr = "تيليجرام",
             monogram = "TG",
+            monogramAr = "ت ج",
             defaultCategory = "APP",
             primaryColorHex = 0xFF2AABEE,
             secondaryColorHex = 0xFF0284C7,
@@ -260,6 +273,7 @@ object VaultAppPresets {
             nameEn = "Snapchat",
             nameAr = "سناب شات",
             monogram = "SC",
+            monogramAr = "س",
             defaultCategory = "APP",
             primaryColorHex = 0xFFFACC15,
             secondaryColorHex = 0xFFF59E0B,
@@ -275,6 +289,7 @@ object VaultAppPresets {
             nameEn = "X (Twitter)",
             nameAr = "إكس (تويتر)",
             monogram = "X",
+            monogramAr = "إ ك",
             defaultCategory = "APP",
             primaryColorHex = 0xFFE2E8F0,
             secondaryColorHex = 0xFF475569,
@@ -290,6 +305,7 @@ object VaultAppPresets {
             nameEn = "Netflix",
             nameAr = "نتفليكس",
             monogram = "N",
+            monogramAr = "ن",
             defaultCategory = "APP",
             primaryColorHex = 0xFFE50914,
             secondaryColorHex = 0xFF7F1D1D,
@@ -305,6 +321,7 @@ object VaultAppPresets {
             nameEn = "Spotify",
             nameAr = "سبوتيفاي",
             monogram = "SP",
+            monogramAr = "س ب",
             defaultCategory = "APP",
             primaryColorHex = 0xFF1DB954,
             secondaryColorHex = 0xFF15803D,
@@ -320,6 +337,7 @@ object VaultAppPresets {
             nameEn = "Discord",
             nameAr = "ديسكورد",
             monogram = "DC",
+            monogramAr = "د ك",
             defaultCategory = "APP",
             primaryColorHex = 0xFF5865F2,
             secondaryColorHex = 0xFF4338CA,
@@ -333,8 +351,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "github",
             nameEn = "GitHub",
-            nameAr = "GitHub",
+            nameAr = "جيت هب",
             monogram = "GH",
+            monogramAr = "ج هـ",
             defaultCategory = "APP",
             primaryColorHex = 0xFF8B5CF6,
             secondaryColorHex = 0xFF0EA5E9,
@@ -350,6 +369,7 @@ object VaultAppPresets {
             nameEn = "PayPal",
             nameAr = "باي بال",
             monogram = "PP",
+            monogramAr = "ب ب",
             defaultCategory = "BANK",
             primaryColorHex = 0xFF0070BA,
             secondaryColorHex = 0xFF003087,
@@ -363,8 +383,9 @@ object VaultAppPresets {
         VaultAppPreset(
             id = "wise",
             nameEn = "Wise",
-            nameAr = "Wise",
+            nameAr = "وايز",
             monogram = "W",
+            monogramAr = "و ز",
             defaultCategory = "BANK",
             primaryColorHex = 0xFF9FE870,
             secondaryColorHex = 0xFF163300,
@@ -380,6 +401,7 @@ object VaultAppPresets {
             nameEn = "LinkedIn",
             nameAr = "لينكد إن",
             monogram = "in",
+            monogramAr = "ل ن",
             defaultCategory = "APP",
             primaryColorHex = 0xFF0A66C2,
             secondaryColorHex = 0xFF004182,
@@ -395,6 +417,7 @@ object VaultAppPresets {
             nameEn = "Custom App / Other",
             nameAr = "تطبيق مخصص / آخر",
             monogram = "★",
+            monogramAr = "★",
             defaultCategory = "APP",
             primaryColorHex = 0xFF38BDF8,
             secondaryColorHex = 0xFF6366F1,
@@ -519,19 +542,19 @@ object PasswordStrengthAnalyzer {
         val hasSymbol = password.any { !it.isLetterOrDigit() }
 
         if (hasLower) score += 12 else {
-            tipsAr.add("أضف حروفاً صغيرة (a-z)")
+            tipsAr.add("أضف حروفاً صغيرة")
             tipsEn.add("Add lowercase letters (a-z)")
         }
         if (hasUpper) score += 15 else {
-            tipsAr.add("أضف حروفاً كبيرة (A-Z)")
+            tipsAr.add("أضف حروفاً كبيرة")
             tipsEn.add("Add uppercase letters (A-Z)")
         }
         if (hasDigit) score += 13 else {
-            tipsAr.add("أضف أرقاماً (0-9)")
+            tipsAr.add("أضف أرقاماً متفرقة")
             tipsEn.add("Add numbers (0-9)")
         }
         if (hasSymbol) score += 18 else {
-            tipsAr.add("أضف رموزاً خاصة (!@#\$%)")
+            tipsAr.add("أضف رموزاً خاصة")
             tipsEn.add("Add special symbols (!@#\$%)")
         }
 
@@ -549,7 +572,7 @@ object PasswordStrengthAnalyzer {
 
         if (hasSequentialRuns(lower)) {
             score -= 18
-            tipsAr.add("تجنب التسلسل المتتالي مثل 1234 أو abcd")
+            tipsAr.add("تجنب التسلسل المتتالي للأرقام أو الحروف")
             tipsEn.add("Avoid sequential characters like 1234 or abcd")
         }
 

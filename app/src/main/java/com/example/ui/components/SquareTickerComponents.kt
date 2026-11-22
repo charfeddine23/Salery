@@ -55,6 +55,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +64,7 @@ import com.example.market.GoldKaratPrice
 import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketSnapshot
 import com.example.market.TROY_OUNCE_IN_GRAMS
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassColors
@@ -331,7 +333,7 @@ fun SquareVenueSubFilterStrip(
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                text = if (isArabic) "ابحث عن عيار أو عملة (18K, EUR, USD...)" else "Filter gold or currency (18K, EUR, USD...)",
+                                text = if (isArabic) "ابحث عن عيار أو عملة (عيار 18، يورو، دولار...)" else "Filter gold or currency (18K, EUR, USD...)",
                                 color = colors.textMuted,
                                 fontSize = 12.sp
                             )
@@ -380,7 +382,7 @@ fun SquareTableHeaderRow(
         SquareVenueFilter.USD -> if (isArabic) "السعر $" else "Price USD"
         else -> if (isArabic) "آخر سعر" else "Last Price"
     }
-    val changeLabel = if (isArabic) "التغير (24س)" else "Change(%)"
+    val changeLabel = if (isArabic) "التغير (24سا)" else "Change(%)"
 
     Row(
         modifier = Modifier
@@ -525,7 +527,7 @@ fun SquareExchangeTickerRow(
                 modifier = Modifier.weight(1.42f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TickerLeadingEmblem(row = row, colors = colors)
+                TickerLeadingEmblem(row = row, isArabic = isArabic, colors = colors)
                 Spacer(modifier = Modifier.width(if (layoutInfo.isCompactPhone) 8.dp else 10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -534,22 +536,26 @@ fun SquareExchangeTickerRow(
                     ) {
                         val (baseText, quoteText, tagText) = when (row) {
                             is SquareTickerRowModel.SpotGold -> Triple(
-                                "XAU",
-                                "/USD",
+                                if (isArabic) "ذهب" else "XAU",
+                                if (isArabic) "/ دولار" else "/USD",
                                 if (isArabic) "فوري" else "Spot"
                             )
                             is SquareTickerRowModel.GoldKarat -> Triple(
-                                "${row.item.karat}K",
-                                if (venueFilter == SquareVenueFilter.USD) "/USD" else "/DZD",
+                                if (isArabic) "عيار ${row.item.karat}" else "${row.item.karat}K",
+                                if (isArabic) {
+                                    if (venueFilter == SquareVenueFilter.USD) "/ دولار" else "/ دج"
+                                } else {
+                                    if (venueFilter == SquareVenueFilter.USD) "/USD" else "/DZD"
+                                },
                                 when (venueFilter) {
                                     SquareVenueFilter.BANK -> if (isArabic) "بنك" else "Bank"
-                                    SquareVenueFilter.USD -> "1g"
+                                    SquareVenueFilter.USD -> if (isArabic) "1 غ" else "1g"
                                     else -> if (isArabic) "سكوار" else "Square"
                                 }
                             )
                             is SquareTickerRowModel.CurrencyFx -> Triple(
-                                row.rate.code,
-                                "/DZD",
+                                if (isArabic) row.rate.nameAr else row.rate.code,
+                                if (isArabic) "" else "/DZD",
                                 when {
                                     venueFilter == SquareVenueFilter.BANK -> if (isArabic) "بنك" else "Bank"
                                     row.rate.parallelSellDzd > 0.0 -> if (isArabic) "سكوار" else "Square"
@@ -563,15 +569,19 @@ fun SquareExchangeTickerRow(
                             color = colors.textPrimary,
                             fontSize = typo.bodyLg,
                             fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                        Text(
-                            text = quoteText,
-                            color = colors.textMuted,
-                            fontSize = typo.bodyXs,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
+                        if (quoteText.isNotEmpty()) {
+                            Text(
+                                text = quoteText,
+                                color = colors.textMuted,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
@@ -606,22 +616,29 @@ fun SquareExchangeTickerRow(
                         val subtitle = when (row) {
                             is SquareTickerRowModel.SpotGold -> {
                                 val label = if (isArabic) "أونصة ذهب" else "Gold Oz"
-                                val src = row.sourceName.ifBlank { if (isArabic) "سوق عالمي" else "Global" }
+                                val src = if (isArabic) {
+                                    row.sourceName.ifBlank { "سوق عالمي" }
+                                        .replace("Yahoo Finance", "ياهو المالية", ignoreCase = true)
+                                        .replace("ExchangeRate-API", "أسعار الصرف", ignoreCase = true)
+                                } else {
+                                    row.sourceName.ifBlank { "Global" }
+                                }
                                 "$label | $src"
                             }
                             is SquareTickerRowModel.GoldKarat -> {
                                 val bankShort = if (row.item.pricePerGramDzdBank > 0.0) {
-                                    formatTickerCompact(row.item.pricePerGramDzdBank)
+                                    isolateLtr(formatTickerCompact(row.item.pricePerGramDzdBank))
                                 } else "--"
-                                if (isArabic) "${row.item.purityLabel} | بنك $bankShort"
+                                if (isArabic) "${isolateLtr(row.item.purityLabel)} | بنك $bankShort"
                                 else "${row.item.purityLabel} | Bank $bankShort"
                             }
                             is SquareTickerRowModel.CurrencyFx -> {
-                                val localizedName = if (isArabic) row.rate.nameAr else row.rate.nameEn
+                                val localizedLabel = if (isArabic) "مقابل الدينار" else row.rate.nameEn
                                 if (row.rate.sourceCount > 0) {
-                                    "$localizedName | ${row.rate.sourceCount}×"
+                                    if (isArabic) "$localizedLabel | ${isolateLtr("${row.rate.sourceCount}×")}"
+                                    else "$localizedLabel | ${row.rate.sourceCount}×"
                                 } else {
-                                    localizedName
+                                    localizedLabel
                                 }
                             }
                         }
@@ -641,31 +658,33 @@ fun SquareExchangeTickerRow(
                 modifier = Modifier.weight(1.05f),
                 horizontalAlignment = Alignment.End
             ) {
+                val perGramSuffix = if (isArabic) "/غ" else "/g"
+                val dzdSuffix = if (isArabic) "دج" else "DZD"
                 val (mainPriceText, subPriceText) = when (row) {
                     is SquareTickerRowModel.SpotGold -> {
-                        val main = formatTickerPrice(row.goldOzUsd)
-                        val sub = "$${formatTickerPrice(row.usdPerGram24K)}/g"
+                        val main = isolateLtr(formatTickerPrice(row.goldOzUsd))
+                        val sub = isolateLtr("$${formatTickerPrice(row.usdPerGram24K)}$perGramSuffix")
                         main to sub
                     }
                     is SquareTickerRowModel.GoldKarat -> {
                         when (venueFilter) {
                             SquareVenueFilter.BANK -> {
                                 val main = if (row.item.pricePerGramDzdBank > 0.0) {
-                                    formatTickerPrice(row.item.pricePerGramDzdBank)
+                                    isolateLtr(formatTickerPrice(row.item.pricePerGramDzdBank))
                                 } else "---"
-                                val sub = "$${formatTickerPrice(row.item.pricePerGramUsd)}/g"
+                                val sub = isolateLtr("$${formatTickerPrice(row.item.pricePerGramUsd)}$perGramSuffix")
                                 main to sub
                             }
                             SquareVenueFilter.USD -> {
-                                val main = "$${formatTickerPrice(row.item.pricePerGramUsd)}"
-                                val sub = "${formatTickerCompact(row.item.pricePerGramDzdParallel)} DZD"
+                                val main = isolateLtr("$${formatTickerPrice(row.item.pricePerGramUsd)}")
+                                val sub = "${isolateLtr(formatTickerCompact(row.item.pricePerGramDzdParallel))} $dzdSuffix"
                                 main to sub
                             }
                             else -> {
                                 val main = if (row.item.pricePerGramDzdParallel > 0.0) {
-                                    formatTickerPrice(row.item.pricePerGramDzdParallel)
+                                    isolateLtr(formatTickerPrice(row.item.pricePerGramDzdParallel))
                                 } else "---"
-                                val sub = "$${formatTickerPrice(row.item.pricePerGramUsd)}/g"
+                                val sub = isolateLtr("$${formatTickerPrice(row.item.pricePerGramUsd)}$perGramSuffix")
                                 main to sub
                             }
                         }
@@ -673,24 +692,24 @@ fun SquareExchangeTickerRow(
                     is SquareTickerRowModel.CurrencyFx -> {
                         when (venueFilter) {
                             SquareVenueFilter.BANK -> {
-                                val main = if (row.rate.bankRateDzd > 0.0) formatTickerPrice(row.rate.bankRateDzd) else "---"
+                                val main = if (row.rate.bankRateDzd > 0.0) isolateLtr(formatTickerPrice(row.rate.bankRateDzd)) else "---"
                                 val sub = if (row.rate.parallelSellDzd > 0.0) {
-                                    "${if (isArabic) "سكوار" else "Sq"} ${formatTickerCompact(row.rate.parallelSellDzd)}"
+                                    "${if (isArabic) "سكوار" else "Sq"} ${isolateLtr(formatTickerCompact(row.rate.parallelSellDzd))}"
                                 } else "---"
                                 main to sub
                             }
                             else -> {
                                 val main = when {
-                                    row.rate.parallelSellDzd > 0.0 -> formatTickerPrice(row.rate.parallelSellDzd)
-                                    row.rate.bankRateDzd > 0.0 -> formatTickerPrice(row.rate.bankRateDzd)
+                                    row.rate.parallelSellDzd > 0.0 -> isolateLtr(formatTickerPrice(row.rate.parallelSellDzd))
+                                    row.rate.bankRateDzd > 0.0 -> isolateLtr(formatTickerPrice(row.rate.bankRateDzd))
                                     else -> "---"
                                 }
                                 val sub = when {
                                     row.rate.parallelBuyDzd > 0.0 && row.rate.bankRateDzd > 0.0 -> {
-                                        if (isArabic) "شراء ${formatTickerCompact(row.rate.parallelBuyDzd)}"
+                                        if (isArabic) "شراء ${isolateLtr(formatTickerCompact(row.rate.parallelBuyDzd))}"
                                         else "Buy ${formatTickerCompact(row.rate.parallelBuyDzd)}"
                                     }
-                                    row.rate.bankRateDzd > 0.0 -> "${if (isArabic) "بنك" else "Bank"} ${formatTickerCompact(row.rate.bankRateDzd)}"
+                                    row.rate.bankRateDzd > 0.0 -> "${if (isArabic) "بنك" else "Bank"} ${isolateLtr(formatTickerCompact(row.rate.bankRateDzd))}"
                                     else -> "---"
                                 }
                                 main to sub
@@ -738,13 +757,14 @@ fun SquareExchangeTickerRow(
                 isNegative -> TickerRedPill
                 else -> TickerNeutralPill
             }
+            val pctChar = if (isArabic) "٪" else "%"
             val pillLabel = when {
                 !hasValidMetric -> "--"
-                !isPositive && !isNegative -> "0.00%"
+                !isPositive && !isNegative -> isolateLtr("0.00$pctChar")
                 else -> {
                     val sign = if (isPositive) "+" else ""
                     val decimals = if (abs(pillValue) >= 100.0) 1 else 2
-                    "$sign${String.format(Locale.US, "%.${decimals}f", pillValue)}%"
+                    isolateLtr("$sign${String.format(Locale.US, "%.${decimals}f", pillValue)}$pctChar")
                 }
             }
 
@@ -791,6 +811,7 @@ fun SquareExchangeTickerRow(
 @Composable
 private fun TickerLeadingEmblem(
     row: SquareTickerRowModel,
+    isArabic: Boolean,
     colors: LiquidGlassColors
 ) {
     when (row) {
@@ -804,7 +825,7 @@ private fun TickerLeadingEmblem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Diamond,
-                    contentDescription = "XAU",
+                    contentDescription = if (isArabic) "ذهب" else "XAU",
                     tint = Color(0xFF1F1600),
                     modifier = Modifier.size(18.dp)
                 )
@@ -832,7 +853,7 @@ private fun TickerLeadingEmblem(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "${row.item.karat}K",
+                    text = if (isArabic) "ع${row.item.karat}" else "${row.item.karat}K",
                     color = SquareGoldAccent,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -897,7 +918,7 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "24K سكوار/غ" else "24K Square/g",
+                        label = if (isArabic) "عيار 24 سكوار/غ" else "24K Square/g",
                         value = "${formatTickerCompact(row.dzdPerGram24KParallel)} $unitDzd",
                         valueColor = EmeraldNeon,
                         modifier = Modifier.weight(1f),
@@ -962,11 +983,12 @@ private fun TickerExpandedTray(
                 }
                 val gapText = if (row.rate.parallelSellDzd > 0.0 && row.rate.bankRateDzd > 0.0) {
                     val gapSign = if (row.spreadPct >= 0.0) "+" else ""
-                    val gapPctStr = "$gapSign${String.format(Locale.US, "%.1f", row.spreadPct)}%"
+                    val gapPctStr = isolateLtr("$gapSign${String.format(Locale.US, "%.1f", row.spreadPct)}${if (isArabic) "٪" else "%"}")
                     if (isArabic) "فارق السكوار عن البنك: $gapPctStr" else "Square-Bank Gap: $gapPctStr"
                 } else ""
                 val srcText = if (row.rate.parallelSource.isNotBlank()) {
-                    (if (isArabic) "المصادر: " else "Sources: ") + row.rate.parallelSource
+                    (if (isArabic) "المصادر: " else "Sources: ") +
+                        if (isArabic) row.rate.parallelSource.replace("sites", "مواقع", ignoreCase = true) else row.rate.parallelSource
                 } else ""
                 val footerLine = listOf(gapText, srcText).filter { it.isNotBlank() }.joinToString(" • ")
                 if (footerLine.isNotBlank()) {
@@ -1080,7 +1102,7 @@ private fun TrayMetricBox(
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = value,
+            text = isolateLtr(value),
             color = valueColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.ExtraBold,
@@ -1211,7 +1233,7 @@ fun SquareQuickConverterCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "${k.karat}K",
+                                text = if (isArabic) "عيار ${k.karat}" else "${k.karat}K",
                                 color = if (active) SquareGoldAccent else colors.textSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -1236,7 +1258,7 @@ fun SquareQuickConverterCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "${fx.flag} ${fx.code}",
+                                text = if (isArabic) "${fx.flag} ${fx.nameAr}" else "${fx.flag} ${fx.code}",
                                 color = if (active) parallelAccent else colors.textSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -1266,7 +1288,7 @@ fun SquareQuickConverterCard(
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = if (isGoldMode) "${preset}g" else preset,
+                            text = if (isGoldMode) (if (isArabic) "${isolateLtr(preset)} غ" else "${preset}g") else isolateLtr(preset),
                             color = colors.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1299,13 +1321,19 @@ fun SquareQuickConverterCard(
                             color = colors.textPrimary,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            fontFeatureSettings = "tnum"
+                            fontFeatureSettings = "tnum",
+                            textDirection = TextDirection.Ltr
                         ),
                         cursorBrush = SolidColor(SquareGoldAccent),
                         modifier = Modifier.weight(1f)
                     )
+                    val selectedCurrencyLabel = if (isArabic) {
+                        snapshot.currencies.firstOrNull { it.code == selectedCurrencyCode }?.nameAr ?: selectedCurrencyCode
+                    } else {
+                        selectedCurrencyCode
+                    }
                     Text(
-                        text = if (isGoldMode) (if (isArabic) "غرام (g)" else "Grams (g)") else selectedCurrencyCode,
+                        text = if (isGoldMode) (if (isArabic) "غرام" else "Grams (g)") else selectedCurrencyLabel,
                         color = colors.textMuted,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold

@@ -55,10 +55,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.GlassCard
@@ -370,7 +372,7 @@ private fun ActiveThemeHeroCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isArabic) activeSpec.nameEn else activeSpec.nameAr,
+                        text = if (isArabic) activeSpec.category.labelAr else activeSpec.nameAr,
                         color = colors.primaryNeon,
                         fontSize = typo.bodySm,
                         fontWeight = FontWeight.SemiBold,
@@ -549,7 +551,9 @@ private fun ThemeEngineGridCard(
                 )
                 .border(1.dp, preview.glassBorder.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
         ) {
+            val isRtlPreview = LocalLayoutDirection.current == LayoutDirection.Rtl
             Canvas(modifier = Modifier.fillMaxSize()) {
+                fun mx(fraction: Float): Float = if (isRtlPreview) size.width * (1f - fraction) else size.width * fraction
                 when (spec.surfaceEffect) {
                     ThemeSurfaceEffect.BLUEPRINT_GRID -> {
                         val step = 16.dp.toPx()
@@ -579,7 +583,7 @@ private fun ThemeEngineGridCard(
                         drawCircle(
                             color = Color.White.copy(alpha = if (preview.isDark) 0.06f else 0.45f),
                             radius = size.minDimension * 0.45f,
-                            center = Offset(size.width * 0.2f, size.height * 0.25f)
+                            center = Offset(mx(0.2f), size.height * 0.25f)
                         )
                     }
                     else -> {
@@ -589,7 +593,7 @@ private fun ThemeEngineGridCard(
                                     preview.primaryNeon.copy(alpha = 0.34f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.22f, size.height * 0.24f),
+                                center = Offset(mx(0.22f), size.height * 0.24f),
                                 radius = size.minDimension * 0.72f
                             )
                         )
@@ -599,7 +603,7 @@ private fun ThemeEngineGridCard(
                                     preview.secondaryNeon.copy(alpha = 0.28f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.85f, size.height * 0.8f),
+                                center = Offset(mx(0.85f), size.height * 0.8f),
                                 radius = size.minDimension * 0.65f
                             )
                         )
@@ -650,7 +654,7 @@ private fun ThemeEngineGridCard(
                             val checkTint = if (preview.primaryNeon.luminance() > 0.45f) Color(0xFF0A1220) else Color.White
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Active",
+                                contentDescription = if (isArabic) "مفعّل" else "Active",
                                 tint = checkTint,
                                 modifier = Modifier.size(13.dp)
                             )
@@ -740,7 +744,7 @@ private fun ThemeEngineGridCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (isArabic) spec.nameEn else spec.nameAr,
+                text = if (isArabic) spec.category.labelAr else spec.nameAr,
                 color = if (isSelected) appColors.primaryNeon else appColors.textMuted,
                 fontSize = typo.bodyXs,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,

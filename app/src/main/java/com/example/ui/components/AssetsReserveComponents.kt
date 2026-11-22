@@ -48,6 +48,7 @@ import com.example.market.GoldValuationItem
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -136,7 +137,7 @@ fun AssetsLauncherCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (isArabic) "الأصول: الذهب والكريبتو" else "Assets: Gold & Crypto",
+                    text = if (isArabic) "الأصول: الذهب والعملات الرقمية" else "Assets: Gold & Crypto",
                     color = colors.textPrimary,
                     fontSize = typo.titleSm,
                     fontWeight = FontWeight.Bold,
@@ -144,38 +145,38 @@ fun AssetsLauncherCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(3.dp))
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    val goldPart = if (goldHoldings.isEmpty()) {
-                        if (isArabic) "0 غ ذهب" else "0g Gold"
-                    } else {
-                        "${gramsFmt}g Gold"
-                    }
-                    val cryptoPart = if (isStealth) "$ ••••" else String.format(Locale.US, "$%,.2f", cryptoTotalUsd)
-                    Text(
-                        text = "$goldPart  •  $cryptoPart",
-                        color = colors.textMuted,
-                        fontSize = typo.bodyXs,
-                        style = tnumStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                val goldPart = if (isArabic) {
+                    "${if (goldHoldings.isEmpty()) isolateLtr("0") else isolateLtr(gramsFmt)} غ ذهب"
+                } else {
+                    if (goldHoldings.isEmpty()) "0g Gold" else "${gramsFmt}g Gold"
                 }
+                val cryptoPart = if (isStealth) {
+                    if (isArabic) "•••• دولار" else "$ ••••"
+                } else {
+                    isolateLtr(String.format(Locale.US, "$%,.2f", cryptoTotalUsd))
+                }
+                Text(
+                    text = "$goldPart  •  $cryptoPart",
+                    color = colors.textMuted,
+                    fontSize = typo.bodyXs,
+                    style = tnumStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
             Column(horizontalAlignment = Alignment.End) {
                 if (combinedAssetsDzd > 0.0) {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = formatDzd(combinedAssetsDzd, strings.currencyCode, isStealth),
-                            color = EmeraldNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = tnumStyle,
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = isolateLtr(formatDzd(combinedAssetsDzd, strings.currencyCode, isStealth)),
+                        color = EmeraldNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = tnumStyle,
+                        maxLines = 1
+                    )
                     Text(
                         text = if (isArabic) "إدارة الأصول" else "Manage",
                         color = colors.textMuted,
@@ -299,27 +300,26 @@ fun CryptoReadOnlySummaryCard(
             verticalAlignment = Alignment.Bottom
         ) {
             Column {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    val formattedUsd = if (isStealth) "$ ••••••"
-                    else String.format(Locale.US, "$%,.2f", totalUsd)
+                val formattedUsd = if (isStealth) {
+                    if (isArabic) "•••••• دولار" else "$ ••••••"
+                } else {
+                    isolateLtr(String.format(Locale.US, "$%,.2f", totalUsd))
+                }
+                Text(
+                    text = formattedUsd,
+                    color = CyanNeon,
+                    fontSize = typo.titleLg,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = tnumStyle
+                )
+                if (approxDzd != null && approxDzd > 0.0) {
                     Text(
-                        text = formattedUsd,
-                        color = CyanNeon,
-                        fontSize = typo.titleLg,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = "≈ ${isolateLtr(formatDzd(approxDzd, strings.currencyCode, isStealth))}",
+                        color = EmeraldNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Bold,
                         style = tnumStyle
                     )
-                }
-                if (approxDzd != null && approxDzd > 0.0) {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = "≈ ${formatDzd(approxDzd, strings.currencyCode, isStealth)}",
-                            color = EmeraldNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.Bold,
-                            style = tnumStyle
-                        )
-                    }
                 }
             }
 
@@ -331,7 +331,7 @@ fun CryptoReadOnlySummaryCard(
                     .padding(horizontal = 9.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = if (isArabic) "$holdingsCount عملات في Binance"
+                    text = if (isArabic) "$holdingsCount عملات في بينانس"
                     else "$holdingsCount Binance assets",
                     color = colors.textSecondary,
                     fontSize = typo.caption,
@@ -373,7 +373,7 @@ fun GoldHoldingRowItem(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "${h.karat}K",
+                text = if (isArabic) "ع${h.karat}" else "${h.karat}K",
                 color = AmberNeon,
                 fontSize = typo.bodySm,
                 fontWeight = FontWeight.ExtraBold
@@ -385,7 +385,7 @@ fun GoldHoldingRowItem(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = if (isArabic) "$gramsStr غ • عيار ${h.karat}" else "${gramsStr}g • ${h.karat}K Gold",
+                    text = if (isArabic) "${isolateLtr(gramsStr)} غ • عيار ${h.karat}" else "${gramsStr}g • ${h.karat}K Gold",
                     color = colors.textPrimary,
                     fontSize = typo.bodySm,
                     fontWeight = FontWeight.Bold,
@@ -404,20 +404,22 @@ fun GoldHoldingRowItem(
                 }
             }
             if (item.pricePerGramDzdParallel > 0.0) {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Text(
-                        text = "${formatDzd(item.totalValueDzdParallel, strings.currencyCode, isStealth)}  (1g ≈ ${formatDzd(item.pricePerGramDzdParallel, strings.currencyCode, isStealth)})",
-                        color = EmeraldNeon,
-                        fontSize = typo.bodyXs,
-                        fontWeight = FontWeight.Bold,
-                        style = tnumStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = if (isArabic) {
+                        "${isolateLtr(formatDzd(item.totalValueDzdParallel, strings.currencyCode, isStealth))}  (${isolateLtr("1")} غ ≈ ${isolateLtr(formatDzd(item.pricePerGramDzdParallel, strings.currencyCode, isStealth))})"
+                    } else {
+                        "${formatDzd(item.totalValueDzdParallel, strings.currencyCode, isStealth)}  (1g ≈ ${formatDzd(item.pricePerGramDzdParallel, strings.currencyCode, isStealth)})"
+                    },
+                    color = EmeraldNeon,
+                    fontSize = typo.bodyXs,
+                    fontWeight = FontWeight.Bold,
+                    style = tnumStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             } else {
                 Text(
-                    text = if (isArabic) "بانتظار مزامنة سعر Square..." else "Waiting for Square rate sync...",
+                    text = if (isArabic) "بانتظار مزامنة سعر سكوار..." else "Waiting for Square rate sync...",
                     color = colors.textMuted,
                     fontSize = typo.caption
                 )
@@ -458,5 +460,5 @@ fun formatAssetsSyncTimeCompact(millis: Long, isArabic: Boolean): String {
         return if (isArabic) "لم تتم المزامنة بعد" else "Not synced yet"
     }
     val fmt = SimpleDateFormat("dd MMM HH:mm", if (isArabic) Locale("ar") else Locale.US)
-    return fmt.format(Date(millis))
+    return isolateLtr(fmt.format(Date(millis)))
 }

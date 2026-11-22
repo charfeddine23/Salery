@@ -27,8 +27,15 @@ object DebtReminderScheduler {
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Debt Due Date Reminders"
-            val descriptionText = "Sends notifications 24 hours before a debt payment due date"
+            val isArabic = runCatching {
+                com.example.data.PreferencesManager(context.applicationContext).settingsFlow.value.language == "ar"
+            }.getOrDefault(false)
+            val name = if (isArabic) "تذكيرات مواعيد سداد الديون" else "Debt Due Date Reminders"
+            val descriptionText = if (isArabic) {
+                "إرسال إشعارات قبل 24 ساعة من موعد استحقاق سداد الدين"
+            } else {
+                "Sends notifications 24 hours before a debt payment due date"
+            }
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText

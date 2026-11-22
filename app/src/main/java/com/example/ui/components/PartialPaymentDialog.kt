@@ -29,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,9 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -51,6 +55,7 @@ import com.example.data.DebtType
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalScreenshotProtection
@@ -98,6 +103,9 @@ fun PartialPaymentDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -177,13 +185,13 @@ fun PartialPaymentDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${strings.paidAmount}: ${formatDzd(currentPaid, currencyCode)}",
+                                text = "${strings.paidAmount}: ${isolateLtr(formatDzd(currentPaid, currencyCode))}",
                                 color = DebtColors.settled(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "${strings.remainingBalance}: ${formatDzd(currentRemaining, currencyCode)}",
+                                text = "${strings.remainingBalance}: ${isolateLtr(formatDzd(currentRemaining, currencyCode))}",
                                 color = if (debt.type == DebtType.OWED_BY_ME) DebtColors.payable(isDark) else DebtColors.receivable(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -210,7 +218,7 @@ fun PartialPaymentDialog(
                         ) {
                             val progPct = if (isArabic) "${(currentProgress * 100).toInt()}٪" else "${(currentProgress * 100).toInt()}%"
                             Text(
-                                text = "$progPct ${strings.paidOutOf} ${formatDzd(totalAmount, currencyCode)}",
+                                text = "$progPct ${strings.paidOutOf} ${isolateLtr(formatDzd(totalAmount, currencyCode))}",
                                 color = colors.textMuted,
                                 fontSize = 11.sp
                             )
@@ -239,7 +247,7 @@ fun PartialPaymentDialog(
                     Column {
                         val maxLabel = if (isArabic) "الأقصى" else "Max"
                         Text(
-                            text = "${strings.partialPaymentAmount} ($maxLabel: ${formatDzd(currentRemaining, currencyCode)})",
+                            text = "${strings.partialPaymentAmount} ($maxLabel: ${isolateLtr(formatDzd(currentRemaining, currencyCode))})",
                             color = colors.textSecondary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium
@@ -251,7 +259,8 @@ fun PartialPaymentDialog(
                             textStyle = TextStyle(
                                 color = colors.textPrimary,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                textDirection = TextDirection.Ltr
                             ),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -332,7 +341,7 @@ fun PartialPaymentDialog(
                                     } else {
                                         val projPct = if (isArabic) "${(projectedProgress * 100).toInt()}٪" else "${(projectedProgress * 100).toInt()}%"
                                         if (isArabic) {
-                                            "المتبقي: ${formatDzd(projectedRemaining, currencyCode)} (مسدد $projPct)"
+                                            "المتبقي: ${isolateLtr(formatDzd(projectedRemaining, currencyCode))} (مسدد $projPct)"
                                         } else {
                                             "Remaining: ${formatDzd(projectedRemaining, currencyCode)} ($projPct paid)"
                                         }
@@ -371,8 +380,13 @@ fun PartialPaymentDialog(
                             fontSize = 12.sp
                         )
                         Text(
-                            text = if (debt.type == DebtType.OWED_BY_ME) "Deduct expense from wallet balance"
-                            else "Credit income to wallet balance",
+                            text = if (isArabic) {
+                                if (debt.type == DebtType.OWED_BY_ME) "خصم المبلغ من رصيد المحفظة كمصروف"
+                                else "إضافة المبلغ إلى رصيد المحفظة كدخل"
+                            } else {
+                                if (debt.type == DebtType.OWED_BY_ME) "Deduct expense from wallet balance"
+                                else "Credit income to wallet balance"
+                            },
                             color = colors.textSecondary,
                             fontSize = 10.sp
                         )
@@ -394,7 +408,9 @@ fun PartialPaymentDialog(
                 // Confirm Button
                 val isValid = actualPay > 0.0 && actualPay <= currentRemaining
                 GlassButton(
-                    text = if (actualPay >= currentRemaining) strings.markAsPaid else "Record ${formatDzd(actualPay, currencyCode)}",
+                    text = if (actualPay >= currentRemaining) strings.markAsPaid
+                    else if (isArabic) "تسجيل ${isolateLtr(formatDzd(actualPay, currencyCode))}"
+                    else "Record ${formatDzd(actualPay, currencyCode)}",
                     icon = Icons.Default.Payments,
                     enabled = isValid,
                     containerColor = accentColor,
@@ -405,6 +421,7 @@ fun PartialPaymentDialog(
                     }
                 )
             }
+        }
         }
     }
 }

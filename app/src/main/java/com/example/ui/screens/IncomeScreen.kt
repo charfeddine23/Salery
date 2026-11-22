@@ -41,6 +41,7 @@ import com.example.ui.components.LiquidEmptyStateCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
@@ -282,7 +283,7 @@ private fun TotalIncomeHeroCard(
             )
             Spacer(modifier = Modifier.height(dimens.spacingXs))
             Text(
-                text = formatDzd(totalIncome, strings.currencyCode),
+                text = isolateLtr(formatDzd(totalIncome, strings.currencyCode)),
                 color = EmeraldNeon,
                 fontSize = typo.display,
                 fontWeight = FontWeight.ExtraBold,

@@ -644,8 +644,11 @@ private fun extractVersionParts(tag: String): List<Int> {
         .toList()
 }
 
-fun formatBytesToMb(bytes: Long): String {
-    if (bytes <= 0L) return "0.0 MB"
+fun formatBytesToMb(bytes: Long): String = formatBytesToMb(bytes, isArabic = false)
+
+fun formatBytesToMb(bytes: Long, isArabic: Boolean): String {
+    val unit = if (isArabic) "م.ب" else "MB"
+    if (bytes <= 0L) return "0.0 $unit"
     val mb = bytes / (1024.0 * 1024.0)
-    return String.format(Locale.US, "%.1f MB", mb)
+    return String.format(Locale.US, "%.1f $unit", mb)
 }

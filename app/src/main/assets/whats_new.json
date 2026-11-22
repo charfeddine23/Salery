@@ -3,9 +3,9 @@
   "features": [
     {
       "badge": "الأصول والادخار • Assets & Saving",
-      "titleAr": "صفحة الأصول والادخار (الذهب والكريبتو)",
+      "titleAr": "صفحة الأصول والادخار (الذهب والعملات الرقمية)",
       "titleEn": "Assets & Saving (Gold & Crypto Sync)",
-      "descAr": "تم تطوير صفحة الأصول والادخار مع صفحة مستقلة لإدارة الذهب بالغرام والعيار وعرض إجمالي العملات الرقمية من Binance، بمزامنة تلقائية من Square و Binance، مع زر في Total Reserved Savings لدمج قيمة الأصول مع المدخرات في المجموع الإجمالي.",
+      "descAr": "تم تطوير صفحة الأصول والادخار مع صفحة مستقلة لإدارة الذهب بالغرام والعيار وعرض إجمالي العملات الرقمية من بينانس، بمزامنة تلقائية من سكوار وبينانس، مع زر في إجمالي المدخرات لدمج قيمة الأصول مع المدخرات في المجموع الإجمالي.",
       "descEn": "Upgraded Assets & Saving with a dedicated Manage Assets page for adding Gold holdings and viewing read-only Binance Crypto totals synced from Square & Binance, plus a toggle inside Total Reserved Savings to combine Assets + Cash Savings."
     },
     {

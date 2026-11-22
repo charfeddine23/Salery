@@ -64,6 +64,7 @@ import com.example.data.UserSettings
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -253,7 +254,7 @@ fun TotalBalanceVaultCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (isArabic) "0.5ث للراتب" else "Hold 0.5s • Salary",
+                        text = if (isArabic) "اضغط 0.5ث للراتب" else "Hold 0.5s • Salary",
                         color = colors.textSecondary,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -266,7 +267,7 @@ fun TotalBalanceVaultCard(
 
             // Prominent Active Balance (Spendable Amount) with tabular numerals
             Text(
-                text = formatDzd(spendableBalance, strings.currencyCode, isStealth),
+                text = isolateLtr(formatDzd(spendableBalance, strings.currencyCode, isStealth)),
                 color = colors.textPrimary,
                 fontSize = typo.hero,
                 fontWeight = FontWeight.ExtraBold,
@@ -299,7 +300,7 @@ fun TotalBalanceVaultCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = (if (isArabic) "محفظة الادخار: " else "Savings Wallet: ") +
-                                formatDzd(lockedAmount, strings.currencyCode, isStealth),
+                                isolateLtr(formatDzd(lockedAmount, strings.currencyCode, isStealth)),
                             color = colors.textSecondary,
                             fontSize = typo.bodyXs,
                             fontWeight = FontWeight.Medium,
@@ -352,7 +353,7 @@ fun TotalBalanceVaultCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth),
+                                text = isolateLtr(formatDzd(summary.monthlyIncome, strings.currencyCode, isStealth)),
                                 color = EmeraldNeon,
                                 fontSize = typo.body,
                                 fontWeight = FontWeight.Bold,
@@ -398,7 +399,7 @@ fun TotalBalanceVaultCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth),
+                                text = isolateLtr(formatDzd(summary.monthlyExpenses, strings.currencyCode, isStealth)),
                                 color = RoseNeon,
                                 fontSize = typo.body,
                                 fontWeight = FontWeight.Bold,

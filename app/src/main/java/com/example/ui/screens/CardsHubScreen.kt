@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -91,6 +92,7 @@ import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -210,7 +212,7 @@ fun CardsHubScreen(
                     text = if (bankSpec.id == "EDAHABIA") {
                         strings.edahabiaCardTitle
                     } else {
-                        if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCode})" else bankSpec.nameEn
+                        if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCodeAr})" else bankSpec.nameEn
                     },
                     color = colors.textPrimary,
                     fontSize = typo.body,
@@ -246,9 +248,9 @@ fun CardsHubScreen(
     val secondaryCardSection: @Composable (Modifier) -> Unit = { sectionMod ->
         val visaProvider = userSettings.visaCardProvider.uppercase()
         val visaSectionTitle = when (visaProvider) {
-            "REDOTPAY" -> if (isArabic) "بطاقة RedotPay الدولية" else "RedotPay Visa Card"
-            "BYBIT" -> if (isArabic) "بطاقة Bybit الدولية" else "Bybit Card"
-            "BINANCE" -> if (isArabic) "بطاقة Binance الدولية" else "Binance Visa Card"
+            "REDOTPAY" -> if (isArabic) "بطاقة ريدوت باي الدولية" else "RedotPay Visa Card"
+            "BYBIT" -> if (isArabic) "بطاقة بايبت الدولية" else "Bybit Card"
+            "BINANCE" -> if (isArabic) "بطاقة بينانس الدولية" else "Binance Visa Card"
             else -> strings.visaCardTitle
         }
         val visaBadgeColor = when (visaProvider) {
@@ -322,10 +324,10 @@ fun CardsHubScreen(
         if (userSettings.thirdCardEnabled) {
             val thirdProvider = userSettings.thirdCardProvider.uppercase()
             val thirdSectionTitle = when (thirdProvider) {
-                "REDOTPAY" -> if (isArabic) "البطاقة الثالثة • RedotPay" else "Third Card • RedotPay"
-                "BYBIT" -> if (isArabic) "البطاقة الثالثة • Bybit" else "Third Card • Bybit"
-                "BINANCE" -> if (isArabic) "البطاقة الثالثة • Binance" else "Third Card • Binance"
-                else -> if (isArabic) "البطاقة الثالثة • Visa" else "Third Card • Visa"
+                "REDOTPAY" -> if (isArabic) "البطاقة الثالثة • ريدوت باي" else "Third Card • RedotPay"
+                "BYBIT" -> if (isArabic) "البطاقة الثالثة • بايبت" else "Third Card • Bybit"
+                "BINANCE" -> if (isArabic) "البطاقة الثالثة • بينانس" else "Third Card • Binance"
+                else -> if (isArabic) "البطاقة الثالثة • فيزا" else "Third Card • Visa"
             }
             val thirdBadgeColor = when (thirdProvider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
@@ -551,7 +553,7 @@ private fun AddThirdCardSlotCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (isArabic) {
-                            "أضف Binance أو RedotPay أو Bybit أو Visa"
+                            "أضف بينانس أو ريدوت باي أو بايبت أو فيزا"
                         } else {
                             "Add Binance, RedotPay, Bybit or Visa card"
                         },
@@ -711,81 +713,90 @@ private fun EdahabiaCardRealistic(
                 )
         ) {
             // Card Surface Artwork: Classic Edahabia Zellige or selected Algerian CIB Bank geometric motif
+            val isRtlCard = LocalLayoutDirection.current == LayoutDirection.Rtl
             Canvas(modifier = Modifier.fillMaxSize()) {
-                if (isEdahabia) {
-                    drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
+                val drawArtwork: DrawScope.() -> Unit = {
+                    if (isEdahabia) {
+                        drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
+                    } else {
+                        drawAlgerianBankArtwork(bankSpec = bankSpec, holdProgress = holdAnim.value)
+                    }
+                }
+                if (isRtlCard) {
+                    scale(scaleX = -1f, scaleY = 1f, pivot = center) {
+                        drawArtwork()
+                    }
                 } else {
-                    drawAlgerianBankArtwork(bankSpec = bankSpec, holdProgress = holdAnim.value)
+                    drawArtwork()
                 }
             }
 
-            // Card Inner Content (Always LTR to match physical bank card typography, kept clear of right mosaic)
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(
-                            start = 18.dp,
-                            end = if (isEdahabia) 52.dp else 18.dp,
-                            top = 14.dp,
-                            bottom = 14.dp
-                        ),
-                    verticalArrangement = Arrangement.SpaceBetween
+            // Card Inner Content (Mirrors naturally with LocalLayoutDirection, kept clear of trailing mosaic)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = 18.dp,
+                        end = if (isEdahabia) 52.dp else 18.dp,
+                        top = 14.dp,
+                        bottom = 14.dp
+                    ),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top Row: Brand Title & Algérie Poste or Algerian CIB Crest
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    // Top Row: Brand Title on Left & Algérie Poste or Algerian CIB Crest on Right
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(horizontalAlignment = Alignment.Start) {
-                            Text(
-                                text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
-                                color = bankSecondary,
-                                fontSize = if (isEdahabia) 11.sp else 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                lineHeight = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = bankSpec.cardTypeLabel,
-                                color = Color.White,
-                                fontSize = if (isEdahabia) 20.sp else 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.4.sp,
-                                lineHeight = 21.sp,
-                                style = TextStyle(
-                                    shadow = Shadow(
-                                        color = Color(0xFF0F172A).copy(alpha = 0.45f),
-                                        offset = Offset(0f, 1.5f),
-                                        blurRadius = 3f
-                                    )
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
+                            color = bankSecondary,
+                            fontSize = if (isEdahabia) 11.sp else 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isArabic) bankSpec.cardTypeLabelAr else bankSpec.cardTypeLabel,
+                            color = Color.White,
+                            fontSize = if (isEdahabia) 20.sp else 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = if (isArabic) 0.sp else 1.4.sp,
+                            lineHeight = 21.sp,
+                            style = TextStyle(
+                                shadow = Shadow(
+                                    color = Color(0xFF0F172A).copy(alpha = 0.45f),
+                                    offset = Offset(0f, 1.5f),
+                                    blurRadius = 3f
                                 )
                             )
-                        }
-
-                        if (isEdahabia) {
-                            AlgeriePosteWhiteLogo()
-                        } else {
-                            AlgerianCibBankBadge(bankSpec = bankSpec)
-                        }
+                        )
                     }
 
-                    // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            ContactlessWaves(
-                                modifier = Modifier.size(18.dp),
-                                tint = bankSecondary.copy(alpha = 0.88f)
-                            )
-                        }
+                    if (isEdahabia) {
+                        AlgeriePosteWhiteLogo(isArabic = isArabic)
+                    } else {
+                        AlgerianCibBankBadge(bankSpec = bankSpec, isArabic = isArabic)
+                    }
+                }
+
+                // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ContactlessWaves(
+                            modifier = Modifier.size(18.dp),
+                            tint = bankSecondary.copy(alpha = 0.88f)
+                        )
+                    }
 
                         // Live Total Balance Glass Pill
                         Box(
@@ -823,7 +834,7 @@ private fun EdahabiaCardRealistic(
                         }
                     }
 
-                    // Card Number: Embossed Pure White Monospace Digits
+                    // Card Number: Embossed Pure White Monospace Digits (micro-LTR)
                     val classicDigits = userSettings.classicCardNumber.filter { it.isDigit() }
                     val classicDisplayNum = if (classicDigits.isEmpty()) {
                         if (isStealth) "••••  ••••  ••••  ••••" else bankSpec.defaultNumberPrefix
@@ -835,26 +846,28 @@ private fun EdahabiaCardRealistic(
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = classicDisplayNum,
-                            color = Color.White,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.1.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(
-                                shadow = Shadow(
-                                    color = Color(0xFF0A1B4D).copy(alpha = 0.85f),
-                                    offset = Offset(1f, 1.5f),
-                                    blurRadius = 2f
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Text(
+                                text = classicDisplayNum,
+                                color = Color.White,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.1.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color(0xFF0A1B4D).copy(alpha = 0.85f),
+                                        offset = Offset(1f, 1.5f),
+                                        blurRadius = 2f
+                                    )
                                 )
                             )
-                        )
+                        }
                     }
 
-                    // Bottom Row: Cardholder Name (Bottom Left) + EXP DATE & CVC (Center-Right)
+                    // Bottom Row: Cardholder Name + EXP DATE & CVC
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -888,43 +901,46 @@ private fun EdahabiaCardRealistic(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "EXP DATE",
+                                    text = if (isArabic) strings.cardExpiryLabel else "EXP DATE",
                                     color = Color(0xFFBAE6FD),
-                                    fontSize = 7.sp,
+                                    fontSize = if (isArabic) 8.sp else 7.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    letterSpacing = if (isArabic) 0.sp else 0.5.sp
                                 )
                                 val expFormatted = userSettings.classicCardExpiry
                                     .ifBlank { "11/29" }
                                     .replace("/", " / ")
-                                Text(
-                                    text = expFormatted,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = expFormatted,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "CVC",
+                                    text = if (isArabic) strings.cardCvcLabel else "CVC",
                                     color = Color(0xFFBAE6FD),
-                                    fontSize = 7.sp,
+                                    fontSize = if (isArabic) 8.sp else 7.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    letterSpacing = if (isArabic) 0.sp else 0.5.sp
                                 )
-                                Text(
-                                    text = if (isStealth || userSettings.classicCardCvc.isBlank()) "•••" else userSettings.classicCardCvc,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Text(
+                                        text = if (isStealth || userSettings.classicCardCvc.isBlank()) "•••" else userSettings.classicCardCvc,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
                             }
                         }
                     }
-                }
             }
 
             // Floating Hold-to-Edit Progress Badge while user is holding for 1 second
@@ -1207,8 +1223,10 @@ private fun VisaCardRealistic(
                 .background(cardBgBrush)
                 .border(width = 1.2.dp, brush = cardBorderBrush, shape = RoundedCornerShape(22.dp))
         ) {
-            // Official circulating surface artwork for RedotPay / Bybit / Default Visa
+            // Official circulating surface artwork for RedotPay / Bybit / Binance / Default Visa
+            val isRtlVisaCard = LocalLayoutDirection.current == LayoutDirection.Rtl
             Canvas(modifier = Modifier.fillMaxSize()) {
+                val drawVisaBg: DrawScope.() -> Unit = {
                 when (provider) {
                     "REDOTPAY" -> {
                         // Concentric RedotPay signature rings & silky diagonal wave on right side
@@ -1335,7 +1353,7 @@ private fun VisaCardRealistic(
                     }
                 }
 
-                // 1-second hold progress rim accent at bottom
+                // 0.5s hold progress rim accent at bottom
                 if (holdAnim.value > 0.02f) {
                     drawRoundRect(
                         color = glowPrimary.copy(alpha = 0.95f),
@@ -1344,60 +1362,76 @@ private fun VisaCardRealistic(
                         cornerRadius = CornerRadius(4f, 4f)
                     )
                 }
+                }
+                if (isRtlVisaCard) {
+                    scale(scaleX = -1f, scaleY = 1f, pivot = center) {
+                        drawVisaBg()
+                    }
+                } else {
+                    drawVisaBg()
+                }
             }
 
-            // Card Inner Content (Always LTR like physical international cards)
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+            // Card Inner Content (Mirrors naturally to RTL in Arabic, LTR in English)
+            val stringsVisa = AppStrings.current
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top Row: Provider Brand + Network Logo
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Top Row: Provider Brand + Network Logo
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        when (provider) {
-                            "REDOTPAY" -> {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (provider) {
+                        "REDOTPAY" -> {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White),
+                                        contentAlignment = Alignment.Center
+                                    ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(20.dp)
+                                                .size(9.dp)
                                                 .clip(CircleShape)
-                                                .background(Color.White),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(9.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0xFFE11D48))
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(7.dp))
-                                        Text(
-                                            text = "RedotPay",
-                                            color = Color.White,
-                                            fontSize = 15.5.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 0.3.sp
+                                                .background(Color(0xFFE11D48))
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(7.dp))
                                     Text(
-                                        text = "CRYPTO VISA CARD",
-                                        color = secondaryTextColor,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.8.sp
+                                        text = if (isArabic) "ريدوت باي" else "RedotPay",
+                                        color = Color.White,
+                                        fontSize = 15.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = if (isArabic) 0.sp else 0.3.sp
                                     )
                                 }
+                                Text(
+                                    text = if (isArabic) "بطاقة فيزا للعملات الرقمية" else "CRYPTO VISA CARD",
+                                    color = secondaryTextColor,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = if (isArabic) 0.sp else 0.8.sp
+                                )
                             }
-                            "BYBIT" -> {
-                                Column {
+                        }
+                        "BYBIT" -> {
+                            Column {
+                                if (isArabic) {
+                                    Text(
+                                        text = "بايبت",
+                                        color = Color(0xFFF7A600),
+                                        fontSize = 17.5.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                } else {
                                     Text(
                                         text = buildAnnotatedString {
                                             withStyle(SpanStyle(color = Color.White)) { append("BYB") }
@@ -1408,208 +1442,214 @@ private fun VisaCardRealistic(
                                         fontWeight = FontWeight.Black,
                                         letterSpacing = 1.6.sp
                                     )
-                                    Text(
-                                        text = "BYBIT CARD • CRYPTO DEBIT",
-                                        color = Color(0xFFF7A600).copy(alpha = 0.88f),
-                                        fontSize = 7.8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.7.sp
-                                    )
                                 }
-                            }
-                            "BINANCE" -> {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Canvas(modifier = Modifier.size(18.dp)) {
-                                            val cx = size.width / 2f
-                                            val cy = size.height / 2f
-                                            val r = size.minDimension * 0.45f
-                                            val centerDiamond = Path().apply {
-                                                moveTo(cx, cy - r * 0.42f)
-                                                lineTo(cx + r * 0.42f, cy)
-                                                lineTo(cx, cy + r * 0.42f)
-                                                lineTo(cx - r * 0.42f, cy)
-                                                close()
-                                            }
-                                            drawPath(centerDiamond, Color(0xFFF0B90B))
-                                            val ringDiamond = Path().apply {
-                                                moveTo(cx, cy - r)
-                                                lineTo(cx + r, cy)
-                                                lineTo(cx, cy + r)
-                                                lineTo(cx - r, cy)
-                                                close()
-                                            }
-                                            drawPath(ringDiamond, Color(0xFFFCD535), style = Stroke(width = 3.2f))
-                                        }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "BINANCE",
-                                            color = Color(0xFFF0B90B),
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Black,
-                                            letterSpacing = 1.6.sp
-                                        )
-                                    }
-                                    Text(
-                                        text = "BINANCE CARD • CRYPTO VISA",
-                                        color = Color(0xFFFCD535).copy(alpha = 0.82f),
-                                        fontSize = 7.8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.7.sp
-                                    )
-                                }
-                            }
-                            else -> {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Vaultix",
-                                            color = primaryTextColor,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            letterSpacing = 0.4.sp
-                                        )
-                                    }
-                                    Text(
-                                        text = "PREMIER DEBIT",
-                                        color = secondaryTextColor,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.8.sp
-                                    )
-                                }
+                                Text(
+                                    text = if (isArabic) "بطاقة بايبت • خصم رقمي" else "BYBIT CARD • CRYPTO DEBIT",
+                                    color = Color(0xFFF7A600).copy(alpha = 0.88f),
+                                    fontSize = 7.8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = if (isArabic) 0.sp else 0.7.sp
+                                )
                             }
                         }
-
-                        if (provider == "BYBIT") {
-                            // Official Bybit Dual-Circle Network Mark + VISA/MC tag
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.width(34.dp).height(20.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFEB001B))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(start = 13.dp)
-                                            .size(20.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFF79E1B).copy(alpha = 0.90f))
+                        "BINANCE" -> {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Canvas(modifier = Modifier.size(18.dp)) {
+                                        val cx = size.width / 2f
+                                        val cy = size.height / 2f
+                                        val r = size.minDimension * 0.45f
+                                        val centerDiamond = Path().apply {
+                                            moveTo(cx, cy - r * 0.42f)
+                                            lineTo(cx + r * 0.42f, cy)
+                                            lineTo(cx, cy + r * 0.42f)
+                                            lineTo(cx - r * 0.42f, cy)
+                                            close()
+                                        }
+                                        drawPath(centerDiamond, Color(0xFFF0B90B))
+                                        val ringDiamond = Path().apply {
+                                            moveTo(cx, cy - r)
+                                            lineTo(cx + r, cy)
+                                            lineTo(cx, cy + r)
+                                            lineTo(cx - r, cy)
+                                            close()
+                                        }
+                                        drawPath(ringDiamond, Color(0xFFFCD535), style = Stroke(width = 3.2f))
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isArabic) "بينانس" else "BINANCE",
+                                        color = Color(0xFFF0B90B),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = if (isArabic) 0.sp else 1.6.sp
                                     )
                                 }
+                                Text(
+                                    text = if (isArabic) "بطاقة بينانس • فيزا رقمية" else "BINANCE CARD • CRYPTO VISA",
+                                    color = Color(0xFFFCD535).copy(alpha = 0.82f),
+                                    fontSize = 7.8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = if (isArabic) 0.sp else 0.7.sp
+                                )
                             }
-                        } else {
-                            Text(
-                                text = "VISA",
-                                color = when {
-                                    provider == "BINANCE" -> Color(0xFFFCD535)
-                                    isDefaultLight -> Color(0xFF1E3A8A)
-                                    else -> Color.White
-                                },
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Black,
-                                fontStyle = FontStyle.Italic,
-                                letterSpacing = 1.sp
-                            )
+                        }
+                        else -> {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Vaultix",
+                                        color = primaryTextColor,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.4.sp
+                                    )
+                                }
+                                Text(
+                                    text = if (isArabic) "بطاقة خصم متميزة" else "PREMIER DEBIT",
+                                    color = secondaryTextColor,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = if (isArabic) 0.sp else 0.8.sp
+                                )
+                            }
                         }
                     }
 
-                    // Middle Row: EMV Chip + Contactless waves + Status Badge
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    if (provider == "BYBIT") {
+                        // Official Bybit Dual-Circle Network Mark
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (provider == "BYBIT" || provider == "BINANCE") {
-                                EmvChipRealistic(modifier = Modifier.size(width = 40.dp, height = 30.dp))
-                            } else {
-                                SilverEmvChip(modifier = Modifier.size(width = 40.dp, height = 30.dp), isDark = isDark)
+                            Box(modifier = Modifier.width(34.dp).height(20.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFEB001B))
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = 13.dp)
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFF79E1B).copy(alpha = 0.90f))
+                                )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            ContactlessWaves(
-                                modifier = Modifier.size(18.dp),
-                                tint = when (provider) {
-                                    "REDOTPAY" -> Color.White.copy(alpha = 0.85f)
-                                    "BYBIT" -> Color(0xFFF7A600)
-                                    "BINANCE" -> Color(0xFFF0B90B)
-                                    else -> if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                        }
+                    } else {
+                        Text(
+                            text = if (isArabic) "فيزا" else "VISA",
+                            color = when {
+                                provider == "BINANCE" -> Color(0xFFFCD535)
+                                isDefaultLight -> Color(0xFF1E3A8A)
+                                else -> Color.White
+                            },
+                            fontSize = if (isArabic) 20.sp else 24.sp,
+                            fontWeight = FontWeight.Black,
+                            fontStyle = if (isArabic) FontStyle.Normal else FontStyle.Italic,
+                            letterSpacing = if (isArabic) 0.sp else 1.sp
+                        )
+                    }
+                }
+
+                // Middle Row: EMV Chip + Contactless waves + Status Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (provider == "BYBIT" || provider == "BINANCE") {
+                            EmvChipRealistic(modifier = Modifier.size(width = 40.dp, height = 30.dp))
+                        } else {
+                            SilverEmvChip(modifier = Modifier.size(width = 40.dp, height = 30.dp), isDark = isDark)
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        ContactlessWaves(
+                            modifier = Modifier.size(18.dp),
+                            tint = when (provider) {
+                                "REDOTPAY" -> Color.White.copy(alpha = 0.85f)
+                                "BYBIT" -> Color(0xFFF7A600)
+                                "BINANCE" -> Color(0xFFF0B90B)
+                                else -> if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                            }
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                when (provider) {
+                                    "REDOTPAY" -> Color.White.copy(alpha = 0.16f)
+                                    "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.16f)
+                                    "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.16f)
+                                    else -> if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFF0284C7).copy(alpha = 0.12f)
                                 }
                             )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    when (provider) {
-                                        "REDOTPAY" -> Color.White.copy(alpha = 0.16f)
-                                        "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.16f)
-                                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.16f)
-                                        else -> if (isDark) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFF0284C7).copy(alpha = 0.12f)
-                                    }
+                            .border(
+                                1.dp,
+                                when (provider) {
+                                    "REDOTPAY" -> Color.White.copy(alpha = 0.45f)
+                                    "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.55f)
+                                    "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.60f)
+                                    else -> Color(0xFF38BDF8).copy(alpha = 0.5f)
+                                },
+                                RoundedCornerShape(10.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (provider == "DEFAULT") {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                                    modifier = Modifier.size(11.dp)
                                 )
-                                .border(
-                                    1.dp,
-                                    when (provider) {
-                                        "REDOTPAY" -> Color.White.copy(alpha = 0.45f)
-                                        "BYBIT" -> Color(0xFFF7A600).copy(alpha = 0.55f)
-                                        "BINANCE" -> Color(0xFFF0B90B).copy(alpha = 0.60f)
-                                        else -> Color(0xFF38BDF8).copy(alpha = 0.5f)
-                                    },
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (provider == "DEFAULT") {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                }
-                                Text(
-                                    text = when (provider) {
-                                        "REDOTPAY" -> if (isArabic) "RedotPay • USD" else "RedotPay • USD Virtual"
-                                        "BYBIT" -> if (isArabic) "Bybit • USDT / EUR" else "Bybit • Crypto Debit"
-                                        "BINANCE" -> when {
-                                            isStealth -> "Binance • $ ••••"
-                                            binanceHoldingsCount > 0 -> String.format(
+                                Spacer(modifier = Modifier.width(5.dp))
+                            }
+                            Text(
+                                text = when (provider) {
+                                    "REDOTPAY" -> if (isArabic) "ريدوت باي • دولار" else "RedotPay • USD Virtual"
+                                    "BYBIT" -> if (isArabic) "بايبت • تذر / يورو" else "Bybit • Crypto Debit"
+                                    "BINANCE" -> when {
+                                        isStealth -> if (isArabic) "بينانس • ••••" else "Binance • $ ••••"
+                                        binanceHoldingsCount > 0 -> if (isArabic) {
+                                            "${isolateLtr(String.format(Locale.US, "$%,.2f", binancePortfolioTotalUsd))} • $binanceHoldingsCount عملات"
+                                        } else {
+                                            String.format(
                                                 Locale.US,
                                                 "$%,.2f • %d Crypto",
                                                 binancePortfolioTotalUsd,
                                                 binanceHoldingsCount
                                             )
-                                            else -> if (isArabic) "محفظة كريبتو • اضغط للفتح" else "Crypto Wallet • Tap to Open"
                                         }
-                                        else -> if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency"
-                                    },
-                                    color = when (provider) {
-                                        "REDOTPAY" -> Color.White
-                                        "BYBIT" -> Color(0xFFF7A600)
-                                        "BINANCE" -> Color(0xFFF0B90B)
-                                        else -> if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
-                                    },
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                                        else -> if (isArabic) "محفظة العملات الرقمية • اضغط للفتح" else "Crypto Wallet • Tap to Open"
+                                    }
+                                    else -> if (isArabic) "قريباً • بطاقة دولية" else "Coming Soon • Multi-Currency"
+                                },
+                                color = when (provider) {
+                                    "REDOTPAY" -> Color.White
+                                    "BYBIT" -> Color(0xFFF7A600)
+                                    "BINANCE" -> Color(0xFFF0B90B)
+                                    else -> if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
+                }
 
-                    // Card Number
-                    val displayNumber = formatVisaNumberDisplay(
-                        rawDigits = cardNumber,
-                        provider = provider,
-                        isStealth = isStealth
-                    )
+                // Card Number (micro-LTR)
+                val displayNumber = formatVisaNumberDisplay(
+                    rawDigits = cardNumber,
+                    provider = provider,
+                    isStealth = isStealth
+                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Text(
                         text = displayNumber,
                         color = primaryTextColor,
@@ -1620,43 +1660,45 @@ private fun VisaCardRealistic(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
 
-                    // Bottom Row: Cardholder, Valid Thru, CVC
+                // Bottom Row: Cardholder, Valid Thru, CVC
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) "صاحب البطاقة" else "CARDHOLDER",
+                            color = secondaryTextColor,
+                            fontSize = if (isArabic) 8.sp else 7.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = if (isArabic) 0.sp else 0.4.sp
+                        )
+                        Text(
+                            text = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                            color = primaryTextColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "CARDHOLDER",
+                                text = if (isArabic) stringsVisa.cardExpiryLabel else "VALID THRU",
                                 color = secondaryTextColor,
-                                fontSize = 7.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.4.sp
+                                fontSize = if (isArabic) 8.sp else 7.5.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
-                                color = primaryTextColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "VALID THRU",
-                                    color = secondaryTextColor,
-                                    fontSize = 7.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 Text(
                                     text = if (isStealth) "••/••" else expiry.ifBlank { "08/28" },
                                     color = primaryTextColor,
@@ -1665,15 +1707,17 @@ private fun VisaCardRealistic(
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
+                        }
 
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "CVC",
-                                    color = secondaryTextColor,
-                                    fontSize = 7.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = if (isArabic) stringsVisa.cardCvcLabel else "CVC",
+                                color = secondaryTextColor,
+                                fontSize = if (isArabic) 8.sp else 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = if (isArabic) 0.sp else 0.5.sp
+                            )
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 Text(
                                     text = if (isStealth || cvc.isBlank()) "•••" else cvc,
                                     color = primaryTextColor,
@@ -1741,7 +1785,7 @@ private fun VisaCardRealistic(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (isArabic) "اضغط مطولاً 0.5 ثانية على البطاقة لاختيار RedotPay أو Bybit أو Binance"
+            text = if (isArabic) "اضغط مطولاً نصف ثانية على البطاقة لاختيار ريدوت باي أو بايبت أو بينانس"
             else "Hold card 0.5s to choose RedotPay, Bybit or Binance",
             color = when (provider) {
                 "REDOTPAY" -> Color(0xFFFB7185)
@@ -1884,28 +1928,37 @@ private fun SilverEmvChip(modifier: Modifier = Modifier, isDark: Boolean) {
  */
 @Composable
 private fun ContactlessWaves(modifier: Modifier = Modifier, tint: Color = Color.White) {
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Canvas(modifier = modifier) {
-        val stroke = Stroke(width = 1.8f)
-        val cx = 0f
-        val cy = size.height / 2f
-        drawArc(
-            color = tint,
-            startAngle = -45f,
-            sweepAngle = 90f,
-            useCenter = false,
-            topLeft = Offset(-size.width * 0.2f, cy - size.height * 0.25f),
-            size = androidx.compose.ui.geometry.Size(size.width * 0.5f, size.height * 0.5f),
-            style = stroke
-        )
-        drawArc(
-            color = tint,
-            startAngle = -45f,
-            sweepAngle = 90f,
-            useCenter = false,
-            topLeft = Offset(-size.width * 0.2f, cy - size.height * 0.45f),
-            size = Size(size.width * 0.9f, size.height * 0.9f),
-            style = stroke
-        )
+        val drawWaves: DrawScope.() -> Unit = {
+            val stroke = Stroke(width = 1.8f)
+            val cy = size.height / 2f
+            drawArc(
+                color = tint,
+                startAngle = -45f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(-size.width * 0.2f, cy - size.height * 0.25f),
+                size = Size(size.width * 0.5f, size.height * 0.5f),
+                style = stroke
+            )
+            drawArc(
+                color = tint,
+                startAngle = -45f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(-size.width * 0.2f, cy - size.height * 0.45f),
+                size = Size(size.width * 0.9f, size.height * 0.9f),
+                style = stroke
+            )
+        }
+        if (isRtl) {
+            scale(scaleX = -1f, scaleY = 1f, pivot = center) {
+                drawWaves()
+            }
+        } else {
+            drawWaves()
+        }
     }
 }
 
@@ -1913,7 +1966,7 @@ private fun ContactlessWaves(modifier: Modifier = Modifier, tint: Color = Color.
  * Stylized white Algérie Poste crescent-wing emblem matching the Classic Blue card.
  */
 @Composable
-private fun AlgeriePosteWhiteLogo(modifier: Modifier = Modifier) {
+private fun AlgeriePosteWhiteLogo(isArabic: Boolean = false, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1966,14 +2019,16 @@ private fun AlgeriePosteWhiteLogo(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.ExtraBold,
             lineHeight = 9.sp
         )
-        Text(
-            text = "ALGÉRIE POSTE",
-            color = Color(0xFFBAE6FD),
-            fontSize = 5.8.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
-            lineHeight = 7.sp
-        )
+        if (!isArabic) {
+            Text(
+                text = "ALGÉRIE POSTE",
+                color = Color(0xFFBAE6FD),
+                fontSize = 5.8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp,
+                lineHeight = 7.sp
+            )
+        }
     }
 }
 
@@ -2249,7 +2304,7 @@ private fun DrawScope.drawClassicEdahabiaArtwork(holdProgress: Float) {
 }
 
 @Composable
-private fun AlgerianCibBankBadge(bankSpec: AlgerianBankCardSpec) {
+private fun AlgerianCibBankBadge(bankSpec: AlgerianBankCardSpec, isArabic: Boolean = false) {
     val accent = Color(bankSpec.accentHex)
     Column(horizontalAlignment = Alignment.End) {
         Box(
@@ -2268,21 +2323,21 @@ private fun AlgerianCibBankBadge(bankSpec: AlgerianBankCardSpec) {
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
-                    text = bankSpec.shortCode,
+                    text = if (isArabic) bankSpec.shortCodeAr else bankSpec.shortCode,
                     color = Color.White,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.6.sp
+                    letterSpacing = if (isArabic) 0.sp else 0.6.sp
                 )
             }
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "CIB INTERBANK",
+            text = if (isArabic) "الشبكة البنكية المشتركة" else "CIB INTERBANK",
             color = accent.copy(alpha = 0.90f),
             fontSize = 7.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 0.7.sp
+            letterSpacing = if (isArabic) 0.sp else 0.7.sp
         )
     }
 }

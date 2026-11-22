@@ -44,7 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
@@ -60,6 +62,7 @@ fun GlassBackground(
     content: @Composable BoxScope.() -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     when {
         colors.isNeumorphic -> {
@@ -138,10 +141,11 @@ fun GlassBackground(
                             end = Offset(size.width, size.height * 0.14f),
                             strokeWidth = 1.5f
                         )
+                        val lineX = if (isRtl) size.width * 0.12f else size.width * 0.88f
                         drawLine(
                             color = colors.secondaryNeon.copy(alpha = 0.14f),
-                            start = Offset(size.width * 0.88f, 0f),
-                            end = Offset(size.width * 0.88f, size.height),
+                            start = Offset(lineX, 0f),
+                            end = Offset(lineX, size.height),
                             strokeWidth = 1.2f
                         )
                     },
@@ -172,7 +176,7 @@ fun GlassBackground(
                                     colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.06f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.25f, size.height * 0.18f),
+                                center = Offset(size.width * (if (isRtl) 0.75f else 0.25f), size.height * 0.18f),
                                 radius = minOf(size.width, size.height) * 0.65f
                             )
                         )
@@ -239,7 +243,7 @@ fun GlassBackground(
                                     colors.primaryNeon.copy(alpha = if (colors.isDark) 0.08f else 0.05f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.18f, size.height * 0.16f),
+                                center = Offset(size.width * (if (isRtl) 0.82f else 0.18f), size.height * 0.16f),
                                 radius = orb1Radius
                             )
                         )
@@ -251,7 +255,7 @@ fun GlassBackground(
                                     colors.secondaryNeon.copy(alpha = if (colors.isDark) 0.06f else 0.03f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.84f, size.height * 0.42f),
+                                center = Offset(size.width * (if (isRtl) 0.16f else 0.84f), size.height * 0.42f),
                                 radius = orb2Radius
                             )
                         )
@@ -262,7 +266,7 @@ fun GlassBackground(
                                     colors.successColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.30f, size.height * 0.82f),
+                                center = Offset(size.width * (if (isRtl) 0.70f else 0.30f), size.height * 0.82f),
                                 radius = orb3Radius
                             )
                         )
@@ -274,7 +278,7 @@ fun GlassBackground(
                                         colors.primaryNeon.copy(alpha = if (colors.isDark) 0.10f else 0.05f),
                                         Color.Transparent
                                     ),
-                                    center = Offset(size.width * 0.78f, size.height * 0.88f),
+                                    center = Offset(size.width * (if (isRtl) 0.22f else 0.78f), size.height * 0.88f),
                                     radius = minDim * 0.38f
                                 )
                             )

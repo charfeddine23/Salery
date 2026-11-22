@@ -46,6 +46,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,12 +61,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -82,6 +86,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -139,8 +144,10 @@ fun BinanceWalletScreen(
 
     val lastSyncFormatted = remember(userSettings.binanceLastPriceSyncMillis, isArabic) {
         if (userSettings.binanceLastPriceSyncMillis > 0L) {
-            SimpleDateFormat("dd/MM • HH:mm", Locale.getDefault())
-                .format(Date(userSettings.binanceLastPriceSyncMillis))
+            isolateLtr(
+                SimpleDateFormat("dd/MM • HH:mm", if (isArabic) Locale("ar") else Locale.US)
+                    .format(Date(userSettings.binanceLastPriceSyncMillis))
+            )
         } else {
             if (isArabic) "لم يتم التحديث بعد" else "Not synced yet"
         }
@@ -155,8 +162,13 @@ fun BinanceWalletScreen(
         }
     }
 
-    val priceSource = remember(prices) {
-        prices.values.firstOrNull { it.source.isNotBlank() }?.source ?: "Binance"
+    val priceSource = remember(prices, isArabic) {
+        val raw = prices.values.firstOrNull { it.source.isNotBlank() }?.source ?: "Binance"
+        if (!isArabic) raw
+        else raw
+            .replace("Binance", "بينانس", ignoreCase = true)
+            .replace("CoinGecko", "كوين غيكو", ignoreCase = true)
+            .replace("CryptoCompare", "كريبتو كومبير", ignoreCase = true)
     }
 
     if (dialogCoinSymbol != null) {
@@ -240,8 +252,9 @@ fun BinanceWalletScreen(
             shape = RoundedCornerShape(dimens.cornerRadiusLg),
             cornerRadius = dimens.cornerRadiusLg
         ) {
+            val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             Canvas(modifier = Modifier.matchParentSize()) {
-                val cx = size.width * 0.85f
+                val cx = size.width * (if (isRtl) 0.15f else 0.85f)
                 val cy = size.height * 0.35f
                 val r = size.height * 0.45f
                 val outer = Path().apply {
@@ -347,7 +360,7 @@ fun BinanceWalletScreen(
                 Spacer(modifier = Modifier.height(dimens.spacingMd))
 
                 Text(
-                    text = if (isStealth) "$ ••••••" else formatUsdCurrency(totalPortfolioUsd),
+                    text = if (isStealth) (if (isArabic) "•••• دولار" else "$ ••••••") else isolateLtr(formatUsdCurrency(totalPortfolioUsd)),
                     color = Color.White,
                     fontSize = typo.hero,
                     fontWeight = FontWeight.Black,
@@ -406,7 +419,7 @@ fun BinanceWalletScreen(
                     if (userSettings.binanceLastPriceSyncMillis > 0L) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isArabic) "التالي: ${nextSyncRemainingMins}د" else "Next: ${nextSyncRemainingMins}m",
+                            text = if (isArabic) "التالي: ${isolateLtr(nextSyncRemainingMins.toString())} د" else "Next: ${nextSyncRemainingMins}m",
                             color = EmeraldNeon,
                             fontSize = typo.caption,
                             fontWeight = FontWeight.Bold,
@@ -524,7 +537,7 @@ fun BinanceWalletScreen(
                                 else -> "---"
                             }
                             Text(
-                                text = priceText,
+                                text = isolateLtr(priceText),
                                 color = colors.textPrimary,
                                 fontSize = typo.bodySm,
                                 fontWeight = FontWeight.Bold,
@@ -632,7 +645,7 @@ fun BinanceWalletScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (isArabic) {
-                                        "اضغط لإضافة XRP أو BTC أو ETH أو أي عملة أساسية وتحديد الكمية التي تملكها لمتابعة قيمتها كل ساعة"
+                                        "اضغط لإضافة أي عملة رقمية أساسية وتحديد الكمية التي تملكها لمتابعة قيمتها كل ساعة"
                                     } else {
                                         "Tap to add XRP, BTC, ETH or other major coins and track live hourly market value"
                                     },
@@ -707,7 +720,11 @@ fun BinanceWalletScreen(
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = if (isStealth) "•••••• ${spec.symbol}" else "${formatCryptoQuantity(holding.quantity)} ${spec.symbol}",
+                                            text = if (isStealth) {
+                                                if (isArabic) "•••••• ${spec.nameAr}" else "•••••• ${spec.symbol}"
+                                            } else {
+                                                isolateLtr("${formatCryptoQuantity(holding.quantity)} ${spec.symbol}")
+                                            },
                                             color = colors.textSecondary,
                                             fontSize = typo.bodySm,
                                             fontWeight = FontWeight.SemiBold,
@@ -718,7 +735,7 @@ fun BinanceWalletScreen(
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = if (unitPrice > 0.0) "1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}"
+                                                text = if (unitPrice > 0.0) isolateLtr("1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}")
                                                 else if (isArabic) "بانتظار السعر..." else "Fetching price...",
                                                 color = colors.textMuted,
                                                 fontSize = typo.caption,
@@ -739,7 +756,7 @@ fun BinanceWalletScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(2.dp))
                                                 Text(
-                                                    text = String.format(Locale.US, "%+.2f%%", changePct),
+                                                    text = isolateLtr(String.format(Locale.US, "%+.2f", changePct) + if (isArabic) "٪" else "%"),
                                                     color = pctColor,
                                                     fontSize = typo.caption,
                                                     fontWeight = FontWeight.Bold
@@ -751,7 +768,7 @@ fun BinanceWalletScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = if (isStealth) "$ ••••" else if (unitPrice > 0.0) formatUsdCurrency(totalUsd) else "---",
+                                        text = if (isStealth) (if (isArabic) "•••• دولار" else "$ ••••") else if (unitPrice > 0.0) isolateLtr(formatUsdCurrency(totalUsd)) else "---",
                                         color = if (unitPrice > 0.0) EmeraldNeon else colors.textMuted,
                                         fontSize = typo.bodyLg,
                                         fontWeight = FontWeight.ExtraBold,
@@ -869,7 +886,7 @@ fun BinanceWalletScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isArabic) {
-                                "اضغط لإضافة XRP أو BTC أو ETH أو أي عملة أساسية وتحديد الكمية التي تملكها لمتابعة قيمتها كل ساعة"
+                                "اضغط لإضافة أي عملة رقمية أساسية وتحديد الكمية التي تملكها لمتابعة قيمتها كل ساعة"
                             } else {
                                 "Tap to add XRP, BTC, ETH or other major coins and track live hourly market value"
                             },
@@ -951,9 +968,9 @@ fun BinanceWalletScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isStealth) {
-                                        "•••••• ${spec.symbol}"
+                                        if (isArabic) "•••••• ${spec.nameAr}" else "•••••• ${spec.symbol}"
                                     } else {
-                                        "${formatCryptoQuantity(holding.quantity)} ${spec.symbol}"
+                                        isolateLtr("${formatCryptoQuantity(holding.quantity)} ${spec.symbol}")
                                     },
                                     color = colors.textSecondary,
                                     fontSize = 12.sp,
@@ -964,7 +981,7 @@ fun BinanceWalletScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = if (unitPrice > 0.0) {
-                                            "1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}"
+                                            isolateLtr("1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}")
                                         } else {
                                             if (isArabic) "بانتظار السعر..." else "Fetching price..."
                                         },
@@ -984,7 +1001,7 @@ fun BinanceWalletScreen(
                                         )
                                         Spacer(modifier = Modifier.width(2.dp))
                                         Text(
-                                            text = String.format(Locale.US, "%+.2f%%", changePct),
+                                            text = isolateLtr(String.format(Locale.US, "%+.2f", changePct) + if (isArabic) "٪" else "%"),
                                             color = pctColor,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold
@@ -997,9 +1014,9 @@ fun BinanceWalletScreen(
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
                                 text = if (isStealth) {
-                                    "$ ••••"
+                                    if (isArabic) "•••• دولار" else "$ ••••"
                                 } else if (unitPrice > 0.0) {
-                                    formatUsdCurrency(totalUsd)
+                                    isolateLtr(formatUsdCurrency(totalUsd))
                                 } else {
                                     "---"
                                 },
@@ -1090,6 +1107,9 @@ private fun AddOrEditCryptoDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 500.dp)
@@ -1116,7 +1136,7 @@ private fun AddOrEditCryptoDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isArabic) "أدخل الكمية المملوكة (يشمل XRP والعملات الأساسية)" else "Enter your coin balance (XRP & major assets)",
+                            text = if (isArabic) "أدخل الكمية المملوكة للريبل أو أي عملة رقمية أساسية" else "Enter your coin balance (XRP & major assets)",
                             color = colors.textMuted,
                             fontSize = 11.sp
                         )
@@ -1186,7 +1206,7 @@ private fun AddOrEditCryptoDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = asset.symbol,
+                                    text = if (isArabic) asset.nameAr else asset.symbol,
                                     color = if (isSel) colors.textPrimary else colors.textSecondary,
                                     fontSize = 12.sp,
                                     fontWeight = if (isSel) FontWeight.ExtraBold else FontWeight.SemiBold
@@ -1210,13 +1230,13 @@ private fun AddOrEditCryptoDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isArabic) "السعر الحالي لـ ${selectedAsset.symbol}" else "Current ${selectedAsset.symbol} Market Price",
+                        text = if (isArabic) "السعر الحالي لـ ${selectedAsset.nameAr}" else "Current ${selectedAsset.symbol} Market Price",
                         color = colors.textSecondary,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = if (unitPrice > 0.0) formatCryptoUnitPrice(unitPrice) else (if (isArabic) "سيتم جلبه" else "Syncing..."),
+                        text = if (unitPrice > 0.0) isolateLtr(formatCryptoUnitPrice(unitPrice)) else (if (isArabic) "سيتم جلبه" else "Syncing..."),
                         color = binanceGold,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -1236,7 +1256,7 @@ private fun AddOrEditCryptoDialog(
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        text = if (isArabic) "الكمية التي تملكها (${selectedAsset.symbol})" else "Quantity Held (${selectedAsset.symbol})",
+                        text = if (isArabic) "الكمية التي تملكها (${selectedAsset.nameAr})" else "Quantity Held (${selectedAsset.symbol})",
                         color = colors.textSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1245,7 +1265,11 @@ private fun AddOrEditCryptoDialog(
                     Box(modifier = Modifier.fillMaxWidth()) {
                         if (quantityText.isEmpty()) {
                             Text(
-                                text = if (selectedAsset.symbol == "XRP") "e.g. 500.0" else "0.00",
+                                text = if (isArabic) {
+                                    if (selectedAsset.symbol == "XRP") "مثال: 500.0" else "0.00"
+                                } else {
+                                    if (selectedAsset.symbol == "XRP") "e.g. 500.0" else "0.00"
+                                },
                                 color = colors.textMuted.copy(alpha = 0.55f),
                                 fontSize = 16.sp,
                                 fontFamily = FontFamily.Monospace
@@ -1263,7 +1287,8 @@ private fun AddOrEditCryptoDialog(
                                 color = colors.textPrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = TextDirection.Ltr
                             ),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -1277,7 +1302,7 @@ private fun AddOrEditCryptoDialog(
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (isArabic) {
-                                "القيمة المقدرة: ${formatUsdCurrency(parsedQuantity!! * unitPrice)}"
+                                "القيمة المقدرة: ${isolateLtr(formatUsdCurrency(parsedQuantity!! * unitPrice))}"
                             } else {
                                 "Estimated Value: ${formatUsdCurrency(parsedQuantity!! * unitPrice)}"
                             },
@@ -1317,6 +1342,7 @@ private fun AddOrEditCryptoDialog(
                     )
                 }
             }
+        }
         }
     }
 }

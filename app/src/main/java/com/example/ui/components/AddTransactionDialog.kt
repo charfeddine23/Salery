@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -47,6 +52,7 @@ import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.ExpenseCategories
 import com.example.data.TransactionType
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalScreenshotProtection
@@ -59,6 +65,7 @@ fun AddTransactionDialog(
     onSave: (type: TransactionType, amount: Double, category: String, title: String, note: String, dateMillis: Long) -> Unit
 ) {
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val colors = LiquidGlassTheme.colors
 
     var selectedType by remember { mutableStateOf(initialType) }
@@ -83,6 +90,9 @@ fun AddTransactionDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -194,6 +204,7 @@ fun AddTransactionDialog(
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
                     label = { Text("${strings.amount} (${strings.currencyCode})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = TextStyle(textDirection = TextDirection.Ltr),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -356,6 +367,7 @@ fun AddTransactionDialog(
                     }
                 )
             }
+        }
         }
     }
 }

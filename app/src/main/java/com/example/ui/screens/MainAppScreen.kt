@@ -279,8 +279,8 @@ fun MainAppScreen(
     // Determine current localized strings bundle
     val isArabic = userSettings.language == "ar"
     val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
-    // Strict LTR layout orientation across both Arabic and English locales
-    val layoutDirection = LayoutDirection.Ltr
+    // Mirror layout cleanly to RTL in Arabic mode and LTR in English mode
+    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
@@ -444,15 +444,15 @@ fun MainAppScreen(
                                         MainTopAppBar(
                                             title = when (currentRoute) {
                                                 "cards" -> activeStrings.cardsHubTitle
-                                                "keys" -> "Keys"
-                                                "ccps" -> "CCP's"
-                                                "square" -> "Square"
+                                                "keys" -> if (isArabic) "المفاتيح" else "Keys"
+                                                "ccps" -> if (isArabic) "الحسابات البريدية" else "CCP's"
+                                                "square" -> if (isArabic) "السكوار" else "Square"
                                                 "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
                                                 "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
-                                                "theme_engine" -> "Theme Engine"
+                                                "theme_engine" -> if (isArabic) "محرك الثيمات" else "Theme Engine"
                                                 "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
                                                 "visa_coming_soon" -> activeStrings.visaCardTitle
-                                                "binance_wallet" -> if (isArabic) "محفظة Binance" else "Binance Wallet"
+                                                "binance_wallet" -> if (isArabic) "محفظة بينانس" else "Binance Wallet"
                                                 "income" -> activeStrings.navIncome
                                                 "expenses" -> activeStrings.navExpenses
                                                 "debts" -> activeStrings.navDebts
@@ -1036,6 +1036,8 @@ fun MainTopAppBar(
     onBackClick: () -> Unit = {}
 ) {
     val colors = LiquidGlassTheme.colors
+    val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
@@ -1063,7 +1065,11 @@ fun MainTopAppBar(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (canGoBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
-                        contentDescription = if (canGoBack) "Back" else "Menu",
+                        contentDescription = if (canGoBack) {
+                            if (isArabic) "رجوع" else "Back"
+                        } else {
+                            if (isArabic) "القائمة" else "Menu"
+                        },
                         tint = colors.textPrimary,
                         modifier = Modifier.size(dimens.iconSizeMd)
                     )
@@ -1116,7 +1122,7 @@ fun MainTopAppBar(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = "Stealth Mode Toggle",
+                        contentDescription = if (isArabic) "تبديل وضع التخفي" else "Stealth Mode Toggle",
                         tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
                         modifier = Modifier.size(dimens.iconSizeMd - 2.dp)
                     )
@@ -1132,6 +1138,7 @@ private fun ScreenshotShieldTopButton(
     onClick: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val isArabic = AppStrings.current is ArabicStrings
     val infinite = rememberInfiniteTransition(label = "top_shield_glow")
     val pulse by infinite.animateFloat(
         initialValue = 0.72f,
@@ -1157,9 +1164,9 @@ private fun ScreenshotShieldTopButton(
             .size(48.dp)
             .semantics {
                 contentDescription = if (isProtected) {
-                    "No-Screenshot Protection Active"
+                    if (isArabic) "حماية منع التصوير مفعّلة" else "No-Screenshot Protection Active"
                 } else {
-                    "No-Screenshot Protection Disabled"
+                    if (isArabic) "حماية منع التصوير معطّلة" else "No-Screenshot Protection Disabled"
                 }
             }
             .clickable(
@@ -1430,14 +1437,15 @@ fun HubBottomBar(
     onRouteSelect: (String) -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
+    val isArabic = AppStrings.current is ArabicStrings
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
     val items = listOf(
-        NavigationItem("cards", "Card Hub", Icons.Default.CreditCard),
-        NavigationItem("keys", "Keys", Icons.Default.VpnKey),
-        NavigationItem("ccps", "CCP's", Icons.Default.AccountBalance),
-        NavigationItem("square", "Square", Icons.Default.CurrencyExchange)
+        NavigationItem("cards", if (isArabic) "مركز البطاقات" else "Card Hub", Icons.Default.CreditCard),
+        NavigationItem("keys", if (isArabic) "المفاتيح" else "Keys", Icons.Default.VpnKey),
+        NavigationItem("ccps", if (isArabic) "الحسابات البريدية" else "CCP's", Icons.Default.AccountBalance),
+        NavigationItem("square", if (isArabic) "السكوار" else "Square", Icons.Default.CurrencyExchange)
     )
 
     Box(
@@ -1528,10 +1536,10 @@ fun LiquidGlassNavigationRail(
         )
     } else {
         listOf(
-            NavigationItem("cards", "Card Hub", Icons.Default.CreditCard),
-            NavigationItem("keys", "Keys", Icons.Default.VpnKey),
-            NavigationItem("ccps", "CCP's", Icons.Default.AccountBalance),
-            NavigationItem("square", "Square", Icons.Default.CurrencyExchange)
+            NavigationItem("cards", if (isArabic) "مركز البطاقات" else "Card Hub", Icons.Default.CreditCard),
+            NavigationItem("keys", if (isArabic) "المفاتيح" else "Keys", Icons.Default.VpnKey),
+            NavigationItem("ccps", if (isArabic) "الحسابات البريدية" else "CCP's", Icons.Default.AccountBalance),
+            NavigationItem("square", if (isArabic) "السكوار" else "Square", Icons.Default.CurrencyExchange)
         )
     }
 

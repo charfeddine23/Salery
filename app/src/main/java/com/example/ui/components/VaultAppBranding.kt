@@ -37,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -59,14 +60,17 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale as drawScale
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -101,6 +105,7 @@ fun VaultAppBrandBackdrop(
 ) {
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     val primary by animateColorAsState(
         targetValue = preset.primaryColor(),
@@ -140,58 +145,68 @@ fun VaultAppBrandBackdrop(
             )
         )
 
-        // 2. Ambient corner radial glow
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    primary.copy(alpha = (if (isDark) 0.28f else 0.16f) * (0.85f + 0.15f * pulsePhase)),
-                    secondary.copy(alpha = if (isDark) 0.12f else 0.06f),
-                    Color.Transparent
+        val drawDecor: DrawScope.() -> Unit = {
+            // 2. Ambient corner radial glow
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        primary.copy(alpha = (if (isDark) 0.28f else 0.16f) * (0.85f + 0.15f * pulsePhase)),
+                        secondary.copy(alpha = if (isDark) 0.12f else 0.06f),
+                        Color.Transparent
+                    ),
+                    center = Offset(w * 0.86f, h * 0.18f),
+                    radius = w * 0.62f
                 ),
-                center = Offset(w * 0.86f, h * 0.18f),
-                radius = w * 0.62f
-            ),
-            radius = w * 0.62f,
-            center = Offset(w * 0.86f, h * 0.18f)
-        )
+                radius = w * 0.62f,
+                center = Offset(w * 0.86f, h * 0.18f)
+            )
 
-        // 3. Signature Brand Shapes & Geometry
-        val shapeAlpha = if (isDark) 0.24f else 0.18f
-        when (preset.motif) {
-            VaultAppMotif.CAMERA_LENS_RINGS -> drawCameraLensMotif(w, h, primary, secondary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.POSTAL_ARCS -> drawPostalArcsMotif(w, h, primary, secondary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.CRYSTAL_FACETS -> drawCrystalFacetsMotif(w, h, primary, secondary, accent, shapeAlpha)
-            VaultAppMotif.CRYPTO_HEX_GRID -> drawCryptoHexMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.CRYPTO_DIAMONDS -> drawCryptoDiamondsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.AURORA_ORBS -> drawGoogleAuroraOrbsMotif(w, h, pulsePhase, shapeAlpha)
-            VaultAppMotif.SOCIAL_WAVES -> drawSocialWavesMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
-            VaultAppMotif.SOUND_WAVES -> drawTikTokSoundWavesMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
-            VaultAppMotif.CHAT_BUBBLES -> drawChatBubblesMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.PAPER_PLANES -> drawPaperPlaneMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.SPARK_STARS -> drawSparkStarsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.DIAGONAL_SLASHES -> drawDiagonalSlashesMotif(w, h, primary, accent, shapeAlpha)
-            VaultAppMotif.CINEMA_STRIPES -> drawCinemaStripesMotif(w, h, primary, secondary, shapeAlpha)
-            VaultAppMotif.SOUND_RINGS -> drawSpotifySoundRingsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.ORBIT_NODES -> drawOrbitNodesMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
-            VaultAppMotif.CODE_NODES -> drawCodeNodesMotif(w, h, primary, secondary, shapeAlpha)
-            VaultAppMotif.CARD_RIBBONS -> drawCardRibbonsMotif(w, h, primary, secondary, accent, shapeAlpha)
-            VaultAppMotif.LIQUID_AURORA -> drawLiquidAuroraMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
+            // 3. Signature Brand Shapes & Geometry
+            val shapeAlpha = if (isDark) 0.24f else 0.18f
+            when (preset.motif) {
+                VaultAppMotif.CAMERA_LENS_RINGS -> drawCameraLensMotif(w, h, primary, secondary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.POSTAL_ARCS -> drawPostalArcsMotif(w, h, primary, secondary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.CRYSTAL_FACETS -> drawCrystalFacetsMotif(w, h, primary, secondary, accent, shapeAlpha)
+                VaultAppMotif.CRYPTO_HEX_GRID -> drawCryptoHexMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.CRYPTO_DIAMONDS -> drawCryptoDiamondsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.AURORA_ORBS -> drawGoogleAuroraOrbsMotif(w, h, pulsePhase, shapeAlpha)
+                VaultAppMotif.SOCIAL_WAVES -> drawSocialWavesMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
+                VaultAppMotif.SOUND_WAVES -> drawTikTokSoundWavesMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
+                VaultAppMotif.CHAT_BUBBLES -> drawChatBubblesMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.PAPER_PLANES -> drawPaperPlaneMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.SPARK_STARS -> drawSparkStarsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.DIAGONAL_SLASHES -> drawDiagonalSlashesMotif(w, h, primary, accent, shapeAlpha)
+                VaultAppMotif.CINEMA_STRIPES -> drawCinemaStripesMotif(w, h, primary, secondary, shapeAlpha)
+                VaultAppMotif.SOUND_RINGS -> drawSpotifySoundRingsMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.ORBIT_NODES -> drawOrbitNodesMotif(w, h, primary, accent, pulsePhase, shapeAlpha)
+                VaultAppMotif.CODE_NODES -> drawCodeNodesMotif(w, h, primary, secondary, shapeAlpha)
+                VaultAppMotif.CARD_RIBBONS -> drawCardRibbonsMotif(w, h, primary, secondary, accent, shapeAlpha)
+                VaultAppMotif.LIQUID_AURORA -> drawLiquidAuroraMotif(w, h, primary, secondary, pulsePhase, shapeAlpha)
+            }
+
+            // 4. Diagonal metallic liquid shimmer sweep
+            val beamW = w * 0.36f
+            val beamX = (w + beamW * 2f) * shimmerPhase - beamW
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = if (isDark) 0.055f else 0.20f),
+                        Color.Transparent
+                    ),
+                    start = Offset(beamX, 0f),
+                    end = Offset(beamX + beamW, h)
+                )
+            )
         }
 
-        // 4. Diagonal metallic liquid shimmer sweep
-        val beamW = w * 0.36f
-        val beamX = (w + beamW * 2f) * shimmerPhase - beamW
-        drawRect(
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color.Transparent,
-                    Color.White.copy(alpha = if (isDark) 0.055f else 0.20f),
-                    Color.Transparent
-                ),
-                start = Offset(beamX, 0f),
-                end = Offset(beamX + beamW, h)
-            )
-        )
+        if (isRtl) {
+            drawScale(scaleX = -1f, scaleY = 1f, pivot = center) {
+                drawDecor()
+            }
+        } else {
+            drawDecor()
+        }
     }
 }
 
@@ -228,7 +243,8 @@ private fun rememberInstalledAppIconBitmap(packageNames: List<String>): ImageBit
 @Composable
 fun VaultAppEmblemBadge(
     preset: VaultAppPreset,
-    size: Dp = 44.dp
+    size: Dp = 44.dp,
+    isArabic: Boolean = false
 ) {
     val installedIcon = rememberInstalledAppIconBitmap(preset.packageNames)
     val primary by animateColorAsState(preset.primaryColor(), tween(380), label = "emblem_p")
@@ -259,7 +275,7 @@ fun VaultAppEmblemBadge(
         if (installedIcon != null) {
             Image(
                 bitmap = installedIcon,
-                contentDescription = preset.nameEn,
+                contentDescription = if (isArabic) preset.nameAr else preset.nameEn,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -766,6 +782,9 @@ fun VaultHoldActionDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 420.dp)
@@ -780,7 +799,7 @@ fun VaultHoldActionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    VaultAppEmblemBadge(preset = preset, size = 46.dp)
+                    VaultAppEmblemBadge(preset = preset, size = 46.dp, isArabic = isArabic)
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -951,6 +970,7 @@ fun VaultHoldActionDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -984,6 +1004,9 @@ fun AppPresetPickerDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 460.dp)
@@ -1044,7 +1067,7 @@ fun AppPresetPickerDialog(
                     Box(modifier = Modifier.weight(1f)) {
                         if (query.isEmpty()) {
                             Text(
-                                text = if (isArabic) "ابحث: Instagram، BaridiMob، Google..."
+                                text = if (isArabic) "ابحث: إنستغرام، بريدي موب، جوجل..."
                                 else "Search: Instagram, BaridiMob, Google...",
                                 color = colors.textMuted,
                                 fontSize = 12.5.sp
@@ -1099,7 +1122,7 @@ fun AppPresetPickerDialog(
                                 .testTag("app_preset_item_${preset.id}"),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            VaultAppEmblemBadge(preset = preset, size = 40.dp)
+                            VaultAppEmblemBadge(preset = preset, size = 40.dp, isArabic = isArabic)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -1110,8 +1133,18 @@ fun AppPresetPickerDialog(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                val categoryLabel = if (isArabic) {
+                                    when (preset.defaultCategory) {
+                                        "APP" -> "تطبيق"
+                                        "BANK" -> "بنك"
+                                        "EMAIL" -> "بريد إلكتروني"
+                                        "PIN" -> "رمز سري"
+                                        "CARD" -> "بطاقة"
+                                        else -> preset.defaultCategory
+                                    }
+                                } else preset.defaultCategory
                                 Text(
-                                    text = preset.defaultCategory,
+                                    text = categoryLabel,
                                     color = primary,
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.ExtraBold
@@ -1120,7 +1153,7 @@ fun AppPresetPickerDialog(
                             if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Selected",
+                                    contentDescription = if (isArabic) "محدد" else "Selected",
                                     tint = primary,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -1129,6 +1162,7 @@ fun AppPresetPickerDialog(
                     }
                 }
             }
+        }
         }
     }
 }

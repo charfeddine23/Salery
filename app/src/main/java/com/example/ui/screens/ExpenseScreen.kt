@@ -63,6 +63,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -336,7 +337,7 @@ private fun TotalExpenseHeroCard(
             )
             Spacer(modifier = Modifier.height(dimens.spacingXs))
             Text(
-                text = formatDzd(totalExpense, strings.currencyCode),
+                text = isolateLtr(formatDzd(totalExpense, strings.currencyCode)),
                 color = RoseNeon,
                 fontSize = typo.display,
                 fontWeight = FontWeight.ExtraBold,
@@ -385,9 +386,9 @@ private fun TotalExpenseHeroCard(
                     text = when {
                         autoAddTaxesEnabled && autoAddTaxesBaselineMillis > 0L -> {
                             if (isArabic) {
-                                "الضرائب التلقائية مفعّلة منذ ${formatDate(autoAddTaxesBaselineMillis)} (المستقبلية فقط)"
+                                "الضرائب التلقائية مفعّلة منذ ${formatDate(autoAddTaxesBaselineMillis, true)} (المستقبلية فقط)"
                             } else {
-                                "Auto Add Taxes ON since ${formatDate(autoAddTaxesBaselineMillis)} • Future only"
+                                "Auto Add Taxes ON since ${formatDate(autoAddTaxesBaselineMillis, false)} • Future only"
                             }
                         }
                         autoAddTaxesEnabled -> {
@@ -520,8 +521,11 @@ private fun AutoAddTaxesActionButton(
             ) {
                 Text(
                     text = if (enabled) {
-                        if (unloggedCount > 0) "ON $unloggedCount"
-                        else if (isArabic) "مفعّل" else "ON"
+                        if (unloggedCount > 0) {
+                            if (isArabic) "مفعّل $unloggedCount" else "ON $unloggedCount"
+                        } else {
+                            if (isArabic) "مفعّل" else "ON"
+                        }
                     } else {
                         if (isArabic) "معطّل" else "OFF"
                     },

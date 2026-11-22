@@ -32,8 +32,12 @@ class DebtReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
 
+        val isArabic = runCatching {
+            com.example.data.PreferencesManager(context.applicationContext).settingsFlow.value.language == "ar"
+        }.getOrDefault(false)
         val debtId = intent.getLongExtra(EXTRA_DEBT_ID, -1L)
-        val personName = intent.getStringExtra(EXTRA_PERSON_NAME) ?: "Contact"
+        val personName = intent.getStringExtra(EXTRA_PERSON_NAME)
+            ?: if (isArabic) "جهة اتصال" else "Contact"
         val remainingAmount = intent.getDoubleExtra(EXTRA_REMAINING_AMOUNT, 0.0)
         val isOwedByMe = intent.getBooleanExtra(EXTRA_IS_OWED_BY_ME, true)
 
@@ -76,18 +80,25 @@ class DebtReminderReceiver : BroadcastReceiver() {
         amount: Double,
         isOwedByMe: Boolean
     ) {
-        val formattedAmount = formatDzdAmount(amount, "DZD")
+        val isArabic = runCatching {
+            com.example.data.PreferencesManager(context.applicationContext).settingsFlow.value.language == "ar"
+        }.getOrDefault(false)
+        val formattedAmount = formatDzdAmount(amount, if (isArabic) "د.ج" else "DZD")
 
-        val title = if (isOwedByMe) {
-            "Debt Due Tomorrow: $formattedAmount"
+        val title = if (isArabic) {
+            if (isOwedByMe) "موعد سداد دين غداً: $formattedAmount"
+            else "موعد تحصيل دين غداً: $formattedAmount"
         } else {
-            "Receivable Due Tomorrow: $formattedAmount"
+            if (isOwedByMe) "Debt Due Tomorrow: $formattedAmount"
+            else "Receivable Due Tomorrow: $formattedAmount"
         }
 
-        val message = if (isOwedByMe) {
-            "Reminder: Your payment of $formattedAmount to $personName is due in 24 hours."
+        val message = if (isArabic) {
+            if (isOwedByMe) "تذكير: دفعتك بمبلغ $formattedAmount إلى $personName مستحقة خلال 24 ساعة."
+            else "تذكير: مبلغ $formattedAmount المستحق لك من $personName متوقع سداده غداً."
         } else {
-            "Reminder: Payment of $formattedAmount from $personName is expected tomorrow."
+            if (isOwedByMe) "Reminder: Your payment of $formattedAmount to $personName is due in 24 hours."
+            else "Reminder: Payment of $formattedAmount from $personName is expected tomorrow."
         }
 
         val openAppIntent = Intent(context, MainActivity::class.java).apply {

@@ -91,6 +91,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -491,7 +492,7 @@ fun BaridiMobSmsSyncScreen(
                 if (archivedSmsList.isEmpty()) {
                     HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.45f))
                     Text(
-                        text = if (isArabic) "سيتم حفظ رسائل ALG Poste هنا تلقائياً عند فحصها."
+                        text = if (isArabic) "سيتم حفظ رسائل بريد الجزائر هنا تلقائياً عند فحصها."
                         else "Detected ALG Poste messages are securely archived here.",
                         color = colors.textMuted,
                         fontSize = typo.bodySm,
@@ -808,7 +809,7 @@ fun SmsSuggestionCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${suggestion.sender} • ${formatDate(suggestion.receivedAtMillis)}",
+                        text = "${suggestion.sender} • ${isolateLtr(formatDate(suggestion.receivedAtMillis, isArabic))}",
                         color = colors.textMuted,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -827,15 +828,13 @@ fun SmsSuggestionCard(
                         )
                     }
                     if (suggestion.extractedBalance != null) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Text(
-                                text = if (isArabic) "رصيد: ${formatDzd(suggestion.extractedBalance)}"
-                                else "Bal: ${formatDzd(suggestion.extractedBalance)}",
-                                color = colors.textMuted,
-                                fontSize = 10.sp,
-                                style = TextStyle(fontFeatureSettings = "tnum")
-                            )
-                        }
+                        Text(
+                            text = if (isArabic) "رصيد: ${isolateLtr(formatDzd(suggestion.extractedBalance))}"
+                            else "Bal: ${formatDzd(suggestion.extractedBalance)}",
+                            color = colors.textMuted,
+                            fontSize = 10.sp,
+                            style = TextStyle(fontFeatureSettings = "tnum")
+                        )
                     }
                 }
 
@@ -869,18 +868,20 @@ fun SmsSuggestionCard(
                         .padding(vertical = 6.dp, horizontal = 4.dp)
                 )
                 AnimatedVisibility(visible = showRawText) {
-                    Text(
-                        text = suggestion.rawBody,
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.glassSurface)
-                            .padding(10.dp)
-                    )
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Text(
+                            text = suggestion.rawBody,
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.glassSurface)
+                                .padding(10.dp)
+                        )
+                    }
                 }
             }
 
@@ -1020,7 +1021,7 @@ private fun AutoAddTaxesPreferenceCard(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isArabic) "إضافة الضرائب تلقائياً (Auto Add Taxes)"
+                        text = if (isArabic) "إضافة الضرائب تلقائياً"
                         else "Auto Add Taxes",
                         color = colors.textPrimary,
                         fontSize = typo.bodyLg,
@@ -1031,9 +1032,9 @@ private fun AutoAddTaxesPreferenceCard(
                     Text(
                         text = when {
                             enabled && baselineMillis > 0L -> if (isArabic) {
-                                "مفعّل منذ ${formatDate(baselineMillis)} • تُضاف المستقبلية فقط (بدون السابقة)"
+                                "مفعّل منذ ${formatDate(baselineMillis, true)} • تُضاف المستقبلية فقط (بدون السابقة)"
                             } else {
-                                "Active since ${formatDate(baselineMillis)} • Future taxes only (past skipped)"
+                                "Active since ${formatDate(baselineMillis, false)} • Future taxes only (past skipped)"
                             }
                             enabled -> if (isArabic) {
                                 "مفعّل • تُضاف الضرائب المستقبلية فقط إلى المصاريف"

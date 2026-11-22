@@ -31,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -42,9 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -56,6 +61,7 @@ import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalScreenshotProtection
@@ -172,6 +178,9 @@ fun AddDebtDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -349,6 +358,7 @@ fun AddDebtDialog(
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
                     label = { Text(strings.amount) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = TextStyle(textDirection = TextDirection.Ltr),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -375,11 +385,10 @@ fun AddDebtDialog(
                         val paid = paidAmountText.toDoubleOrNull() ?: 0.0
                         val rem = (total - paid).coerceAtLeast(0.0)
                         val pct = if (total > 0) ((paid / total) * 100).toInt().coerceIn(0, 100) else 0
-                        val isArabic = strings is ArabicStrings
                         val pctStr = if (isArabic) "$pct٪" else "$pct%"
                         if (paid > 0) {
                             Text(
-                                text = "${strings.remainingBalance}: ${formatDzd(rem, strings.currencyCode)} ($pctStr ${strings.paidOutOf} ${formatDzd(total, strings.currencyCode)})",
+                                text = "${strings.remainingBalance}: ${isolateLtr(formatDzd(rem, strings.currencyCode))} ($pctStr ${strings.paidOutOf} ${isolateLtr(formatDzd(total, strings.currencyCode))})",
                                 color = if (rem <= 0.001) DebtColors.settled(isDark)
                                 else if (selectedType == DebtType.OWED_BY_ME) DebtColors.payable(isDark)
                                 else DebtColors.receivable(isDark),
@@ -395,6 +404,7 @@ fun AddDebtDialog(
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = TextStyle(textDirection = TextDirection.Ltr),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -506,7 +516,7 @@ fun AddDebtDialog(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = formatDate(dueDateMillis),
+                                text = isolateLtr(formatDate(dueDateMillis, isArabic)),
                                 color = colors.textPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -538,7 +548,7 @@ fun AddDebtDialog(
                             val targetMillis = System.currentTimeMillis() + days * 86400000L
                             val isSelected = Math.abs(dueDateMillis - targetMillis) < 86400000L
                             GlassPill(
-                                text = "+$days d",
+                                text = if (isArabic) "+$days يوم" else "+$days d",
                                 isSelected = isSelected,
                                 onClick = { dueDateMillis = targetMillis }
                             )
@@ -551,6 +561,7 @@ fun AddDebtDialog(
                         onValueChange = { installmentAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
                         label = { Text(strings.monthlyInstallmentAmount) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = TextStyle(textDirection = TextDirection.Ltr),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -607,7 +618,7 @@ fun AddDebtDialog(
                                 .padding(horizontal = 12.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = "Day $installmentDay",
+                                text = if (isArabic) "يوم $installmentDay" else "Day $installmentDay",
                                 color = DebtColors.autoPay(isDark),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -623,7 +634,7 @@ fun AddDebtDialog(
                     ) {
                         listOf(1, 5, 10, 15, 20, 25, 28).forEach { day ->
                             GlassPill(
-                                text = "Day $day",
+                                text = if (isArabic) "يوم $day" else "Day $day",
                                 isSelected = installmentDay == day,
                                 onClick = { installmentDay = day }
                             )
@@ -651,8 +662,13 @@ fun AddDebtDialog(
                             fontSize = 13.sp
                         )
                         Text(
-                            text = if (isRecurringInstallment) "Automatically execute installment on Day $installmentDay"
-                            else "Automatically deduct on due date (${formatDate(dueDateMillis)})",
+                            text = if (isArabic) {
+                                if (isRecurringInstallment) "تنفيذ القسط تلقائياً في يوم $installmentDay من كل شهر"
+                                else "خصم المبلغ تلقائياً بتاريخ الاستحقاق (${isolateLtr(formatDate(dueDateMillis, true))})"
+                            } else {
+                                if (isRecurringInstallment) "Automatically execute installment on Day $installmentDay"
+                                else "Automatically deduct on due date (${formatDate(dueDateMillis, false)})"
+                            },
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )
@@ -720,6 +736,7 @@ fun AddDebtDialog(
                     }
                 )
             }
+        }
         }
     }
 }

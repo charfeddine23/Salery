@@ -42,6 +42,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,9 +63,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -127,6 +130,9 @@ fun ScreenshotProtectionDialog(
             securePolicy = if (isProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -283,7 +289,7 @@ fun ScreenshotProtectionDialog(
                             Text(
                                 text = if (isProtected) {
                                     if (isArabic) {
-                                        "لقطات الشاشة، تسجيل الشاشة ومعاينة التطبيقات الأخيرة ممنوعة في جميع شاشات التطبيق لحماية كلمات المرور وحسابات CCP والبطاقات البنكية."
+                                        "لقطات الشاشة، تسجيل الشاشة ومعاينة التطبيقات الأخيرة ممنوعة في جميع شاشات التطبيق لحماية كلمات المرور وحسابات البريد والبطاقات البنكية."
                                     } else {
                                         "Screenshots, screen recording, and Recents thumbnails are strictly blocked across the entire app to protect your passwords, CCP accounts, and cards."
                                     }
@@ -398,6 +404,7 @@ fun ScreenshotProtectionDialog(
                     }
                 }
             }
+        }
         }
     }
 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,7 @@ import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -176,6 +178,7 @@ fun AssetsGoldEntryPanel(
                 )
             },
             singleLine = true,
+            textStyle = TextStyle(textDirection = TextDirection.Ltr),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AmberNeon,
@@ -209,8 +212,9 @@ fun AssetsGoldEntryPanel(
             SquareMarketCatalog.karats.forEach { (karat, purity, _) ->
                 val selected = selectedKarat == karat
                 val chipTitle = when {
-                    karat == 24 && isArabic -> "24K خالص"
-                    karat == 18 && isArabic -> "18K محلي"
+                    karat == 24 && isArabic -> "عيار 24 خالص"
+                    karat == 18 && isArabic -> "عيار 18 محلي"
+                    isArabic -> "عيار $karat"
                     else -> "${karat}K"
                 }
                 Box(
@@ -301,20 +305,22 @@ fun AssetsGoldEntryPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isArabic) "التقييم الفوري حسب Square" else "Live Square Valuation",
+                        text = if (isArabic) "التقييم الفوري حسب سكوار" else "Live Square Valuation",
                         color = AmberNeon,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.Bold
                     )
                     if (perGramDzd > 0.0) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Text(
-                                text = "1g ${selectedKarat}K ≈ ${formatDzd(perGramDzd, strings.currencyCode, isStealth)}",
-                                color = colors.textMuted,
-                                fontSize = typo.caption,
-                                style = tnumStyle
-                            )
-                        }
+                        Text(
+                            text = if (isArabic) {
+                                "${isolateLtr("1")} غ عيار $selectedKarat ≈ ${isolateLtr(formatDzd(perGramDzd, strings.currencyCode, isStealth))}"
+                            } else {
+                                "1g ${selectedKarat}K ≈ ${formatDzd(perGramDzd, strings.currencyCode, isStealth)}"
+                            },
+                            color = colors.textMuted,
+                            fontSize = typo.caption,
+                            style = tnumStyle
+                        )
                     }
                 }
 
@@ -329,9 +335,9 @@ fun AssetsGoldEntryPanel(
                         ) {
                             Text(
                                 text = if (isRefreshingSquare) {
-                                    if (isArabic) "جاري مزامنة أسعار الذهب من Square..." else "Syncing Square gold prices..."
+                                    if (isArabic) "جاري مزامنة أسعار الذهب من سكوار..." else "Syncing Square gold prices..."
                                 } else {
-                                    if (isArabic) "اضغط للمزامنة لحساب القيمة بالـ DZD" else "Tap sync to fetch live DZD gold rate"
+                                    if (isArabic) "اضغط للمزامنة لحساب القيمة بالدينار الجزائري" else "Tap sync to fetch live DZD gold rate"
                                 },
                                 color = colors.textSecondary,
                                 fontSize = typo.bodyXs,
@@ -385,28 +391,27 @@ fun AssetsGoldEntryPanel(
                                     color = colors.textSecondary,
                                     fontSize = typo.caption
                                 )
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = formatDzd(previewValuation.totalValueDzdParallel, strings.currencyCode, isStealth),
-                                        color = EmeraldNeon,
-                                        fontSize = typo.titleSm,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        style = tnumStyle
-                                    )
-                                }
+                                Text(
+                                    text = isolateLtr(formatDzd(previewValuation.totalValueDzdParallel, strings.currencyCode, isStealth)),
+                                    color = EmeraldNeon,
+                                    fontSize = typo.titleSm,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    style = tnumStyle
+                                )
                             }
                             if (perGramUsd > 0.0) {
-                                val usdStr = if (isStealth) "•••• USD"
-                                else String.format(Locale.US, "$%,.2f", previewValuation.totalValueUsd)
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = "≈ $usdStr",
-                                        color = CyanNeon,
-                                        fontSize = typo.bodySm,
-                                        fontWeight = FontWeight.Bold,
-                                        style = tnumStyle
-                                    )
+                                val usdStr = if (isStealth) {
+                                    if (isArabic) "•••• دولار" else "•••• USD"
+                                } else {
+                                    isolateLtr(String.format(Locale.US, "$%,.2f", previewValuation.totalValueUsd))
                                 }
+                                Text(
+                                    text = "≈ $usdStr",
+                                    color = CyanNeon,
+                                    fontSize = typo.bodySm,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnumStyle
+                                )
                             }
                         }
                     }

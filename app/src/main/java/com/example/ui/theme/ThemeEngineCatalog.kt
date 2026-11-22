@@ -301,7 +301,7 @@ object ThemeEngineCatalog {
             nameEn = "OLED Midnight",
             nameAr = "منتصف الليل الداكن",
             taglineEn = "True #000000 AMOLED void with laser cobalt rim",
-            taglineAr = "أسود AMOLED حقيقي موفر للطاقة بإضاءة زرقاء",
+            taglineAr = "أسود أموليد حقيقي موفر للطاقة بإضاءة زرقاء",
             category = ThemeCategory.LUXURY,
             surfaceEffect = ThemeSurfaceEffect.MINIMAL_FLAT,
             darkColors = darkPalette(

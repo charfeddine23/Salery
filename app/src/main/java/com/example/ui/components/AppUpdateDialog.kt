@@ -89,6 +89,7 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatPercent
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -179,6 +180,9 @@ fun AppUpdateDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -369,12 +373,15 @@ fun AppUpdateDialog(
 
                         // Vibrant Accent Subtitle (e.g. "تحديث جديد • 14.2 MB")
                         val accentSub = when (state) {
-                            is AppUpdateUiState.UpToDate -> "v${state.currentVersion}"
-                            is AppUpdateUiState.Checking -> "GitHub • $APP_NAME"
+                            is AppUpdateUiState.UpToDate -> isolateLtr("v${state.currentVersion}")
+                            is AppUpdateUiState.Checking -> if (isArabic) "غيت هاب • $APP_NAME" else "GitHub • $APP_NAME"
                             is AppUpdateUiState.Error -> state.message
                             else -> {
-                                val verText = release?.tagName ?: ""
-                                val sizeText = release?.apkSizeBytes?.takeIf { it > 0L }?.let { formatBytesToMb(it) }
+                                val verText = release?.tagName?.let { if (isArabic) isolateLtr(it) else it } ?: ""
+                                val sizeText = release?.apkSizeBytes?.takeIf { it > 0L }?.let { bytes ->
+                                    val raw = formatBytesToMb(bytes)
+                                    if (isArabic) isolateLtr(raw.replace("MB", "م.ب")) else raw
+                                }
                                 listOfNotNull(
                                     strings.updateBadgeLabel,
                                     verText.takeIf { it.isNotBlank() },
@@ -411,7 +418,7 @@ fun AppUpdateDialog(
                                 else "All latest Vaultix features are already installed."
                             }
                             is AppUpdateUiState.Checking -> {
-                                if (isArabic) "يتم الاتصال بـ GitHub Releases للتحقق من أحدث نسخة..."
+                                if (isArabic) "يتم الاتصال بإصدارات غيت هاب للتحقق من أحدث نسخة..."
                                 else "Connecting to GitHub Releases..."
                             }
                             is AppUpdateUiState.Error -> {
@@ -499,11 +506,17 @@ fun AppUpdateDialog(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                            val downloadedStr = formatBytesToMb(state.bytesDownloaded).let {
+                                                if (isArabic) it.replace("MB", "م.ب") else it
+                                            }
+                                            val totalStr = formatBytesToMb(state.totalBytes).let {
+                                                if (isArabic) it.replace("MB", "م.ب") else it
+                                            }
                                             Text(
                                                 text = if (state.totalBytes > 0L) {
-                                                    "${formatBytesToMb(state.bytesDownloaded)} / ${formatBytesToMb(state.totalBytes)}"
+                                                    "$downloadedStr / $totalStr"
                                                 } else {
-                                                    formatBytesToMb(state.bytesDownloaded)
+                                                    downloadedStr
                                                 },
                                                 color = colors.textMuted,
                                                 fontSize = 11.sp,
@@ -645,6 +658,7 @@ fun AppUpdateDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -701,7 +715,7 @@ private fun WhatsNewLatestOnlyPanel(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = if (isArabic) "الإصدار $versionLabel • ميزات هذا التحديث"
+            text = if (isArabic) "الإصدار ${isolateLtr(versionLabel)} • ميزات هذا التحديث"
             else "Release $versionLabel • Latest Features Only",
             color = CyanNeon,
             fontSize = 12.sp,

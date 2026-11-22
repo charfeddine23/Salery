@@ -47,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,10 +72,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -200,6 +203,9 @@ fun PermissionsOnboardingDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -263,7 +269,7 @@ fun PermissionsOnboardingDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isArabic) "تشفير محلي 100% • خصوصية مطلقة"
+                                    text = if (isArabic) "تشفير محلي 100٪ • خصوصية مطلقة"
                                     else "100% On-Device • Zero Cloud Tracking",
                                     color = EmeraldNeon,
                                     fontSize = 10.5.sp,
@@ -293,7 +299,7 @@ fun PermissionsOnboardingDialog(
 
                         Text(
                             text = if (isArabic) {
-                                "لتفعيل مزامنة رسائل ALG Poste وجهات الاتصال والتنبيهات الآمنة، يرجى تفعيل الصلاحيات التالية:"
+                                "لتفعيل مزامنة رسائل بريد الجزائر وجهات الاتصال والتنبيهات الآمنة، يرجى تفعيل الصلاحيات التالية:"
                             } else {
                                 "Enable these essential permissions for ALG Poste SMS sync, contact linking, and instant alerts:"
                             },
@@ -309,10 +315,11 @@ fun PermissionsOnboardingDialog(
                         PermissionHighlightRow(
                             icon = Icons.Default.Sms,
                             accent = SecurityIndigo,
-                            title = if (isArabic) "رسائل BaridiMob / ALG Poste" else "ALG Poste / BaridiMob SMS",
+                            title = if (isArabic) "رسائل بريدي موب / بريد الجزائر" else "ALG Poste / BaridiMob SMS",
                             desc = if (isArabic) "قراءة رسائل السحب والدخل واقتراح إضافتها لحسابك"
                             else "Analyze ALG Poste alerts and suggest Expenses & Income",
-                            isGranted = smsGranted
+                            isGranted = smsGranted,
+                            isArabic = isArabic
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -321,9 +328,10 @@ fun PermissionsOnboardingDialog(
                             icon = Icons.Default.ContactPhone,
                             accent = CyanNeon,
                             title = if (isArabic) "الوصول إلى جهات الاتصال" else "Contacts Access",
-                            desc = if (isArabic) "ربط ملفات الـ CCP والديون بأسماء وأرقام جهات اتصالك"
+                            desc = if (isArabic) "ربط ملفات الحساب البريدي والديون بأسماء وأرقام جهات اتصالك"
                             else "Link CCP profiles and debts directly from phone contacts",
-                            isGranted = contactsGranted
+                            isGranted = contactsGranted,
+                            isArabic = isArabic
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -334,7 +342,8 @@ fun PermissionsOnboardingDialog(
                             title = if (isArabic) "التنبيهات المالية الفورية" else "Instant Financial Alerts",
                             desc = if (isArabic) "تذكير بمواعيد الديون واقتراحات المعاملات الواردة"
                             else "Reminders for due debts and newly detected SMS alerts",
-                            isGranted = notificationsGranted
+                            isGranted = notificationsGranted,
+                            isArabic = isArabic
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -346,12 +355,13 @@ fun PermissionsOnboardingDialog(
                             title = if (isArabic) "تثبيت التحديثات داخل التطبيق" else "In-App Update Installer",
                             desc = if (isArabic) {
                                 if (installSourcesAllowed) "مفعّل — التحديثات تثبّت تلقائياً من داخل التطبيق"
-                                else "اضغط هنا لتفعيل (Install unknown apps) للتحديث السلس"
+                                else "اضغط هنا لتفعيل خيار التثبيت من مصادر غير معروفة للتحديث السلس"
                             } else {
                                 if (installSourcesAllowed) "Enabled — ready for seamless in-app APK updates"
                                 else "Tap here to allow 'Install unknown apps' in Settings"
                             },
                             isGranted = installSourcesAllowed,
+                            isArabic = isArabic,
                             onClick = if (!installSourcesAllowed) onRequestInstallSourcesSettings else null
                         )
 
@@ -443,6 +453,7 @@ fun PermissionsOnboardingDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -453,6 +464,7 @@ private fun PermissionHighlightRow(
     title: String,
     desc: String,
     isGranted: Boolean,
+    isArabic: Boolean,
     onClick: (() -> Unit)? = null
 ) {
     val colors = LiquidGlassTheme.colors
@@ -507,7 +519,7 @@ private fun PermissionHighlightRow(
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
                 imageVector = Icons.Default.CheckCircle,
-                contentDescription = "Granted",
+                contentDescription = if (isArabic) "ممنوح" else "Granted",
                 tint = EmeraldNeon,
                 modifier = Modifier.size(20.dp)
             )

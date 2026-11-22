@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -86,6 +87,7 @@ import com.example.sms.SmsBalanceSnapshot
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzdAmount
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -144,6 +146,7 @@ fun SmsHeroBalanceCard(
         cornerRadius = dimens.cornerRadiusXl,
         breathingGlow = breathing
     ) {
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -155,7 +158,7 @@ fun SmsHeroBalanceCard(
                                 EmeraldNeon.copy(alpha = if (colors.isDark) 0.07f else 0.04f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.85f, size.height * 0.12f),
+                            center = Offset(size.width * (if (isRtl) 0.15f else 0.85f), size.height * 0.12f),
                             radius = size.width * 0.78f
                         )
                     )
@@ -286,28 +289,26 @@ fun SmsHeroBalanceCard(
                         color = colors.textMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp
+                        letterSpacing = if (isArabic) 0.sp else 0.6.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = if (hasBalance) {
-                                formatDzdAmount(latestBalance, currencyCode, isStealth)
-                            } else {
-                                "--- $currencyCode"
-                            },
-                            color = when {
-                                !hasBalance -> colors.textMuted
-                                isNegativeBalance -> RoseNeon
-                                else -> colors.textPrimary
-                            },
-                            fontSize = typo.display,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = tnum,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = if (hasBalance) {
+                            isolateLtr(formatDzdAmount(latestBalance, currencyCode, isStealth))
+                        } else {
+                            isolateLtr("--- $currencyCode")
+                        },
+                        color = when {
+                            !hasBalance -> colors.textMuted
+                            isNegativeBalance -> RoseNeon
+                            else -> colors.textPrimary
+                        },
+                        fontSize = typo.display,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = tnum,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -316,7 +317,7 @@ fun SmsHeroBalanceCard(
                     ) {
                         Text(
                             text = if (hasBalance && updatedAtMillis > 0L) {
-                                (if (isArabic) "آخر تحديث: " else "Updated: ") + formatDate(updatedAtMillis)
+                                (if (isArabic) "آخر تحديث: " else "Updated: ") + isolateLtr(formatDate(updatedAtMillis, isArabic))
                             } else {
                                 if (isArabic) "اضغط تحديث لقراءة رصيدك تلقائياً" else "Tap Sync to read your latest Solde"
                             },
@@ -330,22 +331,20 @@ fun SmsHeroBalanceCard(
                             val isUp = latestDelta > 0
                             val dColor = if (isUp) EmeraldNeon else RoseNeon
                             val sign = if (isUp) "+" else "-"
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(dColor.copy(alpha = 0.15f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "$sign${formatDzdAmount(abs(latestDelta), currencyCode)}",
-                                        color = dColor,
-                                        fontSize = typo.bodyXs,
-                                        fontWeight = FontWeight.Bold,
-                                        style = tnum,
-                                        maxLines = 1
-                                    )
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(dColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = isolateLtr("$sign${formatDzdAmount(abs(latestDelta), currencyCode)}"),
+                                    color = dColor,
+                                    fontSize = typo.bodyXs,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnum,
+                                    maxLines = 1
+                                )
                             }
                         }
                     }
@@ -371,7 +370,7 @@ fun SmsHeroBalanceCard(
                             text = if (hasSmsPerm) {
                                 if (isArabic) "مزامنة وفحص الرسائل الآن" else "Sync Balance & Inbox"
                             } else {
-                                if (isArabic) "تفعيل قراءة رسائل ALG Poste" else "Enable ALG Poste SMS Sync"
+                                if (isArabic) "تفعيل قراءة رسائل بريد الجزائر" else "Enable ALG Poste SMS Sync"
                             },
                             icon = Icons.Default.Refresh,
                             containerColor = EmeraldNeon,
@@ -438,8 +437,11 @@ fun SmsHeroBalanceCard(
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     if (hasFreshBaseline && baselineMillis > 0L) {
-                                        val dateFmt = remember(baselineMillis) {
-                                            SimpleDateFormat("dd/MM HH:mm", Locale.US).format(Date(baselineMillis))
+                                        val dateFmt = remember(baselineMillis, isArabic) {
+                                            isolateLtr(
+                                                SimpleDateFormat("dd/MM HH:mm", if (isArabic) Locale("ar") else Locale.US)
+                                                    .format(Date(baselineMillis))
+                                            )
                                         }
                                         Text(
                                             text = if (isArabic) "تجاهل ما قبل $dateFmt" else "Ignoring before $dateFmt",
@@ -644,6 +646,7 @@ fun SmsAnnualTaxSummaryCard(
         cornerRadius = dimens.cornerRadiusLg,
         breathingGlow = false
     ) {
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -655,7 +658,7 @@ fun SmsAnnualTaxSummaryCard(
                                 RoseNeon.copy(alpha = if (colors.isDark) 0.08f else 0.04f),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.15f, size.height * 0.2f),
+                            center = Offset(size.width * (if (isRtl) 0.85f else 0.15f), size.height * 0.2f),
                             radius = size.width * 0.72f
                         )
                     )
@@ -720,7 +723,7 @@ fun SmsAnnualTaxSummaryCard(
                         )
                         Text(
                             text = if (isArabic) {
-                                "بداية العد ${summary.referenceStartDateLabel}"
+                                "بداية العد ${isolateLtr(summary.referenceStartDateLabel)}"
                             } else {
                                 "Since ${summary.referenceStartDateLabel}"
                             },
@@ -734,16 +737,14 @@ fun SmsAnnualTaxSummaryCard(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Text(
-                        text = formatDzdAmount(summary.totalYearTaxesDzd, currencyCode, isStealth),
-                        color = AmberNeon,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        style = tnum,
-                        modifier = Modifier.testTag("sms_annual_taxes_total_amount")
-                    )
-                }
+                Text(
+                    text = isolateLtr(formatDzdAmount(summary.totalYearTaxesDzd, currencyCode, isStealth)),
+                    color = AmberNeon,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = tnum,
+                    modifier = Modifier.testTag("sms_annual_taxes_total_amount")
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -775,7 +776,7 @@ fun SmsAnnualTaxSummaryCard(
                     ) {
                         Text(
                             text = if (isArabic) {
-                                "مسجلة: ${formatDzdAmount(summary.recordedYearTaxesDzd, currencyCode, isStealth)}"
+                                "مسجلة: ${isolateLtr(formatDzdAmount(summary.recordedYearTaxesDzd, currencyCode, isStealth))}"
                             } else {
                                 "Logged: ${formatDzdAmount(summary.recordedYearTaxesDzd, currencyCode, isStealth)}"
                             },
@@ -862,7 +863,7 @@ fun SmsTaxFeeCompactCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = formatDate(anomaly.detectedAtMillis),
+                            text = isolateLtr(formatDate(anomaly.detectedAtMillis, isArabic)),
                             color = colors.textMuted,
                             fontSize = typo.bodyXs,
                             maxLines = 1,
@@ -870,22 +871,20 @@ fun SmsTaxFeeCompactCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(6.dp))
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(RoseNeon.copy(alpha = 0.14f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "-" + formatDzdAmount(anomaly.taxAmount, currency, isStealth),
-                                color = RoseNeon,
-                                fontSize = typo.body,
-                                fontWeight = FontWeight.ExtraBold,
-                                style = TextStyle(fontFeatureSettings = "tnum"),
-                                maxLines = 1
-                            )
-                        }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(RoseNeon.copy(alpha = 0.14f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isStealth) "••••" else isolateLtr("-" + formatDzdAmount(anomaly.taxAmount, currency, false)),
+                            color = RoseNeon,
+                            fontSize = typo.body,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(fontFeatureSettings = "tnum"),
+                            maxLines = 1
+                        )
                     }
                     IconButton(
                         onClick = onDismiss,
@@ -1006,8 +1005,8 @@ fun SmsCleanBalanceTimelineRow(
     val deltaLabel = when {
         isStealth -> "••••"
         effectiveDelta == null -> if (isArabic) "رصيد افتتاحي" else "Opening"
-        effectiveDelta > 0.005 -> "+" + formatDzdAmount(effectiveDelta, currency)
-        effectiveDelta < -0.005 -> "-" + formatDzdAmount(abs(effectiveDelta), currency)
+        effectiveDelta > 0.005 -> isolateLtr("+" + formatDzdAmount(effectiveDelta, currency))
+        effectiveDelta < -0.005 -> isolateLtr("-" + formatDzdAmount(abs(effectiveDelta), currency))
         else -> if (isArabic) "مزامنة" else "Sync"
     }
     val operationLabel = when {
@@ -1065,7 +1064,7 @@ fun SmsCleanBalanceTimelineRow(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${snapshot.sender.ifBlank { "ALG Poste" }} • ${formatDate(snapshot.timestampMillis)}",
+                        text = "${if (isArabic) snapshot.sender.ifBlank { "بريد الجزائر" } else snapshot.sender.ifBlank { "ALG Poste" }} • ${isolateLtr(formatDate(snapshot.timestampMillis, isArabic))}",
                         color = colors.textMuted,
                         fontSize = typo.bodyXs,
                         maxLines = 1,
@@ -1076,39 +1075,35 @@ fun SmsCleanBalanceTimelineRow(
             Spacer(modifier = Modifier.width(8.dp))
 
             Column(horizontalAlignment = Alignment.End) {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(dimens.cornerRadiusXs))
-                            .background(deltaColor.copy(alpha = 0.14f))
-                            .padding(horizontal = 9.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = deltaLabel,
-                            color = deltaColor,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = TextStyle(fontFeatureSettings = "tnum"),
-                            maxLines = 1
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(3.dp))
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(dimens.cornerRadiusXs))
+                        .background(deltaColor.copy(alpha = 0.14f))
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                ) {
                     Text(
-                        text = "${if (isArabic) "الرصيد:" else "Solde:"} ${formatDzdAmount(snapshot.balance, currency, isStealth)}",
-                        color = if (snapshot.balance < 0.0) RoseNeon else colors.textMuted,
-                        fontSize = typo.caption,
+                        text = deltaLabel,
+                        color = deltaColor,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.ExtraBold,
                         style = TextStyle(fontFeatureSettings = "tnum"),
                         maxLines = 1
                     )
                 }
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = "${if (isArabic) "الرصيد:" else "Solde:"} ${isolateLtr(formatDzdAmount(snapshot.balance, currency, isStealth))}",
+                    color = if (snapshot.balance < 0.0) RoseNeon else colors.textMuted,
+                    fontSize = typo.caption,
+                    style = TextStyle(fontFeatureSettings = "tnum"),
+                    maxLines = 1
+                )
             }
         }
 
         AnimatedVisibility(visible = peekRaw && snapshot.rawBody.isNotBlank()) {
             Text(
-                text = if (isStealth) "••••••" else snapshot.rawBody,
+                text = if (isStealth) "••••••" else isolateLtr(snapshot.rawBody),
                 color = colors.textMuted,
                 fontSize = typo.bodyXs,
                 modifier = Modifier
@@ -1137,7 +1132,7 @@ fun SmsCleanArchiveRow(
         val isExp = item.extractedIsExpense ?: true
         val prefix = if (isExp) "-" else "+"
         val color = if (isExp) RoseNeon else EmeraldNeon
-        (if (isStealth) "••••" else "$prefix${formatDzdAmount(amt, currency)}") to color
+        (if (isStealth) "••••" else isolateLtr("$prefix${formatDzdAmount(amt, currency)}")) to color
     }
 
     Column(
@@ -1164,7 +1159,7 @@ fun SmsCleanArchiveRow(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = item.sender.ifBlank { "ALG Poste" },
+                        text = if (isArabic) item.sender.ifBlank { "بريد الجزائر" } else item.sender.ifBlank { "ALG Poste" },
                         color = colors.textPrimary,
                         fontSize = typo.body,
                         fontWeight = FontWeight.Bold,
@@ -1172,7 +1167,7 @@ fun SmsCleanArchiveRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = formatDate(item.receivedAtMillis),
+                        text = isolateLtr(formatDate(item.receivedAtMillis, isArabic)),
                         color = colors.textMuted,
                         fontSize = typo.bodyXs,
                         maxLines = 1,
@@ -1184,34 +1179,30 @@ fun SmsCleanArchiveRow(
 
             Column(horizontalAlignment = Alignment.End) {
                 if (amountText != null) {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = amountText.first,
-                            color = amountText.second,
-                            fontSize = typo.body,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = TextStyle(fontFeatureSettings = "tnum"),
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = amountText.first,
+                        color = amountText.second,
+                        fontSize = typo.body,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = TextStyle(fontFeatureSettings = "tnum"),
+                        maxLines = 1
+                    )
                 }
                 item.extractedBalance?.let { bal ->
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = if (isStealth) "••••" else "${if (isArabic) "رصيد:" else "Solde:"} ${formatDzdAmount(bal, currency)}",
-                            color = if (bal < 0.0) RoseNeon else colors.textMuted,
-                            fontSize = typo.bodyXs,
-                            style = TextStyle(fontFeatureSettings = "tnum"),
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = if (isStealth) "••••" else "${if (isArabic) "رصيد:" else "Solde:"} ${isolateLtr(formatDzdAmount(bal, currency))}",
+                        color = if (bal < 0.0) RoseNeon else colors.textMuted,
+                        fontSize = typo.bodyXs,
+                        style = TextStyle(fontFeatureSettings = "tnum"),
+                        maxLines = 1
+                    )
                 }
             }
         }
 
         AnimatedVisibility(visible = showRaw) {
             Text(
-                text = if (isStealth) "••••••" else item.rawBody,
+                text = if (isStealth) "••••••" else isolateLtr(item.rawBody),
                 color = colors.textSecondary,
                 fontSize = typo.bodyXs,
                 modifier = Modifier.padding(top = 8.dp)
@@ -1285,7 +1276,7 @@ fun SmsManualTestAccordion(
                     ) {
                         if (manualSmsText.isEmpty()) {
                             Text(
-                                text = if (isArabic) "ألصق رسالة ALG Poste هنا..." else "Paste an ALG Poste SMS here...",
+                                text = if (isArabic) "ألصق رسالة بريد الجزائر هنا..." else "Paste an ALG Poste SMS here...",
                                 color = colors.textMuted.copy(alpha = 0.65f),
                                 fontSize = 12.sp
                             )
@@ -1296,7 +1287,8 @@ fun SmsManualTestAccordion(
                             textStyle = TextStyle(
                                 color = colors.textPrimary,
                                 fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = TextDirection.Ltr
                             ),
                             cursorBrush = SolidColor(CyanNeon),
                             modifier = Modifier

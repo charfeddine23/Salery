@@ -427,13 +427,13 @@ object ArabicStrings : StringsBundle {
     override val visaComingSoonDesc = "خدمات الدفع الدولي، الاشتراكات العالمية وحسابات العملات الأجنبية ستتوفر قريباً جداً في Vaultix."
     override val backToCards = "العودة إلى البطاقات"
     override val activeCardsCount = "بطاقتان نشطتان"
-    override val currentAccount = "حساب جاري • CCP"
+    override val currentAccount = "حساب بريدي جاري"
     override val editCardTitle = "تعديل معلومات البطاقة"
     override val editCardSubtitle = "تخصيص بيانات بطاقة بريد الجزائر الكلاسيكية"
     override val cardHolderNameLabel = "الاسم واللقب"
     override val cardNumberLabel = "رقم البطاقة (16 رقماً)"
-    override val cardExpiryLabel = "تاريخ نهاية الصلاحية (MM/YY)"
-    override val cardCvcLabel = "رمز الأمان CVC"
+    override val cardExpiryLabel = "تاريخ انتهاء الصلاحية (شهر/سنة)"
+    override val cardCvcLabel = "رمز التحقق"
     override val holdToEditCardHint = "اضغط لفتح لوحة التحكم • اضغط نصف ثانية للتعديل"
     override val holdingToEditLabel = "استمر بالضغط 0.5 ث..."
 
@@ -506,16 +506,16 @@ object ArabicStrings : StringsBundle {
     override val styleLiquidGlass = "زجاج سائل"
     override val styleNeumorphism = "نيومورفيزم"
 
-    override val patternLock = "قفل النمط (Gesture Lock)"
+    override val patternLock = "قفل النمط الإيمائي"
     override val drawPattern = "ارسم نمط إيماءة فتح القفل"
     override val confirmPattern = "أعد رسم النمط للتأكيد"
     override val patternSaved = "تم حفظ نمط الإيماءة بنجاح"
     override val patternMismatch = "الأنماط غير متطابقة. أعد المحاولة."
     override val patternTooShort = "صل 4 نقاط على الأقل."
-    override val unlockApp = "فتح قفل Vaultix"
-    override val biometricUnlock = "فتح القفل بالبصمة (Fingerprint / Face ID)"
+    override val unlockApp = "فتح قفل $APP_NAME"
+    override val biometricUnlock = "فتح القفل بالبصمة والتعرف على الوجه"
     override val biometricUnlockDesc = "دخول سريع وآمن باستخدام بصمة الإصبع أو التعرف على الوجه"
-    override val biometricPromptTitle = "فتح قفل Vaultix"
+    override val biometricPromptTitle = "فتح قفل $APP_NAME"
     override val biometricPromptSubtitle = "المس مستشعر البصمة أو تحقق من الوجه للمتابعة"
     override val biometricUnlockAction = "فتح القفل بالبصمة"
     override val biometricNotAvailable = "ميزة البصمة غير متوفرة أو غير مسجلة بالجهاز"
@@ -524,21 +524,21 @@ object ArabicStrings : StringsBundle {
     override val biometricDisabled = "معطل"
     override val updatedLabel = "آخر تحديث"
     override val breathingGlowTitle = "تأثير التوهج التنفسي للبطاقات"
-    override val breathingGlowActive = "مفعل • إضاءة ديناميكية Liquid Glass v3"
+    override val breathingGlowActive = "مفعل • إضاءة ديناميكية متوهجة"
     override val breathingGlowDisabled = "معطل • بطاقات ثابتة بدون توهج"
-    override val screenshotProtectionTitle = "منع لقطات الشاشة (No-Screenshot)"
+    override val screenshotProtectionTitle = "منع لقطات الشاشة"
     override val screenshotProtectionActive = "مفعل • التصوير محظور في البطاقات"
     override val screenshotProtectionDisabled = "معطل • مسموح بتصوير الشاشة"
 
-    override val backupDriveTitle = "إعدادات النسخ الإحتياطي"
-    override val backupToDrive = "نسخ احتياطي إلى Google Drive"
-    override val restoreFromDrive = "استعادة من Google Drive"
+    override val backupDriveTitle = "إعدادات النسخ الاحتياطي"
+    override val backupToDrive = "نسخ احتياطي إلى جوجل درايف"
+    override val restoreFromDrive = "استعادة من جوجل درايف"
     override val restoreBackup = "استعادة البيانات"
-    override val backupSuccess = "تم إنشاء النسخة! اختر Google Drive للحفظ."
-    override val restoreSuccess = "تمت استعادة البيانات بنجاح من Google Drive"
+    override val backupSuccess = "تم إنشاء النسخة الاحتياطية! اختر جوجل درايف للحفظ."
+    override val restoreSuccess = "تمت استعادة البيانات بنجاح من جوجل درايف"
     override val restoreError = "ملف النسخة الاحتياطية غير صالح أو تالف"
-    override val backupInfo = "نسخ السجلات المالية بأمان إلى Google Drive أو ذاكرة الجهاز."
-    override val pasteJsonFallback = "أو لصق نص JSON مباشرة"
+    override val backupInfo = "نسخ السجلات المالية بأمان إلى جوجل درايف أو ذاكرة الجهاز."
+    override val pasteJsonFallback = "أو لصق بيانات النسخة الاحتياطية مباشرة"
     override val lastBackupLabel = "آخر نسخة: %s"
     override val neverBackedUp = "لم يتم النسخ بعد"
 
@@ -666,3 +666,11 @@ fun formatDate(millis: Long): String {
     val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     return sdf.format(Date(millis))
 }
+
+fun formatDate(millis: Long, isArabic: Boolean): String {
+    val locale = if (isArabic) Locale("ar") else Locale.US
+    val sdf = SimpleDateFormat("dd MMM yyyy", locale)
+    return sdf.format(Date(millis))
+}
+
+fun isolateLtr(text: String): String = "\u2066$text\u2069"

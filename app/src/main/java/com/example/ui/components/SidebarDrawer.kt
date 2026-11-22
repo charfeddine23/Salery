@@ -61,6 +61,7 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.screens.readAppPermissionsSummary
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -146,13 +147,14 @@ fun SidebarDrawer(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Navigation Items
+            val isArabic = strings is ArabicStrings
             val isInsideCard = selectedRoute in listOf(
                 "dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault", "gold_asset_editor"
             )
 
             DrawerNavItem(
                 icon = Icons.Default.CreditCard,
-                title = if (isInsideCard) strings.navDashboard else "Card Hub",
+                title = if (isInsideCard) strings.navDashboard else if (isArabic) "مركز البطاقات" else "Card Hub",
                 isSelected = selectedRoute == "cards" || selectedRoute == "visa_coming_soon",
                 onClick = { onNavigate("cards") }
             )
@@ -160,21 +162,21 @@ fun SidebarDrawer(
             if (!isInsideCard) {
                 DrawerNavItem(
                     icon = Icons.Default.VpnKey,
-                    title = "Keys",
+                    title = if (isArabic) "المفاتيح" else "Keys",
                     iconTint = com.example.ui.theme.AmberNeon,
                     isSelected = selectedRoute == "keys",
                     onClick = { onNavigate("keys") }
                 )
                 DrawerNavItem(
                     icon = Icons.Default.AccountBalance,
-                    title = "CCP's",
+                    title = if (isArabic) "الحسابات البريدية" else "CCP's",
                     iconTint = EmeraldNeon,
                     isSelected = selectedRoute == "ccps",
                     onClick = { onNavigate("ccps") }
                 )
                 DrawerNavItem(
                     icon = Icons.Default.CurrencyExchange,
-                    title = "Square",
+                    title = if (isArabic) "السكوار" else "Square",
                     iconTint = com.example.ui.theme.AmberNeon,
                     isSelected = selectedRoute == "square",
                     onClick = { onNavigate("square") }
@@ -233,7 +235,6 @@ fun SidebarDrawer(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Access Permissions (صلاحيات الوصول)
-            val isArabic = strings is ArabicStrings
             DrawerActionItem(
                 icon = Icons.Default.AdminPanelSettings,
                 title = if (isArabic) "صلاحيات الوصول" else "Access Permissions",
@@ -509,7 +510,7 @@ fun SidebarDrawer(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Palette,
-                            contentDescription = "Theme Engine",
+                            contentDescription = if (isArabic) "محرك الثيمات" else "Theme Engine",
                             tint = colors.primaryNeon,
                             modifier = Modifier.size(21.dp)
                         )
@@ -517,7 +518,7 @@ fun SidebarDrawer(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Theme Engine",
+                            text = if (isArabic) "محرك الثيمات" else "Theme Engine",
                             color = colors.textPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
@@ -606,10 +607,10 @@ fun SidebarDrawer(
                 updateUiState is AppUpdateUiState.Downloading ||
                 updateUiState is AppUpdateUiState.ReadyToInstall
             val updateSubtitle = when (updateUiState) {
-                is AppUpdateUiState.Available -> "${strings.updateBadgeLabel} • ${updateUiState.release.tagName}"
+                is AppUpdateUiState.Available -> "${strings.updateBadgeLabel} • ${isolateLtr(updateUiState.release.tagName)}"
                 is AppUpdateUiState.Downloading -> strings.downloadingUpdate
                 is AppUpdateUiState.ReadyToInstall -> strings.installUpdateButton
-                else -> "v$APP_VERSION • GitHub Releases"
+                else -> if (isArabic) "${isolateLtr("v$APP_VERSION")} • إصدارات جيت هب" else "v$APP_VERSION • GitHub Releases"
             }
 
             GlassCard(
@@ -710,7 +711,7 @@ fun SidebarDrawer(
                         Spacer(modifier = Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "v$APP_VERSION",
+                                text = isolateLtr("v$APP_VERSION"),
                                 color = colors.primaryNeon,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold

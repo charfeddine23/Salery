@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,15 +42,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalScreenshotProtection
@@ -66,6 +71,7 @@ fun SalarySchedulerDialog(
     onDepositNow: () -> Unit
 ) {
     val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
     val colors = LiquidGlassTheme.colors
     val context = LocalContext.current
 
@@ -95,6 +101,9 @@ fun SalarySchedulerDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -174,7 +183,8 @@ fun SalarySchedulerDialog(
                                 textStyle = TextStyle(
                                     color = colors.textPrimary,
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    textDirection = TextDirection.Ltr
                                 ),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
@@ -211,7 +221,7 @@ fun SalarySchedulerDialog(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Day $payday",
+                                    text = if (isArabic) "يوم $payday" else "Day $payday",
                                     color = colors.primaryNeon,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
@@ -298,7 +308,7 @@ fun SalarySchedulerDialog(
                             fontSize = 13.sp
                         )
                         Text(
-                            text = "Automatic deposit into wallet on payday",
+                            text = if (isArabic) "إيداع الراتب تلقائياً في المحفظة يوم الصرف" else "Automatic deposit into wallet on payday",
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )
@@ -345,6 +355,7 @@ fun SalarySchedulerDialog(
                     }
                 )
             }
+        }
         }
     }
 }

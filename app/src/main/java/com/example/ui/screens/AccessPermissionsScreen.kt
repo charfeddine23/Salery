@@ -71,6 +71,7 @@ import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.formatPercent
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -269,7 +270,7 @@ fun AccessPermissionsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "${(progress * 100).toInt()}%",
+                        text = formatPercent((progress * 100).toInt(), isArabic),
                         color = statusAccent,
                         fontSize = typo.bodySm,
                         fontWeight = FontWeight.ExtraBold
@@ -346,9 +347,9 @@ fun AccessPermissionsScreen(
             PermissionControlCard(
                 icon = Icons.Default.Sms,
                 accent = Color(0xFF818CF8),
-                title = if (isArabic) "قراءة واستلام رسائل SMS (ALG Poste)" else "SMS Read & Receive (ALG Poste)",
+                title = if (isArabic) "قراءة واستلام رسائل الهاتف (بريد الجزائر)" else "SMS Read & Receive (ALG Poste)",
                 description = if (isArabic) {
-                    "مطلوب لمزامنة إشعارات BaridiMob / ALG Poste واقتراح المصاريف (-) والدخل (+) تلقائياً"
+                    "مطلوب لمزامنة إشعارات بريدي موب وبريد الجزائر واقتراح المصاريف (-) والدخل (+) تلقائياً"
                 } else {
                     "Required for BaridiMob / ALG Poste SMS analysis and Expense/Income suggestions"
                 },
@@ -356,7 +357,7 @@ fun AccessPermissionsScreen(
                 actionLabel = if (permSummary.smsGranted) {
                     if (isArabic) "مفعّلة" else "Granted"
                 } else {
-                    if (isArabic) "تفعيل صلاحية SMS" else "Grant SMS Access"
+                    if (isArabic) "تفعيل صلاحية الرسائل" else "Grant SMS Access"
                 },
                 onActionClick = {
                     if (permSummary.smsGranted) {
@@ -427,9 +428,9 @@ fun AccessPermissionsScreen(
             PermissionControlCard(
                 icon = Icons.Default.ContactPhone,
                 accent = CyanNeon,
-                title = if (isArabic) "الوصول إلى جهات الاتصال (Contacts)" else "Contacts Access",
+                title = if (isArabic) "الوصول إلى جهات الاتصال" else "Contacts Access",
                 description = if (isArabic) {
-                    "مطلوب لربط حسابات CCP's والأشخاص في الديون مباشرة من قائمة جهات الاتصال بالهاتف"
+                    "مطلوب لربط الحسابات البريدية والأشخاص في الديون مباشرة من قائمة جهات الاتصال بالهاتف"
                 } else {
                     "Required to link CCP profiles and Debt contacts directly from your address book"
                 },
@@ -453,7 +454,7 @@ fun AccessPermissionsScreen(
                 accent = EmeraldNeon,
                 title = if (isArabic) "صلاحية الإشعارات والتنبيهات" else "Notifications & Reminders",
                 description = if (isArabic) {
-                    "مطلوب لتنبيهات مواعيد الديون، إشعارات الراتب واقتراحات رسائل ALG Poste الفورية"
+                    "مطلوب لتنبيهات مواعيد الديون، إشعارات الراتب واقتراحات رسائل بريد الجزائر الفورية"
                 } else {
                     "Required for debt due-date reminders, salary alerts & instant ALG Poste notifications"
                 },

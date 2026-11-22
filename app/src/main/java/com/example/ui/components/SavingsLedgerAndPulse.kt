@@ -52,6 +52,7 @@ import com.example.data.SavingsMovementType
 import com.example.data.UserSettings
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
@@ -330,7 +331,7 @@ fun SavingsActivityLedgerCard(
                 displayedEntries.forEachIndexed { index, entry ->
                     SavingsMovementRow(
                         entry = entry,
-                        formattedDate = dateFormatter.format(Date(entry.timestampMillis)),
+                        formattedDate = isolateLtr(dateFormatter.format(Date(entry.timestampMillis))),
                         currencyCode = currencyCode,
                         isArabic = isArabic,
                         isStealth = isStealth
@@ -435,7 +436,7 @@ private fun SavingsMovementRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = if (entry.note.isNotBlank()) "$formattedDate • ${entry.note}" else formattedDate,
+                text = if (entry.note.isNotBlank()) "${isolateLtr(formattedDate)} • ${entry.note}" else isolateLtr(formattedDate),
                 color = colors.textMuted,
                 fontSize = typo.caption,
                 maxLines = 1,
@@ -444,7 +445,7 @@ private fun SavingsMovementRow(
         }
         Spacer(modifier = Modifier.width(dimens.spacingSm))
         Text(
-            text = if (isStealth) "•••••" else "$prefix${formatDzd(entry.amount, currencyCode, false)}",
+            text = if (isStealth) "•••••" else isolateLtr("$prefix${formatDzd(entry.amount, currencyCode, false)}"),
             color = accent,
             fontSize = typo.bodySm,
             fontWeight = FontWeight.ExtraBold,
@@ -502,7 +503,7 @@ fun SavingsPulseSection(
                 icon = Icons.Default.Savings,
                 tint = colors.successColor,
                 title = strings.savingsMilestone,
-                value = formatDzd(netSurplus, strings.currencyCode, isStealth),
+                value = isolateLtr(formatDzd(netSurplus, strings.currencyCode, isStealth)),
                 subtitle = if (isArabic) "الفائض هذا الشهر" else "Monthly surplus",
                 modifier = Modifier.weight(1f)
             )
@@ -510,8 +511,8 @@ fun SavingsPulseSection(
                 icon = Icons.Default.Schedule,
                 tint = colors.primaryNeon,
                 title = strings.salaryRunway,
-                value = if (isArabic) "$daysToPayday يوم" else "$daysToPayday days",
-                subtitle = if (isArabic) "حتى يوم ${userSettings.salaryPayday}" else "Until payday ${userSettings.salaryPayday}",
+                value = if (isArabic) "${isolateLtr(daysToPayday.toString())} يوم" else "$daysToPayday days",
+                subtitle = if (isArabic) "حتى يوم ${isolateLtr(userSettings.salaryPayday.toString())}" else "Until payday ${userSettings.salaryPayday}",
                 modifier = Modifier.weight(1f)
             )
         }
@@ -524,7 +525,7 @@ fun SavingsPulseSection(
                 icon = Icons.Default.Speed,
                 tint = colors.warningColor,
                 title = strings.spendingVelocity,
-                value = formatDzd(dailyBurn, strings.currencyCode, isStealth),
+                value = isolateLtr(formatDzd(dailyBurn, strings.currencyCode, isStealth)),
                 subtitle = if (isArabic) "المتوسط اليومي" else "Daily burn rate",
                 modifier = Modifier.weight(1f)
             )
@@ -532,8 +533,8 @@ fun SavingsPulseSection(
                 icon = Icons.Default.CreditCard,
                 tint = if (debtRatio > 35.0) colors.errorColor else colors.secondaryNeon,
                 title = strings.debtPressure,
-                value = formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode, isStealth),
-                subtitle = if (isArabic) "${debtRatio.toInt()}٪ من المتاح" else "${debtRatio.toInt()}% of available",
+                value = isolateLtr(formatDzd(summary.pendingDebtsOwedByMe, strings.currencyCode, isStealth)),
+                subtitle = if (isArabic) "${isolateLtr("${debtRatio.toInt()}٪")} من المتاح" else "${debtRatio.toInt()}% of available",
                 modifier = Modifier.weight(1f)
             )
         }

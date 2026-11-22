@@ -58,6 +58,7 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
@@ -206,7 +207,7 @@ fun LockScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Fingerprint,
-                            contentDescription = "Fingerprint Sensor",
+                            contentDescription = if (isArabic) "مستشعر البصمة" else "Fingerprint Sensor",
                             tint = if (isError) RoseNeon else colors.primaryNeon,
                             modifier = Modifier.size(if (layoutInfo.isCompactPhone) 52.dp else 60.dp)
                         )
@@ -272,7 +273,7 @@ fun LockScreen(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "v$APP_VERSION • ${strings.updatedLabel}: ${strings.buildDate}",
+                    text = "${isolateLtr("v$APP_VERSION")} • ${strings.updatedLabel}: ${strings.buildDate}",
                     color = colors.textMuted.copy(alpha = 0.7f),
                     fontSize = typo.bodyXs,
                     textAlign = TextAlign.Center

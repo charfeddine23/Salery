@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -88,6 +89,7 @@ import com.example.data.ExpenseCategories
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.formatDzd
 import com.example.ui.i18n.formatDzdAmount
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -202,6 +204,7 @@ fun SovereignSavingsHeroCard(
         borderColor = vaultGold.copy(alpha = if (colors.isDark) 0.30f + breathPhase * 0.18f else 0.22f + breathPhase * 0.12f),
         breathingGlow = false
     ) {
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -215,7 +218,7 @@ fun SovereignSavingsHeroCard(
                                     vaultGold.copy(alpha = (if (colors.isDark) 0.18f else 0.10f) * (0.7f + 0.3f * breathPhase)),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.88f, size.height * 0.18f),
+                                center = Offset(size.width * (if (isRtl) 0.12f else 0.88f), size.height * 0.18f),
                                 radius = r1.coerceAtLeast(1f)
                             )
                         )
@@ -225,7 +228,7 @@ fun SovereignSavingsHeroCard(
                                     vaultEmerald.copy(alpha = (if (colors.isDark) 0.12f else 0.06f) * (0.65f + 0.35f * breathPhase)),
                                     Color.Transparent
                                 ),
-                                center = Offset(size.width * 0.12f, size.height * 0.88f),
+                                center = Offset(size.width * (if (isRtl) 0.88f else 0.12f), size.height * 0.88f),
                                 radius = r2.coerceAtLeast(1f)
                             )
                         )
@@ -312,17 +315,15 @@ fun SovereignSavingsHeroCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Hero Monetary Figure
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Text(
-                        text = formatDzd(animatedSavingsValue.toDouble(), strings.currencyCode, isStealth),
-                        color = vaultGold,
-                        fontSize = typo.hero,
-                        fontWeight = FontWeight.ExtraBold,
-                        style = tnumStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = isolateLtr(formatDzd(animatedSavingsValue.toDouble(), strings.currencyCode, isStealth)),
+                    color = vaultGold,
+                    fontSize = typo.hero,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = tnumStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 // Airy Hairline Breakdown when Assets are Combined (no cluttered inner boxes)
                 AnimatedVisibility(visible = includeAssetsInTotal) {
@@ -338,17 +339,15 @@ fun SovereignSavingsHeroCard(
                                     color = colors.textMuted,
                                     fontSize = typo.caption
                                 )
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = formatDzd(savingsBalance, strings.currencyCode, isStealth),
-                                        color = colors.textPrimary,
-                                        fontSize = typo.bodyXs,
-                                        fontWeight = FontWeight.Bold,
-                                        style = tnumStyle,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                Text(
+                                    text = isolateLtr(formatDzd(savingsBalance, strings.currencyCode, isStealth)),
+                                    color = colors.textPrimary,
+                                    fontSize = typo.bodyXs,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnumStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             VerticalDivider(
                                 modifier = Modifier
@@ -362,17 +361,15 @@ fun SovereignSavingsHeroCard(
                                     color = colors.textMuted,
                                     fontSize = typo.caption
                                 )
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = formatDzd(goldValueDzd, strings.currencyCode, isStealth),
-                                        color = vaultGold,
-                                        fontSize = typo.bodyXs,
-                                        fontWeight = FontWeight.Bold,
-                                        style = tnumStyle,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                Text(
+                                    text = isolateLtr(formatDzd(goldValueDzd, strings.currencyCode, isStealth)),
+                                    color = vaultGold,
+                                    fontSize = typo.bodyXs,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnumStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             VerticalDivider(
                                 modifier = Modifier
@@ -382,21 +379,19 @@ fun SovereignSavingsHeroCard(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isArabic) "كريبتو" else "Crypto",
+                                    text = if (isArabic) "عملات رقمية" else "Crypto",
                                     color = colors.textMuted,
                                     fontSize = typo.caption
                                 )
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    Text(
-                                        text = formatDzd(cryptoValueDzd, strings.currencyCode, isStealth),
-                                        color = CyanNeon,
-                                        fontSize = typo.bodyXs,
-                                        fontWeight = FontWeight.Bold,
-                                        style = tnumStyle,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                Text(
+                                    text = isolateLtr(formatDzd(cryptoValueDzd, strings.currencyCode, isStealth)),
+                                    color = CyanNeon,
+                                    fontSize = typo.bodyXs,
+                                    fontWeight = FontWeight.Bold,
+                                    style = tnumStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
@@ -445,15 +440,13 @@ fun SovereignSavingsHeroCard(
                             )
                         }
                         if (savingsGoalAmount > 0.0) {
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                Text(
-                                    text = formatDzd(savingsGoalAmount, strings.currencyCode, isStealth),
-                                    color = vaultGold,
-                                    fontSize = typo.bodyXs,
-                                    fontWeight = FontWeight.Bold,
-                                    style = tnumStyle
-                                )
-                            }
+                            Text(
+                                text = isolateLtr(formatDzd(savingsGoalAmount, strings.currencyCode, isStealth)),
+                                color = vaultGold,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Bold,
+                                style = tnumStyle
+                            )
                         }
                     }
                     if (savingsGoalAmount > 0.0) {
@@ -496,7 +489,7 @@ fun SovereignSavingsHeroCard(
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = (if (isArabic) "المتاح: " else "Available: ") +
-                                formatDzd(availableBalance, strings.currencyCode, isStealth),
+                                isolateLtr(formatDzd(availableBalance, strings.currencyCode, isStealth)),
                             color = colors.textMuted,
                             fontSize = typo.caption,
                             style = tnumStyle,
@@ -512,7 +505,7 @@ fun SovereignSavingsHeroCard(
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = if (isArabic) "محصّن ${(reserveRatio * 100).toInt()}٪"
+                            text = if (isArabic) "محصّن ${isolateLtr("${(reserveRatio * 100).toInt()}٪")}"
                             else "${(reserveRatio * 100).toInt()}% Secured",
                             color = vaultEmerald,
                             fontSize = typo.caption,
@@ -647,6 +640,9 @@ fun SavingsTransferDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -674,6 +670,7 @@ fun SavingsTransferDialog(
                     onDismiss()
                 }
             )
+        }
         }
     }
 }
@@ -900,7 +897,8 @@ fun InstantSavingsTransferStudio(
                 textStyle = TextStyle(
                     fontSize = typo.title,
                     fontWeight = FontWeight.ExtraBold,
-                    fontFeatureSettings = "tnum"
+                    fontFeatureSettings = "tnum",
+                    textDirection = TextDirection.Ltr
                 ),
                 trailingIcon = {
                     if (amountInput.isNotEmpty()) {
@@ -962,7 +960,7 @@ fun InstantSavingsTransferStudio(
                         val pctLabel = if (pct == 1.0) {
                             if (isArabic) "الكل" else "All"
                         } else {
-                            "${(pct * 100).toInt()}%"
+                            if (isArabic) isolateLtr("${(pct * 100).toInt()}٪") else "${(pct * 100).toInt()}%"
                         }
                         val targetAmt = (sourceMax * pct).toLong()
                         val isSelected = targetAmt > 0 && parsedAmount.toLong() == targetAmt
@@ -1024,7 +1022,7 @@ fun InstantSavingsTransferStudio(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "+${formatDzdAmount(step)}",
+                            text = isolateLtr("+${formatDzdAmount(step)}"),
                             color = modeColor,
                             fontSize = typo.bodyXs,
                             fontWeight = FontWeight.Bold,
@@ -1124,7 +1122,7 @@ fun InstantSavingsTransferStudio(
                 Spacer(modifier = Modifier.height(dimens.spacingSm))
                 Text(
                     text = if (isArabic) {
-                        "رصيد الادخار الحالي (${formatDzdAmount(savingsBalance)} ${strings.currencyCode}) لا يكفي لهذا المبلغ."
+                        "رصيد الادخار الحالي (${isolateLtr("${formatDzdAmount(savingsBalance)} ${strings.currencyCode}")}) لا يكفي لهذا المبلغ."
                     } else {
                         "Current savings balance (${formatDzdAmount(savingsBalance)} ${strings.currencyCode}) is insufficient."
                     },
@@ -1136,7 +1134,7 @@ fun InstantSavingsTransferStudio(
                 Spacer(modifier = Modifier.height(dimens.spacingSm))
                 Text(
                     text = if (isArabic) {
-                        "ملاحظة: المبلغ أكبر من الرصيد المتاح الحالي (${formatDzdAmount(availableBalance)} ${strings.currencyCode})."
+                        "ملاحظة: المبلغ أكبر من الرصيد المتاح الحالي (${isolateLtr("${formatDzdAmount(availableBalance)} ${strings.currencyCode}")})."
                     } else {
                         "Note: Amount exceeds current available balance (${formatDzdAmount(availableBalance)} ${strings.currencyCode})."
                     },
@@ -1156,7 +1154,7 @@ fun InstantSavingsTransferStudio(
                     SavingsTransferMode.SPEND -> if (isArabic) "أدخل مبلغ الصرف" else "Enter Spend Amount"
                 }
                 else -> {
-                    val amtText = "${formatDzdAmount(parsedAmount)} ${strings.currencyCode}"
+                    val amtText = isolateLtr("${formatDzdAmount(parsedAmount)} ${strings.currencyCode}")
                     when (activeMode) {
                         SavingsTransferMode.DEPOSIT -> if (isArabic) "تحويل $amtText للادخار" else "Deposit $amtText to Savings"
                         SavingsTransferMode.WITHDRAW -> if (isArabic) "سحب $amtText للمتاح" else "Withdraw $amtText to Available"
@@ -1335,11 +1333,13 @@ private fun TransferFlowPreviewStrip(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = if (transferAmount > 0.0) {
-                    formatDzd(fromAfter, currencyCode, isStealth)
-                } else {
-                    formatDzd(fromBefore, currencyCode, isStealth)
-                },
+                text = isolateLtr(
+                    if (transferAmount > 0.0) {
+                        formatDzd(fromAfter, currencyCode, isStealth)
+                    } else {
+                        formatDzd(fromBefore, currencyCode, isStealth)
+                    }
+                ),
                 color = if (transferAmount > 0.0) colors.textPrimary else colors.textSecondary,
                 fontSize = typo.bodySm,
                 fontWeight = FontWeight.Bold,
@@ -1378,11 +1378,11 @@ private fun TransferFlowPreviewStrip(
             )
             Text(
                 text = if (mode == SavingsTransferMode.SPEND) {
-                    if (transferAmount > 0.0) formatDzd(transferAmount, currencyCode, isStealth) else "—"
+                    if (transferAmount > 0.0) isolateLtr(formatDzd(transferAmount, currencyCode, isStealth)) else "—"
                 } else if (transferAmount > 0.0) {
-                    formatDzd(toAfter, currencyCode, isStealth)
+                    isolateLtr(formatDzd(toAfter, currencyCode, isStealth))
                 } else {
-                    formatDzd(toBefore, currencyCode, isStealth)
+                    isolateLtr(formatDzd(toBefore, currencyCode, isStealth))
                 },
                 color = if (transferAmount > 0.0) accentColor else colors.textSecondary,
                 fontSize = typo.bodySm,
@@ -1420,6 +1420,9 @@ fun SavingsGoalDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(dimens.cornerRadiusXl),
@@ -1478,7 +1481,7 @@ fun SavingsGoalDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = formatDzdAmount(preset),
+                                text = isolateLtr(formatDzdAmount(preset)),
                                 color = AmberNeon,
                                 fontSize = typo.bodyXs,
                                 fontWeight = FontWeight.Bold,
@@ -1495,6 +1498,7 @@ fun SavingsGoalDialog(
                     onValueChange = { goalInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
                     label = { Text(if (isArabic) "مبلغ الهدف (${strings.currencyCode})" else "Goal Amount (${strings.currencyCode})") },
                     singleLine = true,
+                    textStyle = TextStyle(fontFeatureSettings = "tnum", textDirection = TextDirection.Ltr),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(dimens.cornerRadiusMd),
@@ -1541,6 +1545,7 @@ fun SavingsGoalDialog(
                     )
                 }
             }
+        }
         }
     }
 }

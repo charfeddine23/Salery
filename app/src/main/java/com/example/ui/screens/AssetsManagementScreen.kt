@@ -59,6 +59,7 @@ import com.example.ui.components.formatAssetsSyncTimeCompact
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -330,17 +331,15 @@ private fun AssetsSummaryHeaderCard(
 
             Spacer(modifier = Modifier.height(dimens.spacingMd))
 
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Text(
-                    text = formatDzd(combinedAssetsDzd, strings.currencyCode, isStealth),
-                    color = AmberNeon,
-                    fontSize = typo.hero,
-                    fontWeight = FontWeight.ExtraBold,
-                    style = tnumStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = isolateLtr(formatDzd(combinedAssetsDzd, strings.currencyCode, isStealth)),
+                color = AmberNeon,
+                fontSize = typo.hero,
+                fontWeight = FontWeight.ExtraBold,
+                style = tnumStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
 
             Spacer(modifier = Modifier.height(dimens.spacingSm))
 
@@ -357,22 +356,20 @@ private fun AssetsSummaryHeaderCard(
                         .padding(dimens.cardPaddingSmall)
                 ) {
                     Text(
-                        text = if (isArabic) "الذهب (Square)" else "Gold (Square)",
+                        text = if (isArabic) "الذهب (سكوار)" else "Gold (Square)",
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = formatDzd(goldValueDzd, strings.currencyCode, isStealth),
-                            color = AmberNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.Bold,
-                            style = tnumStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = isolateLtr(formatDzd(goldValueDzd, strings.currencyCode, isStealth)),
+                        color = AmberNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Bold,
+                        style = tnumStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 Column(
@@ -384,22 +381,20 @@ private fun AssetsSummaryHeaderCard(
                         .padding(dimens.cardPaddingSmall)
                 ) {
                     Text(
-                        text = if (isArabic) "الكريبتو (Square eq)" else "Crypto (Square eq)",
+                        text = if (isArabic) "العملات الرقمية (سكوار)" else "Crypto (Square eq)",
                         color = colors.textMuted,
                         fontSize = typo.caption
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = formatDzd(cryptoValueDzd, strings.currencyCode, isStealth),
-                            color = CyanNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.Bold,
-                            style = tnumStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = isolateLtr(formatDzd(cryptoValueDzd, strings.currencyCode, isStealth)),
+                        color = CyanNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Bold,
+                        style = tnumStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -459,7 +454,7 @@ private fun GoldVaultManagementCard(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = if (isArabic) "خزنة الذهب (Square)" else "Gold Vault (Square)",
+                        text = if (isArabic) "خزنة الذهب (سكوار)" else "Gold Vault (Square)",
                         color = colors.textPrimary,
                         fontSize = typo.titleSm,
                         fontWeight = FontWeight.Bold,
@@ -546,38 +541,37 @@ private fun GoldVaultManagementCard(
             ) {
                 Column {
                     Text(
-                        text = if (isArabic) "إجمالي الذهب ($totalGramsFmt غ)" else "Total Gold (${totalGramsFmt}g)",
+                        text = if (isArabic) "إجمالي الذهب (${isolateLtr(totalGramsFmt)} غ)" else "Total Gold (${totalGramsFmt}g)",
                         color = colors.textSecondary,
                         fontSize = typo.caption,
                         fontWeight = FontWeight.SemiBold
                     )
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = if (goldSummary.hasLivePrices) {
-                                formatDzd(goldSummary.totalValueDzdParallel, strings.currencyCode, isStealth)
-                            } else {
-                                if (isArabic) "بانتظار مزامنة الأسعار" else "Awaiting price sync"
-                            },
-                            color = AmberNeon,
-                            fontSize = typo.title,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = tnumStyle
-                        )
-                    }
+                    Text(
+                        text = if (goldSummary.hasLivePrices) {
+                            isolateLtr(formatDzd(goldSummary.totalValueDzdParallel, strings.currencyCode, isStealth))
+                        } else {
+                            if (isArabic) "بانتظار مزامنة الأسعار" else "Awaiting price sync"
+                        },
+                        color = AmberNeon,
+                        fontSize = typo.title,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = tnumStyle
+                    )
                 }
 
                 if (goldSummary.totalValueUsd > 0.0) {
-                    val usdFormatted = if (isStealth) "•••• USD"
-                    else String.format(Locale.US, "$%,.2f", goldSummary.totalValueUsd)
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(
-                            text = "≈ $usdFormatted",
-                            color = EmeraldNeon,
-                            fontSize = typo.bodySm,
-                            fontWeight = FontWeight.Bold,
-                            style = tnumStyle
-                        )
+                    val usdFormatted = if (isStealth) {
+                        if (isArabic) "•••• دولار" else "•••• USD"
+                    } else {
+                        isolateLtr(String.format(Locale.US, "$%,.2f", goldSummary.totalValueUsd))
                     }
+                    Text(
+                        text = "≈ $usdFormatted",
+                        color = EmeraldNeon,
+                        fontSize = typo.bodySm,
+                        fontWeight = FontWeight.Bold,
+                        style = tnumStyle
+                    )
                 }
             }
         } else {

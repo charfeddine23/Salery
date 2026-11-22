@@ -50,6 +50,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -87,10 +88,12 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,6 +102,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.market.SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES
 import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -513,7 +517,7 @@ fun SquareTopAnchoredPullToRefresh(
             if (hudAlpha > 0.02f) {
                 val secsLeftText = remember(holdProgress) {
                     val left = ((1f - holdProgress) * 2f).coerceIn(0f, 2f)
-                    String.format(Locale.US, "%.1f", left)
+                    isolateLtr(String.format(Locale.US, "%.1f", left))
                 }
 
                 Row(
@@ -588,11 +592,11 @@ fun SquareTopAnchoredPullToRefresh(
                                 if (isArabic) "جاري تحديث الأسعار..." else "Updating live rates..."
                             }
                             holdProgress > 0.06f -> {
-                                if (isArabic) "أفلت للتحديث • انتظر ${secsLeftText}ث لوقت المزامنة"
+                                if (isArabic) "أفلت للتحديث • انتظر ${secsLeftText} ث لوقت المزامنة"
                                 else "Release to refresh • Hold ${secsLeftText}s for sync settings"
                             }
                             isPastThreshold -> {
-                                if (isArabic) "أفلت للتحديث أو انتظر 2ث للإعدادات"
+                                if (isArabic) "أفلت للتحديث أو انتظر ${isolateLtr("2")} ث للإعدادات"
                                 else "Release to refresh • Hold 2s for sync settings"
                             }
                             else -> {
@@ -648,6 +652,9 @@ fun SquareSyncIntervalSettingsDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -929,6 +936,7 @@ fun SquareSyncIntervalSettingsDialog(
                     }
                 }
             }
+        }
         }
     }
 }

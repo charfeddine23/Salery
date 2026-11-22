@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,10 +64,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -74,9 +77,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.security.StepUpAuthHelper
 import com.example.security.VaultCryptoManager
+import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDate
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
@@ -191,14 +196,18 @@ fun BackupRestoreDialog(
                         }
                     }
                     statusMessage = if (encryptBackupWithPassword) {
-                        if (isArabic) "تم حفظ النسخة المشفرة بأمان (AES-256) ✓"
+                        if (isArabic) "تم حفظ النسخة المشفرة بأمان ✓"
                         else "Encrypted backup saved securely (AES-256) ✓"
                     } else {
                         strings.backupSuccess
                     }
                     isErrorMessage = false
                 } catch (e: Exception) {
-                    statusMessage = "Write error: ${e.localizedMessage ?: "Failed to save"}"
+                    statusMessage = if (isArabic) {
+                        "خطأ في الكتابة: ${e.localizedMessage ?: "تعذر الحفظ"}"
+                    } else {
+                        "Write error: ${e.localizedMessage ?: "Failed to save"}"
+                    }
                     isErrorMessage = true
                 } finally {
                     isLoading = false
@@ -270,11 +279,23 @@ fun BackupRestoreDialog(
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, exported)
-                                putExtra(Intent.EXTRA_SUBJECT, "Vaultix Backup (${formatDate(System.currentTimeMillis())})")
+                                putExtra(
+                                    Intent.EXTRA_SUBJECT,
+                                    if (isArabic) {
+                                        "نسخة احتياطية $APP_NAME (${formatDate(System.currentTimeMillis(), true)})"
+                                    } else {
+                                        "$APP_NAME Backup (${formatDate(System.currentTimeMillis(), false)})"
+                                    }
+                                )
                                 putExtra(Intent.EXTRA_TITLE, "Vaultix_$suffix")
                                 type = "application/json"
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share Backup to Google Drive / Apps"))
+                            context.startActivity(
+                                Intent.createChooser(
+                                    sendIntent,
+                                    if (isArabic) "مشاركة النسخة عبر جوجل درايف / التطبيقات" else "Share Backup to Google Drive / Apps"
+                                )
+                            )
                         } else {
                             pendingExportJson = exported
                             onBeforeExternalFlow()
@@ -287,7 +308,11 @@ fun BackupRestoreDialog(
                         }
                     } catch (e: Exception) {
                         isLoading = false
-                        statusMessage = "Backup error: ${e.localizedMessage ?: "Unknown"}"
+                        statusMessage = if (isArabic) {
+                            "خطأ في النسخ الاحتياطي: ${e.localizedMessage ?: "خطأ غير معروف"}"
+                        } else {
+                            "Backup error: ${e.localizedMessage ?: "Unknown"}"
+                        }
                         isErrorMessage = true
                     }
                 }
@@ -308,6 +333,9 @@ fun BackupRestoreDialog(
             securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -352,7 +380,7 @@ fun BackupRestoreDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Vaultix Cloud & Local Data",
+                                text = if (isArabic) "بيانات $APP_NAME السحابية والمحلية" else "$APP_NAME Cloud & Local Data",
                                 color = colors.textMuted,
                                 fontSize = 11.sp
                             )
@@ -391,7 +419,7 @@ fun BackupRestoreDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         val lastSyncStr = if (lastBackupTimestamp > 0) {
-                            String.format(strings.lastBackupLabel, formatDate(lastBackupTimestamp))
+                            String.format(strings.lastBackupLabel, isolateLtr(formatDate(lastBackupTimestamp, isArabic)))
                         } else {
                             strings.neverBackedUp
                         }
@@ -442,7 +470,7 @@ fun BackupRestoreDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (isArabic) "تشفير النسخة بكلمة مرور (AES-256)" else "Encrypt backup with password",
+                                text = if (isArabic) "تشفير النسخة الاحتياطية بكلمة مرور" else "Encrypt backup with password",
                                 color = colors.textPrimary,
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -630,7 +658,7 @@ fun BackupRestoreDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isArabic) "أو مشاركة النسخة عبر Google Drive / التطبيقات"
+                        text = if (isArabic) "أو مشاركة النسخة عبر جوجل درايف / التطبيقات"
                         else "Or share backup via Google Drive app",
                         color = colors.textSecondary,
                         fontSize = 11.5.sp
@@ -771,6 +799,7 @@ fun BackupRestoreDialog(
                     }
                 }
             }
+        }
         }
     }
 }

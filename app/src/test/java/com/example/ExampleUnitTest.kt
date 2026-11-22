@@ -10,7 +10,10 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.EnglishStrings
+import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzdAmount
+import com.example.ui.i18n.formatPercent
+import com.example.ui.i18n.isolateLtr
 import com.example.update.isMandatoryBlockActive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -1727,5 +1730,43 @@ class ExampleUnitTest {
     assertEquals(2, eligible.size)
     assertTrue(eligible.none { it.id == "tax_past" })
     assertEquals(listOf("tax_future_boundary", "tax_future_later"), eligible.map { it.id })
+  }
+
+  @Test
+  fun arabicLocalization_preservesIdentityAndEliminatesLatinLeaks() {
+    assertEquals("Vaultix", APP_NAME)
+    assertEquals("Charfeddine Ka", DEVELOPER_NAME)
+    assertEquals("Vaultix", ArabicStrings.appName)
+    assertEquals("Vaultix", EnglishStrings.appName)
+
+    assertEquals("د.ج", ArabicStrings.currencyCode)
+    assertEquals("\u206612,500 د.ج\u2069", isolateLtr("12,500 د.ج"))
+    assertEquals("45٪", formatPercent(45, isArabic = true))
+    assertEquals("45%", formatPercent(45, isArabic = false))
+    assertTrue(formatDate(1_765_000_000_000L, isArabic = true).isNotBlank())
+
+    val forbiddenAcronyms = listOf("DZD", "USD", "CCP", "SMS", "CVC", "EXP", "JSON", "Google Drive", "BaridiMob", "Binance", "Square")
+    val auditedArabicStrings = listOf(
+      ArabicStrings.currencyCode,
+      ArabicStrings.currentAccount,
+      ArabicStrings.cardCvcLabel,
+      ArabicStrings.salaryAmount,
+      ArabicStrings.monthlyInstallmentAmount,
+      ArabicStrings.partialPaymentAmount,
+      ArabicStrings.amount,
+      ArabicStrings.backupDriveTitle,
+      ArabicStrings.backupToDrive,
+      ArabicStrings.restoreFromDrive,
+      ArabicStrings.restoreError,
+      ArabicStrings.pasteJsonFallback,
+      ArabicStrings.visaComingSoonDesc
+    )
+    auditedArabicStrings.forEach { value ->
+      forbiddenAcronyms.forEach { token ->
+        assertTrue("Unexpected Latin token '$token' in Arabic string '$value'", !value.contains(token))
+      }
+    }
+    assertTrue(ArabicStrings.visaComingSoonDesc.contains("Vaultix"))
+    assertTrue(ArabicStrings.unlockApp.contains("Vaultix"))
   }
 }

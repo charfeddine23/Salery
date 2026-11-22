@@ -123,6 +123,8 @@ import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
+import com.example.ui.i18n.formatPercent
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -400,11 +402,11 @@ fun CcpsScreen(
                         )
                         Text(
                             text = if (accounts.isEmpty()) {
-                                if (isArabic) "أضف حسابات CCP واختر نمط البطاقة لتتحول بأشكال وألوان متناسقة"
+                                if (isArabic) "أضف حساباتك البريدية واختر نمط البطاقة لتتحول بأشكال وألوان متناسقة"
                                 else "Pick a card theme to transform each CCP container dynamically"
                             } else {
-                                if (isArabic) "${accounts.size} ملف محفوظ • تغطية RIP الكاملة ${(ripRatio * 100).toInt()}%"
-                                else "${accounts.size} saved profiles • ${(ripRatio * 100).toInt()}% complete RIP"
+                                if (isArabic) "${accounts.size} ملف محفوظ • تغطية الهوية البريدية الكاملة ${formatPercent((ripRatio * 100).toInt(), true)}"
+                                else "${accounts.size} saved profiles • ${formatPercent((ripRatio * 100).toInt(), false)} complete RIP"
                             },
                             color = colors.textMuted,
                             fontSize = typo.bodyXs
@@ -439,7 +441,7 @@ fun CcpsScreen(
                             modifier = Modifier.weight(1f)
                         )
                         CcpSummaryChip(
-                            label = if (isArabic) "مع RIP: $withRipCount" else "RIP: $withRipCount",
+                            label = if (isArabic) "هوية بريدية: $withRipCount" else "RIP: $withRipCount",
                             color = EmeraldNeon,
                             modifier = Modifier.weight(1f)
                         )
@@ -473,7 +475,7 @@ fun CcpsScreen(
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                text = if (isArabic) "ابحث بالاسم، اللقب، CCP، RIP أو الملاحظة..."
+                                text = if (isArabic) "ابحث بالاسم، اللقب، رقم الحساب، الهوية البريدية أو الملاحظة..."
                                 else "Search name, CCP, RIP, or note...",
                                 color = colors.textMuted,
                                 fontSize = typo.bodySm,
@@ -534,7 +536,7 @@ fun CcpsScreen(
                     onClick = { activeFilter = CcpFilter.LINKED_CONTACTS }
                 )
                 GlassPill(
-                    text = if (isArabic) "مع RIP ($withRipCount)" else "With RIP ($withRipCount)",
+                    text = if (isArabic) "هوية بريدية ($withRipCount)" else "With RIP ($withRipCount)",
                     isSelected = activeFilter == CcpFilter.WITH_RIP,
                     onClick = { activeFilter = CcpFilter.WITH_RIP }
                 )
@@ -584,12 +586,12 @@ fun CcpsScreen(
                     item(key = "ccp_empty_tablet") {
                         LiquidEmptyStateCard(
                             title = if (accounts.isEmpty()) {
-                                if (isArabic) "لا توجد ملفات CCP محفوظة" else "No saved CCP profiles"
+                                if (isArabic) "لا توجد حسابات بريدية محفوظة" else "No saved CCP profiles"
                             } else {
                                 if (isArabic) "لا توجد نتائج مطابقة" else "No matching profiles"
                             },
                             description = if (accounts.isEmpty()) {
-                                if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، CCP والمفتاح Clé، و RIP) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
+                                if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، الحساب البريدي والمفتاح، والهوية البريدية) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
                                 else "Store up to 1,000 CCP & RIP profiles with app-themed animated cards, linked contacts, and one-tap copy."
                             } else {
                                 if (isArabic) "جرّب تغيير التصفية أو البحث باسم آخر."
@@ -625,14 +627,14 @@ fun CcpsScreen(
                                 copyText(
                                     label = "CCP",
                                     text = value,
-                                    toastMessage = if (isArabic) "تم نسخ رقم CCP والمفتاح ✓" else "CCP & Clé copied ✓"
+                                    toastMessage = if (isArabic) "تم نسخ رقم الحساب والمفتاح ✓" else "CCP & Clé copied ✓"
                                 )
                             },
                             onCopyRip = {
                                 copyText(
                                     label = "RIP",
                                     text = acc.ripFull,
-                                    toastMessage = if (isArabic) "تم نسخ رقم RIP ✓" else "RIP copied ✓"
+                                    toastMessage = if (isArabic) "تم نسخ الهوية البريدية ✓" else "RIP copied ✓"
                                 )
                             },
                             onCopyPhone = {
@@ -686,12 +688,12 @@ fun CcpsScreen(
                 item(key = "ccp_empty") {
                     LiquidEmptyStateCard(
                         title = if (accounts.isEmpty()) {
-                            if (isArabic) "لا توجد ملفات CCP محفوظة" else "No saved CCP profiles"
+                            if (isArabic) "لا توجد حسابات بريدية محفوظة" else "No saved CCP profiles"
                         } else {
                             if (isArabic) "لا توجد نتائج مطابقة" else "No matching profiles"
                         },
                         description = if (accounts.isEmpty()) {
-                            if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، CCP والمفتاح Clé، و RIP) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
+                            if (isArabic) "أضف حتى 1000 شخص (الاسم، ربط بجهة اتصال، الحساب البريدي والمفتاح، والهوية البريدية) مع تحوّل تلقائي فخم لشكل ولون كل وعاء."
                             else "Store up to 1,000 CCP & RIP profiles with app-themed animated cards, linked contacts, and one-tap copy."
                         } else {
                             if (isArabic) "جرّب تغيير التصفية أو البحث باسم آخر."
@@ -727,14 +729,14 @@ fun CcpsScreen(
                             copyText(
                                 label = "CCP",
                                 text = value,
-                                toastMessage = if (isArabic) "تم نسخ رقم CCP والمفتاح ✓" else "CCP & Clé copied ✓"
+                                toastMessage = if (isArabic) "تم نسخ رقم الحساب والمفتاح ✓" else "CCP & Clé copied ✓"
                             )
                         },
                         onCopyRip = {
                             copyText(
                                 label = "RIP",
                                 text = acc.ripFull,
-                                toastMessage = if (isArabic) "تم نسخ رقم RIP ✓" else "RIP copied ✓"
+                                toastMessage = if (isArabic) "تم نسخ الهوية البريدية ✓" else "RIP copied ✓"
                             )
                         },
                         onCopyPhone = {
@@ -995,7 +997,7 @@ private fun CcpAccountCard(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "RIP",
+                                        text = if (isArabic) "هوية بريدية" else "RIP",
                                         color = EmeraldNeon,
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold
@@ -1009,7 +1011,7 @@ private fun CcpAccountCard(
                             val contactMeta = buildString {
                                 append(account.contactName)
                                 if (account.contactPhone.isNotBlank()) {
-                                    append(" • ${if (isStealth || !isExpanded) "••••••" else account.contactPhone}")
+                                    append(" • ${if (isStealth || !isExpanded) "••••••" else isolateLtr(account.contactPhone)}")
                                 }
                             }
                             Row(
@@ -1080,12 +1082,16 @@ private fun CcpAccountCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val quickPreview = when {
-                        isStealth -> "CCP ••••••"
+                        isStealth -> if (isArabic) "حساب ••••••" else "CCP ••••••"
                         account.ccpNumber.isNotBlank() -> {
                             val tail = account.ccpNumber.takeLast(4)
-                            if (account.ccpKey.isNotBlank()) "CCP ••••$tail (${account.ccpKey})" else "CCP ••••$tail"
+                            val maskDigits = if (account.ccpKey.isNotBlank()) "••••$tail (${account.ccpKey})" else "••••$tail"
+                            if (isArabic) "حساب ${isolateLtr(maskDigits)}" else "CCP $maskDigits"
                         }
-                        account.ripFull.isNotBlank() -> "RIP ••••${account.ripFull.takeLast(4)}"
+                        account.ripFull.isNotBlank() -> {
+                            val tail = "••••${account.ripFull.takeLast(4)}"
+                            if (isArabic) "هوية ${isolateLtr(tail)}" else "RIP $tail"
+                        }
                         else -> if (isArabic) "اضغط لعرض التفاصيل" else "Tap to view details"
                     }
                     Text(
@@ -1117,44 +1123,46 @@ private fun CcpAccountCard(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            if (account.ccpNumber.isNotBlank()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(colors.glassSurface)
-                                        .border(
-                                            width = 0.9.dp,
-                                            color = if (copiedCcpRecently) EmeraldNeon.copy(alpha = 0.80f)
-                                            else colors.glassBorderSubtle,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable {
-                                            copiedCcpRecently = true
-                                            onCopyCcp()
+                        if (account.ccpNumber.isNotBlank()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.glassSurface)
+                                    .border(
+                                        width = 0.9.dp,
+                                        color = if (copiedCcpRecently) EmeraldNeon.copy(alpha = 0.80f)
+                                        else colors.glassBorderSubtle,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        copiedCcpRecently = true
+                                        onCopyCcp()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isArabic) "الحساب البريدي • المفتاح" else "CCP • CLÉ",
+                                        color = brandPrimary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    val ccpDisplay = if (!isDigitsVisible) "••••••••••" else buildString {
+                                        append(account.ccpNumber)
+                                        if (account.ccpKey.isNotBlank()) {
+                                            append(if (isArabic) "   (${account.ccpKey})" else "   Clé ${account.ccpKey}")
                                         }
-                                        .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "CCP • CLÉ",
-                                            color = brandPrimary,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                        val ccpDisplay = if (!isDigitsVisible) "••••••••••" else buildString {
-                                            append(account.ccpNumber)
-                                            if (account.ccpKey.isNotBlank()) append("   Clé ${account.ccpKey}")
-                                        }
-                                        AnimatedContent(
-                                            targetState = ccpDisplay,
-                                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-                                            label = "ccp_digits_anim"
-                                        ) { textVal ->
+                                    }
+                                    AnimatedContent(
+                                        targetState = ccpDisplay,
+                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+                                        label = "ccp_digits_anim"
+                                    ) { textVal ->
+                                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                             Text(
                                                 text = textVal,
                                                 color = colors.textPrimary,
@@ -1165,70 +1173,72 @@ private fun CcpAccountCard(
                                             )
                                         }
                                     }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(onClick = onToggleDigitsVisibility, modifier = Modifier.size(48.dp)) {
-                                            Icon(
-                                                imageVector = if (isDigitsVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                contentDescription = if (isArabic) "إظهار/إخفاء" else "Show/Hide",
-                                                tint = brandPrimary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                copiedCcpRecently = true
-                                                onCopyCcp()
-                                            },
-                                            modifier = Modifier.size(48.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (copiedCcpRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                                contentDescription = "Copy CCP",
-                                                tint = if (copiedCcpRecently) EmeraldNeon else brandPrimary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = onToggleDigitsVisibility, modifier = Modifier.size(48.dp)) {
+                                        Icon(
+                                            imageVector = if (isDigitsVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = if (isArabic) "إظهار/إخفاء" else "Show/Hide",
+                                            tint = brandPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            copiedCcpRecently = true
+                                            onCopyCcp()
+                                        },
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (copiedCcpRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                            contentDescription = if (isArabic) "نسخ رقم الحساب" else "Copy CCP",
+                                            tint = if (copiedCcpRecently) EmeraldNeon else brandPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
                             }
+                        }
 
-                            if (account.ripFull.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(colors.glassSurface)
-                                        .border(
-                                            width = 0.9.dp,
-                                            color = if (copiedRipRecently) EmeraldNeon.copy(alpha = 0.85f)
-                                            else colors.glassBorderSubtle,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable {
-                                            copiedRipRecently = true
-                                            onCopyRip()
-                                        }
-                                        .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "RIP (ALGÉRIE POSTE)",
-                                            color = EmeraldNeon,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                        val ripDisplay = if (!isDigitsVisible) "007 99999 •••••••••• ••" else {
-                                            HubVaultCodec.formatRipGrouped(account.ripFull)
-                                        }
-                                        AnimatedContent(
-                                            targetState = ripDisplay,
-                                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
-                                            label = "rip_digits_anim"
-                                        ) { textVal ->
+                        if (account.ripFull.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.glassSurface)
+                                    .border(
+                                        width = 0.9.dp,
+                                        color = if (copiedRipRecently) EmeraldNeon.copy(alpha = 0.85f)
+                                        else colors.glassBorderSubtle,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        copiedRipRecently = true
+                                        onCopyRip()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isArabic) "الهوية البريدية (بريد الجزائر)" else "RIP (ALGÉRIE POSTE)",
+                                        color = EmeraldNeon,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    val ripDisplay = if (!isDigitsVisible) "007 99999 •••••••••• ••" else {
+                                        HubVaultCodec.formatRipGrouped(account.ripFull)
+                                    }
+                                    AnimatedContent(
+                                        targetState = ripDisplay,
+                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) },
+                                        label = "rip_digits_anim"
+                                    ) { textVal ->
+                                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                             Text(
                                                 text = textVal,
                                                 color = colors.textPrimary,
@@ -1241,20 +1251,20 @@ private fun CcpAccountCard(
                                             )
                                         }
                                     }
-                                    IconButton(
-                                        onClick = {
-                                            copiedRipRecently = true
-                                            onCopyRip()
-                                        },
-                                        modifier = Modifier.size(48.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (copiedRipRecently) Icons.Default.Check else Icons.Default.ContentCopy,
-                                            contentDescription = "Copy RIP",
-                                            tint = EmeraldNeon,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        copiedRipRecently = true
+                                        onCopyRip()
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (copiedRipRecently) Icons.Default.Check else Icons.Default.ContentCopy,
+                                        contentDescription = if (isArabic) "نسخ الهوية البريدية" else "Copy RIP",
+                                        tint = EmeraldNeon,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
@@ -1448,19 +1458,22 @@ private fun AddOrEditCcpAccountDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
-        GlassCard(
-            modifier = Modifier
-                .widthIn(max = 480.dp)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
-            backgroundColor = colors.dialogBackground,
-            borderColor = presetAccent.copy(alpha = 0.50f)
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
         ) {
-            Column(
+            GlassCard(
                 modifier = Modifier
-                    .padding(18.dp)
-                    .verticalScroll(rememberScrollState())
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                backgroundColor = colors.dialogBackground,
+                borderColor = presetAccent.copy(alpha = 0.50f)
             ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                 // Live Brand Transformation Preview Banner matching KeysScreen Dialog
                 Box(
                     modifier = Modifier
@@ -1486,9 +1499,9 @@ private fun AddOrEditCcpAccountDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (existing == null) {
-                                    if (isArabic) "إضافة ملف CCP جديد" else "Add CCP Person Profile"
+                                    if (isArabic) "إضافة ملف حساب بريدي جديد" else "Add CCP Person Profile"
                                 } else {
-                                    if (isArabic) "تعديل ملف CCP" else "Edit CCP Profile"
+                                    if (isArabic) "تعديل ملف الحساب البريدي" else "Edit CCP Profile"
                                 },
                                 color = colors.textPrimary,
                                 fontSize = 16.sp,
@@ -1588,7 +1601,7 @@ private fun AddOrEditCcpAccountDialog(
                             VaultAppEmblemBadge(preset = p, size = 20.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = p.nameEn.substringBefore(" /"),
+                                text = (if (isArabic) p.nameAr else p.nameEn).substringBefore(" /"),
                                 color = if (selected) pColor else colors.textSecondary,
                                 fontSize = 11.5.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
@@ -1651,7 +1664,7 @@ private fun AddOrEditCcpAccountDialog(
                             )
                             Text(
                                 text = if (contactPhone.isNotBlank()) {
-                                    contactPhone
+                                    isolateLtr(contactPhone)
                                 } else {
                                     if (isArabic) "اضغط لاختيار جهة اتصال وتعبئة الاسم تلقائياً" else "Tap to select a phone contact"
                                 },
@@ -1735,45 +1748,41 @@ private fun AddOrEditCcpAccountDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 3. CCP Number & Clé (رقم الحساب البريدي CCP والمفتاح Clé)
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(modifier = Modifier.weight(1.75f)) {
-                            CcpFieldBox(
-                                label = if (isArabic) "رقم الحساب البريدي CCP" else "CCP Number",
-                                value = ccpNumber,
-                                onValueChange = { ccpNumber = it.filter { ch -> ch.isDigit() }.take(10) },
-                                isNumeric = true,
-                                placeholder = "0012345678"
-                            )
-                        }
-                        Box(modifier = Modifier.weight(0.85f)) {
-                            CcpFieldBox(
-                                label = if (isArabic) "المفتاح Clé" else "Clé",
-                                value = ccpKey,
-                                onValueChange = { ccpKey = it.filter { ch -> ch.isDigit() }.take(2) },
-                                isNumeric = true,
-                                placeholder = "42"
-                            )
-                        }
+                // 3. CCP Number & Key
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1.75f)) {
+                        CcpFieldBox(
+                            label = if (isArabic) "رقم الحساب البريدي" else "CCP Number",
+                            value = ccpNumber,
+                            onValueChange = { ccpNumber = it.filter { ch -> ch.isDigit() }.take(10) },
+                            isNumeric = true,
+                            placeholder = "0012345678"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(0.85f)) {
+                        CcpFieldBox(
+                            label = if (isArabic) "المفتاح" else "Clé",
+                            value = ccpKey,
+                            onValueChange = { ccpKey = it.filter { ch -> ch.isDigit() }.take(2) },
+                            isNumeric = true,
+                            placeholder = "42"
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // 4. Directly Below: Manual RIP Number Field
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    CcpFieldBox(
-                        label = if (isArabic) "رقم الـ RIP (اختياري)" else "RIP Number (optional)",
-                        value = ripNumber,
-                        onValueChange = { ripNumber = it.filter { ch -> ch.isDigit() }.take(20) },
-                        isNumeric = true,
-                        placeholder = "00799999001234567897"
-                    )
-                }
+                CcpFieldBox(
+                    label = if (isArabic) "رقم الهوية البريدية (اختياري)" else "RIP Number (optional)",
+                    value = ripNumber,
+                    onValueChange = { ripNumber = it.filter { ch -> ch.isDigit() }.take(20) },
+                    isNumeric = true,
+                    placeholder = "00799999001234567897"
+                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -1867,6 +1876,7 @@ private fun AddOrEditCcpAccountDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -1894,31 +1904,40 @@ private fun CcpFieldBox(
             fontWeight = FontWeight.SemiBold
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            if (value.isEmpty() && placeholder.isNotEmpty()) {
-                Text(
-                    text = placeholder,
-                    color = colors.textMuted.copy(alpha = 0.55f),
-                    fontSize = 13.5.sp,
-                    fontFamily = if (isNumeric) FontFamily.Monospace else FontFamily.Default,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        val inputContent: @Composable () -> Unit = {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Text(
+                        text = placeholder,
+                        color = colors.textMuted.copy(alpha = 0.55f),
+                        fontSize = 13.5.sp,
+                        fontFamily = if (isNumeric) FontFamily.Monospace else FontFamily.Default,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    keyboardOptions = if (isNumeric) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                    textStyle = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = if (isNumeric) FontFamily.Monospace else FontFamily.Default
+                    ),
+                    cursorBrush = SolidColor(CyanNeon),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                keyboardOptions = if (isNumeric) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-                textStyle = TextStyle(
-                    color = colors.textPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = if (isNumeric) FontFamily.Monospace else FontFamily.Default
-                ),
-                cursorBrush = SolidColor(CyanNeon),
-                modifier = Modifier.fillMaxWidth()
-            )
+        }
+        if (isNumeric) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                inputContent()
+            }
+        } else {
+            inputContent()
         }
     }
 }

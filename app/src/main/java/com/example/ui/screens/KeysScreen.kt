@@ -75,6 +75,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -92,6 +93,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -99,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -124,6 +127,8 @@ import com.example.ui.components.secondaryColor
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
+import com.example.ui.i18n.formatPercent
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
@@ -259,7 +264,7 @@ fun KeysScreen(
         }
         VaultHoldActionDialog(
             title = targetKey.label,
-            subtitle = if (preset.id == "custom") targetKey.category else {
+            subtitle = if (preset.id == "custom") localizedKeyCategory(targetKey.category, isArabic) else {
                 if (isArabic) preset.nameAr else preset.nameEn
             },
             preset = preset,
@@ -414,8 +419,8 @@ fun KeysScreen(
                                 if (isArabic) "أضف حساباتك واختر التطبيق لتتحول البطاقة بألوانه وشعاره"
                                 else "Pick an app from the list to transform each vault card"
                             } else {
-                                if (isArabic) "${keys.size} حساب محفوظ • معدل الأمان العام $averageScore%"
-                                else "${keys.size} saved accounts • Overall security score $averageScore%"
+                                if (isArabic) "${keys.size} حساب محفوظ • معدل الأمان العام ${formatPercent(averageScore, true)}"
+                                else "${keys.size} saved accounts • Overall security score ${formatPercent(averageScore, false)}"
                             },
                             color = colors.textMuted,
                             fontSize = typo.bodyXs
@@ -430,7 +435,7 @@ fun KeysScreen(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "$averageScore%",
+                                text = formatPercent(averageScore, isArabic),
                                 color = auditAccent,
                                 fontSize = typo.bodySm,
                                 fontWeight = FontWeight.ExtraBold
@@ -614,7 +619,7 @@ fun KeysScreen(
                                 if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
                             },
                             description = if (keys.isEmpty()) {
-                                if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
+                                if (isArabic) "احفظ كلمات السر لحساباتك (بريدي موب، إنستغرام، جوجل، ريدوت باي وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
                                 else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
                             } else {
                                 if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
@@ -685,7 +690,7 @@ fun KeysScreen(
                             if (isArabic) "لا توجد حسابات مطابقة للتصفية" else "No matching accounts"
                         },
                         description = if (keys.isEmpty()) {
-                            if (isArabic) "احفظ كلمات السر لحساباتك (BaridiMob، Instagram، Google، RedotPay وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
+                            if (isArabic) "احفظ كلمات السر لحساباتك (بريدي موب، إنستغرام، جوجل، ريدوت باي وغيرها) مع تحوّل تلقائي فخم لشكل ولون كل تطبيق."
                             else "Store usernames & passwords locally with dynamic app-themed animated cards and instant strength analysis."
                         } else {
                             if (isArabic) "غيّر التصفية أو كلمات البحث لعرض باقي الحسابات."
@@ -917,7 +922,7 @@ private fun VaultKeyRowCard(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = if (preset.id == "custom") entry.category else {
+                                    text = if (preset.id == "custom") localizedKeyCategory(entry.category, isArabic) else {
                                         if (isArabic) preset.nameAr else preset.nameEn
                                     },
                                     color = brandPrimary,
@@ -935,7 +940,7 @@ private fun VaultKeyRowCard(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "$strengthLabel ${analysis.score}%",
+                                    text = "$strengthLabel ${formatPercent(analysis.score, isArabic)}",
                                     color = strengthColor,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
@@ -1022,7 +1027,7 @@ private fun VaultKeyRowCard(
                     Text(
                         text = when {
                             isStealth -> "••••••••"
-                            entry.username.isNotBlank() -> entry.username
+                            entry.username.isNotBlank() -> isolateLtr(entry.username)
                             else -> if (isArabic) "اضغط لعرض كلمة السر" else "Tap to reveal credentials"
                         },
                         color = colors.textSecondary,
@@ -1091,7 +1096,7 @@ private fun VaultKeyRowCard(
                                             letterSpacing = 0.5.sp
                                         )
                                         Text(
-                                            text = if (isStealth) "••••••••" else entry.username,
+                                            text = if (isStealth) "••••••••" else isolateLtr(entry.username),
                                             color = colors.textPrimary,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -1163,16 +1168,18 @@ private fun VaultKeyRowCard(
                                         },
                                         label = "secret_reveal_anim"
                                     ) { revealed ->
-                                        Text(
-                                            text = if (revealed) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
-                                            color = colors.textPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            letterSpacing = 1.1.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                            Text(
+                                                text = if (revealed) entry.secretValue else "•".repeat(entry.secretValue.length.coerceIn(6, 14)),
+                                                color = colors.textPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                letterSpacing = 1.1.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1336,19 +1343,22 @@ private fun AddOrEditVaultKeyDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
-        GlassCard(
-            modifier = Modifier
-                .widthIn(max = 480.dp)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
-            backgroundColor = colors.dialogBackground,
-            borderColor = presetAccent.copy(alpha = 0.50f)
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
         ) {
-            Column(
+            GlassCard(
                 modifier = Modifier
-                    .padding(18.dp)
-                    .verticalScroll(rememberScrollState())
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                backgroundColor = colors.dialogBackground,
+                borderColor = presetAccent.copy(alpha = 0.50f)
             ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                 // Live Brand Transformation Preview Banner inside the Dialog
                 Box(
                     modifier = Modifier
@@ -1493,7 +1503,7 @@ private fun AddOrEditVaultKeyDialog(
                             VaultAppEmblemBadge(preset = p, size = 20.dp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = p.nameEn.substringBefore(" /"),
+                                text = (if (isArabic) p.nameAr else p.nameEn).substringBefore(" /"),
                                 color = if (selected) pColor else colors.textSecondary,
                                 fontSize = 11.5.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
@@ -1512,7 +1522,7 @@ private fun AddOrEditVaultKeyDialog(
                 ) {
                     listOf("APP", "BANK", "EMAIL", "PIN").forEach { cat ->
                         GlassPill(
-                            text = cat,
+                            text = localizedKeyCategory(cat, isArabic),
                             isSelected = category == cat,
                             onClick = { category = cat }
                         )
@@ -1522,7 +1532,7 @@ private fun AddOrEditVaultKeyDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 KeyFieldBox(
-                    label = if (isArabic) "اسم التطبيق / الخدمة (مثال: BaridiMob)" else "Account / Service Name",
+                    label = if (isArabic) "اسم التطبيق / الخدمة (مثال: بريدي موب)" else "Account / Service Name",
                     value = label,
                     onValueChange = { newText ->
                         label = newText
@@ -1603,24 +1613,26 @@ private fun AddOrEditVaultKeyDialog(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BasicTextField(
-                            value = secret,
-                            onValueChange = { secret = it },
-                            singleLine = true,
-                            visualTransformation = if (showPasswordInDialog) {
-                                VisualTransformation.None
-                            } else {
-                                PasswordVisualTransformation()
-                            },
-                            textStyle = TextStyle(
-                                color = colors.textPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            ),
-                            cursorBrush = SolidColor(strengthColor),
-                            modifier = Modifier.weight(1f)
-                        )
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            BasicTextField(
+                                value = secret,
+                                onValueChange = { secret = it },
+                                singleLine = true,
+                                visualTransformation = if (showPasswordInDialog) {
+                                    VisualTransformation.None
+                                } else {
+                                    PasswordVisualTransformation()
+                                },
+                                textStyle = TextStyle(
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                cursorBrush = SolidColor(strengthColor),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                         IconButton(
                             onClick = { showPasswordInDialog = !showPasswordInDialog },
                             modifier = Modifier.size(40.dp)
@@ -1667,7 +1679,7 @@ private fun AddOrEditVaultKeyDialog(
                                 )
                             }
                             Text(
-                                text = "${liveAnalysis.score}%",
+                                text = formatPercent(liveAnalysis.score, isArabic),
                                 color = strengthColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -1767,6 +1779,18 @@ private fun AddOrEditVaultKeyDialog(
                 }
             }
         }
+        }
+    }
+}
+
+private fun localizedKeyCategory(cat: String, isArabic: Boolean): String {
+    if (!isArabic) return cat
+    return when (cat.uppercase()) {
+        "APP" -> "تطبيق"
+        "BANK" -> "بنك"
+        "EMAIL" -> "بريد"
+        "PIN" -> "رمز سري"
+        else -> cat
     }
 }
 

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -53,6 +56,7 @@ import com.example.ui.components.PartialPaymentDialog
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.DebtColors
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
@@ -424,69 +428,73 @@ fun DebtScreen(
                 securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
             )
         ) {
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                shape = RoundedCornerShape(22.dp),
-                backgroundColor = colors.dialogBackground
+            CompositionLocalProvider(
+                LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(DebtColors.dangerContainer(isDark))
-                                .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = DebtColors.danger(isDark),
-                                modifier = Modifier.size(20.dp)
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    backgroundColor = colors.dialogBackground
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(DebtColors.dangerContainer(isDark))
+                                    .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = DebtColors.danger(isDark),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = strings.confirmDelete,
+                                color = colors.textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = strings.confirmDelete,
-                            color = colors.textPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "${targetDebt.personName} • ${isolateLtr(formatDzd(targetDebt.amount, strings.currencyCode))}",
+                            color = colors.textSecondary,
+                            fontSize = 13.sp
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                    Text(
-                        text = "${targetDebt.personName} • ${formatDzd(targetDebt.amount, strings.currencyCode)}",
-                        color = colors.textSecondary,
-                        fontSize = 13.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        GlassButton(
-                            text = strings.cancel,
-                            containerColor = colors.glassCard,
-                            modifier = Modifier.weight(1f),
-                            onClick = { debtToDelete = null }
-                        )
-                        GlassButton(
-                            text = strings.delete,
-                            icon = Icons.Default.Delete,
-                            containerColor = DebtColors.danger(isDark),
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                onDeleteDebt(targetDebt)
-                                debtToDelete = null
-                            }
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            GlassButton(
+                                text = strings.cancel,
+                                containerColor = colors.glassCard,
+                                modifier = Modifier.weight(1f),
+                                onClick = { debtToDelete = null }
+                            )
+                            GlassButton(
+                                text = strings.delete,
+                                icon = Icons.Default.Delete,
+                                containerColor = DebtColors.danger(isDark),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onDeleteDebt(targetDebt)
+                                    debtToDelete = null
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -501,69 +509,73 @@ fun DebtScreen(
                 securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
             )
         ) {
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                shape = RoundedCornerShape(22.dp),
-                backgroundColor = colors.dialogBackground
+            CompositionLocalProvider(
+                LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(DebtColors.dangerContainer(isDark))
-                                .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = null,
-                                tint = DebtColors.danger(isDark),
-                                modifier = Modifier.size(20.dp)
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    backgroundColor = colors.dialogBackground
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(DebtColors.dangerContainer(isDark))
+                                    .border(1.dp, DebtColors.dangerBorder(isDark), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteSweep,
+                                    contentDescription = null,
+                                    tint = DebtColors.danger(isDark),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = strings.deleteSettledDebts,
+                                color = colors.textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = strings.deleteSettledDebts,
-                            color = colors.textPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            text = strings.clearSettledConfirm,
+                            color = colors.textSecondary,
+                            fontSize = 13.sp
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                    Text(
-                        text = strings.clearSettledConfirm,
-                        color = colors.textSecondary,
-                        fontSize = 13.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        GlassButton(
-                            text = strings.cancel,
-                            containerColor = colors.glassCard,
-                            modifier = Modifier.weight(1f),
-                            onClick = { showClearSettledConfirm = false }
-                        )
-                        GlassButton(
-                            text = strings.delete,
-                            icon = Icons.Default.Delete,
-                            containerColor = DebtColors.danger(isDark),
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                onClearSettledDebts()
-                                showClearSettledConfirm = false
-                            }
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            GlassButton(
+                                text = strings.cancel,
+                                containerColor = colors.glassCard,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showClearSettledConfirm = false }
+                            )
+                            GlassButton(
+                                text = strings.delete,
+                                icon = Icons.Default.Delete,
+                                containerColor = DebtColors.danger(isDark),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    onClearSettledDebts()
+                                    showClearSettledConfirm = false
+                                }
+                            )
+                        }
                     }
                 }
             }

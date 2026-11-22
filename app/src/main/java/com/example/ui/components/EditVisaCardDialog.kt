@@ -142,6 +142,9 @@ fun EditVisaCardDialog(
             securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
         GlassCard(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -196,14 +199,14 @@ fun EditVisaCardDialog(
                             Text(
                                 text = when {
                                     isThirdCard -> if (isArabic) "إعداد البطاقة الثالثة" else "Configure Third Card"
-                                    else -> if (isArabic) "إعداد البطاقة الدولية (Visa)" else "Configure Virtual / Bank Card"
+                                    else -> if (isArabic) "إعداد البطاقة الدولية (فيزا)" else "Configure Virtual / Bank Card"
                                 },
                                 color = colors.textPrimary,
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (isArabic) "اختر RedotPay أو Bybit أو Binance وأدخل بيانات بطاقتك" else "Choose RedotPay, Bybit, Binance, or default Visa card",
+                                text = if (isArabic) "اختر ريدوت باي أو باي بيت أو بينانس وأدخل بيانات بطاقتك" else "Choose RedotPay, Bybit, Binance, or default Visa card",
                                 color = colors.textMuted,
                                 fontSize = 11.sp,
                                 maxLines = 1,
@@ -256,7 +259,7 @@ fun EditVisaCardDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ProviderChoicePill(
-                            title = "RedotPay",
+                            title = if (isArabic) "ريدوت باي" else "RedotPay",
                             accent = Color(0xFFE11D48),
                             isSelected = selectedProvider == "REDOTPAY",
                             onClick = { selectedProvider = "REDOTPAY" },
@@ -265,7 +268,7 @@ fun EditVisaCardDialog(
                                 .testTag("select_provider_redotpay")
                         )
                         ProviderChoicePill(
-                            title = "Bybit",
+                            title = if (isArabic) "باي بيت" else "Bybit",
                             accent = Color(0xFFF7A600),
                             isSelected = selectedProvider == "BYBIT",
                             onClick = { selectedProvider = "BYBIT" },
@@ -279,7 +282,7 @@ fun EditVisaCardDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ProviderChoicePill(
-                            title = "Binance",
+                            title = if (isArabic) "بينانس" else "Binance",
                             accent = Color(0xFFF0B90B),
                             isSelected = selectedProvider == "BINANCE",
                             onClick = { selectedProvider = "BINANCE" },
@@ -327,66 +330,65 @@ fun EditVisaCardDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Card Number (16 digits)
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    VisaDialogFieldBox(
-                        label = strings.cardNumberLabel,
-                        icon = Icons.Default.CreditCard,
-                        value = cardNumberDigits,
-                        onValueChange = { input ->
-                            cardNumberDigits = input.filter { it.isDigit() }.take(16)
-                        },
-                        placeholder = when (selectedProvider) {
-                            "BYBIT" -> "5316 00•• •••• 8890"
-                            "BINANCE" -> "4895 00•• •••• 2026"
-                            else -> "4152 •••• •••• 3120"
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        visualTransformation = VisaNumberVisualTransformation(),
-                        isError = !isCardNumberValid,
-                        helperText = if (!isCardNumberValid) {
-                            if (isArabic) "أدخل 16 رقماً أو اتركه فارغاً" else "Enter 16 digits or leave empty"
-                        } else null,
-                        testTag = "visa_number_input"
-                    )
-                }
+                VisaDialogFieldBox(
+                    label = strings.cardNumberLabel,
+                    icon = Icons.Default.CreditCard,
+                    value = cardNumberDigits,
+                    onValueChange = { input ->
+                        cardNumberDigits = input.filter { it.isDigit() }.take(16)
+                    },
+                    placeholder = when (selectedProvider) {
+                        "BYBIT" -> "5316 00•• •••• 8890"
+                        "BINANCE" -> "4895 00•• •••• 2026"
+                        else -> "4152 •••• •••• 3120"
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = VisaNumberVisualTransformation(),
+                    isError = !isCardNumberValid,
+                    helperText = if (!isCardNumberValid) {
+                        if (isArabic) "أدخل 16 رقماً أو اتركه فارغاً" else "Enter 16 digits or leave empty"
+                    } else null,
+                    ltrInput = true,
+                    testTag = "visa_number_input"
+                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Expiry Date & CVC
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            VisaDialogFieldBox(
-                                label = strings.cardExpiryLabel,
-                                icon = Icons.Default.Event,
-                                value = expiryDigits,
-                                onValueChange = { input ->
-                                    expiryDigits = input.filter { it.isDigit() }.take(4)
-                                },
-                                placeholder = "08/28",
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                visualTransformation = VisaExpiryVisualTransformation(),
-                                isError = !isExpiryValid,
-                                testTag = "visa_expiry_input"
-                            )
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            VisaDialogFieldBox(
-                                label = strings.cardCvcLabel,
-                                icon = Icons.Default.Lock,
-                                value = cvcDigits,
-                                onValueChange = { input ->
-                                    cvcDigits = input.filter { it.isDigit() }.take(4)
-                                },
-                                placeholder = "•••",
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                isError = !isCvcValid,
-                                testTag = "visa_cvc_input"
-                            )
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        VisaDialogFieldBox(
+                            label = strings.cardExpiryLabel,
+                            icon = Icons.Default.Event,
+                            value = expiryDigits,
+                            onValueChange = { input ->
+                                expiryDigits = input.filter { it.isDigit() }.take(4)
+                            },
+                            placeholder = "08/28",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = VisaExpiryVisualTransformation(),
+                            isError = !isExpiryValid,
+                            ltrInput = true,
+                            testTag = "visa_expiry_input"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        VisaDialogFieldBox(
+                            label = strings.cardCvcLabel,
+                            icon = Icons.Default.Lock,
+                            value = cvcDigits,
+                            onValueChange = { input ->
+                                cvcDigits = input.filter { it.isDigit() }.take(4)
+                            },
+                            placeholder = "•••",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = !isCvcValid,
+                            ltrInput = true,
+                            testTag = "visa_cvc_input"
+                        )
                     }
                 }
 
@@ -433,6 +435,7 @@ fun EditVisaCardDialog(
                     )
                 }
             }
+        }
         }
     }
 }
@@ -745,6 +748,7 @@ private fun VisaDialogFieldBox(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     isError: Boolean = false,
     helperText: String? = null,
+    ltrInput: Boolean = false,
     testTag: String
 ) {
     val colors = LiquidGlassTheme.colors
@@ -774,34 +778,37 @@ private fun VisaDialogFieldBox(
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            if (value.isEmpty()) {
-                Text(
-                    text = placeholder,
-                    color = colors.textMuted.copy(alpha = 0.55f),
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        val inputDir = if (ltrInput) LayoutDirection.Ltr else LocalLayoutDirection.current
+        CompositionLocalProvider(LocalLayoutDirection provides inputDir) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        color = colors.textMuted.copy(alpha = 0.55f),
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    keyboardOptions = keyboardOptions,
+                    visualTransformation = visualTransformation,
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(testTag),
+                    cursorBrush = SolidColor(CyanNeon)
                 )
             }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = TextStyle(
-                    color = colors.textPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                ),
-                keyboardOptions = keyboardOptions,
-                visualTransformation = visualTransformation,
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(testTag),
-                cursorBrush = SolidColor(CyanNeon)
-            )
         }
         if (!helperText.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(4.dp))

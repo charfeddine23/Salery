@@ -231,7 +231,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                if (isArabic) "مزامنة رسائل ALG Poste" else "BaridiMob SMS Sync",
+                if (isArabic) "مزامنة رسائل بريد الجزائر" else "BaridiMob SMS Sync",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
             nm.createNotificationChannel(channel)
@@ -263,9 +263,9 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
 
             val formattedAmt = formatDzdAmount(suggestion.amount, if (isArabic) "دج" else "DA")
             val title = if (suggestion.isExpense) {
-                if (isArabic) "ALG Poste: اقتراح مصروف (-$formattedAmt)" else "ALG Poste: Expense Suggested (-$formattedAmt)"
+                if (isArabic) "بريد الجزائر: اقتراح مصروف (-$formattedAmt)" else "ALG Poste: Expense Suggested (-$formattedAmt)"
             } else {
-                if (isArabic) "ALG Poste: اقتراح دخل (+$formattedAmt)" else "ALG Poste: Income Suggested (+$formattedAmt)"
+                if (isArabic) "بريد الجزائر: اقتراح دخل (+$formattedAmt)" else "ALG Poste: Income Suggested (+$formattedAmt)"
             }
             val taxNote = caughtTax?.let {
                 val formattedTax = formatDzdAmount(it.taxAmount, if (isArabic) "دج" else "DA")
