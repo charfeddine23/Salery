@@ -53,6 +53,7 @@ import com.example.sms.TaxExpenseAutoLogger
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
 import com.example.update.DownloadState
+import com.example.update.GitHubReleaseInfo
 import com.example.update.compareVersionTags
 import com.example.crypto.BinanceCryptoCatalog
 import com.example.crypto.BinanceCryptoCodec
@@ -1614,8 +1615,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     private var lastUpdateCheckElapsedMillis: Long = 0L
     private var dismissedUpdateVersionTag: String? = null
+    private var activeDownloadTag: String? = null
 
-    // In-App GitHub Releases Optional Update & Download Actions
+    // In-App GitHub Releases Optional Update & Silent Auto-Download + Auto-Retry Actions
     fun checkForUpdates(manual: Boolean = true) {
         if (manual) {
             dismissedUpdateVersionTag = null
@@ -1623,22 +1625,50 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
         lastUpdateCheckElapsedMillis = System.currentTimeMillis()
         viewModelScope.launch {
+            val currentState = _updateUiState.value
+            val hasOngoingOrReadyUpdate = when (currentState) {
+                is AppUpdateUiState.Downloading -> true
+                is AppUpdateUiState.ReadyToInstall -> true
+                is AppUpdateUiState.Error -> currentState.release != null && downloadJob?.isActive == true
+                else -> false
+            }
+
             if (manual) {
-                _updateUiState.value = AppUpdateUiState.Checking
                 _showUpdateDialog.value = true
+                if (hasOngoingOrReadyUpdate) {
+                    return@launch
+                }
+                _updateUiState.value = AppUpdateUiState.Checking
             }
 
             val result = AppUpdateManager.fetchLatestRelease()
             result.onSuccess { release ->
                 val isNewer = compareVersionTags(release.versionName, APP_VERSION) > 0
                 if (isNewer) {
-                    val alreadyDownloadedApk = AppUpdateManager.findReadyUpdateApk(getApplication(), release)
-                    _updateUiState.value = if (alreadyDownloadedApk != null) {
-                        AppUpdateUiState.ReadyToInstall(release, alreadyDownloadedApk)
-                    } else {
-                        AppUpdateUiState.Available(release)
+                    val existing = _updateUiState.value
+                    val sameTagActive = (
+                        (existing is AppUpdateUiState.Downloading && existing.release.tagName == release.tagName) ||
+                            (existing is AppUpdateUiState.ReadyToInstall && existing.release.tagName == release.tagName) ||
+                            (existing is AppUpdateUiState.Error && existing.release?.tagName == release.tagName && downloadJob?.isActive == true)
+                        )
+                    if (sameTagActive) {
+                        return@onSuccess
                     }
-                    if (manual || dismissedUpdateVersionTag != release.tagName) {
+
+                    val alreadyDownloadedApk = AppUpdateManager.findReadyUpdateApk(getApplication(), release)
+                    if (alreadyDownloadedApk != null) {
+                        downloadJob?.cancel()
+                        downloadJob = null
+                        activeDownloadTag = null
+                        _updateUiState.value = AppUpdateUiState.ReadyToInstall(release, alreadyDownloadedApk)
+                    } else {
+                        _updateUiState.value = AppUpdateUiState.Available(release)
+                        if (!release.apkDownloadUrl.isNullOrBlank()) {
+                            startUpdateDownload(releaseOverride = release, forceRestart = false)
+                        }
+                    }
+                    // Automatic background checks stay silent — the luxurious top-bar arrow appears without popping a dialog.
+                    if (manual) {
                         _showUpdateDialog.value = true
                     }
                 } else if (manual) {
@@ -1664,8 +1694,30 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun startUpdateDownload() {
-        val release = when (val current = _updateUiState.value) {
+    fun openUpdateDialogFromIndicator() {
+        val current = _updateUiState.value
+        _showUpdateDialog.value = true
+        when (current) {
+            is AppUpdateUiState.Available -> {
+                if (!current.release.apkDownloadUrl.isNullOrBlank() && downloadJob?.isActive != true) {
+                    startUpdateDownload(releaseOverride = current.release, forceRestart = false)
+                }
+            }
+            is AppUpdateUiState.Error -> {
+                val rel = current.release
+                if (rel != null && !rel.apkDownloadUrl.isNullOrBlank() && downloadJob?.isActive != true) {
+                    startUpdateDownload(releaseOverride = rel, forceRestart = true)
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    fun startUpdateDownload(
+        releaseOverride: GitHubReleaseInfo? = null,
+        forceRestart: Boolean = true
+    ) {
+        val release = releaseOverride ?: when (val current = _updateUiState.value) {
             is AppUpdateUiState.Available -> current.release
             is AppUpdateUiState.Error -> current.release
             else -> null
@@ -1681,38 +1733,71 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             } else {
                 "No downloadable APK asset is available for this release yet."
             }
-            _updateUiState.value = AppUpdateUiState.Error(msg, release)
+            _updateUiState.value = AppUpdateUiState.Error(msg, release, isRetrying = false)
+            return
+        }
+
+        if (!forceRestart && downloadJob?.isActive == true && activeDownloadTag == release.tagName) {
             return
         }
 
         downloadJob?.cancel()
+        activeDownloadTag = release.tagName
         downloadJob = viewModelScope.launch {
             val appCtx = getApplication<Application>()
-            _updateUiState.value = AppUpdateUiState.Downloading(release, 0L, release.apkSizeBytes)
+            var attempt = 0
+            while (isActive) {
+                val cachedValidApk = AppUpdateManager.findReadyUpdateApk(appCtx, release)
+                if (cachedValidApk != null) {
+                    _updateUiState.value = AppUpdateUiState.ReadyToInstall(release, cachedValidApk)
+                    break
+                }
 
-            AppUpdateManager.downloadApk(appCtx, release).collect { dlState ->
-                when (dlState) {
-                    is DownloadState.Progress -> {
-                        _updateUiState.value = AppUpdateUiState.Downloading(
-                            release = release,
-                            bytesDownloaded = dlState.bytesDownloaded,
-                            totalBytes = dlState.totalBytes
-                        )
-                    }
-                    is DownloadState.Completed -> {
-                        _updateUiState.value = AppUpdateUiState.ReadyToInstall(
-                            release = release,
-                            apkFile = dlState.file
-                        )
-                    }
-                    is DownloadState.Failed -> {
-                        _updateUiState.value = AppUpdateUiState.Error(
-                            message = dlState.errorMessage,
-                            release = release
-                        )
+                var completed = false
+                var failedMessage: String? = null
+                _updateUiState.value = AppUpdateUiState.Downloading(release, 0L, release.apkSizeBytes)
+
+                AppUpdateManager.downloadApk(appCtx, release).collect { dlState ->
+                    when (dlState) {
+                        is DownloadState.Progress -> {
+                            _updateUiState.value = AppUpdateUiState.Downloading(
+                                release = release,
+                                bytesDownloaded = dlState.bytesDownloaded,
+                                totalBytes = dlState.totalBytes
+                            )
+                        }
+                        is DownloadState.Completed -> {
+                            completed = true
+                            _updateUiState.value = AppUpdateUiState.ReadyToInstall(
+                                release = release,
+                                apkFile = dlState.file
+                            )
+                        }
+                        is DownloadState.Failed -> {
+                            failedMessage = dlState.errorMessage
+                        }
                     }
                 }
+
+                if (completed) break
+
+                attempt++
+                val isAr = settings.value.language == "ar"
+                val detail = failedMessage?.takeIf { it.isNotBlank() }
+                val retryMsg = if (isAr) {
+                    "تعذر إكمال التحميل، سيتم إعادة المحاولة تلقائياً..."
+                } else {
+                    if (detail != null) "Download failed ($detail). Retrying automatically..."
+                    else "Download failed. Retrying automatically..."
+                }
+                _updateUiState.value = AppUpdateUiState.Error(
+                    message = retryMsg,
+                    release = release,
+                    isRetrying = true
+                )
+                delay(AppUpdateManager.computeRetryBackoffMillis(attempt))
             }
+            activeDownloadTag = null
         }
     }
 
@@ -1728,7 +1813,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         } else {
             "Please enable 'Install unknown apps' permission in device settings."
         }
-        _updateUiState.value = AppUpdateUiState.Error(msg, currentRelease)
+        _updateUiState.value = AppUpdateUiState.Error(msg, currentRelease, isRetrying = false)
     }
 
     fun installReadyUpdate(launcherContext: Context = getApplication()): Boolean {
@@ -1741,7 +1826,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             } else {
                 "Could not launch the package installer. Please try again."
             }
-            _updateUiState.value = AppUpdateUiState.Error(msg, current.release)
+            _updateUiState.value = AppUpdateUiState.Error(msg, current.release, isRetrying = false)
         }
         return launched
     }
@@ -1749,6 +1834,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     fun dismissUpdateDialog() {
         val releaseTag = when (val current = _updateUiState.value) {
             is AppUpdateUiState.Available -> current.release.tagName
+            is AppUpdateUiState.Downloading -> current.release.tagName
             is AppUpdateUiState.ReadyToInstall -> current.release.tagName
             is AppUpdateUiState.Error -> current.release?.tagName
             else -> null

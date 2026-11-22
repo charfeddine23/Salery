@@ -10,11 +10,16 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
@@ -137,6 +142,7 @@ import com.example.ui.components.PermissionsOnboardingDialog
 import com.example.ui.i18n.LocalStealthMode
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdateUiState
+import com.example.update.hasVisibleTopIndicator
 
 @Composable
 fun MainAppScreen(
@@ -178,8 +184,6 @@ fun MainAppScreen(
     var canInstallPackages by remember {
         mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
     }
-    var lastAutoLaunchedApkPath by remember { mutableStateOf<String?>(null) }
-    var lastAutoRequestedInstallPermApkPath by remember { mutableStateOf<String?>(null) }
     var pendingActionAfterInstallPerm by remember { mutableStateOf<String?>(null) }
     var forceShowPermissionsOnboarding by remember { mutableStateOf(false) }
     var allowOnboardingWindow by remember { mutableStateOf(false) }
@@ -488,6 +492,8 @@ fun MainAppScreen(
                                             showScreenshotShield = currentRoute == "cards",
                                             isScreenshotProtected = userSettings.screenshotProtectionEnabled,
                                             onShieldClick = { showScreenshotShieldDialog = true },
+                                            updateUiState = updateUiState,
+                                            onUpdateIndicatorClick = { viewModel.openUpdateDialogFromIndicator() },
                                             isStealthMode = userSettings.stealthMode,
                                             onToggleStealth = { viewModel.toggleStealthMode() }
                                         )
@@ -946,34 +952,14 @@ fun MainAppScreen(
             val updateDialogVisible = showUpdateDialog
             if (updateDialogVisible) {
                 LaunchedEffect(updateUiState) {
-                    val allowed = AppUpdateManager.canRequestPackageInstalls(context)
-                    canInstallPackages = allowed
-                    val readyState = updateUiState as? AppUpdateUiState.ReadyToInstall
-                    if (readyState != null) {
-                        val apkPath = readyState.apkFile.absolutePath
-                        if (allowed && lastAutoLaunchedApkPath != apkPath) {
-                            lastAutoLaunchedApkPath = apkPath
-                            viewModel.installReadyUpdate(context)
-                        } else if (!allowed && lastAutoRequestedInstallPermApkPath != apkPath) {
-                            lastAutoRequestedInstallPermApkPath = apkPath
-                            openInstallUnknownAppsSettings("install")
-                        }
-                    }
+                    canInstallPackages = AppUpdateManager.canRequestPackageInstalls(context)
                 }
                 AppUpdateDialog(
                     state = updateUiState,
                     canInstallPackages = canInstallPackages,
                     onDismiss = { viewModel.dismissUpdateDialog() },
                     onStartDownload = {
-                        lastAutoLaunchedApkPath = null
-                        lastAutoRequestedInstallPermApkPath = null
-                        val allowed = AppUpdateManager.canRequestPackageInstalls(context)
-                        canInstallPackages = allowed
-                        if (!allowed) {
-                            openInstallUnknownAppsSettings("download")
-                        } else {
-                            viewModel.startUpdateDownload()
-                        }
+                        viewModel.startUpdateDownload(forceRestart = true)
                     },
                     onInstallApk = {
                         val allowed = AppUpdateManager.canRequestPackageInstalls(context)
@@ -1034,6 +1020,8 @@ fun MainTopAppBar(
     showScreenshotShield: Boolean = false,
     isScreenshotProtected: Boolean = false,
     onShieldClick: () -> Unit = {},
+    updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,
+    onUpdateIndicatorClick: () -> Unit = {},
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {},
     canGoBack: Boolean = false,
@@ -1104,6 +1092,20 @@ fun MainTopAppBar(
                 )
 
                 Spacer(modifier = Modifier.width(dimens.spacingXs + 2.dp))
+            }
+
+            AnimatedVisibility(
+                visible = updateUiState.hasVisibleTopIndicator,
+                enter = fadeIn(tween(260)) + scaleIn(initialScale = 0.72f, animationSpec = tween(280)) + expandHorizontally(),
+                exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.72f, animationSpec = tween(200)) + shrinkHorizontally()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LuxuriousUpdateArrowButton(
+                        state = updateUiState,
+                        onClick = onUpdateIndicatorClick
+                    )
+                    Spacer(modifier = Modifier.width(dimens.spacingXs + 2.dp))
+                }
             }
 
             if (showScreenshotShield) {
@@ -1337,6 +1339,286 @@ private fun ScreenshotShieldTopButton(
                     end = Offset(w * 0.75f, h * 0.24f),
                     strokeWidth = 1.7.dp.toPx(),
                     cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LuxuriousUpdateArrowButton(
+    state: AppUpdateUiState,
+    onClick: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val isArabic = AppStrings.current is ArabicStrings
+    val isReady = state is AppUpdateUiState.ReadyToInstall
+    val isDownloading = state is AppUpdateUiState.Downloading
+    val isRetrying = state is AppUpdateUiState.Error
+
+    val targetProgress = if (state is AppUpdateUiState.Downloading) state.progress else if (isReady) 1f else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        label = "update_arrow_progress"
+    )
+
+    val infinite = rememberInfiniteTransition(label = "lux_update_arrow")
+    val pulse by infinite.animateFloat(
+        initialValue = 0.75f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "update_arrow_pulse"
+    )
+    val orbitAngle by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (isDownloading) 1800 else 5600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "update_arrow_orbit"
+    )
+    val arrowGlide by infinite.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (isDownloading) 780 else 1350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "update_arrow_glide"
+    )
+
+    val desc = when {
+        isReady -> if (isArabic) "تحديث جاهز للتثبيت — اضغط للعرض" else "Update ready to install — tap to view"
+        isDownloading -> if (isArabic) "جاري تحميل التحديث في الخلفية" else "Downloading update in background"
+        isRetrying -> if (isArabic) "إعادة محاولة تحميل التحديث تلقائياً" else "Retrying update download automatically"
+        else -> if (isArabic) "تحديث جديد متاح" else "New update available"
+    }
+
+    val goldAccent = Color(0xFFFBBF24)
+    val primaryGlow = when {
+        isReady -> EmeraldNeon
+        isRetrying -> AmberNeon
+        else -> CyanNeon
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .semantics { contentDescription = desc }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = false, radius = 24.dp, color = primaryGlow),
+                onClick = onClick
+            )
+            .testTag("top_bar_update_arrow_button"),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(34.dp)) {
+            val w = size.width
+            val h = size.height
+            val cx = w / 2f
+            val cy = h / 2f
+            val glowAlpha = if (colors.isDark) 1f else 0.78f
+
+            // 1. Luxury multi-layer aurora halo behind medallion
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        primaryGlow.copy(alpha = 0.56f * pulse * glowAlpha),
+                        goldAccent.copy(alpha = (if (isReady) 0.34f else 0.22f) * pulse * glowAlpha),
+                        Color.Transparent
+                    ),
+                    center = Offset(cx, cy),
+                    radius = w * (0.95f + 0.10f * pulse)
+                ),
+                radius = w * (0.95f + 0.10f * pulse),
+                center = Offset(cx, cy)
+            )
+
+            // 2. Sculpted inner glass core medallion
+            val coreRadius = w * 0.38f
+            drawCircle(
+                brush = Brush.linearGradient(
+                    colors = if (colors.isDark) {
+                        listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+                    } else {
+                        listOf(Color(0xFFFFFFFF), Color(0xFFE2E8F0))
+                    },
+                    start = Offset(cx - coreRadius, cy - coreRadius),
+                    end = Offset(cx + coreRadius, cy + coreRadius)
+                ),
+                radius = coreRadius,
+                center = Offset(cx, cy)
+            )
+            // Soft top-left crystal sheen inside medallion
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (colors.isDark) 0.20f else 0.75f),
+                        Color.Transparent
+                    ),
+                    center = Offset(cx - coreRadius * 0.32f, cy - coreRadius * 0.38f),
+                    radius = coreRadius * 0.85f
+                ),
+                radius = coreRadius,
+                center = Offset(cx, cy)
+            )
+
+            // 3. Outer subtle track ring + luminous sweeping progress / luxury gold-emerald rim
+            val ringRadius = w * 0.43f
+            val ringTopLeft = Offset(cx - ringRadius, cy - ringRadius)
+            val ringSize = androidx.compose.ui.geometry.Size(ringRadius * 2f, ringRadius * 2f)
+            val strokePx = 2.2.dp.toPx()
+
+            drawCircle(
+                color = primaryGlow.copy(alpha = if (colors.isDark) 0.22f else 0.26f),
+                radius = ringRadius,
+                center = Offset(cx, cy),
+                style = Stroke(width = strokePx)
+            )
+
+            if (isDownloading) {
+                val hasPct = state is AppUpdateUiState.Downloading && state.totalBytes > 0L
+                if (hasPct) {
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(CyanNeon, EmeraldNeon, goldAccent, CyanNeon)
+                        ),
+                        startAngle = -90f,
+                        sweepAngle = (animatedProgress * 360f).coerceAtLeast(24f),
+                        useCenter = false,
+                        topLeft = ringTopLeft,
+                        size = ringSize,
+                        style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                    )
+                } else {
+                    rotate(degrees = orbitAngle, pivot = Offset(cx, cy)) {
+                        drawArc(
+                            brush = Brush.sweepGradient(
+                                colors = listOf(Color.Transparent, CyanNeon, goldAccent, Color.Transparent)
+                            ),
+                            startAngle = -90f,
+                            sweepAngle = 210f,
+                            useCenter = false,
+                            topLeft = ringTopLeft,
+                            size = ringSize,
+                            style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                        )
+                    }
+                }
+            } else if (isReady) {
+                rotate(degrees = orbitAngle, pivot = Offset(cx, cy)) {
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(EmeraldNeon, goldAccent, CyanNeon, EmeraldNeon)
+                        ),
+                        startAngle = 0f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        topLeft = ringTopLeft,
+                        size = ringSize,
+                        style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                    )
+                }
+            } else {
+                rotate(degrees = orbitAngle, pivot = Offset(cx, cy)) {
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(Color.Transparent, AmberNeon, goldAccent, Color.Transparent)
+                        ),
+                        startAngle = -90f,
+                        sweepAngle = 190f,
+                        useCenter = false,
+                        topLeft = ringTopLeft,
+                        size = ringSize,
+                        style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                    )
+                }
+            }
+
+            // 4. Crisp luxury downward arrow + glowing base dock tray
+            val dy = arrowGlide * h * (if (isDownloading) 0.055f else 0.035f)
+            val arrowColor = when {
+                isReady -> if (colors.isDark) EmeraldNeon else Color(0xFF059669)
+                isRetrying -> if (colors.isDark) AmberNeon else Color(0xFFD97706)
+                else -> if (colors.isDark) CyanNeon else Color(0xFF0284C7)
+            }
+            val arrowHighlight = if (colors.isDark) Color.White else arrowColor
+
+            val shaftTop = cy - h * 0.17f + dy
+            val tipY = cy + h * 0.10f + dy
+            val wingDx = w * 0.135f
+            val wingY = tipY - h * 0.12f
+
+            // Outer aura stroke behind arrow
+            drawLine(
+                color = arrowColor.copy(alpha = 0.42f),
+                start = Offset(cx, shaftTop),
+                end = Offset(cx, tipY),
+                strokeWidth = 3.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            // Main crisp shaft
+            drawLine(
+                brush = Brush.verticalGradient(
+                    colors = listOf(arrowHighlight, arrowColor),
+                    startY = shaftTop,
+                    endY = tipY
+                ),
+                start = Offset(cx, shaftTop),
+                end = Offset(cx, tipY),
+                strokeWidth = 2.0.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            // Crisp sculpted chevron arrowhead
+            val chevron = Path().apply {
+                moveTo(cx - wingDx, wingY)
+                lineTo(cx, tipY)
+                lineTo(cx + wingDx, wingY)
+            }
+            drawPath(
+                path = chevron,
+                color = arrowHighlight,
+                style = Stroke(
+                    width = 2.0.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+
+            // Glowing luxury pedestal dock line below the arrow tip
+            val trayY = cy + h * 0.195f
+            drawLine(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(arrowColor, goldAccent, arrowColor)
+                ),
+                start = Offset(cx - w * 0.16f, trayY),
+                end = Offset(cx + w * 0.16f, trayY),
+                strokeWidth = 2.0.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            // 5. Status sparkle jewel dot at top-right when ReadyToInstall
+            if (isReady) {
+                val dotCenter = Offset(cx + ringRadius * 0.72f, cy - ringRadius * 0.72f)
+                drawCircle(
+                    color = if (colors.isDark) Color(0xFF0F172A) else Color.White,
+                    radius = 4.2.dp.toPx(),
+                    center = dotCenter
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.White, goldAccent, EmeraldNeon),
+                        center = dotCenter,
+                        radius = 3.2.dp.toPx()
+                    ),
+                    radius = (2.8.dp.toPx() * (0.88f + 0.18f * pulse)),
+                    center = dotCenter
                 )
             }
         }

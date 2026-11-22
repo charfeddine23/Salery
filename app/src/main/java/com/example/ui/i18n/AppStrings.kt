@@ -184,6 +184,7 @@ interface StringsBundle {
     val downloadingUpdate: String
     val installUpdateButton: String
     val grantInstallPermButton: String
+    val updateMaybeLater: String
     val retryUpdateButton: String
     val checkingForUpdates: String
     val alreadyUpToDate: String
@@ -368,6 +369,7 @@ object EnglishStrings : StringsBundle {
     override val downloadingUpdate = "Downloading update..."
     override val installUpdateButton = "Install Update"
     override val grantInstallPermButton = "Allow & Install"
+    override val updateMaybeLater = "Maybe Later"
     override val retryUpdateButton = "Retry"
     override val checkingForUpdates = "Checking for updates..."
     override val alreadyUpToDate = "You are on the latest version"
@@ -574,8 +576,9 @@ object ArabicStrings : StringsBundle {
     override val updateBadgeLabel = "تحديث جديد"
     override val updateActionButton = "تحديث"
     override val downloadingUpdate = "جاري تحميل التحديث..."
-    override val installUpdateButton = "تثبيت التحديث"
-    override val grantInstallPermButton = "السماح بالتثبيت"
+    override val installUpdateButton = "ثبّت التحديث"
+    override val grantInstallPermButton = "السماح والتثبيت"
+    override val updateMaybeLater = "ربما لاحقاً"
     override val retryUpdateButton = "إعادة المحاولة"
     override val checkingForUpdates = "جاري البحث عن تحديثات..."
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"

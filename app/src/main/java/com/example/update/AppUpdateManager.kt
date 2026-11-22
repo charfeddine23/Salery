@@ -78,9 +78,25 @@ sealed interface AppUpdateUiState {
     ) : AppUpdateUiState
     data class Error(
         val message: String,
-        val release: GitHubReleaseInfo? = null
+        val release: GitHubReleaseInfo? = null,
+        val isRetrying: Boolean = false
     ) : AppUpdateUiState
 }
+
+/**
+ * True when an update is available, actively downloading, retrying, or ready to install,
+ * so the top bar shows the update arrow indicator beside the No-Screenshot toggle.
+ */
+val AppUpdateUiState.hasVisibleTopIndicator: Boolean
+    get() = when (this) {
+        is AppUpdateUiState.Available -> true
+        is AppUpdateUiState.Downloading -> true
+        is AppUpdateUiState.ReadyToInstall -> true
+        is AppUpdateUiState.Error -> release != null
+        AppUpdateUiState.Idle,
+        AppUpdateUiState.Checking,
+        is AppUpdateUiState.UpToDate -> false
+    }
 
 /**
  * App updates are optional: users can install immediately, download in the background,
@@ -96,6 +112,14 @@ sealed interface DownloadState {
 }
 
 object AppUpdateManager {
+
+    fun computeRetryBackoffMillis(attempt: Int): Long = when {
+        attempt <= 1 -> 4_000L
+        attempt == 2 -> 8_000L
+        attempt == 3 -> 15_000L
+        attempt == 4 -> 30_000L
+        else -> 60_000L
+    }
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()

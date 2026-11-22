@@ -14,8 +14,10 @@ import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzdAmount
 import com.example.ui.i18n.formatPercent
 import com.example.ui.i18n.isolateLtr
+import com.example.update.hasVisibleTopIndicator
 import com.example.update.isMandatoryBlockActive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -1847,5 +1849,52 @@ class ExampleUnitTest {
     assertTrue(localizedAr.contains("بايبت"))
     assertTrue(localizedAr.contains("إكستشينج ريت"))
     assertTrue(localizedAr.contains("أف إكس ريتس"))
+  }
+
+  @Test
+  fun appUpdate_topBarIndicatorVisibility_retryBackoff_andArabicButtons() {
+    val sampleRelease = com.example.update.GitHubReleaseInfo(
+      tagName = "v1.9.0",
+      versionName = "1.9.0",
+      title = "Vaultix v1.9.0",
+      releaseNotes = "",
+      publishedAt = "",
+      htmlUrl = "https://github.com/charfeddine23/Salery/releases/tag/v1.9.0",
+      apkName = "Vaultix-1.9.0.apk",
+      apkDownloadUrl = "https://github.com/charfeddine23/Salery/releases/download/v1.9.0/Vaultix-1.9.0.apk",
+      apkSizeBytes = 10_000_000L
+    )
+
+    assertFalse(com.example.update.AppUpdateUiState.Idle.hasVisibleTopIndicator)
+    assertFalse(com.example.update.AppUpdateUiState.Checking.hasVisibleTopIndicator)
+    assertFalse(com.example.update.AppUpdateUiState.UpToDate("1.0.0").hasVisibleTopIndicator)
+    assertFalse(com.example.update.AppUpdateUiState.Error("Offline", null).hasVisibleTopIndicator)
+
+    assertTrue(com.example.update.AppUpdateUiState.Available(sampleRelease).hasVisibleTopIndicator)
+    assertTrue(com.example.update.AppUpdateUiState.Downloading(sampleRelease, 100L, 1000L).hasVisibleTopIndicator)
+    assertTrue(
+      com.example.update.AppUpdateUiState.ReadyToInstall(
+        sampleRelease,
+        java.io.File("dummy.apk")
+      ).hasVisibleTopIndicator
+    )
+    assertTrue(
+      com.example.update.AppUpdateUiState.Error(
+        "Retrying",
+        sampleRelease,
+        isRetrying = true
+      ).hasVisibleTopIndicator
+    )
+
+    assertEquals(4_000L, com.example.update.AppUpdateManager.computeRetryBackoffMillis(1))
+    assertEquals(8_000L, com.example.update.AppUpdateManager.computeRetryBackoffMillis(2))
+    assertEquals(15_000L, com.example.update.AppUpdateManager.computeRetryBackoffMillis(3))
+    assertEquals(30_000L, com.example.update.AppUpdateManager.computeRetryBackoffMillis(4))
+    assertEquals(60_000L, com.example.update.AppUpdateManager.computeRetryBackoffMillis(5))
+
+    assertEquals("ثبّت التحديث", ArabicStrings.installUpdateButton)
+    assertEquals("ربما لاحقاً", ArabicStrings.updateMaybeLater)
+    assertEquals("Install Update", EnglishStrings.installUpdateButton)
+    assertEquals("Maybe Later", EnglishStrings.updateMaybeLater)
   }
 }

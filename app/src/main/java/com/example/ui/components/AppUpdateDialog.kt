@@ -356,8 +356,12 @@ fun AppUpdateDialog(
                             is AppUpdateUiState.Checking -> strings.checkingForUpdates
                             is AppUpdateUiState.UpToDate -> strings.alreadyUpToDate
                             is AppUpdateUiState.Downloading -> strings.downloadingUpdate
-                            is AppUpdateUiState.ReadyToInstall -> if (isArabic) "تحديث اختياري جاهز للتثبيت" else "Update Ready to Install"
-                            is AppUpdateUiState.Error -> strings.updateCheckFailed
+                            is AppUpdateUiState.ReadyToInstall -> if (isArabic) "التحديث جاهز للتثبيت" else "Update Ready to Install"
+                            is AppUpdateUiState.Error -> if (state.isRetrying) {
+                                if (isArabic) "جارٍ إعادة التحميل تلقائياً" else "Retrying Download Automatically"
+                            } else {
+                                strings.updateCheckFailed
+                            }
                             else -> if (isArabic) "يتوفر تحديث جديد" else "New Update Available"
                         }
                         Text(
@@ -394,7 +398,7 @@ fun AppUpdateDialog(
                             color = when (state) {
                                 is AppUpdateUiState.UpToDate -> EmeraldNeon
                                 is AppUpdateUiState.ReadyToInstall -> EmeraldNeon
-                                is AppUpdateUiState.Error -> RoseNeon
+                                is AppUpdateUiState.Error -> if (state.isRetrying) AmberNeon else RoseNeon
                                 else -> Color(0xFFEF4444)
                             },
                             fontSize = 13.5.sp,
@@ -410,8 +414,8 @@ fun AppUpdateDialog(
                         val bodyText = when (state) {
                             is AppUpdateUiState.ReadyToInstall -> {
                                 if (!canInstallPackages) strings.updateInstallPermNote
-                                else if (isArabic) "اكتمل التحميل بنجاح. اضغط لتثبيت الإصدار الجديد."
-                                else "Download complete. Tap below to install the new version."
+                                else if (isArabic) "تم تحميل التحديث في الخلفية بنجاح. يمكنك تثبيته الآن أو لاحقاً."
+                                else "Update downloaded in the background. Install it now or maybe later."
                             }
                             is AppUpdateUiState.UpToDate -> {
                                 if (isArabic) "كل المميزات والتحسينات محدثة على جهازك."
@@ -422,8 +426,13 @@ fun AppUpdateDialog(
                                 else "Connecting to GitHub Releases..."
                             }
                             is AppUpdateUiState.Error -> {
-                                if (isArabic) "تأكد من اتصالك بالإنترنت وحاول مرة أخرى."
-                                else "Check your internet connection and try again."
+                                if (state.isRetrying) {
+                                    if (isArabic) "سيستمر التطبيق في محاولة التحميل تلقائياً عند توفر الاتصال."
+                                    else "The app will keep retrying the download automatically."
+                                } else {
+                                    if (isArabic) "تأكد من اتصالك بالإنترنت وحاول مرة أخرى."
+                                    else "Check your internet connection and try again."
+                                }
                             }
                             else -> {
                                 val firstFeatureSummary = latestChangelog.features.firstOrNull()?.let { f ->
@@ -599,8 +608,16 @@ fun AppUpdateDialog(
                             }
                             is AppUpdateUiState.Error -> {
                                 CapsuleShimmerButton(
-                                    text = strings.retryUpdateButton,
-                                    gradientColors = listOf(UpdateCrimsonStart, UpdateCrimsonEnd),
+                                    text = if (state.isRetrying) {
+                                        if (isArabic) "إعادة المحاولة الآن" else "Retry Now"
+                                    } else {
+                                        strings.retryUpdateButton
+                                    },
+                                    gradientColors = if (state.isRetrying) {
+                                        listOf(AmberNeon, Color(0xFFEA580C))
+                                    } else {
+                                        listOf(UpdateCrimsonStart, UpdateCrimsonEnd)
+                                    },
                                     sheenProgress = sheenProgress,
                                     onClick = {
                                         if (!state.release?.apkDownloadUrl.isNullOrBlank()) {
@@ -624,6 +641,7 @@ fun AppUpdateDialog(
                         }
 
                         if (state is AppUpdateUiState.Available ||
+                            state is AppUpdateUiState.Downloading ||
                             state is AppUpdateUiState.ReadyToInstall ||
                             state is AppUpdateUiState.Error
                         ) {
@@ -644,7 +662,7 @@ fun AppUpdateDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (isArabic) "لاحقاً (تخطي)" else "Later (Skip)",
+                                    text = strings.updateMaybeLater,
                                     color = colors.textSecondary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold
