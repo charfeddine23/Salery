@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,6 +86,7 @@ import com.example.data.AlgerianBankMotif
 import com.example.data.UserSettings
 import com.example.ui.components.EditCardDialog
 import com.example.ui.components.EditVisaCardDialog
+import com.example.ui.components.FadeToBlurLiquidGlassHost
 import com.example.ui.components.GlassCard
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.components.formatCardDigitsDisplay
@@ -99,6 +102,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
+import com.example.ui.theme.adaptiveContentWidth
 import com.example.ui.theme.breathingGlow
 import com.example.viewmodel.FinancialSummary
 import kotlinx.coroutines.delay
@@ -121,6 +125,7 @@ fun CardsHubScreen(
     onUpdateVisaCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
     onUpdateThirdCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
     onRemoveThirdCard: () -> Unit = {},
+    outerContentPadding: PaddingValues = PaddingValues(0.dp),
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -402,12 +407,33 @@ fun CardsHubScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPaddingH),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+    val listState = rememberLazyListState()
+
+    FadeToBlurLiquidGlassHost(
+        topEdgeHeight = outerContentPadding.calculateTopPadding(),
+        bottomEdgeHeight = outerContentPadding.calculateBottomPadding(),
+        scrollVersionProvider = {
+            listState.firstVisibleItemIndex * 100_000 + listState.firstVisibleItemScrollOffset
+        },
+        modifier = modifier.fillMaxSize()
     ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .adaptiveContentWidth(dimens.contentMaxWidth),
+                contentPadding = PaddingValues(
+                    start = dimens.screenPaddingH,
+                    end = dimens.screenPaddingH,
+                    top = outerContentPadding.calculateTopPadding(),
+                    bottom = outerContentPadding.calculateBottomPadding()
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+            ) {
         // Section Header: Contextual subtitle & Active Badges (TopAppBar already displays Cards Hub title)
         item {
             Spacer(modifier = Modifier.height(dimens.spacingXs))
@@ -485,6 +511,8 @@ fun CardsHubScreen(
 
         item {
             Spacer(modifier = Modifier.height(dimens.spacingLg))
+        }
+            }
         }
     }
 }

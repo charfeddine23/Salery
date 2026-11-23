@@ -34,15 +34,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CurrencyBitcoin
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -117,6 +121,7 @@ fun BinanceWalletScreen(
     onRefreshPrices: (force: Boolean) -> Unit,
     onSaveHolding: (holdingId: String?, symbol: String, quantity: Double, note: String) -> Unit,
     onRemoveHolding: (holdingId: String) -> Unit,
+    onConvertHoldingToUsdt: (holdingId: String, convertQuantity: Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBackClick() }
@@ -138,6 +143,7 @@ fun BinanceWalletScreen(
     }
 
     var dialogTarget by remember { mutableStateOf<CryptoDialogTarget?>(null) }
+    var convertTarget by remember { mutableStateOf<CryptoHoldingEntry?>(null) }
     var refreshSpins by remember { mutableIntStateOf(0) }
     val spinAngle by animateFloatAsState(
         targetValue = refreshSpins * 360f,
@@ -194,6 +200,9 @@ fun BinanceWalletScreen(
     }
 
     dialogTarget?.let { target ->
+        val matchingHolding = remember(target.holdingId, holdings) {
+            target.holdingId?.let { id -> holdings.firstOrNull { it.id == id } }
+        }
         AddOrEditCryptoDialog(
             isEditing = target.holdingId != null,
             initialSymbol = target.symbol,
@@ -212,7 +221,43 @@ fun BinanceWalletScreen(
                     onRemoveHolding(target.holdingId)
                     dialogTarget = null
                 }
+            } else null,
+            onConvertToUsdt = if (matchingHolding != null && !matchingHolding.symbol.equals("USDT", ignoreCase = true)) {
+                {
+                    dialogTarget = null
+                    convertTarget = matchingHolding
+                }
             } else null
+        )
+    }
+
+    convertTarget?.let { targetHolding ->
+        val latestHolding = remember(targetHolding.id, holdings) {
+            holdings.firstOrNull { it.id == targetHolding.id } ?: targetHolding
+        }
+        val assetSpec = remember(latestHolding.symbol) {
+            BinanceCryptoCatalog.findBySymbol(latestHolding.symbol)
+                ?: CryptoAssetSpec(
+                    symbol = latestHolding.symbol,
+                    nameEn = latestHolding.symbol,
+                    nameAr = latestHolding.symbol,
+                    binancePair = "${latestHolding.symbol}USDT",
+                    coingeckoId = latestHolding.symbol.lowercase(Locale.US),
+                    accentHex = 0xFFF0B90B
+                )
+        }
+        ConvertCryptoToUsdtDialog(
+            holding = latestHolding,
+            asset = assetSpec,
+            prices = prices,
+            isRefreshingPrices = isRefreshingPrices,
+            secureScreenshots = userSettings.screenshotProtectionEnabled,
+            onRefreshLivePrice = { onRefreshPrices(true) },
+            onDismiss = { convertTarget = null },
+            onConfirmConvert = { convertQty ->
+                onConvertHoldingToUsdt(latestHolding.id, convertQty)
+                convertTarget = null
+            }
         )
     }
 
@@ -1026,163 +1071,212 @@ fun BinanceWalletScreen(
                         )
                     }
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(accent.copy(alpha = 0.18f))
-                                    .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text(
-                                    text = spec.symbol,
-                                    color = accent,
-                                    fontSize = if (spec.symbol.length >= 4) 11.sp else 13.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(accent.copy(alpha = 0.18f))
+                                        .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (isArabic) spec.nameAr else spec.nameEn,
-                                        color = colors.textPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                        text = spec.symbol,
+                                        color = accent,
+                                        fontSize = if (spec.symbol.length >= 4) 11.sp else 13.sp,
+                                        fontWeight = FontWeight.Black
                                     )
-                                    val tagLabel = when {
-                                        holding.note.isNotBlank() -> holding.note
-                                        totalSameCoin > 1 -> "#$entryIndex"
-                                        else -> null
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isArabic) spec.nameAr else spec.nameEn,
+                                            color = colors.textPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        val tagLabel = when {
+                                            holding.note.isNotBlank() -> holding.note
+                                            totalSameCoin > 1 -> "#$entryIndex"
+                                            else -> null
+                                        }
+                                        if (tagLabel != null) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(accent.copy(alpha = 0.16f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = tagLabel,
+                                                    color = accent,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
                                     }
-                                    if (tagLabel != null) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(accent.copy(alpha = 0.16f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isStealth) {
+                                            if (isArabic) "•••••• ${spec.nameAr}" else "•••••• ${spec.symbol}"
+                                        } else {
+                                            isolateLtr("${formatCryptoQuantity(holding.quantity)} ${spec.symbol}")
+                                        },
+                                        color = colors.textSecondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (unitPrice > 0.0) {
+                                                isolateLtr("1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}")
+                                            } else {
+                                                if (isArabic) "بانتظار السعر..." else "Fetching price..."
+                                            },
+                                            color = colors.textMuted,
+                                            fontSize = 10.5.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        if (marketPrice != null && !spec.isStablecoin) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            val isPositive = changePct >= 0.0
+                                            val pctColor = if (isPositive) EmeraldNeon else RoseNeon
+                                            Icon(
+                                                imageVector = if (isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                                contentDescription = null,
+                                                tint = pctColor,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
                                             Text(
-                                                text = tagLabel,
-                                                color = accent,
+                                                text = isolateLtr(String.format(Locale.US, "%+.2f", changePct) + if (isArabic) "٪" else "%"),
+                                                color = pctColor,
                                                 fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = if (isStealth) {
-                                        if (isArabic) "•••••• ${spec.nameAr}" else "•••••• ${spec.symbol}"
+                                        if (isArabic) "•••• دولار" else "$ ••••"
+                                    } else if (unitPrice > 0.0) {
+                                        isolateLtr(formatUsdCurrency(totalUsd))
                                     } else {
-                                        isolateLtr("${formatCryptoQuantity(holding.quantity)} ${spec.symbol}")
+                                        "---"
                                     },
-                                    color = colors.textSecondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (unitPrice > 0.0) EmeraldNeon else colors.textMuted,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
                                     fontFamily = FontFamily.Monospace
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (unitPrice > 0.0) {
-                                            isolateLtr("1 ${spec.symbol} = ${formatCryptoUnitPrice(unitPrice)}")
-                                        } else {
-                                            if (isArabic) "بانتظار السعر..." else "Fetching price..."
+                                    IconButton(
+                                        onClick = {
+                                            dialogTarget = CryptoDialogTarget(
+                                                holdingId = holding.id,
+                                                symbol = spec.symbol,
+                                                initialQuantity = holding.quantity,
+                                                initialNote = holding.note
+                                            )
                                         },
-                                        color = colors.textMuted,
-                                        fontSize = 10.5.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                    if (marketPrice != null && !spec.isStablecoin) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        val isPositive = changePct >= 0.0
-                                        val pctColor = if (isPositive) EmeraldNeon else RoseNeon
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
                                         Icon(
-                                            imageVector = if (isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                                            contentDescription = null,
-                                            tint = pctColor,
-                                            modifier = Modifier.size(12.dp)
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = if (isArabic) "تعديل الكمية" else "Edit Quantity",
+                                            tint = CyanNeon,
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text(
-                                            text = isolateLtr(String.format(Locale.US, "%+.2f", changePct) + if (isArabic) "٪" else "%"),
-                                            color = pctColor,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
+                                    }
+                                    IconButton(
+                                        onClick = { onRemoveHolding(holding.id) },
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .testTag("delete_crypto_${spec.symbol.lowercase()}_${holding.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = if (isArabic) "حذف العملة" else "Delete Coin",
+                                            tint = RoseNeon,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                             }
                         }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = if (isStealth) {
-                                    if (isArabic) "•••• دولار" else "$ ••••"
-                                } else if (unitPrice > 0.0) {
-                                    isolateLtr(formatUsdCurrency(totalUsd))
-                                } else {
-                                    "---"
-                                },
-                                color = if (unitPrice > 0.0) EmeraldNeon else colors.textMuted,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = {
-                                        dialogTarget = CryptoDialogTarget(
-                                            holdingId = holding.id,
-                                            symbol = spec.symbol,
-                                            initialQuantity = holding.quantity,
-                                            initialNote = holding.note
+                        if (!spec.isStablecoin && !spec.symbol.equals("USDT", ignoreCase = true)) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(EmeraldNeon.copy(alpha = 0.12f))
+                                    .border(1.dp, EmeraldNeon.copy(alpha = 0.34f), RoundedCornerShape(12.dp))
+                                    .clickable { convertTarget = holding }
+                                    .testTag("convert_crypto_${spec.symbol.lowercase()}_${holding.id}")
+                                    .padding(horizontal = 12.dp, vertical = 9.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CurrencyExchange,
+                                            contentDescription = null,
+                                            tint = EmeraldNeon,
+                                            modifier = Modifier.size(15.dp)
                                         )
-                                    },
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = if (isArabic) "تعديل الكمية" else "Edit Quantity",
-                                        tint = CyanNeon,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { onRemoveHolding(holding.id) },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .testTag("delete_crypto_${spec.symbol.lowercase()}_${holding.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = if (isArabic) "حذف العملة" else "Delete Coin",
-                                        tint = RoseNeon,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                        Text(
+                                            text = if (isArabic) "تحويل إلى USDT بالسعر اللحظي" else "Convert to USDT at Live Price",
+                                            color = EmeraldNeon,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (!isStealth && unitPrice > 0.0) {
+                                        Text(
+                                            text = isolateLtr("≈ ${formatCryptoQuantity(totalUsd)} USDT"),
+                                            color = colors.textSecondary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1209,7 +1303,8 @@ private fun AddOrEditCryptoDialog(
     secureScreenshots: Boolean,
     onDismiss: () -> Unit,
     onSave: (symbol: String, quantity: Double, note: String) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onConvertToUsdt: (() -> Unit)? = null
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
@@ -1217,11 +1312,13 @@ private fun AddOrEditCryptoDialog(
     val binanceGold = Color(0xFFF0B90B)
 
     var selectedSymbol by remember { mutableStateOf(initialSymbol.uppercase(Locale.US)) }
+    var isAddMoreMode by remember(isEditing) { mutableStateOf(false) }
     var quantityText by remember(initialSymbol, initialQuantity) {
         mutableStateOf(
             if (initialQuantity > 0.0) formatCryptoQuantityInput(initialQuantity) else ""
         )
     }
+    var addMoreText by remember(initialSymbol, initialQuantity) { mutableStateOf("") }
     var noteText by remember(initialNote) { mutableStateOf(initialNote) }
 
     val selectedAsset = remember(selectedSymbol) {
@@ -1234,7 +1331,22 @@ private fun AddOrEditCryptoDialog(
     }
 
     val parsedQuantity = quantityText.replace(',', '.').trim().toDoubleOrNull()
-    val isValidQty = parsedQuantity != null && parsedQuantity > 0.0 && !parsedQuantity.isNaN() && !parsedQuantity.isInfinite()
+    val parsedAddMore = addMoreText.replace(',', '.').trim().toDoubleOrNull()
+    val isValidAddMore = parsedAddMore != null && parsedAddMore > 0.0 && !parsedAddMore.isNaN() && !parsedAddMore.isInfinite()
+    val effectiveQuantity = if (isEditing && isAddMoreMode) {
+        if (isValidAddMore) initialQuantity + parsedAddMore!! else null
+    } else {
+        parsedQuantity
+    }
+    val isValidQty = effectiveQuantity != null && effectiveQuantity > 0.0 && !effectiveQuantity.isNaN() && !effectiveQuantity.isInfinite()
+
+    val quickAddPresets = remember(unitPrice) {
+        when {
+            unitPrice >= 1_000.0 -> listOf(0.01, 0.05, 0.1, 1.0)
+            unitPrice >= 20.0 -> listOf(0.5, 1.0, 5.0, 10.0)
+            else -> listOf(10.0, 50.0, 100.0, 500.0)
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1401,72 +1513,305 @@ private fun AddOrEditCryptoDialog(
                     )
                 }
 
+                if (isEditing) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // Mode Switcher: Edit Total vs Add More
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val editSelected = !isAddMoreMode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(if (editSelected) binanceGold.copy(alpha = 0.22f) else Color.Transparent)
+                                .border(
+                                    width = if (editSelected) 1.dp else 0.dp,
+                                    color = if (editSelected) binanceGold.copy(alpha = 0.7f) else Color.Transparent,
+                                    shape = RoundedCornerShape(11.dp)
+                                )
+                                .clickable { isAddMoreMode = false }
+                                .testTag("crypto_mode_edit_total")
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = if (editSelected) binanceGold else colors.textSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = if (isArabic) "تعديل الإجمالي" else "Edit Total",
+                                    color = if (editSelected) colors.textPrimary else colors.textSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (editSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        val addMoreSelected = isAddMoreMode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(if (addMoreSelected) EmeraldNeon.copy(alpha = 0.20f) else Color.Transparent)
+                                .border(
+                                    width = if (addMoreSelected) 1.dp else 0.dp,
+                                    color = if (addMoreSelected) EmeraldNeon.copy(alpha = 0.7f) else Color.Transparent,
+                                    shape = RoundedCornerShape(11.dp)
+                                )
+                                .clickable { isAddMoreMode = true }
+                                .testTag("crypto_mode_add_more")
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = if (addMoreSelected) EmeraldNeon else colors.textSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (isArabic) "إضافة المزيد" else "Add More",
+                                    color = if (addMoreSelected) colors.textPrimary else colors.textSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (addMoreSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Quantity Input Box
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(colors.glassCard)
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        text = if (isArabic) "الكمية التي تملكها (${selectedAsset.nameAr})" else "Quantity Held (${selectedAsset.symbol})",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        if (quantityText.isEmpty()) {
+                if (isEditing && isAddMoreMode) {
+                    // Add More Panel: Current Holding + Amount to Add + Quick Chips + Live New Total
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.42f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = if (isArabic) {
-                                    if (selectedAsset.symbol == "XRP") "مثال: 500.0" else "0.00"
-                                } else {
-                                    if (selectedAsset.symbol == "XRP") "e.g. 500.0" else "0.00"
-                                },
-                                color = colors.textMuted.copy(alpha = 0.55f),
-                                fontSize = 16.sp,
+                                text = if (isArabic) "الرصيد الحالي" else "Current Holding",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = isolateLtr("${formatCryptoQuantity(initialQuantity)} ${selectedAsset.symbol}"),
+                                color = colors.textPrimary,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
-                        BasicTextField(
-                            value = quantityText,
-                            onValueChange = { raw ->
-                                val filtered = raw.filter { it.isDigit() || it == '.' || it == ',' }
-                                if (filtered.length <= 18) {
-                                    quantityText = filtered
-                                }
-                            },
-                            textStyle = TextStyle(
-                                color = colors.textPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace,
-                                textDirection = TextDirection.Ltr
-                            ),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("crypto_quantity_input"),
-                            cursorBrush = SolidColor(binanceGold)
-                        )
-                    }
-                    if (isValidQty && unitPrice > 0.0) {
-                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         Text(
-                            text = if (isArabic) {
-                                "القيمة المقدرة: ${isolateLtr(formatUsdCurrency(parsedQuantity!! * unitPrice))}"
-                            } else {
-                                "Estimated Value: ${formatUsdCurrency(parsedQuantity!! * unitPrice)}"
-                            },
+                            text = if (isArabic) "الكمية المراد إضافتها (+ ${selectedAsset.nameAr})" else "Amount to Add (+ ${selectedAsset.symbol})",
                             color = EmeraldNeon,
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (addMoreText.isEmpty()) {
+                                Text(
+                                    text = if (isArabic) "+ أدخل الكمية الإضافية" else "+ Enter amount to add",
+                                    color = colors.textMuted.copy(alpha = 0.55f),
+                                    fontSize = 15.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            BasicTextField(
+                                value = addMoreText,
+                                onValueChange = { raw ->
+                                    val filtered = raw.filter { it.isDigit() || it == '.' || it == ',' }
+                                    if (filtered.length <= 18) {
+                                        addMoreText = filtered
+                                    }
+                                },
+                                textStyle = TextStyle(
+                                    color = EmeraldNeon,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace,
+                                    textDirection = TextDirection.Ltr
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("crypto_add_more_input"),
+                                cursorBrush = SolidColor(EmeraldNeon)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Quick Increment Chips
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            quickAddPresets.forEach { preset ->
+                                val presetLabel = "+${formatCryptoQuantityInput(preset)}"
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(EmeraldNeon.copy(alpha = 0.14f))
+                                        .border(1.dp, EmeraldNeon.copy(alpha = 0.38f), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            val currentAdd = addMoreText.replace(',', '.').trim().toDoubleOrNull() ?: 0.0
+                                            addMoreText = formatCryptoQuantityInput(currentAdd + preset)
+                                        }
+                                        .testTag("crypto_add_more_preset_${formatCryptoQuantityInput(preset)}")
+                                        .padding(vertical = 7.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = isolateLtr(presetLabel),
+                                        color = EmeraldNeon,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isValidAddMore && effectiveQuantity != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(EmeraldNeon.copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        text = if (isArabic) {
+                                            "الإجمالي الجديد: ${isolateLtr("${formatCryptoQuantity(initialQuantity)} + ${formatCryptoQuantity(parsedAddMore!!)} = ${formatCryptoQuantity(effectiveQuantity)} ${selectedAsset.symbol}")}"
+                                        } else {
+                                            "New Total: ${formatCryptoQuantity(initialQuantity)} + ${formatCryptoQuantity(parsedAddMore!!)} = ${formatCryptoQuantity(effectiveQuantity)} ${selectedAsset.symbol}"
+                                        },
+                                        color = colors.textPrimary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    if (unitPrice > 0.0) {
+                                        Text(
+                                            text = if (isArabic) {
+                                                "القيمة المضافة: +${isolateLtr(formatUsdCurrency(parsedAddMore * unitPrice))} • القيمة الكلية: ${isolateLtr(formatUsdCurrency(effectiveQuantity * unitPrice))}"
+                                            } else {
+                                                "Added: +${formatUsdCurrency(parsedAddMore * unitPrice)} • New Value: ${formatUsdCurrency(effectiveQuantity * unitPrice)}"
+                                            },
+                                            color = EmeraldNeon,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Quantity Input Box
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = if (isArabic) "الكمية التي تملكها (${selectedAsset.nameAr})" else "Quantity Held (${selectedAsset.symbol})",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (quantityText.isEmpty()) {
+                                Text(
+                                    text = if (isArabic) {
+                                        if (selectedAsset.symbol == "XRP") "مثال: 500.0" else "0.00"
+                                    } else {
+                                        if (selectedAsset.symbol == "XRP") "e.g. 500.0" else "0.00"
+                                    },
+                                    color = colors.textMuted.copy(alpha = 0.55f),
+                                    fontSize = 16.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            BasicTextField(
+                                value = quantityText,
+                                onValueChange = { raw ->
+                                    val filtered = raw.filter { it.isDigit() || it == '.' || it == ',' }
+                                    if (filtered.length <= 18) {
+                                        quantityText = filtered
+                                    }
+                                },
+                                textStyle = TextStyle(
+                                    color = colors.textPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace,
+                                    textDirection = TextDirection.Ltr
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("crypto_quantity_input"),
+                                cursorBrush = SolidColor(binanceGold)
+                            )
+                        }
+                        if (isValidQty && unitPrice > 0.0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (isArabic) {
+                                    "القيمة المقدرة: ${isolateLtr(formatUsdCurrency(effectiveQuantity!! * unitPrice))}"
+                                } else {
+                                    "Estimated Value: ${formatUsdCurrency(effectiveQuantity!! * unitPrice)}"
+                                },
+                                color = EmeraldNeon,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
@@ -1517,6 +1862,52 @@ private fun AddOrEditCryptoDialog(
                     }
                 }
 
+                if (isEditing && onConvertToUsdt != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.14f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.42f), RoundedCornerShape(14.dp))
+                            .clickable(onClick = onConvertToUsdt)
+                            .testTag("dialog_convert_to_usdt_btn")
+                            .padding(horizontal = 14.dp, vertical = 11.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CurrencyExchange,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (isArabic) "تحويل (كلي أو جزئي) إلى USDT" else "Convert (Full or Partial) to USDT",
+                                    color = EmeraldNeon,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "USDT",
+                                color = colors.textPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Row(
@@ -1531,22 +1922,471 @@ private fun AddOrEditCryptoDialog(
                         onClick = onDismiss
                     )
                     GlassButton(
-                        text = strings.save,
+                        text = if (isEditing && isAddMoreMode && isValidAddMore) {
+                            if (isArabic) "إضافة وحفظ" else "Add & Save"
+                        } else {
+                            strings.save
+                        },
                         enabled = isValidQty,
-                        containerColor = binanceGold,
+                        containerColor = if (isEditing && isAddMoreMode) EmeraldNeon else binanceGold,
                         contentColor = Color(0xFF0B0E11),
                         modifier = Modifier
                             .weight(1.3f)
                             .testTag("save_crypto_holding_btn"),
                         onClick = {
                             if (isValidQty) {
-                                onSave(selectedAsset.symbol, parsedQuantity!!, noteText.trim())
+                                onSave(selectedAsset.symbol, effectiveQuantity!!, noteText.trim())
                             }
                         }
                     )
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun ConvertCryptoToUsdtDialog(
+    holding: CryptoHoldingEntry,
+    asset: CryptoAssetSpec,
+    prices: Map<String, CryptoMarketPriceEntry>,
+    isRefreshingPrices: Boolean,
+    secureScreenshots: Boolean,
+    onRefreshLivePrice: () -> Unit,
+    onDismiss: () -> Unit,
+    onConfirmConvert: (convertQuantity: Double) -> Unit
+) {
+    val strings = AppStrings.current
+    val colors = LiquidGlassTheme.colors
+    val isArabic = strings is ArabicStrings
+    val binanceGold = Color(0xFFF0B90B)
+
+    // Automatically fetch live spot price when conversion dialog opens
+    LaunchedEffect(holding.id) {
+        onRefreshLivePrice()
+    }
+
+    val marketEntry = prices[asset.symbol.uppercase(Locale.US)]
+    val unitPrice = marketEntry?.priceUsd ?: 0.0
+    val changePct = marketEntry?.change24hPercent ?: 0.0
+
+    var convertAmountText by remember(holding.id, holding.quantity) {
+        mutableStateOf(formatCryptoQuantityInput(holding.quantity))
+    }
+
+    val parsedConvertQty = convertAmountText.replace(',', '.').trim().toDoubleOrNull()
+    val balanceTolerance = maxOf(1e-8, holding.quantity * 1e-6)
+    val exceedsBalance = parsedConvertQty != null && parsedConvertQty > holding.quantity + balanceTolerance
+    val isValidQty = parsedConvertQty != null &&
+        parsedConvertQty > 0.0 &&
+        parsedConvertQty <= holding.quantity + balanceTolerance &&
+        !parsedConvertQty.isNaN() &&
+        !parsedConvertQty.isInfinite()
+
+    val clampedConvertQty = if (isValidQty) parsedConvertQty!!.coerceAtMost(holding.quantity) else 0.0
+    val sliderFraction = if (holding.quantity > 0.0) {
+        (clampedConvertQty / holding.quantity).toFloat().coerceIn(0f, 1f)
+    } else 0f
+    val remainingQty = (holding.quantity - clampedConvertQty).let {
+        if (it <= 1e-9 || it <= holding.quantity * 1e-7) 0.0 else it
+    }
+    val usdtReceived = clampedConvertQty * unitPrice
+    val canConvert = isValidQty && unitPrice > 0.0
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+        ) {
+            GlassCard(
+                modifier = Modifier
+                    .widthIn(max = 500.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                shape = RoundedCornerShape(24.dp),
+                backgroundColor = colors.dialogBackground
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "تحويل ${asset.nameAr} إلى USDT" else "Convert ${asset.symbol} to USDT",
+                                color = colors.textPrimary,
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isArabic) {
+                                    "تحويل كلي أو جزئي حسب السعر اللحظي في السوق"
+                                } else {
+                                    "Convert full or partial balance at live spot price"
+                                },
+                                color = colors.textMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        IconButton(
+                            onClick = onRefreshLivePrice,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("convert_usdt_refresh_price_btn")
+                        ) {
+                            if (isRefreshingPrices) {
+                                CircularProgressIndicator(
+                                    color = EmeraldNeon,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = if (isArabic) "تحديث السعر اللحظي" else "Refresh Live Price",
+                                    tint = EmeraldNeon
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = strings.cancel,
+                                tint = colors.textSecondary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live Spot Price Pill
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.42f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = if (isArabic) "السعر اللحظي الآن" else "Live Spot Price",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (marketEntry != null) {
+                                Text(
+                                    text = if (isArabic) "المصدر: ${marketEntry.source}" else "Source: ${marketEntry.source}",
+                                    color = colors.textMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = if (unitPrice > 0.0) {
+                                    isolateLtr("1 ${asset.symbol} = ${formatCryptoUnitPrice(unitPrice)}")
+                                } else {
+                                    if (isArabic) "جاري جلب السعر..." else "Syncing price..."
+                                },
+                                color = if (unitPrice > 0.0) binanceGold else colors.textMuted,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            if (marketEntry != null) {
+                                val pctPositive = changePct >= 0.0
+                                Text(
+                                    text = isolateLtr(String.format(Locale.US, "%+.2f%% (24h)", changePct)),
+                                    color = if (pctPositive) EmeraldNeon else RoseNeon,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Available Coin Balance
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isArabic) "الرصيد المتاح للتحويل" else "Available Balance",
+                            color = colors.textSecondary,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = isolateLtr("${formatCryptoQuantity(holding.quantity)} ${asset.symbol}"),
+                            color = colors.textPrimary,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Quantity to Convert Input + MAX pill + Slider + Percentage Chips
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .border(
+                                width = 1.dp,
+                                color = if (exceedsBalance) RoseNeon.copy(alpha = 0.7f) else colors.glassBorderSubtle,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isArabic) "الكمية المراد تحويلها (${asset.symbol})" else "Amount to Convert (${asset.symbol})",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(binanceGold.copy(alpha = 0.18f))
+                                    .clickable {
+                                        convertAmountText = formatCryptoQuantityInput(holding.quantity)
+                                    }
+                                    .testTag("convert_usdt_max_btn")
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (isArabic) "الكل MAX" else "MAX",
+                                    color = binanceGold,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (convertAmountText.isEmpty()) {
+                                Text(
+                                    text = "0.00",
+                                    color = colors.textMuted.copy(alpha = 0.55f),
+                                    fontSize = 16.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            BasicTextField(
+                                value = convertAmountText,
+                                onValueChange = { raw ->
+                                    val filtered = raw.filter { it.isDigit() || it == '.' || it == ',' }
+                                    if (filtered.length <= 18) {
+                                        convertAmountText = filtered
+                                    }
+                                },
+                                textStyle = TextStyle(
+                                    color = if (exceedsBalance) RoseNeon else colors.textPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = FontFamily.Monospace,
+                                    textDirection = TextDirection.Ltr
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("convert_usdt_amount_input"),
+                                cursorBrush = SolidColor(EmeraldNeon)
+                            )
+                        }
+
+                        if (exceedsBalance) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (isArabic) "الكمية المطلوبة أكبر من الرصيد المتاح" else "Amount exceeds available coin balance",
+                                color = RoseNeon,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Slider(
+                            value = sliderFraction,
+                            onValueChange = { fraction ->
+                                val target = if (fraction >= 0.995f) {
+                                    holding.quantity
+                                } else {
+                                    holding.quantity * fraction.toDouble()
+                                }
+                                convertAmountText = if (target <= 0.0) "" else formatCryptoQuantityInput(target)
+                            },
+                            valueRange = 0f..1f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = EmeraldNeon,
+                                activeTrackColor = EmeraldNeon,
+                                inactiveTrackColor = colors.textMuted.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("convert_usdt_slider")
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(0.25, 0.50, 0.75, 1.0).forEach { pct ->
+                                val pctLabel = "${(pct * 100).toInt()}%"
+                                val isExactPct = holding.quantity > 0.0 &&
+                                    abs(clampedConvertQty - holding.quantity * pct) <= holding.quantity * 0.005
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isExactPct) EmeraldNeon.copy(alpha = 0.22f)
+                                            else colors.glassSurface.copy(alpha = 0.55f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isExactPct) EmeraldNeon.copy(alpha = 0.7f) else colors.glassBorderSubtle,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable {
+                                            val qty = if (pct >= 1.0) holding.quantity else holding.quantity * pct
+                                            convertAmountText = formatCryptoQuantityInput(qty)
+                                        }
+                                        .testTag("convert_pct_${(pct * 100).toInt()}")
+                                        .padding(vertical = 7.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = isolateLtr(pctLabel),
+                                        color = if (isExactPct) EmeraldNeon else colors.textSecondary,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live Conversion Output Preview
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.11f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.36f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isArabic) "ستحصل على (USDT)" else "You Receive (USDT)",
+                                color = colors.textSecondary,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (unitPrice > 0.0) {
+                                    isolateLtr("+${formatCryptoQuantity(usdtReceived)} USDT")
+                                } else "---",
+                                color = EmeraldNeon,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isArabic) "المتبقي من ${asset.nameAr}" else "Remaining ${asset.symbol}",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp
+                            )
+                            Text(
+                                text = if (remainingQty <= 0.0 && isValidQty) {
+                                    if (isArabic) "0 ${asset.symbol} (تحويل كامل)" else "0 ${asset.symbol} (Full)"
+                                } else {
+                                    isolateLtr("${formatCryptoQuantity(remainingQty)} ${asset.symbol}")
+                                },
+                                color = colors.textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        GlassButton(
+                            text = strings.cancel,
+                            containerColor = colors.textMuted.copy(alpha = 0.25f),
+                            contentColor = colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                            onClick = onDismiss
+                        )
+                        GlassButton(
+                            text = if (isArabic) "تأكيد التحويل" else "Convert",
+                            enabled = canConvert,
+                            containerColor = EmeraldNeon,
+                            contentColor = Color(0xFF0B0E11),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .testTag("confirm_convert_to_usdt_btn"),
+                            onClick = {
+                                if (canConvert) {
+                                    onConfirmConvert(clampedConvertQty)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1580,6 +2420,6 @@ private fun formatCryptoQuantityInput(qty: Double): String {
     return if (qty % 1.0 == 0.0) {
         String.format(Locale.US, "%.0f", qty)
     } else {
-        String.format(Locale.US, "%.6f", qty).trimEnd('0').trimEnd('.')
+        String.format(Locale.US, "%.8f", qty).trimEnd('0').trimEnd('.')
     }
 }

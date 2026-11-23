@@ -36,39 +36,55 @@ fun SpLogoContainer(
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
     cornerRadius: Dp = 14.dp,
-    padding: Dp = 6.dp
+    padding: Dp = 6.dp,
+    containerAlpha: Float? = null
 ) {
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
+    val customAlpha = containerAlpha?.coerceIn(0f, 1f)
 
     val backgroundBrush = if (isDark) {
         Brush.verticalGradient(
             colors = listOf(
-                colors.glassSurface.copy(alpha = 0.90f),
-                colors.glassCard.copy(alpha = 0.75f)
+                colors.glassSurface.copy(alpha = customAlpha ?: 0.90f),
+                colors.glassCard.copy(alpha = customAlpha ?: 0.75f)
             )
         )
     } else {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xFF0F172A), // Deep Slate Obsidian
-                Color(0xFF1E293B)  // Luminous Midnight Slate
+                Color(0xFF0F172A).copy(alpha = customAlpha ?: 1f), // Deep Slate Obsidian
+                Color(0xFF1E293B).copy(alpha = customAlpha ?: 1f)  // Luminous Midnight Slate
             )
         )
     }
 
-    val borderColor = if (isDark) {
+    val baseBorderColor = if (isDark) {
         colors.glassBorder
     } else {
         Color(0xFF38BDF8).copy(alpha = 0.55f)
     }
+    val borderColor = if (customAlpha != null && customAlpha <= 0.15f) {
+        baseBorderColor.copy(alpha = (customAlpha * 2.4f).coerceAtLeast(0.05f))
+    } else {
+        baseBorderColor
+    }
 
     val shape = RoundedCornerShape(cornerRadius)
+    val shadowModifier = if (customAlpha != null && customAlpha <= 0.15f) {
+        Modifier
+    } else {
+        Modifier.shadow(
+            elevation = if (isDark) 4.dp else 6.dp,
+            shape = shape,
+            spotColor = Color(0xFF00E5FF).copy(alpha = 0.25f)
+        )
+    }
 
     Box(
         modifier = modifier
             .size(size)
-            .shadow(elevation = if (isDark) 4.dp else 6.dp, shape = shape, spotColor = Color(0xFF00E5FF).copy(alpha = 0.25f))
+            .then(shadowModifier)
             .clip(shape)
             .background(backgroundBrush)
             .border(1.2.dp, borderColor, shape)

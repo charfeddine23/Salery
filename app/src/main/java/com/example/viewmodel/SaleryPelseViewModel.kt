@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import java.util.Locale
 import com.example.notification.DebtReminderScheduler
 import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.AlgPosteSmsCodec
@@ -2815,6 +2816,101 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     else "Removed $symLabel from Binance Wallet"
                 )
             }
+        }
+    }
+
+    fun convertCryptoHoldingToUsdt(
+        holdingId: String,
+        convertQuantity: Double
+    ) {
+        if (holdingId.isBlank() || !convertQuantity.isFinite() || convertQuantity <= 0.0) return
+        val isAr = settings.value.language == "ar"
+        val currentPrices = BinanceCryptoCodec.parsePrices(settings.value.binancePricesJson)
+        val currentList = BinanceCryptoCodec.parseHoldings(settings.value.binanceHoldingsJson)
+        val sourceEntry = currentList.firstOrNull { it.id == holdingId } ?: return
+        val sourceSym = sourceEntry.symbol.trim().uppercase(Locale.US)
+        if (sourceSym == "USDT") return
+
+        val unitPriceUsd = currentPrices[sourceSym]?.priceUsd ?: 0.0
+        if (unitPriceUsd <= 0.0 || !unitPriceUsd.isFinite()) {
+            viewModelScope.launch {
+                _toastEvent.emit(
+                    if (isAr) "يرجى تحديث السعر اللحظي لـ $sourceSym قبل التحويل"
+                    else "Please sync live $sourceSym price before converting"
+                )
+            }
+            return
+        }
+
+        val actualConvertQty = convertQuantity.coerceAtMost(sourceEntry.quantity)
+        val usdtReceived = actualConvertQty * unitPriceUsd
+        if (actualConvertQty <= 0.0 || usdtReceived <= 0.0 || !usdtReceived.isFinite()) return
+
+        val now = System.currentTimeMillis()
+        var convertedFully = false
+
+        prefsManager.updateSettings { current ->
+            val mutable = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson).toMutableList()
+            val srcIdx = mutable.indexOfFirst { it.id == holdingId }
+            if (srcIdx < 0) return@updateSettings current
+            val latestSource = mutable[srcIdx]
+            val clampedQty = actualConvertQty.coerceAtMost(latestSource.quantity)
+            val remainingQty = latestSource.quantity - clampedQty
+
+            if (remainingQty <= 1e-9 || remainingQty <= latestSource.quantity * 1e-7) {
+                mutable.removeAt(srcIdx)
+                convertedFully = true
+            } else {
+                mutable[srcIdx] = latestSource.copy(
+                    quantity = remainingQty,
+                    updatedAtMillis = now
+                )
+            }
+
+            // Credit USDT received into existing general USDT holding or create a new USDT entry
+            val generalUsdtIdx = mutable.indexOfFirst {
+                it.symbol.equals("USDT", ignoreCase = true) && it.note.isBlank()
+            }
+            val targetUsdtIdx = if (generalUsdtIdx >= 0) {
+                generalUsdtIdx
+            } else {
+                mutable.indexOfFirst { it.symbol.equals("USDT", ignoreCase = true) }
+            }
+
+            if (targetUsdtIdx >= 0) {
+                val existingUsdt = mutable[targetUsdtIdx]
+                mutable[targetUsdtIdx] = existingUsdt.copy(
+                    quantity = existingUsdt.quantity + usdtReceived,
+                    updatedAtMillis = now
+                )
+            } else {
+                mutable.add(
+                    0,
+                    CryptoHoldingEntry(
+                        id = java.util.UUID.randomUUID().toString(),
+                        symbol = "USDT",
+                        quantity = usdtReceived,
+                        updatedAtMillis = now,
+                        note = ""
+                    )
+                )
+            }
+
+            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(mutable))
+        }
+
+        val qtyLabel = String.format(Locale.US, "%.4f", actualConvertQty).trimEnd('0').trimEnd('.')
+        val usdtLabel = String.format(Locale.US, "%,.2f", usdtReceived)
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (isAr) {
+                    if (convertedFully) "تم تحويل كامل رصيد $sourceSym ($qtyLabel) إلى $usdtLabel USDT ✅"
+                    else "تم تحويل $qtyLabel $sourceSym إلى $usdtLabel USDT ✅"
+                } else {
+                    if (convertedFully) "Converted all $qtyLabel $sourceSym to $usdtLabel USDT ✅"
+                    else "Converted $qtyLabel $sourceSym to $usdtLabel USDT ✅"
+                }
+            )
         }
     }
 

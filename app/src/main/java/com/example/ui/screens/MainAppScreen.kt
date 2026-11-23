@@ -52,7 +52,6 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -98,6 +97,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +116,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.ScreenshotProtectionDialog
 import com.example.ui.components.SidebarDrawer
+import com.example.ui.components.SpLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -495,7 +496,8 @@ fun MainAppScreen(
                                             updateUiState = updateUiState,
                                             onUpdateIndicatorClick = { viewModel.openUpdateDialogFromIndicator() },
                                             isStealthMode = userSettings.stealthMode,
-                                            onToggleStealth = { viewModel.toggleStealthMode() }
+                                            onToggleStealth = { viewModel.toggleStealthMode() },
+                                            frameless = currentRoute == "cards"
                                         )
                                     },
                                     bottomBar = {
@@ -508,7 +510,8 @@ fun MainAppScreen(
                                                 ) {
                                                     HubBottomBar(
                                                         currentRoute = currentRoute,
-                                                        onRouteSelect = { currentRoute = it }
+                                                        onRouteSelect = { currentRoute = it },
+                                                        frameless = currentRoute == "cards"
                                                     )
                                                 }
                                                 androidx.compose.animation.AnimatedVisibility(
@@ -526,11 +529,19 @@ fun MainAppScreen(
                                         }
                                     }
                                 ) { innerPadding ->
+                                    val isCardsHub = currentRoute == "cards"
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(innerPadding)
-                                            .adaptiveContentWidth(dimens.contentMaxWidth),
+                                            .then(
+                                                if (isCardsHub) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier
+                                                        .padding(innerPadding)
+                                                        .adaptiveContentWidth(dimens.contentMaxWidth)
+                                                }
+                                            ),
                                         contentAlignment = Alignment.TopCenter
                                     ) {
                             when (currentRoute) {
@@ -553,7 +564,8 @@ fun MainAppScreen(
                                     },
                                     onRemoveThirdCard = {
                                         viewModel.removeThirdCard()
-                                    }
+                                    },
+                                    outerContentPadding = innerPadding
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
@@ -770,6 +782,9 @@ fun MainAppScreen(
                                     },
                                     onRemoveHolding = { holdingId ->
                                         viewModel.removeCryptoHoldingById(holdingId)
+                                    },
+                                    onConvertHoldingToUsdt = { holdingId, convertQuantity ->
+                                        viewModel.convertCryptoHoldingToUsdt(holdingId, convertQuantity)
                                     }
                                 )
                                 "income" -> IncomeScreen(
@@ -1035,7 +1050,8 @@ fun MainTopAppBar(
     isStealthMode: Boolean = false,
     onToggleStealth: () -> Unit = {},
     canGoBack: Boolean = false,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    frameless: Boolean = false
 ) {
     val colors = LiquidGlassTheme.colors
     val strings = AppStrings.current
@@ -1056,24 +1072,56 @@ fun MainTopAppBar(
                 .padding(horizontal = dimens.screenPaddingH, vertical = dimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Menu / Back Button (min touch target 48dp)
-            GlassCard(
-                modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
-                shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                backgroundColor = colors.glassCard,
-                breathingGlow = false,
-                onClick = if (canGoBack) onBackClick else onMenuClick
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (canGoBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu,
-                        contentDescription = if (canGoBack) {
-                            if (isArabic) "رجوع" else "Back"
-                        } else {
-                            if (isArabic) "القائمة" else "Menu"
-                        },
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(dimens.iconSizeMd)
+            // App Logo Menu Button (4 main screens) / Back Button (sub-screens) — min touch target 48dp
+            val navButtonSize = dimens.buttonHeight.coerceAtLeast(48.dp)
+            if (canGoBack) {
+                GlassCard(
+                    modifier = Modifier
+                        .size(navButtonSize)
+                        .testTag("top_bar_back_button"),
+                    shape = RoundedCornerShape(dimens.cornerRadiusMd),
+                    backgroundColor = colors.glassCard,
+                    breathingGlow = false,
+                    onClick = onBackClick
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = if (isArabic) "رجوع" else "Back",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(dimens.iconSizeMd)
+                        )
+                    }
+                }
+            } else {
+                val logoShape = RoundedCornerShape(dimens.cornerRadiusMd)
+                val menuDesc = if (isArabic) "الإعدادات والقائمة" else "Settings & Menu"
+                Box(
+                    modifier = Modifier
+                        .size(navButtonSize)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = menuDesc
+                        }
+                        .testTag("top_bar_logo_menu_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SpLogoContainer(
+                        size = navButtonSize,
+                        cornerRadius = dimens.cornerRadiusMd,
+                        padding = 6.dp,
+                        containerAlpha = 0.05f
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(logoShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(color = colors.primaryNeon),
+                                role = Role.Button,
+                                onClickLabel = menuDesc,
+                                onClick = onMenuClick
+                            )
                     )
                 }
             }
@@ -1128,20 +1176,57 @@ fun MainTopAppBar(
             }
 
             // Stealth Mode / Privacy Toggle Action Button (min touch target 48dp)
-            GlassCard(
-                modifier = Modifier.size(dimens.buttonHeight.coerceAtLeast(48.dp)),
-                shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
-                breathingGlow = false,
-                onClick = onToggleStealth
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (frameless) {
+                val stealthDesc = if (isArabic) "تبديل وضع التخفي" else "Stealth Mode Toggle"
+                Box(
+                    modifier = Modifier
+                        .size(navButtonSize)
+                        .clip(CircleShape)
+                        .then(
+                            if (isStealthMode) {
+                                Modifier.background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            colors.primaryNeon.copy(alpha = 0.24f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                            } else Modifier
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(bounded = false, radius = 24.dp, color = colors.primaryNeon),
+                            role = Role.Button,
+                            onClickLabel = stealthDesc,
+                            onClick = onToggleStealth
+                        )
+                        .testTag("top_bar_stealth_button"),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (isArabic) "تبديل وضع التخفي" else "Stealth Mode Toggle",
-                        tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
-                        modifier = Modifier.size(dimens.iconSizeMd - 2.dp)
+                        contentDescription = stealthDesc,
+                        tint = if (isStealthMode) colors.primaryNeon else colors.textPrimary.copy(alpha = 0.85f),
+                        modifier = Modifier.size(dimens.iconSizeMd)
                     )
+                }
+            } else {
+                GlassCard(
+                    modifier = Modifier.size(navButtonSize),
+                    shape = RoundedCornerShape(dimens.cornerRadiusMd),
+                    backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
+                    breathingGlow = false,
+                    onClick = onToggleStealth
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isStealthMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (isArabic) "تبديل وضع التخفي" else "Stealth Mode Toggle",
+                            tint = if (isStealthMode) colors.primaryNeon else colors.textSecondary,
+                            modifier = Modifier.size(dimens.iconSizeMd - 2.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1667,7 +1752,9 @@ fun LiquidGlassBottomBar(
                 .widthIn(max = 580.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
-            backgroundColor = colors.glassCard
+            borderColor = colors.glassBorder.copy(alpha = 0.14f),
+            backgroundColor = colors.glassCard.copy(alpha = 0.05f),
+            breathingGlow = false
         ) {
             Row(
                 modifier = Modifier
@@ -1730,7 +1817,8 @@ fun LiquidGlassBottomBar(
 @Composable
 fun HubBottomBar(
     currentRoute: String,
-    onRouteSelect: (String) -> Unit
+    onRouteSelect: (String) -> Unit,
+    frameless: Boolean = false
 ) {
     val colors = LiquidGlassTheme.colors
     val isArabic = AppStrings.current is ArabicStrings
@@ -1744,6 +1832,60 @@ fun HubBottomBar(
         NavigationItem("square", if (isArabic) "السكوار" else "Square", Icons.Default.CurrencyExchange)
     )
 
+    val dockRow: @Composable (Modifier) -> Unit = { rowModifier ->
+        Row(
+            modifier = rowModifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp, horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { item ->
+                val isSelected = currentRoute == item.route
+                val activeColor = when (item.route) {
+                    "keys" -> AmberNeon
+                    "ccps" -> EmeraldNeon
+                    "square" -> AmberNeon
+                    else -> CyanNeon
+                }
+                val inactiveColor = if (frameless) {
+                    colors.textSecondary.copy(alpha = 0.88f)
+                } else {
+                    colors.textMuted
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (isSelected) activeColor.copy(alpha = 0.14f) else Color.Transparent
+                        )
+                        .clickable { onRouteSelect(item.route) }
+                        .padding(horizontal = 4.dp, vertical = 8.dp)
+                        .testTag("hub_tab_${item.route}"),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        tint = if (isSelected) activeColor else inactiveColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = item.label,
+                        color = if (isSelected) activeColor else inactiveColor,
+                        fontSize = typo.caption,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1751,59 +1893,24 @@ fun HubBottomBar(
             .padding(horizontal = dimens.screenPaddingH, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        GlassCard(
-            modifier = Modifier
-                .widthIn(max = 560.dp)
-                .fillMaxWidth()
-                .testTag("hub_bottom_banner"),
-            shape = RoundedCornerShape(26.dp),
-            backgroundColor = colors.glassCard
-        ) {
-            Row(
+        if (frameless) {
+            dockRow(
+                Modifier
+                    .widthIn(max = 560.dp)
+                    .testTag("hub_bottom_banner")
+            )
+        } else {
+            GlassCard(
                 modifier = Modifier
+                    .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp, horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .testTag("hub_bottom_banner"),
+                shape = RoundedCornerShape(26.dp),
+                borderColor = colors.glassBorder.copy(alpha = 0.14f),
+                backgroundColor = colors.glassCard.copy(alpha = 0.05f),
+                breathingGlow = false
             ) {
-                items.forEach { item ->
-                    val isSelected = currentRoute == item.route
-                    val activeColor = when (item.route) {
-                        "keys" -> AmberNeon
-                        "ccps" -> EmeraldNeon
-                        "square" -> AmberNeon
-                        else -> CyanNeon
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                if (isSelected) activeColor.copy(alpha = 0.14f) else Color.Transparent
-                            )
-                            .clickable { onRouteSelect(item.route) }
-                            .padding(horizontal = 4.dp, vertical = 8.dp)
-                            .testTag("hub_tab_${item.route}"),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            tint = if (isSelected) activeColor else colors.textMuted,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = item.label,
-                            color = if (isSelected) activeColor else colors.textMuted,
-                            fontSize = typo.caption,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                dockRow(Modifier)
             }
         }
     }
