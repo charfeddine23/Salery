@@ -2545,7 +2545,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         prefsManager.updateSettings { it.copy(detectedSmsTaxesJson = "[]") }
     }
 
-    fun acceptSmsSuggestion(suggestionId: String, overrideType: TransactionType? = null) {
+    fun acceptSmsSuggestion(
+        suggestionId: String,
+        overrideType: TransactionType? = null,
+        customCategory: String? = null,
+        customReasonOrSource: String? = null
+    ) {
         viewModelScope.launch {
             val currentSettings = settings.value
             val isAr = currentSettings.language == "ar"
@@ -2553,24 +2558,54 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val target = pending.firstOrNull { it.id == suggestionId } ?: return@launch
 
             val finalType = overrideType ?: target.transactionType
+            val cleanCustomCat = customCategory?.trim()?.takeIf { it.isNotBlank() }
+            val cleanReasonOrSource = customReasonOrSource?.trim()?.takeIf { it.isNotBlank() }
             val resolvedCategory = when {
+                cleanCustomCat != null -> cleanCustomCat
                 overrideType != null && overrideType != target.transactionType -> {
                     if (finalType == TransactionType.EXPENSE) "other" else "transfer"
                 }
                 else -> target.suggestedCategory
             }
-            val title = if (isAr) {
+            val baseFallbackTitle = if (isAr) {
                 if (finalType == TransactionType.EXPENSE) {
-                    target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (بريد الجزائر)" }
+                    if (overrideType == TransactionType.EXPENSE && target.transactionType != TransactionType.EXPENSE) {
+                        "مصروف بريدي موب (بريد الجزائر)"
+                    } else {
+                        target.suggestedTitleAr.ifBlank { "مصروف بريدي موب (بريد الجزائر)" }
+                    }
                 } else {
-                    target.suggestedTitleAr.ifBlank { "دخل بريدي موب (بريد الجزائر)" }
+                    if (overrideType == TransactionType.INCOME && target.transactionType != TransactionType.INCOME) {
+                        "دخل بريدي موب (بريد الجزائر)"
+                    } else {
+                        target.suggestedTitleAr.ifBlank { "دخل بريدي موب (بريد الجزائر)" }
+                    }
                 }
             } else {
                 if (finalType == TransactionType.EXPENSE) {
-                    target.suggestedTitleEn.ifBlank { "BaridiMob Expense (ALG Poste)" }
+                    if (overrideType == TransactionType.EXPENSE && target.transactionType != TransactionType.EXPENSE) {
+                        "BaridiMob Expense (ALG Poste)"
+                    } else {
+                        target.suggestedTitleEn.ifBlank { "BaridiMob Expense (ALG Poste)" }
+                    }
                 } else {
-                    target.suggestedTitleEn.ifBlank { "BaridiMob Income (ALG Poste)" }
+                    if (overrideType == TransactionType.INCOME && target.transactionType != TransactionType.INCOME) {
+                        "BaridiMob Income (ALG Poste)"
+                    } else {
+                        target.suggestedTitleEn.ifBlank { "BaridiMob Income (ALG Poste)" }
+                    }
                 }
+            }
+            val title = cleanReasonOrSource ?: baseFallbackTitle
+            val composedNote = if (cleanReasonOrSource != null) {
+                val prefix = if (finalType == TransactionType.EXPENSE) {
+                    if (isAr) "سبب السحب: $cleanReasonOrSource" else "Reason: $cleanReasonOrSource"
+                } else {
+                    if (isAr) "جهة/سبب الدخل: $cleanReasonOrSource" else "Source/Reason: $cleanReasonOrSource"
+                }
+                "$prefix • ${target.sender}: ${target.rawBody}".take(240)
+            } else {
+                "${target.sender}: ${target.rawBody}".take(240)
             }
             dao.insertTransaction(
                 TransactionEntity(
@@ -2578,7 +2613,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     amount = target.amount,
                     category = resolvedCategory,
                     title = title,
-                    note = "${target.sender}: ${target.rawBody}".take(240),
+                    note = composedNote,
                     dateMillis = target.receivedAtMillis
                 )
             )
@@ -2681,26 +2716,61 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun upsertCryptoHolding(symbol: String, quantity: Double) {
+    fun saveCryptoHolding(
+        holdingId: String?,
+        symbol: String,
+        quantity: Double,
+        note: String = ""
+    ) {
         val cleanSym = symbol.trim().uppercase()
+        val cleanNote = note.trim()
         if (cleanSym.isBlank() || !quantity.isFinite()) return
         val isAr = settings.value.language == "ar"
+        val now = System.currentTimeMillis()
 
         prefsManager.updateSettings { current ->
-            val list = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
-                .filterNot { it.symbol.equals(cleanSym, ignoreCase = true) }
+            val currentList = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
                 .toMutableList()
-            if (quantity > 0.0) {
-                list.add(
-                    0,
-                    CryptoHoldingEntry(
-                        symbol = cleanSym,
-                        quantity = quantity,
-                        updatedAtMillis = System.currentTimeMillis()
+            if (holdingId.isNullOrBlank()) {
+                if (quantity > 0.0) {
+                    currentList.add(
+                        0,
+                        CryptoHoldingEntry(
+                            id = java.util.UUID.randomUUID().toString(),
+                            symbol = cleanSym,
+                            quantity = quantity,
+                            updatedAtMillis = now,
+                            note = cleanNote
+                        )
                     )
-                )
+                }
+            } else {
+                val targetIndex = currentList.indexOfFirst { it.id == holdingId }
+                if (targetIndex >= 0) {
+                    if (quantity > 0.0) {
+                        currentList[targetIndex] = currentList[targetIndex].copy(
+                            symbol = cleanSym,
+                            quantity = quantity,
+                            updatedAtMillis = now,
+                            note = cleanNote
+                        )
+                    } else {
+                        currentList.removeAt(targetIndex)
+                    }
+                } else if (quantity > 0.0) {
+                    currentList.add(
+                        0,
+                        CryptoHoldingEntry(
+                            id = holdingId,
+                            symbol = cleanSym,
+                            quantity = quantity,
+                            updatedAtMillis = now,
+                            note = cleanNote
+                        )
+                    )
+                }
             }
-            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(list))
+            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(currentList))
         }
 
         // Ensure we have fresh prices if stale or if coin price isn't cached yet
@@ -2724,8 +2794,49 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun removeCryptoHoldingById(holdingId: String) {
+        if (holdingId.isBlank()) return
+        val isAr = settings.value.language == "ar"
+        var removedSymbol: String? = null
+
+        prefsManager.updateSettings { current ->
+            val currentList = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
+            val target = currentList.firstOrNull { it.id == holdingId }
+            removedSymbol = target?.symbol
+            val filtered = currentList.filterNot { it.id == holdingId }
+            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(filtered))
+        }
+
+        val symLabel = removedSymbol ?: ""
+        if (symLabel.isNotBlank()) {
+            viewModelScope.launch {
+                _toastEvent.emit(
+                    if (isAr) "تمت إزالة $symLabel من المحفظة"
+                    else "Removed $symLabel from Binance Wallet"
+                )
+            }
+        }
+    }
+
+    fun upsertCryptoHolding(symbol: String, quantity: Double) {
+        saveCryptoHolding(holdingId = null, symbol = symbol, quantity = quantity)
+    }
+
     fun removeCryptoHolding(symbol: String) {
-        upsertCryptoHolding(symbol, 0.0)
+        val cleanSym = symbol.trim().uppercase()
+        if (cleanSym.isBlank()) return
+        val isAr = settings.value.language == "ar"
+        prefsManager.updateSettings { current ->
+            val filtered = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
+                .filterNot { it.symbol.equals(cleanSym, ignoreCase = true) }
+            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(filtered))
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (isAr) "تمت إزالة $cleanSym من المحفظة"
+                else "Removed $cleanSym from Binance Wallet"
+            )
+        }
     }
 
     // ==================== Square Market (Gold Karats + Bank/Parallel FX, Hourly) ====================

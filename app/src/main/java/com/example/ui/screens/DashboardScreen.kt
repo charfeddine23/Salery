@@ -41,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,7 +111,7 @@ fun DashboardScreen(
     onDeleteTransaction: (TransactionEntity) -> Unit,
     onLockToVault: (Double) -> Unit = {},
     onUnlockFromVault: (Double) -> Unit = {},
-    onAcceptSmsSuggestion: (String, TransactionType?) -> Unit = { _, _ -> },
+    onAcceptSmsSuggestion: (String, TransactionType?, String?, String?) -> Unit = { _, _, _, _ -> },
     onDismissSmsSuggestion: (String) -> Unit = {},
     onOpenBaridiMobSync: () -> Unit = {},
     onRefreshCcpBalanceFromSms: (showFeedback: Boolean) -> Unit = {},
@@ -153,7 +155,7 @@ fun DashboardScreen(
                             suggestions = pendingSmsSuggestions,
                             strings = strings,
                             colors = colors,
-                            onAccept = { id, type -> onAcceptSmsSuggestion(id, type) },
+                            onAccept = { id, type, cat, reason -> onAcceptSmsSuggestion(id, type, cat, reason) },
                             onDismiss = onDismissSmsSuggestion,
                             onOpenSync = onOpenBaridiMobSync
                         )
@@ -261,7 +263,7 @@ fun DashboardScreen(
                         suggestions = pendingSmsSuggestions,
                         strings = strings,
                         colors = colors,
-                        onAccept = { id, type -> onAcceptSmsSuggestion(id, type) },
+                        onAccept = { id, type, cat, reason -> onAcceptSmsSuggestion(id, type, cat, reason) },
                         onDismiss = onDismissSmsSuggestion,
                         onOpenSync = onOpenBaridiMobSync
                     )
@@ -629,7 +631,7 @@ private fun BaridiMobSmsSuggestionBanner(
     suggestions: List<SmsSuggestionEntry>,
     strings: StringsBundle,
     colors: LiquidGlassColors,
-    onAccept: (id: String, type: TransactionType) -> Unit,
+    onAccept: (id: String, type: TransactionType, customCategory: String?, customReasonOrSource: String?) -> Unit,
     onDismiss: (id: String) -> Unit,
     onOpenSync: () -> Unit
 ) {
@@ -638,7 +640,25 @@ private fun BaridiMobSmsSuggestionBanner(
     val isStealth = LocalStealthMode.current
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
-    val isExpense = latest.isExpense
+
+    var selectedType by remember(latest.id, latest.isExpense) {
+        mutableStateOf(latest.transactionType)
+    }
+    var selectedPresetKey by remember(latest.id, selectedType) {
+        mutableStateOf(
+            com.example.ui.components.SmsSuggestionReasonCatalog.defaultPresetKey(
+                isExpense = selectedType == TransactionType.EXPENSE,
+                suggestedCategory = if (selectedType == latest.transactionType) {
+                    latest.suggestedCategory
+                } else {
+                    if (selectedType == TransactionType.EXPENSE) "other" else "transfer"
+                }
+            )
+        )
+    }
+    var customReasonText by remember(latest.id, selectedType) { mutableStateOf("") }
+
+    val isExpense = selectedType == TransactionType.EXPENSE
     val accent = if (isExpense) RoseNeon else EmeraldNeon
     val oppositeType = if (isExpense) TransactionType.INCOME else TransactionType.EXPENSE
     val oppositeAccent = if (isExpense) EmeraldNeon else RoseNeon
@@ -688,13 +708,45 @@ private fun BaridiMobSmsSuggestionBanner(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = if (isArabic) latest.suggestedTitleAr else latest.suggestedTitleEn,
-                            color = colors.textMuted,
-                            fontSize = typo.caption,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(accent.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (selectedType == latest.transactionType) {
+                                        if (isExpense) {
+                                            if (isArabic) "تصنيف تلقائي: سحب / مصروف" else "Auto: Expense (Withdrawal)"
+                                        } else {
+                                            if (isArabic) "تصنيف تلقائي: دخول رصيد / دخل" else "Auto: Income (Credit)"
+                                        }
+                                    } else {
+                                        if (isExpense) {
+                                            if (isArabic) "كمصروف" else "As Expense"
+                                        } else {
+                                            if (isArabic) "كدخل" else "As Income"
+                                        }
+                                    },
+                                    color = accent,
+                                    fontSize = typo.caption,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
+                            Text(
+                                text = if (isArabic) latest.suggestedTitleAr else latest.suggestedTitleEn,
+                                color = colors.textMuted,
+                                fontSize = typo.caption,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                        }
                     }
                 }
 
@@ -766,6 +818,20 @@ private fun BaridiMobSmsSuggestionBanner(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            com.example.ui.components.SmsSuggestionReasonPicker(
+                isExpense = isExpense,
+                isArabic = isArabic,
+                selectedPresetKey = selectedPresetKey,
+                onSelectPreset = { preset ->
+                    selectedPresetKey = if (selectedPresetKey == preset.key) null else preset.key
+                },
+                customReasonText = customReasonText,
+                onCustomReasonTextChange = { customReasonText = it },
+                accent = accent
+            )
+
             Spacer(modifier = Modifier.height(9.dp))
 
             Row(
@@ -773,7 +839,7 @@ private fun BaridiMobSmsSuggestionBanner(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Primary button: Add directly to detected Income or Expense
+                // Primary button: Add directly to detected/chosen Income or Expense
                 Box(
                     modifier = Modifier
                         .weight(1.35f)
@@ -781,7 +847,21 @@ private fun BaridiMobSmsSuggestionBanner(
                         .clip(RoundedCornerShape(11.dp))
                         .background(accent.copy(alpha = 0.2f))
                         .border(0.8.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
-                        .clickable { onAccept(latest.id, latest.transactionType) }
+                        .clickable {
+                            val chosenPreset = com.example.ui.components.SmsSuggestionReasonCatalog.findPreset(
+                                isExpense = isExpense,
+                                key = selectedPresetKey
+                            )
+                            val resolvedReason = customReasonText.trim().ifBlank {
+                                chosenPreset?.localizedLabel(isArabic)
+                            }
+                            onAccept(
+                                latest.id,
+                                selectedType,
+                                chosenPreset?.categoryId,
+                                resolvedReason
+                            )
+                        }
                         .padding(vertical = 8.dp, horizontal = 8.dp)
                         .testTag("sms_suggestion_accept_btn"),
                     contentAlignment = Alignment.Center
@@ -800,7 +880,7 @@ private fun BaridiMobSmsSuggestionBanner(
                     )
                 }
 
-                // Quick switch button: allow filing under the other side (Income <-> Expense)
+                // Quick switch button: toggles Income <-> Expense so user can pick reason/source for either
                 Box(
                     modifier = Modifier
                         .weight(0.95f)
@@ -808,7 +888,7 @@ private fun BaridiMobSmsSuggestionBanner(
                         .clip(RoundedCornerShape(11.dp))
                         .background(oppositeAccent.copy(alpha = 0.12f))
                         .border(0.8.dp, oppositeAccent.copy(alpha = 0.3f), RoundedCornerShape(11.dp))
-                        .clickable { onAccept(latest.id, oppositeType) }
+                        .clickable { selectedType = oppositeType }
                         .padding(vertical = 8.dp, horizontal = 6.dp)
                         .testTag("sms_suggestion_switch_btn"),
                     contentAlignment = Alignment.Center

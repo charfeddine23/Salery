@@ -949,7 +949,7 @@ private fun CcpAccountCard(
                             .background(if (account.isPinned) AmberNeon else brandPrimary)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    VaultAppEmblemBadge(preset = preset, size = 40.dp, isArabic = isArabic)
+                    VaultAppEmblemBadge(preset = preset, size = 40.dp, isArabic = isArabic, showBorder = false)
                     Spacer(modifier = Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {

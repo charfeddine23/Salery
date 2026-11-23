@@ -159,20 +159,49 @@ object AlgPosteSmsAnalyzer {
     }
 
     private val debitKeywords = listOf(
-        "retrait", "retire", "retiré", "débit", "debit", "débité", "debite",
-        "prélevé", "preleve", "prélèvement", "prelevement", "paiement", "payement",
-        "tpe", "achat", "virement emis", "virement émis", "virement effectue",
-        "virement effectué", "émis", "emis", "frais", "commission", "facture",
-        "cotisation", "transfert sortant", "taxe", "taxes", "timbre", "agios", "redevance",
-        "سحب", "خصم", "حسم", "اقتطاع", "دفع", "شراء", "صرف", "تحويل صادر", "فاتورة",
-        "ضريبة", "ضرائب", "رسوم", "رسم", "عمولة"
+        "retrait", "retire", "retiré", "retirer", "gab", "dab",
+        "débit", "debit", "débité", "debite",
+        "prélevé", "preleve", "prélèvement", "prelevement",
+        "paiement", "payement", "e-paiement", "epaiement", "tpe", "achat",
+        "virement emis", "virement émis", "virement effectue", "virement effectué",
+        "transfert effectue", "transfert effectué", "transfert envoye", "transfert envoyé",
+        "transfert sortant", "émis", "emis", "envoyé", "envoye",
+        "frais", "commission", "facture", "cotisation", "taxe", "taxes", "timbre", "agios", "redevance",
+        "recharge", "flexy", "baridipay", "mobipost",
+        "withdrawn", "withdrawal", "debited", "payment", "purchase", "deducted", "sent to",
+        "سحب", "مسحوب", "سحبت", "تم سحب", "خصم", "تم خصم", "حسم", "اقتطاع", "تم اقتطاع",
+        "دفع", "تم دفع", "تسديد", "سداد", "شراء", "صرف", "تحويل صادر", "تحويل إلى", "تحويل الى",
+        "إرسال", "ارسال", "فاتورة", "ضريبة", "ضرائب", "رسوم", "رسم", "عمولة", "شحن", "تعبئة", "فليكسي"
+    )
+
+    private val outgoingTransferPhrases = listOf(
+        "vers le compte", "vers rip", "vers ccp", "vers compte", "vers carte",
+        "من حسابكم إلى", "من حسابك إلى", "من حسابكم الى", "من حسابك الى"
+    )
+
+    private val versWordRegex = Regex("""\bvers\b""", RegexOption.IGNORE_CASE)
+    private val arabicOutgoingTransferRegex = Regex(
+        """(?:تم\s+)?تحويل[^\r\n]{0,60}(?:إلى|الى|لحساب)(?!\s*(?:حسابك|حسابكم))"""
+    )
+    private val frenchOutgoingTransferRegex = Regex(
+        """\b(?:virement|transfert|transfer)\b[^\r\n]{0,60}\b(?:vers|to)\b(?!\s*votre)"""
     )
 
     private val creditKeywords = listOf(
-        "crédit", "credit", "crédité", "credite", "versement", "alimentation",
-        "virement reçu", "virement recu", "reçu", "recu", "salaire", "dépôt",
-        "depot", "remboursement", "virement entrant", "bonification", "encaissement",
-        "إيداع", "تحويل وارد", "وارد", "استلام", "راتب", "مستحقات", "إضافة", "رصيد مضاف", "صب"
+        "crédit", "credit", "crédité", "credite", "credited",
+        "versement", "alimentation", "alimenté", "alimente",
+        "virement reçu", "virement recu", "transfert reçu", "transfert recu",
+        "reçu", "recu", "received", "incoming", "en votre faveur", "vers votre compte",
+        "salaire", "paie", "salary", "pension", "allocation", "bourse",
+        "dépôt", "depot", "deposit", "deposited",
+        "remboursement", "refund", "virement entrant", "transfert entrant",
+        "bonification", "encaissement", "top up", "top-up",
+        "إيداع", "ايداع", "تم إيداع", "تم ايداع", "تحويل وارد", "وارد",
+        "استلام", "تم استلام", "راتب", "أجرة", "منحة", "معاش", "تقاعد", "مستحقات",
+        "إضافة", "تمت إضافة", "تمت اضافة", "رصيد مضاف", "مبلغ مضاف",
+        "دخول رصيد", "دخول", "إلى حسابكم", "الى حسابكم", "إلى حسابك", "الى حسابك",
+        "في حسابكم", "في حسابك",
+        "استرجاع", "تعويض", "تغذية الحساب", "صب"
     )
 
     private val explicitFeeKeywords = listOf(
@@ -463,8 +492,14 @@ object AlgPosteSmsAnalyzer {
             return null
         }
 
-        val hasDebitKeyword = debitKeywords.any { lowerBody.contains(it) }
         val hasCreditKeyword = creditKeywords.any { lowerBody.contains(it) }
+        val hasDebitKeyword = debitKeywords.any { lowerBody.contains(it) } ||
+            outgoingTransferPhrases.any { lowerBody.contains(it) } ||
+            (!hasCreditKeyword && (
+                versWordRegex.containsMatchIn(lowerBody) ||
+                    arabicOutgoingTransferRegex.containsMatchIn(lowerBody) ||
+                    frenchOutgoingTransferRegex.containsMatchIn(lowerBody)
+                ))
         val balanceMatch = extractBalanceMatchFromBody(normalizedBody)
         val prevBalanceMatch = extractPreviousBalanceMatchFromBody(normalizedBody)
         val extractedBalance = balanceMatch?.amount
@@ -495,7 +530,7 @@ object AlgPosteSmsAnalyzer {
             break
         }
 
-        // 2. Fallback to unsigned currency amount (e.g. "300.00 DA") + transaction keyword direction
+        // 2. Fallback to unsigned currency amount (e.g. "300.00 DA") + transaction keyword or balance delta direction
         if (pickedAmount == null) {
             val currencyMatches = currencyAmountRegex.findAll(normalizedBody).toList()
             for (match in currencyMatches) {
@@ -526,6 +561,14 @@ object AlgPosteSmsAnalyzer {
                     pickedIsExpense = firstDebitIdx <= firstCreditIdx
                     matchedReason = if (pickedIsExpense == true) "DEBIT_KEYWORD" else "CREDIT_KEYWORD"
                     break
+                } else if (balanceMatch != null && prevBalanceMatch != null) {
+                    val balDelta = balanceMatch.amount - prevBalanceMatch.amount
+                    if (kotlin.math.abs(balDelta) >= 0.01) {
+                        pickedAmount = parsed
+                        pickedIsExpense = balDelta < 0.0
+                        matchedReason = if (pickedIsExpense == true) "BALANCE_DECREASE" else "BALANCE_INCREASE"
+                        break
+                    }
                 }
             }
         }
@@ -548,6 +591,7 @@ object AlgPosteSmsAnalyzer {
             receivedAtMillis = timestampMillis,
             matchedReason = matchedReason,
             extractedBalance = extractedBalance,
+            previousBalance = prevBalanceMatch?.amount,
             hasExplicitFeeKeyword = isExplicitFee
         )
     }
@@ -763,10 +807,37 @@ object AlgPosteSmsAnalyzer {
             } else null
 
             if (explicitParsed != null) {
+                var resolved = explicitParsed
+                if (refPrevBalance != null &&
+                    explicitParsed.matchedReason != "SIGN_MINUS" &&
+                    explicitParsed.matchedReason != "SIGN_PLUS"
+                ) {
+                    val balDelta = roundTwoDecimals(curr.balance - refPrevBalance)
+                    val shouldBeExpense = when {
+                        balDelta < -0.01 && kotlin.math.abs(balDelta) >= explicitParsed.amount * 0.5 -> true
+                        balDelta > 0.01 && balDelta >= explicitParsed.amount * 0.5 -> false
+                        else -> explicitParsed.isExpense
+                    }
+                    if (shouldBeExpense != explicitParsed.isExpense) {
+                        val lower = normalizeArabicDigits(curr.rawBody).lowercase(Locale.US)
+                        val (cat, titleAr, titleEn) = classifyMetadata(
+                            lower,
+                            shouldBeExpense,
+                            explicitParsed.hasExplicitFeeKeyword
+                        )
+                        resolved = explicitParsed.copy(
+                            isExpense = shouldBeExpense,
+                            suggestedCategory = cat,
+                            suggestedTitleAr = titleAr,
+                            suggestedTitleEn = titleEn,
+                            matchedReason = if (shouldBeExpense) "BALANCE_DECREASE" else "BALANCE_INCREASE"
+                        )
+                    }
+                }
                 results.add(
-                    explicitParsed.copy(
-                        extractedBalance = explicitParsed.extractedBalance ?: curr.balance,
-                        previousBalance = refPrevBalance
+                    resolved.copy(
+                        extractedBalance = resolved.extractedBalance ?: curr.balance,
+                        previousBalance = refPrevBalance ?: resolved.previousBalance
                     )
                 )
                 continue
@@ -776,25 +847,30 @@ object AlgPosteSmsAnalyzer {
                 val delta = roundTwoDecimals(curr.balance - refPrevBalance)
                 if (kotlin.math.abs(delta) >= 0.01) {
                     val isOutcome = delta < 0.0
-                    val absDelta = roundTwoDecimals(kotlin.math.abs(delta))
+                    val candidateAmt = if (curr.rawBody.isNotBlank()) {
+                        extractUnsignedCandidateAmountOutsideBalances(normalizeArabicDigits(curr.rawBody))
+                    } else null
+                    val finalAmt = candidateAmt?.takeIf { it > 0.0 } ?: roundTwoDecimals(kotlin.math.abs(delta))
+                    val lower = normalizeArabicDigits(curr.rawBody).lowercase(Locale.US)
+                    val (cat, titleAr, titleEn) = if (candidateAmt != null) {
+                        classifyMetadata(lower, isOutcome, curr.hasExplicitFeeKeyword)
+                    } else {
+                        Triple(
+                            if (isOutcome) "other" else "transfer",
+                            if (isOutcome) "سحب / عملية خصم في بريد الجزائر" else "دخول رصيد / إيداع في بريد الجزائر",
+                            if (isOutcome) "Alg Post Balance Withdrawal" else "Alg Post Balance Income"
+                        )
+                    }
                     results.add(
                         SmsSuggestionEntry(
-                            id = "bal_op_${curr.id}",
+                            id = if (candidateAmt != null) curr.id else "bal_op_${curr.id}",
                             sender = curr.sender.ifBlank { "ALG Poste" },
                             rawBody = curr.rawBody,
-                            amount = absDelta,
+                            amount = finalAmt,
                             isExpense = isOutcome,
-                            suggestedCategory = if (isOutcome) "other" else "transfer",
-                            suggestedTitleAr = if (isOutcome) {
-                                "عملية خصم في رصيد بريد الجزائر"
-                            } else {
-                                "عملية إيداع / دخل في رصيد بريد الجزائر"
-                            },
-                            suggestedTitleEn = if (isOutcome) {
-                                "Alg Post Balance Outcome"
-                            } else {
-                                "Alg Post Balance Income"
-                            },
+                            suggestedCategory = cat,
+                            suggestedTitleAr = titleAr,
+                            suggestedTitleEn = titleEn,
                             receivedAtMillis = curr.timestampMillis,
                             matchedReason = if (isOutcome) "BALANCE_DELTA_EXPENSE" else "BALANCE_DELTA_INCOME",
                             extractedBalance = curr.balance,
@@ -979,33 +1055,59 @@ object AlgPosteSmsAnalyzer {
 
                 lowerBody.contains("mobilis") || lowerBody.contains("djezzy") ||
                     lowerBody.contains("ooredoo") || lowerBody.contains("internet") ||
-                    lowerBody.contains("recharge") || lowerBody.contains("فليكسي") ->
-                    Triple("internet", "شحن واتصالات (بريد الجزائر)", "Telecom & Recharge (ALG Poste)")
+                    lowerBody.contains("idoom") || lowerBody.contains("recharge") ||
+                    lowerBody.contains("flexy") || lowerBody.contains("فليكسي") ||
+                    lowerBody.contains("شحن") || lowerBody.contains("تعبئة") ->
+                    Triple("internet", "شحن واتصالات (بريدي موب)", "Telecom & Recharge (BaridiMob)")
 
                 lowerBody.contains("sonelgaz") || lowerBody.contains("ade") ||
-                    lowerBody.contains("facture") || lowerBody.contains("فاتورة") ->
-                    Triple("utilities", "دفع فاتورة (بريد الجزائر)", "Bill Payment (ALG Poste)")
+                    lowerBody.contains("seaal") || lowerBody.contains("facture") ||
+                    lowerBody.contains("فاتورة") || lowerBody.contains("تسديد") ->
+                    Triple("utilities", "دفع فاتورة (بريدي موب)", "Bill Payment (BaridiMob)")
 
                 lowerBody.contains("tpe") || lowerBody.contains("achat") ||
-                    lowerBody.contains("paiement") || lowerBody.contains("شراء") ->
-                    Triple("shopping", "دفع / شراء (بريد الجزائر)", "Card Payment (ALG Poste)")
+                    lowerBody.contains("paiement") || lowerBody.contains("payement") ||
+                    lowerBody.contains("baridipay") || lowerBody.contains("شراء") ->
+                    Triple("shopping", "دفع / شراء بالبطاقة (بريدي موب)", "Card Payment (BaridiMob)")
 
-                lowerBody.contains("retrait") || lowerBody.contains("gab") || lowerBody.contains("سحب") ->
-                    Triple("other", "سحب نقدي (بريد الجزائر)", "ATM Withdrawal (ALG Poste)")
+                lowerBody.contains("retrait") || lowerBody.contains("gab") ||
+                    lowerBody.contains("dab") || lowerBody.contains("سحب") ->
+                    Triple("other", "سحب نقدي (بريدي موب)", "ATM Withdrawal (BaridiMob)")
+
+                lowerBody.contains("virement") || lowerBody.contains("transfert") ||
+                    lowerBody.contains("تحويل") ->
+                    Triple("other", "تحويل صادر (بريدي موب)", "Outgoing Transfer (BaridiMob)")
 
                 else ->
                     Triple("other", "سحب / مصروف بريدي موب", "BaridiMob Expense (ALG Poste)")
             }
         } else {
             when {
-                lowerBody.contains("salaire") || lowerBody.contains("راتب") || lowerBody.contains("paie") ->
-                    Triple("salary", "راتب وارد (بريد الجزائر)", "Salary Credit (ALG Poste)")
+                lowerBody.contains("salaire") || lowerBody.contains("راتب") ||
+                    lowerBody.contains("paie") || lowerBody.contains("salary") ||
+                    lowerBody.contains("أجرة") ->
+                    Triple("salary", "راتب وارد (بريدي موب)", "Salary Credit (BaridiMob)")
 
-                lowerBody.contains("virement") || lowerBody.contains("تحويل") ->
-                    Triple("transfer", "تحويل مالي وارد (بريد الجزائر)", "Incoming Transfer (ALG Poste)")
+                lowerBody.contains("bourse") || lowerBody.contains("allocation") ||
+                    lowerBody.contains("pension") || lowerBody.contains("منحة") ||
+                    lowerBody.contains("معاش") || lowerBody.contains("تقاعد") ->
+                    Triple("other_income", "منحة / معاش وارد (بريدي موب)", "Grant / Pension Income (BaridiMob)")
+
+                lowerBody.contains("remboursement") || lowerBody.contains("refund") ||
+                    lowerBody.contains("استرجاع") || lowerBody.contains("تعويض") ->
+                    Triple("other_income", "استرجاع مبلغ (بريدي موب)", "Refund Received (BaridiMob)")
+
+                lowerBody.contains("virement") || lowerBody.contains("transfert") ||
+                    lowerBody.contains("تحويل") ->
+                    Triple("transfer", "تحويل مالي وارد (بريدي موب)", "Incoming Transfer (BaridiMob)")
+
+                lowerBody.contains("versement") || lowerBody.contains("dépôt") ||
+                    lowerBody.contains("depot") || lowerBody.contains("إيداع") ||
+                    lowerBody.contains("ايداع") || lowerBody.contains("صب") ->
+                    Triple("transfer", "إيداع في الحساب (بريدي موب)", "Account Deposit (BaridiMob)")
 
                 else ->
-                    Triple("other_income", "إيداع / دخل بريدي موب", "BaridiMob Income (ALG Poste)")
+                    Triple("other_income", "دخول رصيد / دخل بريدي موب", "BaridiMob Income (ALG Poste)")
             }
         }
     }

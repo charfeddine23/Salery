@@ -244,7 +244,8 @@ private fun rememberInstalledAppIconBitmap(packageNames: List<String>): ImageBit
 fun VaultAppEmblemBadge(
     preset: VaultAppPreset,
     size: Dp = 44.dp,
-    isArabic: Boolean = false
+    isArabic: Boolean = false,
+    showBorder: Boolean = true
 ) {
     val installedIcon = rememberInstalledAppIconBitmap(preset.packageNames)
     val primary by animateColorAsState(preset.primaryColor(), tween(380), label = "emblem_p")
@@ -252,8 +253,10 @@ fun VaultAppEmblemBadge(
     val accent by animateColorAsState(preset.accentColor(), tween(380), label = "emblem_a")
     val cornerRadius = (size.value * 0.30f).coerceIn(6f, 15f).dp
 
-    Box(
-        modifier = Modifier
+    val baseModifier = if (installedIcon != null && !showBorder) {
+        Modifier.size(size)
+    } else {
+        Modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
             .background(
@@ -263,20 +266,30 @@ fun VaultAppEmblemBadge(
                     authenticBrandBackgroundBrush(preset.id, primary, secondary)
                 }
             )
-            .border(
-                width = if (size < 28.dp) 0.9.dp else 1.2.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.72f), accent.copy(alpha = 0.75f))
-                ),
-                shape = RoundedCornerShape(cornerRadius)
-            ),
+            .let { mod ->
+                if (showBorder) {
+                    mod.border(
+                        width = if (size < 28.dp) 0.9.dp else 1.2.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(Color.White.copy(alpha = 0.72f), accent.copy(alpha = 0.75f))
+                        ),
+                        shape = RoundedCornerShape(cornerRadius)
+                    )
+                } else {
+                    mod
+                }
+            }
+    }
+
+    Box(
+        modifier = baseModifier,
         contentAlignment = Alignment.Center
     ) {
         if (installedIcon != null) {
             Image(
                 bitmap = installedIcon,
                 contentDescription = if (isArabic) preset.nameAr else preset.nameEn,
-                contentScale = ContentScale.Crop,
+                contentScale = if (showBorder) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
             )
         } else {

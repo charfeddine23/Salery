@@ -99,6 +99,13 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
+private data class CryptoDialogTarget(
+    val holdingId: String?,
+    val symbol: String,
+    val initialQuantity: Double,
+    val initialNote: String
+)
+
 @Composable
 fun BinanceWalletScreen(
     userSettings: UserSettings,
@@ -108,8 +115,8 @@ fun BinanceWalletScreen(
     priceError: String?,
     onBackClick: () -> Unit,
     onRefreshPrices: (force: Boolean) -> Unit,
-    onUpsertHolding: (symbol: String, quantity: Double) -> Unit,
-    onRemoveHolding: (symbol: String) -> Unit,
+    onSaveHolding: (holdingId: String?, symbol: String, quantity: Double, note: String) -> Unit,
+    onRemoveHolding: (holdingId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBackClick() }
@@ -130,13 +137,28 @@ fun BinanceWalletScreen(
         onRefreshPrices(false)
     }
 
-    var dialogCoinSymbol by remember { mutableStateOf<String?>(null) }
+    var dialogTarget by remember { mutableStateOf<CryptoDialogTarget?>(null) }
     var refreshSpins by remember { mutableIntStateOf(0) }
     val spinAngle by animateFloatAsState(
         targetValue = refreshSpins * 360f,
         animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing),
         label = "binance_price_refresh_spin"
     )
+
+    val symbolCounts = remember(holdings) {
+        holdings.groupingBy { it.symbol.uppercase(Locale.US) }.eachCount()
+    }
+    val holdingPositionsById = remember(holdings) {
+        val counters = HashMap<String, Int>()
+        val result = HashMap<String, Int>(holdings.size)
+        for (item in holdings) {
+            val sym = item.symbol.uppercase(Locale.US)
+            val next = (counters[sym] ?: 0) + 1
+            counters[sym] = next
+            result[item.id] = next
+        }
+        result
+    }
 
     val totalPortfolioUsd = remember(holdings, prices) {
         BinanceCryptoCatalog.calculatePortfolioTotalUsd(holdings, prices)
@@ -171,26 +193,24 @@ fun BinanceWalletScreen(
             .replace("CryptoCompare", "كريبتو كومبير", ignoreCase = true)
     }
 
-    if (dialogCoinSymbol != null) {
-        val currentSymbol = dialogCoinSymbol!!
-        val existingQty = holdings.firstOrNull {
-            it.symbol.equals(currentSymbol, ignoreCase = true)
-        }?.quantity ?: 0.0
-
+    dialogTarget?.let { target ->
         AddOrEditCryptoDialog(
-            initialSymbol = currentSymbol,
-            initialQuantity = existingQty,
+            isEditing = target.holdingId != null,
+            initialSymbol = target.symbol,
+            initialQuantity = target.initialQuantity,
+            initialNote = target.initialNote,
+            existingSymbolCounts = symbolCounts,
             prices = prices,
             secureScreenshots = userSettings.screenshotProtectionEnabled,
-            onDismiss = { dialogCoinSymbol = null },
-            onSave = { sym, qty ->
-                onUpsertHolding(sym, qty)
-                dialogCoinSymbol = null
+            onDismiss = { dialogTarget = null },
+            onSave = { sym, qty, note ->
+                onSaveHolding(target.holdingId, sym, qty, note)
+                dialogTarget = null
             },
-            onDelete = if (existingQty > 0.0) {
+            onDelete = if (target.holdingId != null) {
                 {
-                    onRemoveHolding(currentSymbol)
-                    dialogCoinSymbol = null
+                    onRemoveHolding(target.holdingId)
+                    dialogTarget = null
                 }
             } else null
         )
@@ -217,7 +237,14 @@ fun BinanceWalletScreen(
                     .minimumInteractiveComponentSize()
                     .clip(RoundedCornerShape(14.dp))
                     .background(binanceGold)
-                    .clickable { dialogCoinSymbol = "XRP" }
+                    .clickable {
+                        dialogTarget = CryptoDialogTarget(
+                            holdingId = null,
+                            symbol = "XRP",
+                            initialQuantity = 0.0,
+                            initialNote = ""
+                        )
+                    }
                     .testTag("binance_add_crypto_btn")
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -455,17 +482,24 @@ fun BinanceWalletScreen(
             ) {
                 items(BinanceCryptoCatalog.majorAssets, key = { it.symbol }) { asset ->
                     val livePrice = prices[asset.symbol]
-                    val owned = holdings.firstOrNull { it.symbol.equals(asset.symbol, ignoreCase = true) }
+                    val ownedCount = symbolCounts[asset.symbol.uppercase(Locale.US)] ?: 0
                     val accent = Color(asset.accentHex)
                     GlassCard(
                         modifier = Modifier
                             .width(136.dp)
                             .testTag("crypto_quick_card_${asset.symbol.lowercase()}"),
                         backgroundColor = colors.glassCard,
-                        borderColor = if (owned != null) accent.copy(alpha = 0.7f) else colors.glassBorderSubtle,
+                        borderColor = if (ownedCount > 0) accent.copy(alpha = 0.7f) else colors.glassBorderSubtle,
                         shape = RoundedCornerShape(16.dp),
                         cornerRadius = 16.dp,
-                        onClick = { dialogCoinSymbol = asset.symbol }
+                        onClick = {
+                            dialogTarget = CryptoDialogTarget(
+                                holdingId = null,
+                                symbol = asset.symbol,
+                                initialQuantity = 0.0,
+                                initialNote = ""
+                            )
+                        }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
@@ -493,18 +527,18 @@ fun BinanceWalletScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(
-                                            if (owned != null) EmeraldNeon.copy(alpha = 0.16f)
+                                            if (ownedCount > 0) EmeraldNeon.copy(alpha = 0.16f)
                                             else binanceGold.copy(alpha = 0.16f)
                                         )
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (owned != null) {
-                                            if (isArabic) "مملوكة" else "HELD"
+                                        text = if (ownedCount > 0) {
+                                            if (isArabic) "×$ownedCount +" else "×$ownedCount +"
                                         } else {
                                             "+"
                                         },
-                                        color = if (owned != null) EmeraldNeon else binanceGold,
+                                        color = if (ownedCount > 0) EmeraldNeon else binanceGold,
                                         fontSize = typo.caption,
                                         fontWeight = FontWeight.ExtraBold,
                                         maxLines = 1
@@ -613,7 +647,14 @@ fun BinanceWalletScreen(
                             backgroundColor = colors.glassCard,
                             borderColor = binanceGold.copy(alpha = 0.35f),
                             shape = RoundedCornerShape(18.dp),
-                            onClick = { dialogCoinSymbol = "XRP" }
+                            onClick = {
+                                dialogTarget = CryptoDialogTarget(
+                                    holdingId = null,
+                                    symbol = "XRP",
+                                    initialQuantity = 0.0,
+                                    initialNote = ""
+                                )
+                            }
                         ) {
                             Column(
                                 modifier = Modifier
@@ -656,7 +697,7 @@ fun BinanceWalletScreen(
                         }
                     }
                 } else {
-                    items(holdings, key = { it.symbol }) { holding ->
+                    items(holdings, key = { it.id }) { holding ->
                         val spec = BinanceCryptoCatalog.findBySymbol(holding.symbol)
                             ?: CryptoAssetSpec(
                                 symbol = holding.symbol,
@@ -671,15 +712,24 @@ fun BinanceWalletScreen(
                         val totalUsd = holding.quantity * unitPrice
                         val changePct = marketPrice?.change24hPercent ?: 0.0
                         val accent = Color(spec.accentHex)
+                        val totalSameCoin = symbolCounts[holding.symbol.uppercase(Locale.US)] ?: 1
+                        val entryIndex = holdingPositionsById[holding.id] ?: 1
 
                         GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("crypto_holding_row_${spec.symbol.lowercase()}"),
+                                .testTag("crypto_holding_row_${spec.symbol.lowercase()}_${holding.id}"),
                             backgroundColor = colors.glassCard,
                             borderColor = accent.copy(alpha = 0.40f),
                             shape = RoundedCornerShape(18.dp),
-                            onClick = { dialogCoinSymbol = spec.symbol }
+                            onClick = {
+                                dialogTarget = CryptoDialogTarget(
+                                    holdingId = holding.id,
+                                    symbol = spec.symbol,
+                                    initialQuantity = holding.quantity,
+                                    initialNote = holding.note
+                                )
+                            }
                         ) {
                             Row(
                                 modifier = Modifier
@@ -710,14 +760,42 @@ fun BinanceWalletScreen(
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (isArabic) spec.nameAr else spec.nameEn,
-                                            color = colors.textPrimary,
-                                            fontSize = typo.body,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isArabic) spec.nameAr else spec.nameEn,
+                                                color = colors.textPrimary,
+                                                fontSize = typo.body,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            val tagLabel = when {
+                                                holding.note.isNotBlank() -> holding.note
+                                                totalSameCoin > 1 -> "#$entryIndex"
+                                                else -> null
+                                            }
+                                            if (tagLabel != null) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(accent.copy(alpha = 0.16f))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = tagLabel,
+                                                        color = accent,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = if (isStealth) {
@@ -777,8 +855,15 @@ fun BinanceWalletScreen(
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         IconButton(
-                                            onClick = { dialogCoinSymbol = spec.symbol },
-                                            modifier = Modifier.size(40.dp)
+                                            onClick = {
+                                                dialogTarget = CryptoDialogTarget(
+                                                    holdingId = holding.id,
+                                                    symbol = spec.symbol,
+                                                    initialQuantity = holding.quantity,
+                                                    initialNote = holding.note
+                                                )
+                                            },
+                                            modifier = Modifier.size(48.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Edit,
@@ -788,10 +873,10 @@ fun BinanceWalletScreen(
                                             )
                                         }
                                         IconButton(
-                                            onClick = { onRemoveHolding(spec.symbol) },
+                                            onClick = { onRemoveHolding(holding.id) },
                                             modifier = Modifier
-                                                .size(40.dp)
-                                                .testTag("delete_crypto_${spec.symbol.lowercase()}")
+                                                .size(48.dp)
+                                                .testTag("delete_crypto_${spec.symbol.lowercase()}_${holding.id}")
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
@@ -854,7 +939,14 @@ fun BinanceWalletScreen(
                     backgroundColor = colors.glassCard,
                     borderColor = binanceGold.copy(alpha = 0.35f),
                     shape = RoundedCornerShape(18.dp),
-                    onClick = { dialogCoinSymbol = "XRP" }
+                    onClick = {
+                        dialogTarget = CryptoDialogTarget(
+                            holdingId = null,
+                            symbol = "XRP",
+                            initialQuantity = 0.0,
+                            initialNote = ""
+                        )
+                    }
                 ) {
                     Column(
                         modifier = Modifier
@@ -897,7 +989,7 @@ fun BinanceWalletScreen(
                 }
             }
         } else {
-            items(holdings, key = { it.symbol }) { holding ->
+            items(holdings, key = { it.id }) { holding ->
                 val spec = BinanceCryptoCatalog.findBySymbol(holding.symbol)
                     ?: CryptoAssetSpec(
                         symbol = holding.symbol,
@@ -915,15 +1007,24 @@ fun BinanceWalletScreen(
                 val totalUsd = holding.quantity * unitPrice
                 val changePct = marketPrice?.change24hPercent ?: 0.0
                 val accent = Color(spec.accentHex)
+                val totalSameCoin = symbolCounts[holding.symbol.uppercase(Locale.US)] ?: 1
+                val entryIndex = holdingPositionsById[holding.id] ?: 1
 
                 GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("crypto_holding_row_${spec.symbol.lowercase()}"),
+                        .testTag("crypto_holding_row_${spec.symbol.lowercase()}_${holding.id}"),
                     backgroundColor = colors.glassCard,
                     borderColor = accent.copy(alpha = 0.40f),
                     shape = RoundedCornerShape(18.dp),
-                    onClick = { dialogCoinSymbol = spec.symbol }
+                    onClick = {
+                        dialogTarget = CryptoDialogTarget(
+                            holdingId = holding.id,
+                            symbol = spec.symbol,
+                            initialQuantity = holding.quantity,
+                            initialNote = holding.note
+                        )
+                    }
                 ) {
                     Row(
                         modifier = Modifier
@@ -955,15 +1056,41 @@ fun BinanceWalletScreen(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
                                         text = if (isArabic) spec.nameAr else spec.nameEn,
                                         color = colors.textPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
+                                    val tagLabel = when {
+                                        holding.note.isNotBlank() -> holding.note
+                                        totalSameCoin > 1 -> "#$entryIndex"
+                                        else -> null
+                                    }
+                                    if (tagLabel != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(accent.copy(alpha = 0.16f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = tagLabel,
+                                                color = accent,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
@@ -1027,8 +1154,15 @@ fun BinanceWalletScreen(
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
-                                    onClick = { dialogCoinSymbol = spec.symbol },
-                                    modifier = Modifier.size(36.dp)
+                                    onClick = {
+                                        dialogTarget = CryptoDialogTarget(
+                                            holdingId = holding.id,
+                                            symbol = spec.symbol,
+                                            initialQuantity = holding.quantity,
+                                            initialNote = holding.note
+                                        )
+                                    },
+                                    modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Edit,
@@ -1038,10 +1172,10 @@ fun BinanceWalletScreen(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { onRemoveHolding(spec.symbol) },
+                                    onClick = { onRemoveHolding(holding.id) },
                                     modifier = Modifier
-                                        .size(36.dp)
-                                        .testTag("delete_crypto_${spec.symbol.lowercase()}")
+                                        .size(48.dp)
+                                        .testTag("delete_crypto_${spec.symbol.lowercase()}_${holding.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
@@ -1066,12 +1200,15 @@ fun BinanceWalletScreen(
 
 @Composable
 private fun AddOrEditCryptoDialog(
+    isEditing: Boolean,
     initialSymbol: String,
     initialQuantity: Double,
+    initialNote: String,
+    existingSymbolCounts: Map<String, Int>,
     prices: Map<String, CryptoMarketPriceEntry>,
     secureScreenshots: Boolean,
     onDismiss: () -> Unit,
-    onSave: (symbol: String, quantity: Double) -> Unit,
+    onSave: (symbol: String, quantity: Double, note: String) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     val strings = AppStrings.current
@@ -1080,19 +1217,17 @@ private fun AddOrEditCryptoDialog(
     val binanceGold = Color(0xFFF0B90B)
 
     var selectedSymbol by remember { mutableStateOf(initialSymbol.uppercase(Locale.US)) }
-    var quantityText by remember(selectedSymbol) {
+    var quantityText by remember(initialSymbol, initialQuantity) {
         mutableStateOf(
-            if (selectedSymbol.equals(initialSymbol, ignoreCase = true) && initialQuantity > 0.0) {
-                formatCryptoQuantityInput(initialQuantity)
-            } else {
-                ""
-            }
+            if (initialQuantity > 0.0) formatCryptoQuantityInput(initialQuantity) else ""
         )
     }
+    var noteText by remember(initialNote) { mutableStateOf(initialNote) }
 
     val selectedAsset = remember(selectedSymbol) {
         BinanceCryptoCatalog.findBySymbol(selectedSymbol) ?: BinanceCryptoCatalog.majorAssets.first()
     }
+    val existingCountForSelected = existingSymbolCounts[selectedAsset.symbol.uppercase(Locale.US)] ?: 0
     val unitPrice = remember(selectedSymbol, prices) {
         if (selectedAsset.isStablecoin) prices[selectedAsset.symbol]?.priceUsd ?: 1.0
         else prices[selectedAsset.symbol]?.priceUsd ?: 0.0
@@ -1130,13 +1265,21 @@ private fun AddOrEditCryptoDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isArabic) "إضافة / تعديل عملة رقمية" else "Add / Edit Cryptocurrency",
+                            text = if (isEditing) {
+                                if (isArabic) "تعديل رصيد العملة" else "Edit Crypto Holding"
+                            } else {
+                                if (isArabic) "إضافة عملة رقمية" else "Add Cryptocurrency"
+                            },
                             color = colors.textPrimary,
                             fontSize = 16.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isArabic) "أدخل الكمية المملوكة للريبل أو أي عملة رقمية أساسية" else "Enter your coin balance (XRP & major assets)",
+                            text = if (isArabic) {
+                                "أدخل الكمية ويمكنك إضافة نفس العملة أكثر من مرة في محافظ مختلفة"
+                            } else {
+                                "Enter coin quantity — you can add the same coin multiple times"
+                            },
                             color = colors.textMuted,
                             fontSize = 11.sp
                         )
@@ -1216,7 +1359,21 @@ private fun AddOrEditCryptoDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                if (!isEditing && existingCountForSelected > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isArabic) {
+                            "يوجد حالياً $existingCountForSelected رصيد مسجل لـ ${selectedAsset.nameAr} — سيتم حفظ هذا الرصيد كإضافة مستقلة"
+                        } else {
+                            "You already have $existingCountForSelected ${selectedAsset.symbol} entry — this will be added separately"
+                        },
+                        color = binanceGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Current Market Rate Pill
                 Row(
@@ -1313,6 +1470,53 @@ private fun AddOrEditCryptoDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Optional label / wallet tag input (helpful when adding same coin multiple times)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.glassCard)
+                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = if (isArabic) "التسمية / المحفظة (اختياري)" else "Label / Wallet (Optional)",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (noteText.isEmpty()) {
+                            Text(
+                                text = if (isArabic) "مثال: بينانس Spot، تخزين بارد، ادخار..." else "e.g. Binance Spot, Cold Wallet, Savings...",
+                                color = colors.textMuted.copy(alpha = 0.55f),
+                                fontSize = 13.sp
+                            )
+                        }
+                        BasicTextField(
+                            value = noteText,
+                            onValueChange = { raw ->
+                                if (raw.length <= 36) {
+                                    noteText = raw
+                                }
+                            },
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("crypto_note_input"),
+                            cursorBrush = SolidColor(binanceGold)
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Row(
@@ -1336,7 +1540,7 @@ private fun AddOrEditCryptoDialog(
                             .testTag("save_crypto_holding_btn"),
                         onClick = {
                             if (isValidQty) {
-                                onSave(selectedAsset.symbol, parsedQuantity!!)
+                                onSave(selectedAsset.symbol, parsedQuantity!!, noteText.trim())
                             }
                         }
                     )

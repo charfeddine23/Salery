@@ -1897,4 +1897,107 @@ class ExampleUnitTest {
     assertEquals("Install Update", EnglishStrings.installUpdateButton)
     assertEquals("Maybe Later", EnglishStrings.updateMaybeLater)
   }
+
+  @Test
+  fun cryptoHoldings_allowsDuplicateSameSymbolEntriesAndSumsTotal() {
+    val entries = listOf(
+      com.example.crypto.CryptoHoldingEntry(
+        id = "lot_1",
+        symbol = "XRP",
+        quantity = 300.0,
+        note = "Spot"
+      ),
+      com.example.crypto.CryptoHoldingEntry(
+        id = "lot_2",
+        symbol = "XRP",
+        quantity = 200.0,
+        note = "Cold Wallet"
+      ),
+      com.example.crypto.CryptoHoldingEntry(
+        id = "lot_3",
+        symbol = "BTC",
+        quantity = 0.1,
+        note = "Long Term"
+      )
+    )
+    val encoded = com.example.crypto.BinanceCryptoCodec.encodeHoldings(entries)
+    val decoded = com.example.crypto.BinanceCryptoCodec.parseHoldings(encoded)
+    assertEquals(3, decoded.size)
+    assertEquals(2, decoded.count { it.symbol == "XRP" })
+    assertEquals("Cold Wallet", decoded.first { it.id == "lot_2" }.note)
+
+    val prices = mapOf(
+      "XRP" to com.example.crypto.CryptoMarketPriceEntry("XRP", 2.0),
+      "BTC" to com.example.crypto.CryptoMarketPriceEntry("BTC", 80000.0)
+    )
+    // (300 + 200) * 2.0 + 0.1 * 80000 = 1000 + 8000 = 9000.0 USD
+    val totalUsd = com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(decoded, prices)
+    assertEquals(9000.0, totalUsd, 0.01)
+  }
+
+  @Test
+  fun shakeDetector_requiresStrongDeliberateDoublePeakShake() {
+    var shakeTriggers = 0
+    val detector = com.example.sensor.ShakeDetector { shakeTriggers += 1 }
+    val g = android.hardware.SensorManager.GRAVITY_EARTH
+
+    // Light 2.5G bump should NOT trigger or count as shake peak
+    org.junit.Assert.assertFalse(detector.processAccelerationSample(2.5f * g, 0f, 0f, 1_000L))
+    org.junit.Assert.assertFalse(detector.processAccelerationSample(2.5f * g, 0f, 0f, 1_250L))
+
+    // Single strong 3.6G bump alone should NOT trigger
+    org.junit.Assert.assertFalse(detector.processAccelerationSample(3.6f * g, 0f, 0f, 2_000L))
+
+    // Second peak too soon (< 120ms) should be ignored as same impulse
+    org.junit.Assert.assertFalse(detector.processAccelerationSample(3.6f * g, 0f, 0f, 2_060L))
+
+    // Second distinct strong peak >= 120ms later within window DOES trigger!
+    assertTrue(detector.processAccelerationSample(3.6f * g, 0f, 0f, 2_250L))
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_smartClassifiesWithdrawalsAsExpenseAndCreditsAsIncome() {
+    // Outgoing BaridiMob transfer without minus sign -> Expense
+    val outgoing = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "BaridiMob",
+      body = "Transfert de 2 500,00 DA vers le compte RIP 00799999001234567890. Nouveau solde: 17 500,00 DA",
+      timestampMillis = 1_763_200_000_000L
+    )
+    assertNotNull(outgoing)
+    assertTrue(outgoing!!.isExpense)
+    assertEquals(TransactionType.EXPENSE, outgoing.transactionType)
+    assertEquals(2500.0, outgoing.amount, 0.01)
+
+    // Arabic outgoing transfer -> Expense
+    val outgoingAr = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "تم تحويل 4000 دج إلى الحساب البريدي. الرصيد الجديد: 13500 دج",
+      timestampMillis = 1_763_200_060_000L
+    )
+    assertNotNull(outgoingAr)
+    assertTrue(outgoingAr!!.isExpense)
+    assertEquals(4000.0, outgoingAr.amount, 0.01)
+
+    // Arabic incoming balance -> Income
+    val incomingAr = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "ALG Poste",
+      body = "تم إيداع 12 000 دج في حسابكم البريدي. الرصيد الجديد: 25 500 دج",
+      timestampMillis = 1_763_200_120_000L
+    )
+    assertNotNull(incomingAr)
+    org.junit.Assert.assertFalse(incomingAr!!.isExpense)
+    assertEquals(TransactionType.INCOME, incomingAr.transactionType)
+    assertEquals(12000.0, incomingAr.amount, 0.01)
+
+    // Unsigned message with inline old/new balance increase -> Income
+    val inferredIncome = com.example.sms.AlgPosteSmsAnalyzer.parseSms(
+      sender = "BaridiMob",
+      body = "Opération BaridiMob 5 000,00 DA. Ancien solde: 10 000,00 DA. Nouveau solde: 15 000,00 DA",
+      timestampMillis = 1_763_200_180_000L
+    )
+    assertNotNull(inferredIncome)
+    org.junit.Assert.assertFalse(inferredIncome!!.isExpense)
+    assertEquals(TransactionType.INCOME, inferredIncome.transactionType)
+    assertEquals(5000.0, inferredIncome.amount, 0.01)
+  }
 }

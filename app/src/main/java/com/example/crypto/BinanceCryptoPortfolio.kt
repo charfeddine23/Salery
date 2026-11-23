@@ -28,7 +28,9 @@ data class CryptoAssetSpec(
 data class CryptoHoldingEntry(
     val symbol: String,
     val quantity: Double,
-    val updatedAtMillis: Long = System.currentTimeMillis()
+    val updatedAtMillis: Long = System.currentTimeMillis(),
+    val id: String = "",
+    val note: String = ""
 )
 
 @JsonClass(generateAdapter = true)
@@ -305,9 +307,21 @@ object BinanceCryptoCodec {
     fun parseHoldings(json: String): List<CryptoHoldingEntry> {
         if (json.isBlank()) return emptyList()
         return try {
+            val seenIds = HashSet<String>()
             holdingsAdapter.fromJson(json)
                 ?.filter { it.symbol.isNotBlank() && it.quantity > 0.0 }
-                ?.distinctBy { it.symbol.uppercase(Locale.US) }
+                ?.mapIndexed { index, entry ->
+                    val cleanSymbol = entry.symbol.trim().uppercase(Locale.US)
+                    val baseId = entry.id.trim().ifBlank {
+                        "legacy_${cleanSymbol}_${entry.updatedAtMillis}_$index"
+                    }
+                    val uniqueId = if (seenIds.add(baseId)) baseId else "${baseId}_$index"
+                    entry.copy(
+                        id = uniqueId,
+                        symbol = cleanSymbol,
+                        note = entry.note.trim()
+                    )
+                }
                 ?: emptyList()
         } catch (_: Throwable) {
             emptyList()
@@ -316,10 +330,21 @@ object BinanceCryptoCodec {
 
     fun encodeHoldings(list: List<CryptoHoldingEntry>): String {
         return try {
+            val seenIds = HashSet<String>()
             val cleaned = list
                 .filter { it.symbol.isNotBlank() && it.quantity > 0.0 }
-                .map { it.copy(symbol = it.symbol.trim().uppercase(Locale.US)) }
-                .distinctBy { it.symbol }
+                .mapIndexed { index, item ->
+                    val cleanSymbol = item.symbol.trim().uppercase(Locale.US)
+                    val baseId = item.id.trim().ifBlank {
+                        java.util.UUID.randomUUID().toString()
+                    }
+                    val uniqueId = if (seenIds.add(baseId)) baseId else "${baseId}_$index"
+                    item.copy(
+                        id = uniqueId,
+                        symbol = cleanSymbol,
+                        note = item.note.trim()
+                    )
+                }
             holdingsAdapter.toJson(cleaned)
         } catch (_: Throwable) {
             "[]"

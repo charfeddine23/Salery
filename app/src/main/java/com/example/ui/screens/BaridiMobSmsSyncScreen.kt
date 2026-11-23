@@ -117,7 +117,7 @@ fun BaridiMobSmsSyncScreen(
     onSkipOldSmsAndStartFresh: () -> Unit = {},
     onResetBaselineAndRescan: () -> Unit = {},
     onAnalyzeManualSms: (sender: String, body: String) -> Unit,
-    onAcceptSuggestion: (suggestionId: String, overrideType: TransactionType?) -> Unit,
+    onAcceptSuggestion: (suggestionId: String, overrideType: TransactionType?, customCategory: String?, customReasonOrSource: String?) -> Unit,
     onDismissSuggestion: (suggestionId: String) -> Unit,
     onClearAllSuggestions: () -> Unit,
     onRecordTaxAsExpense: (anomalyId: String) -> Unit = {},
@@ -617,7 +617,9 @@ fun BaridiMobSmsSyncScreen(
                         SmsSuggestionCard(
                             suggestion = suggestion,
                             isArabic = isArabic,
-                            onAccept = { chosenType -> onAcceptSuggestion(suggestion.id, chosenType) },
+                            onAccept = { chosenType, chosenCategory, chosenReason ->
+                                onAcceptSuggestion(suggestion.id, chosenType, chosenCategory, chosenReason)
+                            },
                             onDismiss = { onDismissSuggestion(suggestion.id) }
                         )
                     }
@@ -757,13 +759,26 @@ private fun SectionActionHeader(
 fun SmsSuggestionCard(
     suggestion: SmsSuggestionEntry,
     isArabic: Boolean,
-    onAccept: (TransactionType) -> Unit,
+    onAccept: (TransactionType, String?, String?) -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
     var selectedType by remember(suggestion.id, suggestion.isExpense) {
         mutableStateOf(suggestion.transactionType)
     }
+    var selectedPresetKey by remember(suggestion.id, selectedType) {
+        mutableStateOf(
+            com.example.ui.components.SmsSuggestionReasonCatalog.defaultPresetKey(
+                isExpense = selectedType == TransactionType.EXPENSE,
+                suggestedCategory = if (selectedType == suggestion.transactionType) {
+                    suggestion.suggestedCategory
+                } else {
+                    if (selectedType == TransactionType.EXPENSE) "other" else "transfer"
+                }
+            )
+        )
+    }
+    var customReasonText by remember(suggestion.id, selectedType) { mutableStateOf("") }
     var showRawText by remember(suggestion.id) { mutableStateOf(false) }
 
     val isExpense = selectedType == TransactionType.EXPENSE
@@ -808,13 +823,45 @@ fun SmsSuggestionCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = "${suggestion.sender} • ${isolateLtr(formatDate(suggestion.receivedAtMillis, isArabic))}",
-                        color = colors.textMuted,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(accent.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (selectedType == suggestion.transactionType) {
+                                    if (isExpense) {
+                                        if (isArabic) "تصنيف تلقائي: مصروف (سحب)" else "Auto: Expense (Withdrawal)"
+                                    } else {
+                                        if (isArabic) "تصنيف تلقائي: دخل (رصيد وارد)" else "Auto: Income (Credit)"
+                                    }
+                                } else {
+                                    if (isExpense) {
+                                        if (isArabic) "كمصروف" else "As Expense"
+                                    } else {
+                                        if (isArabic) "كدخل" else "As Income"
+                                    }
+                                },
+                                color = accent,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                        Text(
+                            text = "${suggestion.sender} • ${isolateLtr(formatDate(suggestion.receivedAtMillis, isArabic))}",
+                            color = colors.textMuted,
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
@@ -885,6 +932,20 @@ fun SmsSuggestionCard(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            com.example.ui.components.SmsSuggestionReasonPicker(
+                isExpense = isExpense,
+                isArabic = isArabic,
+                selectedPresetKey = selectedPresetKey,
+                onSelectPreset = { preset ->
+                    selectedPresetKey = if (selectedPresetKey == preset.key) null else preset.key
+                },
+                customReasonText = customReasonText,
+                onCustomReasonTextChange = { customReasonText = it },
+                accent = accent
+            )
+
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(
@@ -936,7 +997,20 @@ fun SmsSuggestionCard(
                         .clip(RoundedCornerShape(12.dp))
                         .background(accent.copy(alpha = 0.20f))
                         .border(0.9.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-                        .clickable { onAccept(selectedType) }
+                        .clickable {
+                            val chosenPreset = com.example.ui.components.SmsSuggestionReasonCatalog.findPreset(
+                                isExpense = isExpense,
+                                key = selectedPresetKey
+                            )
+                            val resolvedReason = customReasonText.trim().ifBlank {
+                                chosenPreset?.localizedLabel(isArabic)
+                            }
+                            onAccept(
+                                selectedType,
+                                chosenPreset?.categoryId,
+                                resolvedReason
+                            )
+                        }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                         .testTag("accept_sms_suggestion_button"),
                     contentAlignment = Alignment.Center

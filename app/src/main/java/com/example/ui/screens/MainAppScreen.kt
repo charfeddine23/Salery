@@ -647,8 +647,13 @@ fun MainAppScreen(
                                     onAnalyzeManualSms = { sender, body ->
                                         viewModel.analyzeManualSmsSample(sender, body)
                                     },
-                                    onAcceptSuggestion = { id, overrideType ->
-                                        viewModel.acceptSmsSuggestion(id, overrideType)
+                                    onAcceptSuggestion = { id, overrideType, customCategory, customReasonOrSource ->
+                                        viewModel.acceptSmsSuggestion(
+                                            suggestionId = id,
+                                            overrideType = overrideType,
+                                            customCategory = customCategory,
+                                            customReasonOrSource = customReasonOrSource
+                                        )
                                     },
                                     onDismissSuggestion = { id ->
                                         viewModel.dismissSmsSuggestion(id)
@@ -721,8 +726,13 @@ fun MainAppScreen(
                                     onDeleteTransaction = { viewModel.deleteTransaction(it) },
                                     onLockToVault = { viewModel.lockToVault(it) },
                                     onUnlockFromVault = { viewModel.unlockFromVault(it) },
-                                    onAcceptSmsSuggestion = { id, overrideType ->
-                                        viewModel.acceptSmsSuggestion(id, overrideType)
+                                    onAcceptSmsSuggestion = { id, overrideType, customCategory, customReasonOrSource ->
+                                        viewModel.acceptSmsSuggestion(
+                                            suggestionId = id,
+                                            overrideType = overrideType,
+                                            customCategory = customCategory,
+                                            customReasonOrSource = customReasonOrSource
+                                        )
                                     },
                                     onDismissSmsSuggestion = { id ->
                                         viewModel.dismissSmsSuggestion(id)
@@ -755,11 +765,11 @@ fun MainAppScreen(
                                     onRefreshPrices = { force ->
                                         viewModel.refreshCryptoMarketPrices(force = force, showFeedback = force)
                                     },
-                                    onUpsertHolding = { symbol, qty ->
-                                        viewModel.upsertCryptoHolding(symbol, qty)
+                                    onSaveHolding = { holdingId, symbol, qty, note ->
+                                        viewModel.saveCryptoHolding(holdingId, symbol, qty, note)
                                     },
-                                    onRemoveHolding = { symbol ->
-                                        viewModel.removeCryptoHolding(symbol)
+                                    onRemoveHolding = { holdingId ->
+                                        viewModel.removeCryptoHoldingById(holdingId)
                                     }
                                 )
                                 "income" -> IncomeScreen(
