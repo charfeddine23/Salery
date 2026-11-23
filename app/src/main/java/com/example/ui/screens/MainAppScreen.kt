@@ -1109,7 +1109,7 @@ fun MainTopAppBar(
                         size = navButtonSize,
                         cornerRadius = dimens.cornerRadiusMd,
                         padding = 6.dp,
-                        containerAlpha = 0.05f
+                        containerAlpha = 1f
                     )
                     Box(
                         modifier = Modifier
@@ -1752,8 +1752,8 @@ fun LiquidGlassBottomBar(
                 .widthIn(max = 580.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
-            borderColor = colors.glassBorder.copy(alpha = 0.14f),
-            backgroundColor = colors.glassCard.copy(alpha = 0.05f),
+            borderColor = colors.glassBorder,
+            backgroundColor = colors.glassCard.copy(alpha = 1f),
             breathingGlow = false
         ) {
             Row(
@@ -1777,6 +1777,9 @@ fun LiquidGlassBottomBar(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (isSelected) activeColor.copy(alpha = 0.14f) else Color.Transparent
+                            )
                             .clickable { onRouteSelect(item.route) }
                             .padding(horizontal = 2.dp, vertical = 6.dp)
                             .testTag("card_tab_${item.route}"),
@@ -1906,8 +1909,8 @@ fun HubBottomBar(
                     .fillMaxWidth()
                     .testTag("hub_bottom_banner"),
                 shape = RoundedCornerShape(26.dp),
-                borderColor = colors.glassBorder.copy(alpha = 0.14f),
-                backgroundColor = colors.glassCard.copy(alpha = 0.05f),
+                borderColor = colors.glassBorder,
+                backgroundColor = colors.glassCard.copy(alpha = 1f),
                 breathingGlow = false
             ) {
                 dockRow(Modifier)
