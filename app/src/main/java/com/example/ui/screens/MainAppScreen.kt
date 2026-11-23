@@ -88,6 +88,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -497,7 +498,7 @@ fun MainAppScreen(
                                             onUpdateIndicatorClick = { viewModel.openUpdateDialogFromIndicator() },
                                             isStealthMode = userSettings.stealthMode,
                                             onToggleStealth = { viewModel.toggleStealthMode() },
-                                            frameless = currentRoute == "cards"
+                                            frameless = false
                                         )
                                     },
                                     bottomBar = {
@@ -511,7 +512,7 @@ fun MainAppScreen(
                                                     HubBottomBar(
                                                         currentRoute = currentRoute,
                                                         onRouteSelect = { currentRoute = it },
-                                                        frameless = currentRoute == "cards"
+                                                        frameless = false
                                                     )
                                                 }
                                                 androidx.compose.animation.AnimatedVisibility(
@@ -529,19 +530,11 @@ fun MainAppScreen(
                                         }
                                     }
                                 ) { innerPadding ->
-                                    val isCardsHub = currentRoute == "cards"
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .then(
-                                                if (isCardsHub) {
-                                                    Modifier
-                                                } else {
-                                                    Modifier
-                                                        .padding(innerPadding)
-                                                        .adaptiveContentWidth(dimens.contentMaxWidth)
-                                                }
-                                            ),
+                                            .padding(innerPadding)
+                                            .adaptiveContentWidth(dimens.contentMaxWidth),
                                         contentAlignment = Alignment.TopCenter
                                     ) {
                             when (currentRoute) {
@@ -564,8 +557,7 @@ fun MainAppScreen(
                                     },
                                     onRemoveThirdCard = {
                                         viewModel.removeThirdCard()
-                                    },
-                                    outerContentPadding = innerPadding
+                                    }
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
@@ -1080,7 +1072,7 @@ fun MainTopAppBar(
                         .size(navButtonSize)
                         .testTag("top_bar_back_button"),
                     shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                    backgroundColor = colors.glassCard,
+                    backgroundColor = colors.glassCard.copy(alpha = 1f),
                     breathingGlow = false,
                     onClick = onBackClick
                 ) {
@@ -1215,7 +1207,11 @@ fun MainTopAppBar(
                 GlassCard(
                     modifier = Modifier.size(navButtonSize),
                     shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                    backgroundColor = if (isStealthMode) colors.primaryNeon.copy(alpha = 0.22f) else colors.glassCard,
+                    backgroundColor = if (isStealthMode) {
+                        colors.primaryNeon.copy(alpha = 0.22f).compositeOver(colors.glassCard.copy(alpha = 1f))
+                    } else {
+                        colors.glassCard.copy(alpha = 1f)
+                    },
                     breathingGlow = false,
                     onClick = onToggleStealth
                 ) {
