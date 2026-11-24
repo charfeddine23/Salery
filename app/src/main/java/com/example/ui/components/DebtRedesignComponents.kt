@@ -891,6 +891,7 @@ fun ModernDebtCard(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onPartialPayClick: () -> Unit,
+    onAddMoreClick: () -> Unit = {},
     onPayNow: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -1283,92 +1284,170 @@ fun ModernDebtCard(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Practical Action Row (48.dp touch height)
-                    Row(
+                    // Practical Action Rows (48.dp touch height)
+                    val typeAccentColor = if (debt.type == DebtType.OWED_BY_ME) {
+                        DebtColors.payable(isDark)
+                    } else {
+                        DebtColors.receivable(isDark)
+                    }
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (!debt.isPaid) {
-                            CompactDebtActionPill(
-                                text = strings.makePartialPayment,
-                                icon = Icons.Default.Payments,
-                                accentColor = statusColor,
-                                isDark = isDark,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("debt_partial_pay_${debt.id}"),
-                                onClick = onPartialPayClick
-                            )
-                            CompactDebtActionPill(
-                                text = strings.executePayment,
-                                icon = Icons.Default.Payment,
-                                accentColor = DebtColors.settled(isDark),
-                                isDark = isDark,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("debt_settle_${debt.id}"),
-                                onClick = onPayNow
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(DebtColors.settledContainer(isDark))
-                                    .border(1.dp, DebtColors.settledBorder(isDark), RoundedCornerShape(14.dp)),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                CompactDebtActionPill(
+                                    text = strings.makePartialPayment,
+                                    icon = Icons.Default.Payments,
+                                    accentColor = statusColor,
+                                    isDark = isDark,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("debt_partial_pay_${debt.id}"),
+                                    onClick = onPartialPayClick
+                                )
+                                CompactDebtActionPill(
+                                    text = strings.executePayment,
+                                    icon = Icons.Default.Payment,
+                                    accentColor = DebtColors.settled(isDark),
+                                    isDark = isDark,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("debt_settle_${debt.id}"),
+                                    onClick = onPayNow
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CompactDebtActionPill(
+                                    text = if (isArabic) "إضافة على الدين" else "Add to Debt",
+                                    icon = Icons.Default.Add,
+                                    accentColor = colors.primaryNeon,
+                                    isDark = isDark,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("debt_add_more_${debt.id}"),
+                                    onClick = onAddMoreClick
+                                )
+
+                                IconButton(
+                                    onClick = onEdit,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.glassSurface)
+                                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                                        .testTag("debt_edit_${debt.id}")
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = DebtColors.settled(isDark),
-                                        modifier = Modifier.size(16.dp)
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = strings.editDebt,
+                                        tint = colors.primaryNeon,
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = strings.fullySettled,
-                                        color = DebtColors.settled(isDark),
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold
+                                }
+
+                                IconButton(
+                                    onClick = onDelete,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(DebtColors.dangerContainer(isDark))
+                                        .border(1.dp, DebtColors.dangerBorder(isDark), RoundedCornerShape(14.dp))
+                                        .testTag("debt_delete_${debt.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = strings.delete,
+                                        tint = DebtColors.danger(isDark),
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
-                        }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(DebtColors.settledContainer(isDark))
+                                        .border(1.dp, DebtColors.settledBorder(isDark), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = DebtColors.settled(isDark),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = strings.fullySettled,
+                                            color = DebtColors.settled(isDark),
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
 
-                        IconButton(
-                            onClick = onEdit,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.glassSurface)
-                                .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
-                                .testTag("debt_edit_${debt.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = strings.editDebt,
-                                tint = colors.primaryNeon,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                                IconButton(
+                                    onClick = onEdit,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.glassSurface)
+                                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(14.dp))
+                                        .testTag("debt_edit_${debt.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = strings.editDebt,
+                                        tint = colors.primaryNeon,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
 
-                        IconButton(
-                            onClick = onDelete,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(DebtColors.dangerContainer(isDark))
-                                .border(1.dp, DebtColors.dangerBorder(isDark), RoundedCornerShape(14.dp))
-                                .testTag("debt_delete_${debt.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = strings.delete,
-                                tint = DebtColors.danger(isDark),
-                                modifier = Modifier.size(18.dp)
+                                IconButton(
+                                    onClick = onDelete,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(DebtColors.dangerContainer(isDark))
+                                        .border(1.dp, DebtColors.dangerBorder(isDark), RoundedCornerShape(14.dp))
+                                        .testTag("debt_delete_${debt.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = strings.delete,
+                                        tint = DebtColors.danger(isDark),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            CompactDebtActionPill(
+                                text = if (isArabic) "إضافة دين جديد عليه" else "Add New Debt on This",
+                                icon = Icons.Default.Add,
+                                accentColor = typeAccentColor,
+                                isDark = isDark,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("debt_add_more_${debt.id}"),
+                                onClick = onAddMoreClick
                             )
                         }
                     }

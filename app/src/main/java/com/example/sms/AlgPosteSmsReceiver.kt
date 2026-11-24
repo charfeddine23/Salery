@@ -56,6 +56,8 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         val existingIds = existingPending.map { it.id }.toSet()
         val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(currentSettings.smsBalanceHistoryJson)
         val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
+        val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(currentSettings.detectedFailedSmsTransactionsJson)
+        val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(currentSettings.dismissedFailedSmsIdsJson)
 
         val newlyDetected = mutableListOf<SmsSuggestionEntry>()
         val newlyExtractedSnapshots = mutableListOf<SmsBalanceSnapshot>()
@@ -142,21 +144,38 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                     .distinctBy { it.id }
                     .sortedBy { it.timestampMillis }
                 val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                val existingFailedIds = existingFailed.map { it.id }.toSet()
+                val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                    snapshots = mergedHistory,
+                    existingEntries = existingFailed,
+                    dismissedIds = dismissedFailedIds
+                )
+                val newSnapIds = newlyExtractedSnapshots.map { it.id }.toSet()
+                val newlyCaughtFailed = failedAnalysis.failedTransactions.firstOrNull {
+                    it.recoverySmsId in newSnapIds && it.id !in existingFailedIds
+                }
+
                 val existingTaxIds = existingTaxes.map { it.id }.toSet()
                 val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                     snapshots = mergedHistory,
-                    existingAnomalies = existingTaxes
+                    existingAnomalies = existingTaxes,
+                    failedAnalysis = failedAnalysis
                 )
-                val newSnapIds = newlyExtractedSnapshots.map { it.id }.toSet()
                 val newlyCaughtTax = updatedTaxes.firstOrNull {
                     it.smsId in newSnapIds && it.id !in existingTaxIds
                 }
 
-                // Suggest any new explicit SMS operation OR balance change (Income / Outcome) in Alg Post Balance
+                // Suggest any new explicit SMS operation OR balance change (Income / Outcome) in Alg Post Balance,
+                // strictly excluding failed debits, explicit reversals, and silent-recovery balance jumps.
+                val excludedIds = failedAnalysis.excludedSuggestionSmsIds
+                val filteredNewlyDetected = newlyDetected.filterNot {
+                    it.id.removePrefix("bal_op_") in excludedIds
+                }
                 val newDeltaSuggestions = if (currentSettings.baridiMobSmsSyncEnabled && allowSuggestionForTimestamp) {
                     AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
                         snapshots = mergedHistory,
-                        minTimestampMillis = baselineMillis
+                        minTimestampMillis = baselineMillis,
+                        excludedSmsIds = excludedIds
                     ).filter { op ->
                         val baseKey = op.id.removePrefix("bal_op_")
                         (baseKey in newSnapIds) &&
@@ -170,7 +189,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                     emptyList()
                 }
 
-                val combinedNewSuggestions = (newlyDetected + newDeltaSuggestions)
+                val combinedNewSuggestions = (filteredNewlyDetected + newDeltaSuggestions)
                     .distinctBy { it.id.removePrefix("bal_op_") }
 
                 val pendingToAdd = if (currentSettings.baridiMobSmsSyncEnabled) {
@@ -178,7 +197,10 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 } else {
                     emptyList()
                 }
-                val updatedList = (pendingToAdd + existingPending)
+                val cleanedExistingPending = existingPending.filterNot {
+                    it.id.removePrefix("bal_op_") in excludedIds
+                }
+                val updatedList = (pendingToAdd + cleanedExistingPending)
                     .distinctBy { it.id.removePrefix("bal_op_") }
 
                 prefsManager.updateSettings {
@@ -186,6 +208,7 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                         pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedList),
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
                         latestSmsBalanceAmount = latestSnap?.balance ?: it.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: it.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: it.latestSmsBalanceRawSnippet
@@ -216,6 +239,13 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                         context = appContext,
                         caughtTax = newlyCaughtTax,
                         wasTaxAutoLogged = wasCaughtTaxAutoLogged,
+                        isArabic = isAr
+                    )
+                }
+                if (newlyCaughtFailed != null) {
+                    postFailedTransactionNotification(
+                        context = appContext,
+                        failedEntry = newlyCaughtFailed,
                         isArabic = isAr
                     )
                 }
@@ -338,6 +368,45 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 .build()
 
             nm.notify(caughtTax.id.hashCode(), notification)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun postFailedTransactionNotification(
+        context: Context,
+        failedEntry: SmsFailedTransactionEntry,
+        isArabic: Boolean
+    ) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return
+            val channelId = ensureSmsChannel(nm, isArabic)
+
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                failedEntry.id.hashCode(),
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val formattedAmt = formatDzdAmount(failedEntry.recoveredAmount, if (isArabic) "دج" else "DA")
+            val title = if (isArabic) "التعاملات الفاشلة: استرجاع $formattedAmt ✓"
+            else "Failed Transaction Reversed: +$formattedAmt ✓"
+            val summary = if (isArabic) failedEntry.explanationAr else failedEntry.explanationEn
+
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(summary)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            nm.notify(failedEntry.id.hashCode(), notification)
         } catch (_: Throwable) {
         }
     }

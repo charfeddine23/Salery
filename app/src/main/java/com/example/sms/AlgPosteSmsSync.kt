@@ -69,6 +69,39 @@ data class SmsTaxAnomalyEntry(
     val isRecordedAsExpense: Boolean = false
 )
 
+@JsonClass(generateAdapter = true)
+data class SmsFailedTransactionEntry(
+    val id: String = "",
+    val failedDebitSmsId: String = "",
+    val recoverySmsId: String = "",
+    val debitAmount: Double = 0.0,
+    val recoveredAmount: Double = 0.0,
+    val unrefundedFeeAmount: Double = 0.0,
+    val balanceBeforeDebit: Double = 0.0,
+    val balanceAfterDebit: Double = 0.0,
+    val expectedBalanceBeforeRecovery: Double = 0.0,
+    val actualBalanceAtRecovery: Double = 0.0,
+    val debitTimestampMillis: Long = 0L,
+    val recoveredTimestampMillis: Long = System.currentTimeMillis(),
+    val detectionKind: String = "SILENT_BALANCE_JUMP", // SILENT_BALANCE_JUMP, EXPLICIT_REFUND_REVERSAL, FAILED_WITH_FEE_KEPT, MULTI_DEBIT_RECOVERY, EXPLICIT_FAILED_NO_DEDUCTION, EXPLICIT_REVERSAL_UNLINKED
+    val confidencePercent: Int = 99,
+    val titleAr: String = "",
+    val titleEn: String = "",
+    val explanationAr: String = "",
+    val explanationEn: String = "",
+    val debitRawBody: String = "",
+    val recoveryRawBody: String = "",
+    val isResolved: Boolean = false
+)
+
+data class FailedTransactionAnalysisResult(
+    val failedTransactions: List<SmsFailedTransactionEntry> = emptyList(),
+    val excludedSuggestionSmsIds: Set<String> = emptySet(),
+    val voidedTaxDebitSmsIds: Set<String> = emptySet(),
+    val reversalRecoverySmsIds: Set<String> = emptySet(),
+    val adjustedPrevBalanceByRecoverySmsId: Map<String, Double> = emptyMap()
+)
+
 data class RawAlgPosteSms(
     val sender: String,
     val body: String,
@@ -208,6 +241,28 @@ object AlgPosteSmsAnalyzer {
         "frais", "taxe", "taxes", "commission", "timbre", "tva", "agios",
         "cotisation", "redevance", "prelevement fiscal", "prélèvement fiscal",
         "ضريبة", "الضريبة", "ضرائب", "رسم", "رسوم", "عمولة", "اقتطاع", "طابع", "مصاريف بنكية"
+    )
+
+    private val explicitFailureKeywords = listOf(
+        "echoue", "échoué", "echouee", "échouée", "echec", "échec",
+        "non abouti", "non aboutie", "refuse", "refusé", "refusee", "refusée",
+        "rejet", "rejete", "rejeté", "rejetee", "rejetée",
+        "failed", "declined", "unsuccessful", "rejected",
+        "فشل", "فشلت", "فاشل", "فاشلة", "مرفوض", "مرفوضة", "رفض",
+        "لم تتم", "غير مكتمل", "غير مكتملة", "تعذر"
+    )
+
+    private val strongReversalKeywords = listOf(
+        "annulation", "annule", "annulé", "annulee", "annulée",
+        "extourne", "extourné", "restitution", "restitue", "restitué",
+        "rejet", "rejete", "rejeté", "rejetee", "rejetée",
+        "reversed", "reversal", "cancelled", "canceled", "chargeback",
+        "إلغاء", "الغاء", "ملغاة", "ملغى", "ملغي", "رجوع", "إرجاع", "ارجاع"
+    )
+
+    private val softRefundKeywords = listOf(
+        "remboursement", "rembourse", "remboursé", "remboursee", "remboursée",
+        "refund", "refunded", "استرجاع", "تم استرجاع", "تعويض"
     )
 
     private val balanceContextMarkers = listOf(
@@ -492,7 +547,9 @@ object AlgPosteSmsAnalyzer {
             return null
         }
 
-        val hasCreditKeyword = creditKeywords.any { lowerBody.contains(it) }
+        val hasStrongReversalKeyword = strongReversalKeywords.any { lowerBody.contains(it) }
+        val hasSoftRefundKeyword = softRefundKeywords.any { lowerBody.contains(it) }
+        val hasCreditKeyword = creditKeywords.any { lowerBody.contains(it) } || hasStrongReversalKeyword
         val hasDebitKeyword = debitKeywords.any { lowerBody.contains(it) } ||
             outgoingTransferPhrases.any { lowerBody.contains(it) } ||
             (!hasCreditKeyword && (
@@ -525,8 +582,14 @@ object AlgPosteSmsAnalyzer {
             if (!hasCurrency && parsed in 1900.0..2100.0 && !hasDebitKeyword && !hasCreditKeyword) continue
 
             pickedAmount = parsed
-            pickedIsExpense = (sign == "-")
-            matchedReason = if (sign == "-") "SIGN_MINUS" else "SIGN_PLUS"
+            val balRose = balanceMatch != null && prevBalanceMatch != null &&
+                (balanceMatch.amount - prevBalanceMatch.amount) > 0.01
+            pickedIsExpense = if ((hasStrongReversalKeyword || hasSoftRefundKeyword) && balRose) {
+                false
+            } else {
+                (sign == "-")
+            }
+            matchedReason = if (pickedIsExpense == true) "SIGN_MINUS" else "SIGN_PLUS"
             break
         }
 
@@ -540,7 +603,14 @@ object AlgPosteSmsAnalyzer {
                 val parsed = parseFlexibleAmount(match.groupValues[1]) ?: continue
                 if (parsed <= 0.0) continue
 
-                if (hasDebitKeyword && !hasCreditKeyword) {
+                if (hasStrongReversalKeyword || hasSoftRefundKeyword) {
+                    val balDropped = balanceMatch != null && prevBalanceMatch != null &&
+                        (balanceMatch.amount - prevBalanceMatch.amount) < -0.01
+                    pickedAmount = parsed
+                    pickedIsExpense = balDropped
+                    matchedReason = if (balDropped) "DEBIT_KEYWORD" else "REVERSAL_CREDIT"
+                    break
+                } else if (hasDebitKeyword && !hasCreditKeyword) {
                     pickedAmount = parsed
                     pickedIsExpense = true
                     matchedReason = "DEBIT_KEYWORD"
@@ -596,6 +666,545 @@ object AlgPosteSmsAnalyzer {
         )
     }
 
+    private const val MAX_FAILED_RECOVERY_WINDOW_MILLIS = 60L * 24L * 60L * 60L * 1000L
+    private const val MAX_FEE_VARIANCE_ON_RECOVERY_DZD = 100.0
+
+    private data class PendingDebitCandidate(
+        val smsId: String,
+        val principalAmount: Double,
+        val totalDrop: Double,
+        val keptFee: Double,
+        val balanceBefore: Double,
+        val balanceAfter: Double,
+        val timestampMillis: Long,
+        val rawBody: String
+    )
+
+    private data class EffectiveSnapshotOp(
+        val hasTx: Boolean,
+        val txAmount: Double,
+        val isExpense: Boolean
+    )
+
+    private fun resolveEffectiveOperation(
+        curr: SmsBalanceSnapshot,
+        referencePrevBalance: Double?
+    ): EffectiveSnapshotOp {
+        var effectiveHasTx = curr.hasTransaction && curr.transactionAmount > 0.0
+        var effectiveTxAmount = curr.transactionAmount
+        var effectiveIsExpense = curr.isExpense
+
+        if (!effectiveHasTx && referencePrevBalance != null && curr.rawBody.isNotBlank()) {
+            val candidateAmt = extractUnsignedCandidateAmountOutsideBalances(normalizeArabicDigits(curr.rawBody))
+            if (candidateAmt != null && candidateAmt > 0.0) {
+                val debitExpected = roundTwoDecimals(referencePrevBalance - candidateAmt)
+                val creditExpected = roundTwoDecimals(referencePrevBalance + candidateAmt)
+                val debitDiscrepancy = roundTwoDecimals(debitExpected - curr.balance)
+                val creditDiscrepancy = roundTwoDecimals(creditExpected - curr.balance)
+
+                val debitFits = curr.balance <= referencePrevBalance + 0.01 &&
+                    debitDiscrepancy >= -0.01 &&
+                    debitDiscrepancy <= maxOf(1000.0, candidateAmt * 0.35)
+                val creditFits = curr.balance >= referencePrevBalance - 0.01 &&
+                    creditDiscrepancy >= -0.01 &&
+                    creditDiscrepancy <= maxOf(1000.0, candidateAmt * 0.35)
+
+                if (debitFits || creditFits) {
+                    effectiveHasTx = true
+                    effectiveTxAmount = candidateAmt
+                    effectiveIsExpense = if (debitFits && !creditFits) true
+                    else if (creditFits && !debitFits) false
+                    else curr.balance <= referencePrevBalance
+                }
+            }
+        }
+        return EffectiveSnapshotOp(effectiveHasTx, effectiveTxAmount, effectiveIsExpense)
+    }
+
+    /**
+     * High-precision Failed / Ghost Transaction ("التعاملات الفاشلة") detector.
+     *
+     * Catches:
+     * 1. Silent Reversals: A debit SMS reduces the balance, the operation fails silently, and a later SMS
+     *    reveals an unexplained positive balance jump matching that debit (principal or principal + fee),
+     *    or matching the sum of 2 recent failed debits.
+     * 2. Explicit Refund / Cancellation / Rejection SMS: A subsequent SMS with cancellation/refund keywords
+     *    returns the debited funds (paired with the original failed debit).
+     * 3. Explicit Immediate Failures: SMS stating an operation failed/rejected with zero net balance deduction.
+     *
+     * Also returns exclusion sets so phantom debits, explicit refunds, and balance-only recovery jumps
+     * are excluded from pending Expense/Income suggestions, while genuine subsequent transactions on the
+     * recovery SMS are preserved and fee calculations remain accurate.
+     */
+    fun analyzeFailedTransactions(
+        snapshots: List<SmsBalanceSnapshot>,
+        existingEntries: List<SmsFailedTransactionEntry> = emptyList(),
+        dismissedIds: Set<String> = emptySet()
+    ): FailedTransactionAnalysisResult {
+        if (snapshots.isEmpty()) {
+            val kept = existingEntries.filterNot { it.id in dismissedIds }
+            return FailedTransactionAnalysisResult(failedTransactions = kept)
+        }
+
+        val ordered = snapshots
+            .distinctBy { it.id }
+            .sortedWith(compareBy<SmsBalanceSnapshot> { it.timestampMillis }.thenBy { it.id })
+
+        val existingById = existingEntries.associateBy { it.id }
+        val openDebits = mutableListOf<PendingDebitCandidate>()
+        val resultMap = LinkedHashMap<String, SmsFailedTransactionEntry>()
+        val excludedSuggestionIds = mutableSetOf<String>()
+        val voidedTaxDebitSmsIds = mutableSetOf<String>()
+        val reversalRecoverySmsIds = mutableSetOf<String>()
+        val adjustedPrevByRecoverySmsId = mutableMapOf<String, Double>()
+
+        // Preserve previously detected entries whose underlying debit SMS is no longer in current window
+        val evaluatedSmsIds = ordered.map { it.id }.toSet()
+        existingEntries
+            .filter { entry ->
+                entry.id !in dismissedIds &&
+                    entry.failedDebitSmsId.isNotBlank() &&
+                    entry.failedDebitSmsId !in evaluatedSmsIds &&
+                    entry.recoverySmsId !in evaluatedSmsIds
+            }
+            .forEach { resultMap[it.id] = it }
+
+        for (i in ordered.indices) {
+            val curr = ordered[i]
+            val prev = if (i > 0) ordered[i - 1] else null
+            val inlinePrevBalance = if (prev == null && curr.rawBody.isNotBlank()) {
+                extractPreviousBalanceMatchFromBody(normalizeArabicDigits(curr.rawBody))?.amount
+            } else null
+            val refPrevBalance = prev?.balance ?: inlinePrevBalance
+
+            val lowerBody = normalizeArabicDigits(curr.rawBody).lowercase(Locale.US)
+            val hasExplicitFailure = explicitFailureKeywords.any { lowerBody.contains(it) }
+            val hasStrongReversal = strongReversalKeywords.any { lowerBody.contains(it) }
+            val hasSoftRefund = softRefundKeywords.any { lowerBody.contains(it) }
+            val isDuplicatePrev = prev != null &&
+                kotlin.math.abs(curr.balance - prev.balance) <= 0.01 &&
+                prev.hasTransaction == curr.hasTransaction &&
+                kotlin.math.abs(curr.transactionAmount - prev.transactionAmount) <= 0.01 &&
+                kotlin.math.abs(curr.timestampMillis - prev.timestampMillis) <= 180_000L
+
+            val op = resolveEffectiveOperation(curr, refPrevBalance)
+            var matchedAnyRecoveryHere = false
+            var consumedAsPureFailureOrReversal = false
+
+            // 1. Immediate explicit failed attempt where no funds were actually deducted
+            if ((hasExplicitFailure || (hasStrongReversal && op.isExpense)) &&
+                refPrevBalance != null &&
+                kotlin.math.abs(curr.balance - refPrevBalance) <= 0.05
+            ) {
+                val entryId = "fail_nodeduct_${curr.id}"
+                excludedSuggestionIds.add(curr.id)
+                consumedAsPureFailureOrReversal = true
+                if (entryId !in dismissedIds) {
+                    val amt = if (op.hasTx) op.txAmount else 0.0
+                    val amtText = if (amt > 0.0) formatCompactAmount(amt) else ""
+                    resultMap[entryId] = SmsFailedTransactionEntry(
+                        id = entryId,
+                        failedDebitSmsId = curr.id,
+                        recoverySmsId = curr.id,
+                        debitAmount = amt,
+                        recoveredAmount = amt,
+                        unrefundedFeeAmount = 0.0,
+                        balanceBeforeDebit = refPrevBalance,
+                        balanceAfterDebit = curr.balance,
+                        expectedBalanceBeforeRecovery = refPrevBalance,
+                        actualBalanceAtRecovery = curr.balance,
+                        debitTimestampMillis = curr.timestampMillis,
+                        recoveredTimestampMillis = curr.timestampMillis,
+                        detectionKind = "EXPLICIT_FAILED_NO_DEDUCTION",
+                        confidencePercent = 99,
+                        titleAr = if (amt > 0.0) "محاولة عملية فاشلة ($amtText دج)" else "محاولة عملية فاشلة",
+                        titleEn = if (amt > 0.0) "Failed Transaction ($amtText DA)" else "Failed Transaction",
+                        explanationAr = if (amt > 0.0) {
+                            "العملية بقيمة $amtText دج فشلت ولم يتم خصمها فعلياً من رصيدك (${formatCompactAmount(curr.balance)} دج) — تم استبعادها من المصاريف."
+                        } else {
+                            "تم رصد رسالة فشل عملية بدون أي خصم فعلي من الرصيد (${formatCompactAmount(curr.balance)} دج)."
+                        },
+                        explanationEn = if (amt > 0.0) {
+                            "Operation for $amtText DA failed with no actual deduction (Balance: ${formatCompactAmount(curr.balance)} DA) — excluded from expenses."
+                        } else {
+                            "Detected explicit failed operation with unchanged balance (${formatCompactAmount(curr.balance)} DA)."
+                        },
+                        debitRawBody = curr.rawBody,
+                        recoveryRawBody = curr.rawBody,
+                        isResolved = existingById[entryId]?.isResolved == true
+                    )
+                }
+            } else if ((hasStrongReversal || hasSoftRefund) && !isDuplicatePrev) {
+                // 2. Explicit Refund / Cancellation / Reversal SMS matching an earlier unreversed debit
+                val balGain = if (refPrevBalance != null) roundTwoDecimals(curr.balance - refPrevBalance) else 0.0
+                val explicitRecoveryAmt = when {
+                    balGain >= 1.0 -> balGain
+                    op.hasTx && !op.isExpense && op.txAmount >= 1.0 -> op.txAmount
+                    else -> 0.0
+                }
+                if (explicitRecoveryAmt >= 1.0) {
+                    val candidateIdx = findBestMatchingOpenDebitIndex(
+                        openDebits = openDebits,
+                        recoveredAmt = explicitRecoveryAmt,
+                        recoveryTimestampMillis = curr.timestampMillis,
+                        allowSmallFeeOffset = true
+                    )
+                    if (candidateIdx >= 0) {
+                        val matched = openDebits.removeAt(candidateIdx)
+                        matchedAnyRecoveryHere = true
+                        consumedAsPureFailureOrReversal = true
+                        excludedSuggestionIds.add(matched.smsId)
+                        excludedSuggestionIds.add(curr.id)
+                        reversalRecoverySmsIds.add(curr.id)
+                        val returnedFullDrop = kotlin.math.abs(explicitRecoveryAmt - matched.totalDrop) <= 0.50
+                        val unrefundedFee = if (returnedFullDrop) 0.0 else roundTwoDecimals((matched.totalDrop - explicitRecoveryAmt).coerceAtLeast(0.0))
+                        if (unrefundedFee < 0.01) {
+                            voidedTaxDebitSmsIds.add(matched.smsId)
+                        }
+
+                        val entryId = "fail_${matched.smsId}_${curr.id}"
+                        if (entryId !in dismissedIds) {
+                            resultMap[entryId] = buildPairedFailedEntry(
+                                id = entryId,
+                                debit = matched,
+                                recovery = curr,
+                                recoveredAmount = explicitRecoveryAmt,
+                                unrefundedFeeAmount = unrefundedFee,
+                                expectedBeforeRecovery = roundTwoDecimals((refPrevBalance ?: matched.balanceAfter) + explicitRecoveryAmt),
+                                detectionKind = "EXPLICIT_REFUND_REVERSAL",
+                                confidencePercent = 99,
+                                isResolved = existingById[entryId]?.isResolved == true
+                            )
+                        }
+                    } else if (hasStrongReversal) {
+                        consumedAsPureFailureOrReversal = true
+                        excludedSuggestionIds.add(curr.id)
+                        reversalRecoverySmsIds.add(curr.id)
+                        val entryId = "fail_rev_${curr.id}"
+                        if (entryId !in dismissedIds) {
+                            val balBefore = refPrevBalance ?: roundTwoDecimals(curr.balance - explicitRecoveryAmt)
+                            resultMap[entryId] = SmsFailedTransactionEntry(
+                                id = entryId,
+                                failedDebitSmsId = curr.id,
+                                recoverySmsId = curr.id,
+                                debitAmount = explicitRecoveryAmt,
+                                recoveredAmount = explicitRecoveryAmt,
+                                unrefundedFeeAmount = 0.0,
+                                balanceBeforeDebit = balBefore,
+                                balanceAfterDebit = balBefore,
+                                expectedBalanceBeforeRecovery = curr.balance,
+                                actualBalanceAtRecovery = curr.balance,
+                                debitTimestampMillis = curr.timestampMillis,
+                                recoveredTimestampMillis = curr.timestampMillis,
+                                detectionKind = "EXPLICIT_REVERSAL_UNLINKED",
+                                confidencePercent = 95,
+                                titleAr = "إلغاء / استرجاع عملية (${formatCompactAmount(explicitRecoveryAmt)} دج)",
+                                titleEn = "Cancelled / Reversed Operation (${formatCompactAmount(explicitRecoveryAmt)} DA)",
+                                explanationAr = "وصل إشعار إلغاء واسترجاع مبلغ ${formatCompactAmount(explicitRecoveryAmt)} دج إلى الرصيد (${formatCompactAmount(curr.balance)} دج) — تم استبعادها من الدخل لمنع خلط الحسابات.",
+                                explanationEn = "Explicit reversal SMS returned ${formatCompactAmount(explicitRecoveryAmt)} DA (Balance: ${formatCompactAmount(curr.balance)} DA) — excluded from income to avoid ledger confusion.",
+                                debitRawBody = curr.rawBody,
+                                recoveryRawBody = curr.rawBody,
+                                isResolved = existingById[entryId]?.isResolved == true
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Silent Recovery Caught via Unexplained Positive Balance Jump on Next SMS
+            if (!matchedAnyRecoveryHere && !isDuplicatePrev && refPrevBalance != null) {
+                val expectedBalWithoutJump = roundTwoDecimals(
+                    when {
+                        op.hasTx && op.isExpense -> refPrevBalance - op.txAmount
+                        op.hasTx && !op.isExpense -> refPrevBalance + op.txAmount
+                        else -> refPrevBalance
+                    }
+                )
+                val jump = roundTwoDecimals(curr.balance - expectedBalWithoutJump)
+
+                if (jump >= 1.0 && openDebits.isNotEmpty()) {
+                    val exactIdx = findBestMatchingOpenDebitIndex(
+                        openDebits = openDebits,
+                        recoveredAmt = jump,
+                        recoveryTimestampMillis = curr.timestampMillis,
+                        allowSmallFeeOffset = (op.hasTx && op.isExpense)
+                    )
+                    if (exactIdx >= 0) {
+                        val matched = openDebits.removeAt(exactIdx)
+                        matchedAnyRecoveryHere = true
+                        excludedSuggestionIds.add(matched.smsId)
+                        // If recovery SMS had NO real operation (balance-only SMS showing the money came back),
+                        // exclude it from pending Income suggestions so it doesn't count as fake income!
+                        if (!op.hasTx || hasExplicitFailure || hasStrongReversal) {
+                            excludedSuggestionIds.add(curr.id)
+                        }
+
+                        val isExactTotalDrop = kotlin.math.abs(jump - matched.totalDrop) <= 0.50
+                        val isExactPrincipal = kotlin.math.abs(jump - matched.principalAmount) <= 0.50
+                        val recoveredAmt = when {
+                            isExactTotalDrop -> matched.totalDrop
+                            isExactPrincipal -> matched.principalAmount
+                            else -> matched.principalAmount
+                        }
+                        val unrefundedFee = if (isExactTotalDrop) 0.0 else matched.keptFee
+                        if (unrefundedFee < 0.01) {
+                            voidedTaxDebitSmsIds.add(matched.smsId)
+                        }
+                        adjustedPrevByRecoverySmsId[curr.id] = roundTwoDecimals(refPrevBalance + recoveredAmt)
+
+                        val kind = if (unrefundedFee >= 0.01 && !isExactTotalDrop) {
+                            "FAILED_WITH_FEE_KEPT"
+                        } else {
+                            "SILENT_BALANCE_JUMP"
+                        }
+                        val confidence = if (isExactTotalDrop || isExactPrincipal) 99 else 94
+                        val entryId = "fail_${matched.smsId}_${curr.id}"
+                        if (entryId !in dismissedIds) {
+                            resultMap[entryId] = buildPairedFailedEntry(
+                                id = entryId,
+                                debit = matched,
+                                recovery = curr,
+                                recoveredAmount = recoveredAmt,
+                                unrefundedFeeAmount = unrefundedFee,
+                                expectedBeforeRecovery = expectedBalWithoutJump,
+                                detectionKind = kind,
+                                confidencePercent = confidence,
+                                isResolved = existingById[entryId]?.isResolved == true
+                            )
+                        }
+                    } else {
+                        // Try matching sum of 2 recent failed debits returned together before curr
+                        val pair = findMatchingOpenDebitPair(
+                            openDebits = openDebits,
+                            jump = jump,
+                            recoveryTimestampMillis = curr.timestampMillis
+                        )
+                        if (pair != null) {
+                            val (idxHigh, idxLow, matchedTotalDropSum) = pair
+                            val firstRemoved = openDebits.removeAt(idxHigh)
+                            val secondRemoved = openDebits.removeAt(idxLow)
+                            val matchedPair = listOf(secondRemoved, firstRemoved)
+                            matchedAnyRecoveryHere = true
+                            if (!op.hasTx || hasExplicitFailure || hasStrongReversal) {
+                                excludedSuggestionIds.add(curr.id)
+                            }
+                            adjustedPrevByRecoverySmsId[curr.id] = roundTwoDecimals(refPrevBalance + jump)
+
+                            for (debitItem in matchedPair) {
+                                excludedSuggestionIds.add(debitItem.smsId)
+                                val recAmt = if (matchedTotalDropSum) debitItem.totalDrop else debitItem.principalAmount
+                                val unrefFee = if (matchedTotalDropSum) 0.0 else debitItem.keptFee
+                                if (unrefFee < 0.01) voidedTaxDebitSmsIds.add(debitItem.smsId)
+                                val entryId = "fail_${debitItem.smsId}_${curr.id}"
+                                if (entryId !in dismissedIds) {
+                                    resultMap[entryId] = buildPairedFailedEntry(
+                                        id = entryId,
+                                        debit = debitItem,
+                                        recovery = curr,
+                                        recoveredAmount = recAmt,
+                                        unrefundedFeeAmount = unrefFee,
+                                        expectedBeforeRecovery = expectedBalWithoutJump,
+                                        detectionKind = "MULTI_DEBIT_RECOVERY",
+                                        confidencePercent = 97,
+                                        isResolved = existingById[entryId]?.isResolved == true
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Register genuine outgoing debit as candidate in openDebits AFTER checking recoveries on curr
+            if (!consumedAsPureFailureOrReversal &&
+                !isDuplicatePrev &&
+                op.hasTx &&
+                op.isExpense &&
+                op.txAmount > 0.0
+            ) {
+                val basePrev = adjustedPrevByRecoverySmsId[curr.id] ?: refPrevBalance
+                val actualDrop = if (basePrev != null) {
+                    roundTwoDecimals(basePrev - curr.balance)
+                } else {
+                    op.txAmount
+                }
+                if (actualDrop > 0.50) {
+                    val balBefore = basePrev ?: roundTwoDecimals(curr.balance + actualDrop)
+                    val keptFee = roundTwoDecimals((actualDrop - op.txAmount).coerceAtLeast(0.0))
+                    openDebits.add(
+                        PendingDebitCandidate(
+                            smsId = curr.id,
+                            principalAmount = op.txAmount,
+                            totalDrop = actualDrop,
+                            keptFee = keptFee,
+                            balanceBefore = balBefore,
+                            balanceAfter = curr.balance,
+                            timestampMillis = curr.timestampMillis,
+                            rawBody = curr.rawBody
+                        )
+                    )
+                    // Keep openDebits bounded to recent lookback
+                    if (openDebits.size > 40) {
+                        openDebits.removeAt(0)
+                    }
+                }
+            }
+        }
+
+        val sortedList = resultMap.values
+            .sortedByDescending { it.recoveredTimestampMillis }
+        return FailedTransactionAnalysisResult(
+            failedTransactions = sortedList,
+            excludedSuggestionSmsIds = excludedSuggestionIds,
+            voidedTaxDebitSmsIds = voidedTaxDebitSmsIds,
+            reversalRecoverySmsIds = reversalRecoverySmsIds,
+            adjustedPrevBalanceByRecoverySmsId = adjustedPrevByRecoverySmsId
+        )
+    }
+
+    private fun findBestMatchingOpenDebitIndex(
+        openDebits: List<PendingDebitCandidate>,
+        recoveredAmt: Double,
+        recoveryTimestampMillis: Long,
+        allowSmallFeeOffset: Boolean
+    ): Int {
+        // Priority 1: Most recent exact totalDrop match (principal + fee returned)
+        for (idx in openDebits.indices.reversed()) {
+            val d = openDebits[idx]
+            if (recoveryTimestampMillis - d.timestampMillis > MAX_FAILED_RECOVERY_WINDOW_MILLIS) continue
+            if (kotlin.math.abs(recoveredAmt - d.totalDrop) <= 0.50) return idx
+        }
+        // Priority 2: Most recent exact principalAmount match (principal returned)
+        for (idx in openDebits.indices.reversed()) {
+            val d = openDebits[idx]
+            if (recoveryTimestampMillis - d.timestampMillis > MAX_FAILED_RECOVERY_WINDOW_MILLIS) continue
+            if (kotlin.math.abs(recoveredAmt - d.principalAmount) <= 0.50) return idx
+        }
+        // Priority 3: Principal returned while recovery SMS itself deducted a small bank fee (<= 100 DA)
+        if (allowSmallFeeOffset && recoveredAmt >= 200.0) {
+            for (idx in openDebits.indices.reversed()) {
+                val d = openDebits[idx]
+                if (recoveryTimestampMillis - d.timestampMillis > MAX_FAILED_RECOVERY_WINDOW_MILLIS) continue
+                if (d.principalAmount >= 200.0 && recoveredAmt >= d.principalAmount * 0.85) {
+                    val principalGap = roundTwoDecimals(d.principalAmount - recoveredAmt)
+                    val dropGap = roundTwoDecimals(d.totalDrop - recoveredAmt)
+                    if (principalGap in 0.51..MAX_FEE_VARIANCE_ON_RECOVERY_DZD ||
+                        dropGap in 0.51..MAX_FEE_VARIANCE_ON_RECOVERY_DZD
+                    ) {
+                        return idx
+                    }
+                }
+            }
+        }
+        return -1
+    }
+
+    private data class MatchedDebitPair(
+        val highIndex: Int,
+        val lowIndex: Int,
+        val matchedTotalDropSum: Boolean
+    )
+
+    private fun findMatchingOpenDebitPair(
+        openDebits: List<PendingDebitCandidate>,
+        jump: Double,
+        recoveryTimestampMillis: Long
+    ): MatchedDebitPair? {
+        if (openDebits.size < 2) return null
+        val start = (openDebits.size - 12).coerceAtLeast(0)
+        for (i in openDebits.indices.reversed()) {
+            if (i < start) break
+            val d1 = openDebits[i]
+            if (recoveryTimestampMillis - d1.timestampMillis > MAX_FAILED_RECOVERY_WINDOW_MILLIS) continue
+            for (j in (i - 1) downTo start) {
+                val d2 = openDebits[j]
+                if (recoveryTimestampMillis - d2.timestampMillis > MAX_FAILED_RECOVERY_WINDOW_MILLIS) continue
+                if (kotlin.math.abs(jump - (d1.totalDrop + d2.totalDrop)) <= 0.50) {
+                    return MatchedDebitPair(i, j, matchedTotalDropSum = true)
+                }
+                if (kotlin.math.abs(jump - (d1.principalAmount + d2.principalAmount)) <= 0.50) {
+                    return MatchedDebitPair(i, j, matchedTotalDropSum = false)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun buildPairedFailedEntry(
+        id: String,
+        debit: PendingDebitCandidate,
+        recovery: SmsBalanceSnapshot,
+        recoveredAmount: Double,
+        unrefundedFeeAmount: Double,
+        expectedBeforeRecovery: Double,
+        detectionKind: String,
+        confidencePercent: Int,
+        isResolved: Boolean
+    ): SmsFailedTransactionEntry {
+        val debitFmt = formatCompactAmount(debit.principalAmount)
+        val recFmt = formatCompactAmount(recoveredAmount)
+        val beforeFmt = formatCompactAmount(debit.balanceBefore)
+        val afterFmt = formatCompactAmount(debit.balanceAfter)
+        val expFmt = formatCompactAmount(expectedBeforeRecovery)
+        val actFmt = formatCompactAmount(recovery.balance)
+
+        val (titleAr, titleEn) = when (detectionKind) {
+            "EXPLICIT_REFUND_REVERSAL" ->
+                "معاملة فاشلة واسترجاع صريح ($recFmt دج)" to "Failed Op & Explicit Refund ($recFmt DA)"
+            "FAILED_WITH_FEE_KEPT" ->
+                "معاملة فاشلة — استُرجع $recFmt دج (رسوم ${formatCompactAmount(unrefundedFeeAmount)} دج)" to
+                    "Failed Op — Returned $recFmt DA (${formatCompactAmount(unrefundedFeeAmount)} DA fee kept)"
+            "MULTI_DEBIT_RECOVERY" ->
+                "معاملة فاشلة ضمن استرجاع مجمع ($recFmt دج)" to "Failed Op in Batch Recovery ($recFmt DA)"
+            else ->
+                "معاملة وهمية/فاشلة مسترجعة ($recFmt دج)" to "Ghost / Failed Debit Recovered ($recFmt DA)"
+        }
+
+        val feeSuffixAr = if (unrefundedFeeAmount >= 0.01) {
+            " • ملاحظة: بقيت رسوم ${formatCompactAmount(unrefundedFeeAmount)} دج غير مسترجعة"
+        } else ""
+        val feeSuffixEn = if (unrefundedFeeAmount >= 0.01) {
+            " • Note: ${formatCompactAmount(unrefundedFeeAmount)} DA fee remained unrefunded"
+        } else ""
+
+        val explanationAr = when (detectionKind) {
+            "EXPLICIT_REFUND_REVERSAL" ->
+                "خُصم $debitFmt دج ($beforeFmt ← $afterFmt دج) ثم وصل إشعار الإلغاء والاسترجاع بقيمة $recFmt دج إلى $actFmt دج — تم استبعاد العمليتين من المصاريف والدخل$feeSuffixAr."
+            else ->
+                "خُصم $debitFmt دج ($beforeFmt ← $afterFmt دج) دون إتمام العملية، وعند الرسالة التالية كان المتوقع $expFmt دج لكن الرصيد الفعلي قفز إلى $actFmt دج (+$recFmt دج عادت للحساب)$feeSuffixAr."
+        }
+        val explanationEn = when (detectionKind) {
+            "EXPLICIT_REFUND_REVERSAL" ->
+                "Debited $debitFmt DA ($beforeFmt → $afterFmt DA), then explicitly reversed/refunded $recFmt DA to $actFmt DA — both excluded to keep your ledger accurate$feeSuffixEn."
+            else ->
+                "Debited $debitFmt DA ($beforeFmt → $afterFmt DA) on an incomplete operation; next SMS expected $expFmt DA but actual balance jumped to $actFmt DA (+$recFmt DA silently returned)$feeSuffixEn."
+        }
+
+        return SmsFailedTransactionEntry(
+            id = id,
+            failedDebitSmsId = debit.smsId,
+            recoverySmsId = recovery.id,
+            debitAmount = debit.principalAmount,
+            recoveredAmount = recoveredAmount,
+            unrefundedFeeAmount = unrefundedFeeAmount,
+            balanceBeforeDebit = debit.balanceBefore,
+            balanceAfterDebit = debit.balanceAfter,
+            expectedBalanceBeforeRecovery = expectedBeforeRecovery,
+            actualBalanceAtRecovery = recovery.balance,
+            debitTimestampMillis = debit.timestampMillis,
+            recoveredTimestampMillis = recovery.timestampMillis,
+            detectionKind = detectionKind,
+            confidencePercent = confidencePercent,
+            titleAr = titleAr,
+            titleEn = titleEn,
+            explanationAr = explanationAr,
+            explanationEn = explanationEn,
+            debitRawBody = debit.rawBody,
+            recoveryRawBody = recovery.rawBody,
+            isResolved = isResolved
+        )
+    }
+
     /**
      * Analyzes chronological ALG Poste / BaridiMob balance snapshots to detect:
      * 1. Message-to-message comparison (Current SMS vs Previous SMS):
@@ -608,7 +1217,8 @@ object AlgPosteSmsAnalyzer {
      */
     fun detectTaxAnomalies(
         snapshots: List<SmsBalanceSnapshot>,
-        existingAnomalies: List<SmsTaxAnomalyEntry> = emptyList()
+        existingAnomalies: List<SmsTaxAnomalyEntry> = emptyList(),
+        failedAnalysis: FailedTransactionAnalysisResult = analyzeFailedTransactions(snapshots)
     ): List<SmsTaxAnomalyEntry> {
         if (snapshots.isEmpty()) return existingAnomalies
 
@@ -629,43 +1239,24 @@ object AlgPosteSmsAnalyzer {
 
         for (i in ordered.indices) {
             val curr = ordered[i]
+            // Skip tax detection on fully refunded failed debits, immediate no-deduct failures, or reversal SMS
+            if (curr.id in failedAnalysis.voidedTaxDebitSmsIds ||
+                curr.id in failedAnalysis.reversalRecoverySmsIds
+            ) continue
+
             val prev = if (i > 0) ordered[i - 1] else null
 
             val inlinePrevBalance = if (prev == null && curr.rawBody.isNotBlank()) {
                 extractPreviousBalanceMatchFromBody(normalizeArabicDigits(curr.rawBody))?.amount
             } else null
 
-            val referencePrevBalance = prev?.balance ?: inlinePrevBalance
+            val rawPrevBalance = prev?.balance ?: inlinePrevBalance
+            val referencePrevBalance = failedAnalysis.adjustedPrevBalanceByRecoverySmsId[curr.id] ?: rawPrevBalance
 
-            var effectiveHasTx = curr.hasTransaction && curr.transactionAmount > 0.0
-            var effectiveTxAmount = curr.transactionAmount
-            var effectiveIsExpense = curr.isExpense
-
-            // Recover unsigned transaction amount & infer direction by comparing against previous SMS balance
-            if (!effectiveHasTx && referencePrevBalance != null && curr.rawBody.isNotBlank()) {
-                val candidateAmt = extractUnsignedCandidateAmountOutsideBalances(normalizeArabicDigits(curr.rawBody))
-                if (candidateAmt != null && candidateAmt > 0.0) {
-                    val debitExpected = roundTwoDecimals(referencePrevBalance - candidateAmt)
-                    val creditExpected = roundTwoDecimals(referencePrevBalance + candidateAmt)
-                    val debitDiscrepancy = roundTwoDecimals(debitExpected - curr.balance)
-                    val creditDiscrepancy = roundTwoDecimals(creditExpected - curr.balance)
-
-                    val debitFits = curr.balance <= referencePrevBalance + 0.01 &&
-                        debitDiscrepancy >= -0.01 &&
-                        debitDiscrepancy <= maxOf(1000.0, candidateAmt * 0.35)
-                    val creditFits = curr.balance >= referencePrevBalance - 0.01 &&
-                        creditDiscrepancy >= -0.01 &&
-                        creditDiscrepancy <= maxOf(1000.0, candidateAmt * 0.35)
-
-                    if (debitFits || creditFits) {
-                        effectiveHasTx = true
-                        effectiveTxAmount = candidateAmt
-                        effectiveIsExpense = if (debitFits && !creditFits) true
-                        else if (creditFits && !debitFits) false
-                        else curr.balance <= referencePrevBalance
-                    }
-                }
-            }
+            val resolvedOp = resolveEffectiveOperation(curr, rawPrevBalance)
+            val effectiveHasTx = resolvedOp.hasTx
+            val effectiveTxAmount = resolvedOp.txAmount
+            val effectiveIsExpense = resolvedOp.isExpense
 
             if (referencePrevBalance != null) {
                 val expectedBalance = roundTwoDecimals(
@@ -776,7 +1367,8 @@ object AlgPosteSmsAnalyzer {
      */
     fun detectBalanceOperationSuggestions(
         snapshots: List<SmsBalanceSnapshot>,
-        minTimestampMillis: Long = 0L
+        minTimestampMillis: Long = 0L,
+        excludedSmsIds: Set<String> = analyzeFailedTransactions(snapshots).excludedSuggestionSmsIds
     ): List<SmsSuggestionEntry> {
         if (snapshots.isEmpty()) return emptyList()
 
@@ -794,6 +1386,9 @@ object AlgPosteSmsAnalyzer {
             val refPrevBalance = prev?.balance ?: inlinePrev
 
             if (minTimestampMillis > 0L && curr.timestampMillis <= minTimestampMillis) {
+                continue
+            }
+            if (curr.id in excludedSmsIds) {
                 continue
             }
 
@@ -1272,6 +1867,38 @@ object AlgPosteSmsCodec {
                 list.distinctBy { it.id }
                     .sortedByDescending { it.detectedAtMillis }
                     .take(MAX_TAX_ITEMS)
+            )
+        } catch (_: Throwable) {
+            "[]"
+        }
+    }
+
+    private const val MAX_FAILED_ITEMS = 120
+
+    private val failedListAdapter by lazy {
+        val type = Types.newParameterizedType(List::class.java, SmsFailedTransactionEntry::class.java)
+        moshi.adapter<List<SmsFailedTransactionEntry>>(type)
+    }
+
+    fun parseFailedTransactions(json: String): List<SmsFailedTransactionEntry> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            failedListAdapter.fromJson(json)
+                ?.filter { it.id.isNotBlank() }
+                ?.sortedByDescending { it.recoveredTimestampMillis }
+                ?.take(MAX_FAILED_ITEMS)
+                ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    fun encodeFailedTransactions(list: List<SmsFailedTransactionEntry>): String {
+        return try {
+            failedListAdapter.toJson(
+                list.distinctBy { it.id }
+                    .sortedByDescending { it.recoveredTimestampMillis }
+                    .take(MAX_FAILED_ITEMS)
             )
         } catch (_: Throwable) {
             "[]"

@@ -44,6 +44,7 @@ import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.data.DebtEntity
 import com.example.data.DebtType
 import com.example.ui.components.AddDebtDialog
+import com.example.ui.components.AddMoreDebtDialog
 import com.example.ui.components.DebtBreathingEmptyState
 import com.example.ui.components.DebtBreathingHeroCard
 import com.example.ui.components.DebtControlsBar
@@ -71,6 +72,7 @@ fun DebtScreen(
     onAddDebtClick: (DebtType) -> Unit,
     onEditDebt: (DebtEntity) -> Unit,
     onPartialPay: (DebtEntity, Double, Boolean) -> Unit,
+    onAddToExistingDebt: (DebtEntity, Double, String, Long?) -> Unit = { _, _, _, _ -> },
     onPayDebtNow: (DebtEntity) -> Unit,
     onDeleteDebt: (DebtEntity) -> Unit,
     onClearSettledDebts: () -> Unit,
@@ -92,6 +94,7 @@ fun DebtScreen(
 
     // Dialog States
     var partialPaymentDebt by remember { mutableStateOf<DebtEntity?>(null) }
+    var addMoreDebtTarget by remember { mutableStateOf<DebtEntity?>(null) }
     var editingDebt by remember { mutableStateOf<DebtEntity?>(null) }
     var debtToDelete by remember { mutableStateOf<DebtEntity?>(null) }
     var showClearSettledConfirm by remember { mutableStateOf(false) }
@@ -278,6 +281,7 @@ fun DebtScreen(
                             isExpanded = debt.id in expandedDebtIds,
                             onToggleExpand = { toggleCardExpand(debt.id) },
                             onPartialPayClick = { partialPaymentDebt = debt },
+                            onAddMoreClick = { addMoreDebtTarget = debt },
                             onPayNow = { onPayDebtNow(debt) },
                             onEdit = { editingDebt = debt },
                             onDelete = { debtToDelete = debt }
@@ -370,6 +374,7 @@ fun DebtScreen(
                         isExpanded = debt.id in expandedDebtIds,
                         onToggleExpand = { toggleCardExpand(debt.id) },
                         onPartialPayClick = { partialPaymentDebt = debt },
+                        onAddMoreClick = { addMoreDebtTarget = debt },
                         onPayNow = { onPayDebtNow(debt) },
                         onEdit = { editingDebt = debt },
                         onDelete = { debtToDelete = debt }
@@ -390,6 +395,19 @@ fun DebtScreen(
             onConfirmPayment = { amount, recordTransaction ->
                 onPartialPay(targetDebt, amount, recordTransaction)
                 partialPaymentDebt = null
+            }
+        )
+    }
+
+    // Dialog 1B: Add More Debt onto Existing Debt
+    addMoreDebtTarget?.let { targetDebt ->
+        AddMoreDebtDialog(
+            debt = targetDebt,
+            currencyCode = strings.currencyCode,
+            onDismiss = { addMoreDebtTarget = null },
+            onConfirmAdd = { addedAmount, extraNote, updatedDueDateMillis ->
+                onAddToExistingDebt(targetDebt, addedAmount, extraNote, updatedDueDateMillis)
+                addMoreDebtTarget = null
             }
         )
     }

@@ -939,228 +939,55 @@ private fun CcpAccountCard(
                 )
             }
 
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                // 1. Clean Utility Header Row: Accent Rail + Brand Badge + Name + Linked Contact + 48dp Actions
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                // Minimal Header Row: Person/App Icon + Name + Pin Icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(4.dp)
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (account.isPinned) AmberNeon else brandPrimary)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
                     VaultAppEmblemBadge(preset = preset, size = 40.dp, isArabic = isArabic, showBorder = false)
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = account.displayFullName,
-                            color = colors.textPrimary,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            lineHeight = 20.sp,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        if (account.hasLinkedContact) {
-                            Spacer(modifier = Modifier.height(3.dp))
-                            val contactMeta = buildString {
-                                append(account.contactName)
-                                if (account.contactPhone.isNotBlank()) {
-                                    append(" • ${if (isStealth || !isExpanded) "••••••" else isolateLtr(account.contactPhone)}")
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = if (isExpanded && account.contactPhone.isNotBlank()) {
-                                    Modifier.clickable { onCopyPhone() }
-                                } else Modifier
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContactPhone,
-                                    contentDescription = null,
-                                    tint = EmeraldNeon,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = contactMeta,
-                                    color = EmeraldNeon,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = account.displayFullName,
+                        color = colors.textPrimary,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        lineHeight = 20.sp,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
 
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = onTogglePin,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("pin_ccp_${account.id}")
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (account.isPinned) AmberNeon.copy(alpha = 0.16f)
-                                        else Color.Transparent
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (account.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                                    contentDescription = if (isArabic) "تثبيت في الأعلى" else "Pin to top",
-                                    tint = if (account.isPinned) AmberNeon else colors.textMuted,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = onToggleExpand,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("expand_ccp_${account.id}")
-                        ) {
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-
-                // 2. Full-width non-cramped status pills row (wraps cleanly without collisions)
-                Spacer(modifier = Modifier.height(10.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (account.isPinned) {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(AmberNeon.copy(alpha = 0.16f))
-                                .border(0.7.dp, AmberNeon.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PushPin,
-                                contentDescription = null,
-                                tint = AmberNeon,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = if (isArabic) "مثبت" else "Pinned",
-                                color = AmberNeon,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    Box(
+                    IconButton(
+                        onClick = onTogglePin,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(brandPrimary.copy(alpha = if (colors.isDark) 0.16f else 0.12f))
-                            .border(0.6.dp, brandPrimary.copy(alpha = 0.36f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .size(48.dp)
+                            .testTag("pin_ccp_${account.id}")
                     ) {
-                        Text(
-                            text = if (isArabic) preset.nameAr else preset.nameEn,
-                            color = brandPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (account.ripFull.isNotBlank()) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(EmeraldNeon.copy(alpha = if (colors.isDark) 0.16f else 0.13f))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (account.isPinned) AmberNeon.copy(alpha = 0.16f)
+                                    else Color.Transparent
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (isArabic) "هوية بريدية" else "RIP",
-                                color = EmeraldNeon,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
+                            Icon(
+                                imageVector = if (account.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = if (isArabic) "تثبيت في الأعلى" else "Pin to top",
+                                tint = if (account.isPinned) AmberNeon else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
 
-                // 3. Scannable Utility Summary Strip & 0.5s Hold Cue
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(
-                    color = colors.glassBorderSubtle.copy(alpha = 0.55f),
-                    thickness = 0.75.dp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val quickPreview = when {
-                        isStealth -> if (isArabic) "حساب ••••••" else "CCP ••••••"
-                        account.ccpNumber.isNotBlank() -> {
-                            val tail = account.ccpNumber.takeLast(4)
-                            val maskDigits = if (account.ccpKey.isNotBlank()) "••••$tail (${account.ccpKey})" else "••••$tail"
-                            if (isArabic) "حساب ${isolateLtr(maskDigits)}" else "CCP $maskDigits"
-                        }
-                        account.ripFull.isNotBlank() -> {
-                            val tail = "••••${account.ripFull.takeLast(4)}"
-                            if (isArabic) "هوية ${isolateLtr(tail)}" else "RIP $tail"
-                        }
-                        else -> if (isArabic) "اضغط لعرض التفاصيل" else "Tap to view details"
-                    }
-                    Text(
-                        text = quickPreview,
-                        color = colors.textSecondary,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontFamily = FontFamily.Monospace,
-                        style = TextStyle(fontFeatureSettings = "tnum"),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                    )
-                    Text(
-                        text = if (isArabic) "اضغط 0.5ث للتعديل" else "Hold 0.5s • Edit",
-                        color = colors.textMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-
-                // 3. Expanded Structured Utility Rows
+                // Expanded Structured Utility Rows
                 AnimatedVisibility(
                     visible = isExpanded,
                     enter = fadeIn(tween(200)) + expandVertically(tween(240)),
@@ -1168,6 +995,45 @@ private fun CcpAccountCard(
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(modifier = Modifier.height(10.dp))
+
+                        if (account.hasLinkedContact) {
+                            val contactMeta = buildString {
+                                append(account.contactName)
+                                if (account.contactPhone.isNotBlank()) {
+                                    append(" • ${if (isStealth) "••••••" else isolateLtr(account.contactPhone)}")
+                                }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(EmeraldNeon.copy(alpha = 0.10f))
+                                    .then(
+                                        if (account.contactPhone.isNotBlank()) {
+                                            Modifier.clickable { onCopyPhone() }
+                                        } else Modifier
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContactPhone,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = contactMeta,
+                                    color = EmeraldNeon,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
 
                         if (account.ccpNumber.isNotBlank()) {
                             Row(

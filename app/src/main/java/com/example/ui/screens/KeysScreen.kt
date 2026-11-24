@@ -800,7 +800,7 @@ private fun VaultKeyRowCard(
         VaultAppPresets.resolveForEntry(entry)
     }
     val brandPrimary by animateColorAsState(preset.primaryColor(), tween(320), label = "card_bp")
-    val (strengthColor, strengthLabel) = strengthMeta(analysis.level, isArabic)
+    val (strengthColor, _) = strengthMeta(analysis.level, isArabic)
 
     var copiedUsernameRecently by remember { mutableStateOf(false) }
     var copiedSecretRecently by remember { mutableStateOf(false) }
@@ -897,142 +897,38 @@ private fun VaultKeyRowCard(
                 )
             }
 
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                // 1. Clean Utility Header Row: Accent Rail + Brand Badge + Title + 48dp Actions
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                // Minimal Header Row: App Icon + App Name + Strength % + Pin Icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(4.dp)
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (entry.isPinned) AmberNeon else brandPrimary)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
                     VaultAppEmblemBadge(preset = preset, size = 40.dp, isArabic = isArabic, showBorder = false)
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = entry.label,
-                            color = colors.textPrimary,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            lineHeight = 20.sp,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = entry.label,
+                        color = colors.textPrimary,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        lineHeight = 20.sp,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = onTogglePin,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("pin_key_${entry.id}")
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (entry.isPinned) AmberNeon.copy(alpha = 0.16f)
-                                        else Color.Transparent
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (entry.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                                    contentDescription = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
-                                    tint = if (entry.isPinned) AmberNeon else colors.textMuted,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = onToggleExpand,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("expand_key_${entry.id}")
-                        ) {
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isArabic) "توسيع/طي" else "Expand/Collapse",
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-
-                // 2. Full-width non-cramped status pills row (wraps cleanly without collisions)
-                Spacer(modifier = Modifier.height(10.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (entry.isPinned) {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(AmberNeon.copy(alpha = 0.16f))
-                                .border(0.7.dp, AmberNeon.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PushPin,
-                                contentDescription = null,
-                                tint = AmberNeon,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = if (isArabic) "مثبت" else "Pinned",
-                                color = AmberNeon,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(brandPrimary.copy(alpha = if (colors.isDark) 0.16f else 0.12f))
-                            .border(0.6.dp, brandPrimary.copy(alpha = 0.36f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = if (preset.id == "custom") localizedKeyCategory(entry.category, isArabic) else {
-                                if (isArabic) preset.nameAr else preset.nameEn
-                            },
-                            color = brandPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(strengthColor.copy(alpha = if (colors.isDark) 0.16f else 0.13f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "$strengthLabel ${isolateLtr(formatPercent(analysis.score, isArabic))}",
+                            text = isolateLtr(formatPercent(analysis.score, isArabic)),
                             color = strengthColor,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,
@@ -1040,59 +936,32 @@ private fun VaultKeyRowCard(
                         )
                     }
 
-                    if (analysis.isReused) {
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("pin_key_${entry.id}")
+                    ) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(RoseNeon.copy(alpha = 0.16f))
-                                .border(0.6.dp, RoseNeon.copy(alpha = 0.38f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (entry.isPinned) AmberNeon.copy(alpha = 0.16f)
+                                    else Color.Transparent
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (isArabic) "مكررة" else "Reused",
-                                color = RoseNeon,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                softWrap = false
+                            Icon(
+                                imageVector = if (entry.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = if (isArabic) "تثبيت التطبيق في الأعلى" else "Pin app to top",
+                                tint = if (entry.isPinned) AmberNeon else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                }
-
-                // 3. Scannable Preview & 0.5s Hold Cue Row
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(
-                    color = colors.glassBorderSubtle.copy(alpha = 0.55f),
-                    thickness = 0.75.dp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = when {
-                            isStealth -> "••••••••"
-                            entry.username.isNotBlank() -> isolateLtr(entry.username)
-                            else -> if (isArabic) "اضغط لعرض كلمة السر" else "Tap to reveal credentials"
-                        },
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                    )
-                    Text(
-                        text = if (isArabic) "اضغط 0.5ث للتعديل" else "Hold 0.5s • Edit",
-                        color = colors.textMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
                 }
 
                 // 3. Structured Expanded Utility Panel

@@ -2000,4 +2000,226 @@ class ExampleUnitTest {
     assertEquals(TransactionType.INCOME, inferredIncome.transactionType)
     assertEquals(5000.0, inferredIncome.amount, 0.01)
   }
+
+  @Test
+  fun algPosteSmsAnalyzer_failedTransactions_detectsSilentNextSmsReversal_andExcludesFromSuggestions() {
+    // 1. Base balance: 30,000 DA
+    val s0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Virement reçu +10 000,00 DA. Nouveau solde: 30 000,00 DA",
+      timestampMillis = 10_000_000L
+    )!!
+    // 2. Ghost/failed transfer debit: -5,000 DA -> balance drops to 25,000 DA
+    val s1FailedDebit = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Transfert de 5 000,00 DA vers le compte RIP 00799999001234567890. Nouveau solde: 25 000,00 DA",
+      timestampMillis = 10_060_000L
+    )!!
+    // 3. Next SMS is a REAL -1,000 DA purchase, AND balance jumps to 29,000 DA (instead of 24,000 DA)!
+    // That proves the previous -5,000 DA returned silently!
+    val s2NextRealDebit = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Paiement TPE -1 000,00 DA. Nouveau solde: 29 000,00 DA",
+      timestampMillis = 10_300_000L
+    )!!
+
+    val snapshots = listOf(s0, s1FailedDebit, s2NextRealDebit)
+    val failedAnalysis = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snapshots)
+
+    assertEquals(1, failedAnalysis.failedTransactions.size)
+    val entry = failedAnalysis.failedTransactions[0]
+    assertEquals("SILENT_BALANCE_JUMP", entry.detectionKind)
+    assertEquals(s1FailedDebit.id, entry.failedDebitSmsId)
+    assertEquals(s2NextRealDebit.id, entry.recoverySmsId)
+    assertEquals(5000.0, entry.debitAmount, 0.01)
+    assertEquals(5000.0, entry.recoveredAmount, 0.01)
+    assertEquals(24000.0, entry.expectedBalanceBeforeRecovery, 0.01)
+    assertEquals(29000.0, entry.actualBalanceAtRecovery, 0.01)
+    assertTrue(entry.confidencePercent >= 90)
+
+    // Suggestions MUST exclude the failed -5,000 DA debit while KEEPING the real -1,000 DA expense
+    val suggestions = com.example.sms.AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+      snapshots = snapshots,
+      excludedSmsIds = failedAnalysis.excludedSuggestionSmsIds
+    )
+    assertFalse(
+      "Failed -5,000 DA debit must not be suggested as an expense",
+      suggestions.any { it.id == s1FailedDebit.id }
+    )
+    assertTrue(
+      "Real -1,000 DA purchase on the next SMS must still be suggested",
+      suggestions.any { it.id == s2NextRealDebit.id && it.isExpense && kotlin.math.abs(it.amount - 1000.0) < 0.01 }
+    )
+
+    // Tax anomaly detector MUST NOT flag a false anomaly on the +5,000 DA recovery jump
+    val taxes = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(
+      snapshots = snapshots,
+      failedAnalysis = failedAnalysis
+    )
+    assertTrue("No false tax should be generated on clean silent recovery", taxes.isEmpty())
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_failedTransactions_excludesBalanceOnlySilentRecoveryFromFakeIncome() {
+    val s0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 30 000,00 DA",
+      timestampMillis = 20_000_000L
+    )!!
+    val s1FailedWithdraw = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Retrait GAB -5 000,00 DA. Nouveau solde: 25 000,00 DA",
+      timestampMillis = 20_100_000L
+    )!!
+    // Next SMS only reports balance back at 30,000 DA without an explicit credit label
+    val s2BalanceOnlyRecovery = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 30 000,00 DA",
+      timestampMillis = 20_500_000L
+    )!!
+
+    val snapshots = listOf(s0, s1FailedWithdraw, s2BalanceOnlyRecovery)
+    val failedAnalysis = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snapshots)
+    assertEquals(1, failedAnalysis.failedTransactions.size)
+    assertEquals(5000.0, failedAnalysis.failedTransactions[0].recoveredAmount, 0.01)
+
+    // Both the failed withdrawal AND the silent balance-only recovery must be excluded from suggestions
+    val suggestions = com.example.sms.AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+      snapshots = snapshots,
+      excludedSmsIds = failedAnalysis.excludedSuggestionSmsIds
+    )
+    assertTrue("Neither failed debit nor silent balance-only recovery should enter ledger suggestions", suggestions.isEmpty())
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_failedTransactions_handlesFeesOnFailedDebitAndFeesOnRecoverySms() {
+    val s0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 30 000,00 DA",
+      timestampMillis = 30_000_000L
+    )!!
+    // 5,000 DA debit with hidden 30 DA fee -> balance drops 5,030 DA to 24,970 DA
+    val s1DebitWithFee = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Transfert de 5 000,00 DA vers le compte RIP 00799999001234567890. Nouveau solde: 24 970,00 DA",
+      timestampMillis = 30_100_000L
+    )!!
+    // Case A: Only principal (5,000 DA) returned, while next SMS spends -1,000 DA WITH its own 20 DA fee ->
+    // Adjusted prev = 24,970 + 5,000 = 29,970 -> minus 1,000 = 28,970 -> actual 28,950 (20 DA fee!)
+    val s2PrincipalReturnedWithNewFee = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Paiement TPE -1 000,00 DA. Nouveau solde: 28 950,00 DA",
+      timestampMillis = 30_300_000L
+    )!!
+
+    val snapsA = listOf(s0, s1DebitWithFee, s2PrincipalReturnedWithNewFee)
+    val failedA = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snapsA)
+    assertEquals(1, failedA.failedTransactions.size)
+    assertEquals("FAILED_WITH_FEE_KEPT", failedA.failedTransactions[0].detectionKind)
+    assertEquals(5000.0, failedA.failedTransactions[0].recoveredAmount, 0.01)
+    assertEquals(30.0, failedA.failedTransactions[0].unrefundedFeeAmount, 0.01)
+
+    val taxesA = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(snapsA, failedAnalysis = failedA)
+    assertTrue("Unrefunded 30 DA fee on failed debit should remain in Caught Taxes", taxesA.any { it.smsId == s1DebitWithFee.id && kotlin.math.abs(it.taxAmount - 30.0) < 0.01 })
+    assertTrue("Real 20 DA fee on the recovery SMS itself must still be caught", taxesA.any { it.smsId == s2PrincipalReturnedWithNewFee.id && kotlin.math.abs(it.taxAmount - 20.0) < 0.01 })
+
+    // Case B: Full 5,030 DA (principal + fee) returned on next -1,000 DA purchase (30,000 - 1,000 = 29,000)
+    val s2FullRefund = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Paiement TPE -1 000,00 DA. Nouveau solde: 29 000,00 DA",
+      timestampMillis = 30_300_000L
+    )!!
+    val snapsB = listOf(s0, s1DebitWithFee, s2FullRefund)
+    val failedB = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snapsB)
+    assertEquals(1, failedB.failedTransactions.size)
+    assertEquals(5030.0, failedB.failedTransactions[0].recoveredAmount, 0.01)
+    assertEquals(0.0, failedB.failedTransactions[0].unrefundedFeeAmount, 0.01)
+
+    val taxesB = com.example.sms.AlgPosteSmsAnalyzer.detectTaxAnomalies(snapsB, failedAnalysis = failedB)
+    assertFalse("Voided 30 DA fee must be cleared when full 5,030 DA is returned", taxesB.any { it.smsId == s1DebitWithFee.id })
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_failedTransactions_detectsExplicitCancellationAndCodecRoundTrips() {
+    val s0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 40 000,00 DA",
+      timestampMillis = 40_000_000L
+    )!!
+    val s1Debit = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Retrait GAB -4 000,00 DA. Nouveau solde: 36 000,00 DA",
+      timestampMillis = 40_100_000L
+    )!!
+    val s2ExplicitCancel = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Annulation opération de 4 000,00 DA — remboursement effectué. Nouveau solde: 40 000,00 DA",
+      timestampMillis = 40_250_000L
+    )!!
+    val s3ImmediateFail = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Échec opération de paiement 1 500,00 DA. Nouveau solde: 40 000,00 DA",
+      timestampMillis = 40_400_000L
+    )!!
+
+    val snaps = listOf(s0, s1Debit, s2ExplicitCancel, s3ImmediateFail)
+    val failedAnalysis = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snaps)
+
+    assertEquals(2, failedAnalysis.failedTransactions.size)
+    assertTrue(failedAnalysis.failedTransactions.any { it.detectionKind == "EXPLICIT_REFUND_REVERSAL" && kotlin.math.abs(it.recoveredAmount - 4000.0) < 0.01 })
+    assertTrue(failedAnalysis.failedTransactions.any { it.detectionKind == "EXPLICIT_FAILED_NO_DEDUCTION" })
+
+    val suggestions = com.example.sms.AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+      snapshots = snaps,
+      excludedSmsIds = failedAnalysis.excludedSuggestionSmsIds
+    )
+    assertTrue("Failed debit, explicit reversal, and immediate failure SMS must all be excluded from suggestions", suggestions.isEmpty())
+
+    // Codec round-trip
+    val encoded = com.example.sms.AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions)
+    val decoded = com.example.sms.AlgPosteSmsCodec.parseFailedTransactions(encoded)
+    assertEquals(failedAnalysis.failedTransactions.size, decoded.size)
+    assertEquals(failedAnalysis.failedTransactions.map { it.id }.toSet(), decoded.map { it.id }.toSet())
+  }
+
+  @Test
+  fun algPosteSmsAnalyzer_failedTransactions_detectsTwoDebitBatchSilentRecovery() {
+    val s0 = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "ALG Poste",
+      body = "Nouveau solde: 50 000,00 DA",
+      timestampMillis = 50_000_000L
+    )!!
+    val s1FailA = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Transfert de 2 000,00 DA vers le compte RIP 00799999001234567890. Nouveau solde: 48 000,00 DA",
+      timestampMillis = 50_100_000L
+    )!!
+    val s2FailB = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Transfert de 3 000,00 DA vers le compte RIP 00799999001234567890. Nouveau solde: 45 000,00 DA",
+      timestampMillis = 50_200_000L
+    )!!
+    // Next real purchase is -500 DA, but balance jumps from 45,000 to 49,500 (proving both 2,000 + 3,000 returned!)
+    val s3NextPurchase = com.example.sms.AlgPosteSmsAnalyzer.parseBalanceSnapshot(
+      sender = "BaridiMob",
+      body = "Paiement TPE -500,00 DA. Nouveau solde: 49 500,00 DA",
+      timestampMillis = 50_400_000L
+    )!!
+
+    val snaps = listOf(s0, s1FailA, s2FailB, s3NextPurchase)
+    val failedAnalysis = com.example.sms.AlgPosteSmsAnalyzer.analyzeFailedTransactions(snaps)
+
+    assertEquals(2, failedAnalysis.failedTransactions.size)
+    assertTrue(failedAnalysis.failedTransactions.all { it.detectionKind == "MULTI_DEBIT_RECOVERY" })
+    assertTrue(s1FailA.id in failedAnalysis.excludedSuggestionSmsIds)
+    assertTrue(s2FailB.id in failedAnalysis.excludedSuggestionSmsIds)
+
+    val suggestions = com.example.sms.AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+      snapshots = snaps,
+      excludedSmsIds = failedAnalysis.excludedSuggestionSmsIds
+    )
+    assertEquals(1, suggestions.size)
+    assertEquals(s3NextPurchase.id, suggestions[0].id)
+    assertEquals(500.0, suggestions[0].amount, 0.01)
+  }
 }

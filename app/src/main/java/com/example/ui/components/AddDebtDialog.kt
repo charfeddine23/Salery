@@ -19,10 +19,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPhone
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -71,6 +75,8 @@ import java.util.Calendar
 fun AddDebtDialog(
     initialType: DebtType = DebtType.OWED_BY_ME,
     existingDebt: DebtEntity? = null,
+    existingDebts: List<DebtEntity> = emptyList(),
+    onAddToExistingDebt: ((targetDebt: DebtEntity, addedAmount: Double, extraNote: String, updatedDueDateMillis: Long?) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (
         type: DebtType,
@@ -93,6 +99,23 @@ fun AddDebtDialog(
 
     var selectedType by remember { mutableStateOf(existingDebt?.type ?: initialType) }
     var personNameText by remember { mutableStateOf(existingDebt?.personName ?: "") }
+    var addOnExistingMode by remember { mutableStateOf(false) }
+    val matchingExistingDebts = remember(existingDebts, selectedType) {
+        existingDebts
+            .filter { it.type == selectedType }
+            .sortedWith(compareBy<DebtEntity> { it.isPaid }.thenByDescending { it.createdDateMillis })
+    }
+    var selectedExistingDebtId by remember(matchingExistingDebts) {
+        mutableLongStateOf(matchingExistingDebts.firstOrNull()?.id ?: -1L)
+    }
+    val selectedExistingDebt = remember(matchingExistingDebts, selectedExistingDebtId) {
+        matchingExistingDebts.firstOrNull { it.id == selectedExistingDebtId }
+            ?: matchingExistingDebts.firstOrNull()
+    }
+    val isStackingOnExisting = existingDebt == null &&
+        onAddToExistingDebt != null &&
+        addOnExistingMode &&
+        selectedExistingDebt != null
 
     var amountText by remember {
         val initialAmt = existingDebt?.amount?.let { a ->
@@ -282,8 +305,285 @@ fun AddDebtDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
+                if (existingDebt == null && onAddToExistingDebt != null && matchingExistingDebts.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassCard)
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    if (!addOnExistingMode) colors.primaryNeon.copy(alpha = 0.22f)
+                                    else Color.Transparent
+                                )
+                                .clickable { addOnExistingMode = false }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isArabic) "دين جديد" else "New Debt",
+                                color = if (!addOnExistingMode) colors.primaryNeon else colors.textMuted,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    if (addOnExistingMode) colors.primaryNeon.copy(alpha = 0.22f)
+                                    else Color.Transparent
+                                )
+                                .clickable {
+                                    addOnExistingMode = true
+                                    if (selectedExistingDebt == null) {
+                                        selectedExistingDebtId = matchingExistingDebts.firstOrNull()?.id ?: -1L
+                                    }
+                                }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isArabic) "على دين قديم (${matchingExistingDebts.size})"
+                                else "Add to Existing (${matchingExistingDebts.size})",
+                                color = if (addOnExistingMode) colors.primaryNeon else colors.textMuted,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                if (isStackingOnExisting && selectedExistingDebt != null) {
+                    val accentColor = if (selectedType == DebtType.OWED_BY_ME) {
+                        DebtColors.payable(isDark)
+                    } else {
+                        DebtColors.receivable(isDark)
+                    }
+
+                    Text(
+                        text = if (isArabic) "اختر الدين القديم" else "Select existing debt",
+                        color = colors.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        matchingExistingDebts.forEach { candidate ->
+                            val isSelected = candidate.id == selectedExistingDebt.id
+                            val candidateRem = candidate.remainingAmount.coerceAtLeast(0.0)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (isSelected) accentColor.copy(alpha = 0.14f)
+                                        else colors.glassCard
+                                    )
+                                    .border(
+                                        width = if (isSelected) 1.3.dp else 1.dp,
+                                        color = if (isSelected) accentColor else colors.glassBorderSubtle,
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                    .clickable { selectedExistingDebtId = candidate.id }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = candidate.personName,
+                                        color = colors.textPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (candidate.isPaid) {
+                                            if (isArabic) "مسدد بالكامل • الإجمالي: ${isolateLtr(formatDzd(candidate.amount, strings.currencyCode))}"
+                                            else "Settled • Total: ${formatDzd(candidate.amount, strings.currencyCode)}"
+                                        } else {
+                                            if (isArabic) "المتبقي: ${isolateLtr(formatDzd(candidateRem, strings.currencyCode))}"
+                                            else "Remaining: ${formatDzd(candidateRem, strings.currencyCode)}"
+                                        },
+                                        color = if (candidate.isPaid) DebtColors.settled(isDark) else accentColor,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = {
+                            Text(
+                                if (isArabic) "مبلغ الدين المضاف (${strings.currencyCode})"
+                                else "Added Amount (${strings.currencyCode})"
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = TextStyle(textDirection = TextDirection.Ltr),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = colors.glassBorderSubtle,
+                            focusedLabelColor = accentColor,
+                            unfocusedLabelColor = colors.textSecondary
+                        ),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(500L, 1000L, 2000L, 5000L).forEach { step ->
+                            GlassPill(
+                                text = "+$step",
+                                isSelected = false,
+                                onClick = {
+                                    val nextVal = (amountText.toDoubleOrNull() ?: 0.0) + step
+                                    amountText = if (nextVal % 1.0 == 0.0) nextVal.toLong().toString() else nextVal.toString()
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        label = {
+                            Text(
+                                if (isArabic) "ملاحظة الإضافة (اختياري)"
+                                else "Addition note (optional)"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = colors.glassBorderSubtle,
+                            focusedLabelColor = accentColor,
+                            unfocusedLabelColor = colors.textSecondary
+                        ),
+                        maxLines = 2
+                    )
+
+                    val addedAmt = amountText.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+                    if (addedAmt > 0.0) {
+                        val projRem = selectedExistingDebt.remainingAmount.coerceAtLeast(0.0) + addedAmt
+                        val projTot = selectedExistingDebt.amount + addedAmt
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(accentColor.copy(alpha = 0.12f))
+                                .border(0.8.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isArabic) "النتيجة بعد الإضافة:" else "Projected outcome:",
+                                        color = accentColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isArabic) {
+                                            "المتبقي الجديد: ${isolateLtr(formatDzd(projRem, strings.currencyCode))}"
+                                        } else {
+                                            "New Remaining: ${formatDzd(projRem, strings.currencyCode)}"
+                                        },
+                                        color = colors.textPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        text = if (isArabic) {
+                                            "الإجمالي الجديد: ${isolateLtr(formatDzd(projTot, strings.currencyCode))}"
+                                        } else {
+                                            "New Total: ${formatDzd(projTot, strings.currencyCode)}"
+                                        },
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.TrendingUp,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    GlassButton(
+                        text = if (addedAmt > 0.0) {
+                            if (isArabic) "إضافة ${isolateLtr(formatDzd(addedAmt, strings.currencyCode))}"
+                            else "Add ${formatDzd(addedAmt, strings.currencyCode)}"
+                        } else strings.save,
+                        icon = Icons.Default.Add,
+                        enabled = addedAmt > 0.0,
+                        containerColor = accentColor,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            onAddToExistingDebt(
+                                selectedExistingDebt,
+                                addedAmt,
+                                noteText.trim(),
+                                null
+                            )
+                            onDismiss()
+                        }
+                    )
+                } else {
                 // Title / Person with Contacts Picker Icon
                 OutlinedTextField(
                     value = personNameText,
@@ -735,6 +1035,7 @@ fun AddDebtDialog(
                         onDismiss()
                     }
                 )
+                }
             }
         }
         }

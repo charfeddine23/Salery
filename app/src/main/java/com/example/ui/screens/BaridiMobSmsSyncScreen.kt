@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +75,7 @@ import com.example.data.UserSettings
 import com.example.sms.AlgPosteSmsAnalyzer
 import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
+import com.example.sms.SmsFailedTransactionEntry
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassCard
@@ -82,6 +84,8 @@ import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.components.SmsAnnualTaxSummaryCard
 import com.example.ui.components.SmsCleanArchiveRow
 import com.example.ui.components.SmsCleanBalanceTimelineRow
+import com.example.ui.components.SmsFailedTransactionCard
+import com.example.ui.components.SmsFailedTransactionsSummaryCard
 import com.example.ui.components.SmsHeroBalanceCard
 import com.example.ui.components.SmsManualTestAccordion
 import com.example.ui.components.SmsTaxFeeCompactCard
@@ -92,6 +96,7 @@ import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzd
+import com.example.ui.i18n.formatDzdAmount
 import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
@@ -107,6 +112,8 @@ fun BaridiMobSmsSyncScreen(
     userSettings: UserSettings,
     pendingSuggestions: List<SmsSuggestionEntry>,
     detectedTaxes: List<SmsTaxAnomalyEntry> = emptyList(),
+    failedTransactions: List<SmsFailedTransactionEntry> = emptyList(),
+    conflictingLedgerIdsByFailedId: Map<String, List<Long>> = emptyMap(),
     balanceHistory: List<SmsBalanceSnapshot> = emptyList(),
     archivedSmsList: List<ArchivedAlgPosteSmsEntity> = emptyList(),
     archiveStudyReport: ArchivedSmsStudyReport = ArchivedSmsStudyReport(),
@@ -125,6 +132,9 @@ fun BaridiMobSmsSyncScreen(
     onDismissTaxAnomaly: (anomalyId: String) -> Unit = {},
     onClearAllTaxes: () -> Unit = {},
     onToggleAutoAddTaxes: (Boolean) -> Unit = {},
+    onResolveFailedTransaction: (failedId: String) -> Unit = {},
+    onDismissFailedTransaction: (failedId: String) -> Unit = {},
+    onClearAllFailedTransactions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -264,6 +274,7 @@ fun BaridiMobSmsSyncScreen(
             selectedTab = activeTab,
             taxesCount = detectedTaxes.size,
             transactionsCount = totalTransactionsCount,
+            failedCount = failedTransactions.size,
             archiveCount = archiveTotalCount,
             isArabic = isArabic,
             colors = colors,
@@ -337,19 +348,42 @@ fun BaridiMobSmsSyncScreen(
                         modifier = Modifier.padding(dimens.cardPadding)
                     )
                 } else {
+                    val failedDebitMap = remember(failedTransactions) {
+                        failedTransactions.associateBy { it.failedDebitSmsId }
+                    }
+                    val recoveryMap = remember(failedTransactions) {
+                        failedTransactions.groupBy { it.recoverySmsId }
+                    }
                     val visible = if (showAllBalanceHistory) newestHistoryFirst else newestHistoryFirst.take(8)
                     visible.forEach { snap ->
                         HorizontalDivider(
                             color = colors.glassBorderSubtle.copy(alpha = 0.4f),
                             thickness = 0.6.dp
                         )
+                        val asFailedDebit = failedDebitMap[snap.id]
+                        val asRecoveries = recoveryMap[snap.id].orEmpty()
+                            .filter { it.failedDebitSmsId != it.recoverySmsId }
+                        val statusBadge: Pair<String?, androidx.compose.ui.graphics.Color> = when {
+                            asFailedDebit != null -> (
+                                if (isArabic) "فاشلة • تم استرجاع المبلغ ✓"
+                                else "Failed • Reversed ✓"
+                                ) to RoseNeon
+                            asRecoveries.isNotEmpty() -> {
+                                val sumRec = asRecoveries.sumOf { it.recoveredAmount }
+                                val amtStr = isolateLtr(formatDzdAmount(sumRec, strings.currencyCode, isStealth))
+                                (if (isArabic) "استرجاع فاشلة +$amtStr" else "Recovered +$amtStr") to EmeraldNeon
+                            }
+                            else -> null to RoseNeon
+                        }
                         SmsCleanBalanceTimelineRow(
                             snapshot = snap,
                             delta = deltaBySnapshotId[snap.id],
                             isArabic = isArabic,
                             isStealth = isStealth,
                             currency = strings.currencyCode,
-                            colors = colors
+                            colors = colors,
+                            failedStatusLabel = statusBadge.first,
+                            failedStatusColor = statusBadge.second
                         )
                     }
                     if (newestHistoryFirst.size > 8) {
@@ -628,6 +662,60 @@ fun BaridiMobSmsSyncScreen(
 
                 if (newestHistoryFirst.isNotEmpty() || pendingSuggestions.isEmpty()) {
                     item { TransactionsTimelineCardSection() }
+                }
+            }
+
+            SmsWorkspaceTab.FAILED -> {
+                item {
+                    SmsFailedTransactionsSummaryCard(
+                        failedEntries = failedTransactions,
+                        conflictingMap = conflictingLedgerIdsByFailedId,
+                        currencyCode = strings.currencyCode,
+                        isStealth = isStealth,
+                        isArabic = isArabic,
+                        colors = colors
+                    )
+                }
+
+                if (failedTransactions.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        SectionActionHeader(
+                            title = if (isArabic) "التعاملات الفاشلة المرصودة (${failedTransactions.size})"
+                            else "Detected Failed Operations (${failedTransactions.size})",
+                            actionLabel = if (isArabic) "مسح الكل" else "Clear",
+                            actionColor = RoseNeon,
+                            onActionClick = onClearAllFailedTransactions
+                        )
+                    }
+
+                    items(failedTransactions, key = { "failed_${it.id}" }) { entry ->
+                        val conflictingCount = conflictingLedgerIdsByFailedId[entry.id]?.size ?: 0
+                        SmsFailedTransactionCard(
+                            entry = entry,
+                            conflictingLedgerCount = conflictingCount,
+                            isArabic = isArabic,
+                            isStealth = isStealth,
+                            currency = strings.currencyCode,
+                            colors = colors,
+                            onResolveConflicting = { onResolveFailedTransaction(entry.id) },
+                            onDismiss = { onDismissFailedTransaction(entry.id) }
+                        )
+                    }
+                } else {
+                    item {
+                        LiquidEmptyStateCard(
+                            icon = Icons.Default.Replay,
+                            title = if (isArabic) "لا توجد تعاملات فاشلة أو وهمية ✓"
+                            else "No Failed or Ghost Transactions ✓",
+                            description = if (isArabic) {
+                                "عند خصم مبلغ لعملية لم تتم ثم عودته لاحقاً (صامتاً في الرسالة القادمة أو برسالة إلغاء)، سيتم رصده هنا تلقائياً واستبعاده لمنع أي تناقض في حساباتك."
+                            } else {
+                                "Whenever a failed debit is silently returned on a later SMS or explicitly refunded, it is caught here with balance proof and excluded from expenses/income."
+                            },
+                            iconColor = RoseNeon
+                        )
+                    }
                 }
             }
 

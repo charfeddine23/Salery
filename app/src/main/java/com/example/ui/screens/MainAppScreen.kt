@@ -166,6 +166,8 @@ fun MainAppScreen(
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
     val pendingSmsSuggestions by viewModel.pendingSmsSuggestions.collectAsState()
     val detectedSmsTaxes by viewModel.detectedSmsTaxes.collectAsState()
+    val detectedFailedSmsTransactions by viewModel.detectedFailedSmsTransactions.collectAsState()
+    val conflictingFailedLedgerIds by viewModel.conflictingLedgerTransactionIdsByFailedId.collectAsState()
     val smsBalanceHistory by viewModel.smsBalanceHistory.collectAsState()
     val archivedAlgPosteSms by viewModel.archivedAlgPosteSms.collectAsState()
     val archiveStudyReport by viewModel.archiveStudyReport.collectAsState()
@@ -632,6 +634,8 @@ fun MainAppScreen(
                                     userSettings = userSettings,
                                     pendingSuggestions = pendingSmsSuggestions,
                                     detectedTaxes = detectedSmsTaxes,
+                                    failedTransactions = detectedFailedSmsTransactions,
+                                    conflictingLedgerIdsByFailedId = conflictingFailedLedgerIds,
                                     balanceHistory = smsBalanceHistory,
                                     archivedSmsList = archivedAlgPosteSms,
                                     archiveStudyReport = archiveStudyReport,
@@ -684,6 +688,15 @@ fun MainAppScreen(
                                     },
                                     onToggleAutoAddTaxes = { enabled ->
                                         viewModel.setAutoAddTaxesEnabled(enabled)
+                                    },
+                                    onResolveFailedTransaction = { failedId ->
+                                        viewModel.resolveFailedTransactionAndDeleteConflictingLedgerEntries(failedId)
+                                    },
+                                    onDismissFailedTransaction = { failedId ->
+                                        viewModel.dismissFailedSmsTransaction(failedId)
+                                    },
+                                    onClearAllFailedTransactions = {
+                                        viewModel.clearAllFailedSmsTransactions()
                                     }
                                 )
                                 "access_permissions" -> AccessPermissionsScreen(
@@ -831,6 +844,9 @@ fun MainAppScreen(
                                     onPartialPay = { debt, amount, recordInWallet ->
                                         viewModel.makePartialPayment(debt, amount, recordInWallet)
                                     },
+                                    onAddToExistingDebt = { debt, addedAmount, extraNote, updatedDueDateMillis ->
+                                        viewModel.addAmountToExistingDebt(debt, addedAmount, extraNote, updatedDueDateMillis)
+                                    },
                                     onPayDebtNow = { viewModel.markDebtAsPaid(it) },
                                     onDeleteDebt = { viewModel.deleteDebt(it) },
                                     onClearSettledDebts = { viewModel.clearSettledDebts() }
@@ -930,6 +946,10 @@ fun MainAppScreen(
             if (showAddDebtDialog) {
                 AddDebtDialog(
                     initialType = addDebtType,
+                    existingDebts = debts,
+                    onAddToExistingDebt = { targetDebt, addedAmount, extraNote, updatedDueDateMillis ->
+                        viewModel.addAmountToExistingDebt(targetDebt, addedAmount, extraNote, updatedDueDateMillis)
+                    },
                     onDismiss = { showAddDebtDialog = false },
                     onSave = { type, person, amount, note, dueDateMillis, autoPay, isRecurring, monthlyInstallment, installmentDay, paidAmount ->
                         viewModel.addDebt(

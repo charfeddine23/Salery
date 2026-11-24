@@ -48,6 +48,7 @@ import com.example.sms.AlgPosteSmsCodec
 import com.example.sms.AlgPosteSmsInboxScanner
 import com.example.sms.ArchivedSmsStudyReport
 import com.example.sms.SmsBalanceSnapshot
+import com.example.sms.SmsFailedTransactionEntry
 import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.sms.TaxExpenseAutoLogger
@@ -227,6 +228,28 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
         .map { AlgPosteSmsCodec.parseTaxAnomalies(it.detectedSmsTaxesJson) }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Caught Failed / Ghost Transactions ("التعاملات الفاشلة") reversed silently or via cancellation SMS
+    val detectedFailedSmsTransactions: StateFlow<List<SmsFailedTransactionEntry>> = settings
+        .map { AlgPosteSmsCodec.parseFailedTransactions(it.detectedFailedSmsTransactionsJson) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Room ledger TransactionEntity IDs that contradict a detected Failed Transaction (if already logged prior to reversal)
+    val conflictingLedgerTransactionIdsByFailedId: StateFlow<Map<String, List<Long>>> = combine(
+        detectedFailedSmsTransactions,
+        allTransactions
+    ) { failedList, transactions ->
+        buildMap {
+            for (entry in failedList) {
+                val matchedIds = findMatchingConflictingTransactions(entry, transactions).map { it.id }
+                if (matchedIds.isNotEmpty()) {
+                    put(entry.id, matchedIds)
+                }
+            }
+        }
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Extracted balance history timeline from ALG Poste / BaridiMob SMS messages
     val smsBalanceHistory: StateFlow<List<SmsBalanceSnapshot>> = settings
@@ -682,6 +705,44 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             }
             _toastEvent.emit(
                 if (isAr) "تم تحديث الدين بنجاح" else "Debt updated successfully"
+            )
+        }
+    }
+
+    fun addAmountToExistingDebt(
+        debt: DebtEntity,
+        addedAmount: Double,
+        extraNote: String = "",
+        updatedDueDateMillis: Long? = null
+    ) {
+        if (!addedAmount.isFinite() || addedAmount <= 0.0) return
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val newTotal = debt.amount + addedAmount
+            val newRemaining = debt.remainingAmount.coerceAtLeast(0.0) + addedAmount
+            val cleanExtra = extraNote.trim()
+            val mergedNote = when {
+                cleanExtra.isBlank() -> debt.note
+                debt.note.isBlank() -> cleanExtra
+                else -> "${debt.note}\n+ ${addedAmount.toLong()}: $cleanExtra"
+            }
+            val nextDue = updatedDueDateMillis ?: debt.dueDateMillis
+            val updatedDebt = debt.copy(
+                amount = newTotal,
+                remainingAmount = newRemaining,
+                isPaid = false,
+                paidDateMillis = null,
+                dueDateMillis = nextDue,
+                note = mergedNote
+            )
+            dao.updateDebt(updatedDebt)
+            DebtReminderScheduler.scheduleDebtReminder(getApplication(), updatedDebt)
+            _toastEvent.emit(
+                if (isAr) {
+                    "تمت إضافة ${addedAmount.toLong()} د.ج إلى دين ${debt.personName} • المتبقي: ${newRemaining.toLong()} د.ج"
+                } else {
+                    "Added ${addedAmount.toLong()} DZD to ${debt.personName} • Remaining: ${newRemaining.toLong()} DZD"
+                }
             )
         }
     }
@@ -1898,7 +1959,12 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun resetSmsBaselineAndRescan(context: Context = getApplication()) {
-        prefsManager.updateSettings { it.copy(smsSyncBaselineTimestampMillis = 0L) }
+        prefsManager.updateSettings {
+            it.copy(
+                smsSyncBaselineTimestampMillis = 0L,
+                dismissedFailedSmsIdsJson = "[]"
+            )
+        }
         scanAlgPosteSmsInbox(context, showFeedback = true)
     }
 
@@ -1961,19 +2027,33 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         current.latestSmsBalanceUpdatedAt > 0L || it >= 0.0
                     }
 
+                    val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                    val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
+                    val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                        snapshots = mergedHistory,
+                        existingEntries = existingFailed,
+                        dismissedIds = dismissedFailedIds
+                    )
+                    val excludedIds = failedAnalysis.excludedSuggestionSmsIds
+
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                         snapshots = mergedHistory,
-                        existingAnomalies = existingTaxes
+                        existingAnomalies = existingTaxes,
+                        failedAnalysis = failedAnalysis
                     )
 
+                    val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                    val cleanedExistingPending = existingPending.filterNot {
+                        it.id.removePrefix("bal_op_") in excludedIds
+                    }
                     val updatedPendingJson = if (current.baridiMobSmsSyncEnabled) {
                         val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
-                        val existingPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                        val existingBaseIds = existingPending.map { it.id.removePrefix("bal_op_") }.toSet()
+                        val existingBaseIds = cleanedExistingPending.map { it.id.removePrefix("bal_op_") }.toSet()
                         val deltaOps = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
                             snapshots = mergedHistory,
-                            minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                            minTimestampMillis = current.smsSyncBaselineTimestampMillis,
+                            excludedSmsIds = excludedIds
                         ).filter { op ->
                             val baseKey = op.id.removePrefix("bal_op_")
                             op.id !in processed &&
@@ -1981,15 +2061,11 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                                 "bal_op_$baseKey" !in processed &&
                                 baseKey !in existingBaseIds
                         }
-                        if (deltaOps.isEmpty()) {
-                            current.pendingSmsSuggestionsJson
-                        } else {
-                            AlgPosteSmsCodec.encodeSuggestions(
-                                (deltaOps + existingPending).distinctBy { it.id.removePrefix("bal_op_") }
-                            )
-                        }
+                        AlgPosteSmsCodec.encodeSuggestions(
+                            (deltaOps + cleanedExistingPending).distinctBy { it.id.removePrefix("bal_op_") }
+                        )
                     } else {
-                        current.pendingSmsSuggestionsJson
+                        AlgPosteSmsCodec.encodeSuggestions(cleanedExistingPending)
                     }
 
                     current.copy(
@@ -1998,7 +2074,8 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet,
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes)
+                        detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions)
                     )
                 }
                 TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
@@ -2051,25 +2128,42 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            val totalTaxes = withContext(Dispatchers.IO) {
+            val (totalTaxes, totalFailed) = withContext(Dispatchers.IO) {
                 val reconstructedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(reanalyzed)
                 var taxesCount = 0
+                var failedCount = 0
                 prefsManager.updateSettings { current ->
                     val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                     val mergedHistory = (existingHistory + reconstructedSnaps)
                         .distinctBy { it.id }
                         .sortedBy { it.timestampMillis }
                     val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+
+                    val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                    val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
+                    val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                        snapshots = mergedHistory,
+                        existingEntries = existingFailed,
+                        dismissedIds = dismissedFailedIds
+                    )
+                    failedCount = failedAnalysis.failedTransactions.size
+
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                         snapshots = mergedHistory,
-                        existingAnomalies = existingTaxes
+                        existingAnomalies = existingTaxes,
+                        failedAnalysis = failedAnalysis
                     )
                     taxesCount = updatedTaxes.size
 
+                    val cleanedPending = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
+                        .filterNot { it.id.removePrefix("bal_op_") in failedAnalysis.excludedSuggestionSmsIds }
+
                     current.copy(
+                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(cleanedPending),
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
@@ -2080,13 +2174,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     prefsManager = prefsManager,
                     isArabic = isAr
                 )
-                taxesCount
+                taxesCount to failedCount
             }
 
             if (showFeedback) {
                 _toastEvent.emit(
-                    if (isAr) "تمت إعادة دراسة ${reanalyzed.size} رسالة دائمة • رصد $totalTaxes ضرائب (≤ 1,000 دج)"
-                    else "Re-studied ${reanalyzed.size} permanent SMS • $totalTaxes caught taxes (≤ 1,000 DA)"
+                    if (isAr) "تمت إعادة دراسة ${reanalyzed.size} رسالة دائمة • $totalTaxes ضرائب • $totalFailed تعاملات فاشلة"
+                    else "Re-studied ${reanalyzed.size} permanent SMS • $totalTaxes taxes • $totalFailed failed ops"
                 )
             }
         }
@@ -2132,13 +2226,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
             var addedCount = 0
             var newTaxCount = 0
+            var newFailedCount = 0
             var newSnapshotCount = 0
             var autoLoggedTaxCount = 0
             withContext(Dispatchers.IO) {
                 prefsManager.updateSettings { current ->
                     val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
-                    val existingBaseIds = existing.map { it.id.removePrefix("bal_op_") }.toSet()
 
                     val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
                     val mergedHistory = (existingHistory + archivedSnapshots + scanResult.snapshots)
@@ -2147,12 +2241,27 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     newSnapshotCount = (mergedHistory.size - existingHistory.size).coerceAtLeast(0)
                     val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
+                    val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                    val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
+                    val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                        snapshots = mergedHistory,
+                        existingEntries = existingFailed,
+                        dismissedIds = dismissedFailedIds
+                    )
+                    newFailedCount = (failedAnalysis.failedTransactions.size - existingFailed.size).coerceAtLeast(0)
+                    val excludedIds = failedAnalysis.excludedSuggestionSmsIds
+                    val cleanedExisting = existing.filterNot {
+                        it.id.removePrefix("bal_op_") in excludedIds
+                    }
+                    val existingBaseIds = cleanedExisting.map { it.id.removePrefix("bal_op_") }.toSet()
+
                     val newPending = if (current.baridiMobSmsSyncEnabled) {
                         val deltaOperations = AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
                             snapshots = mergedHistory,
-                            minTimestampMillis = current.smsSyncBaselineTimestampMillis
+                            minTimestampMillis = current.smsSyncBaselineTimestampMillis,
+                            excludedSmsIds = excludedIds
                         )
-                        (scanResult.suggestions + deltaOperations)
+                        (scanResult.suggestions.filterNot { it.id.removePrefix("bal_op_") in excludedIds } + deltaOperations)
                             .distinctBy { it.id.removePrefix("bal_op_") }
                             .filter { candidate ->
                                 val baseKey = candidate.id.removePrefix("bal_op_")
@@ -2169,17 +2278,18 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                         snapshots = mergedHistory,
-                        existingAnomalies = existingTaxes
+                        existingAnomalies = existingTaxes,
+                        failedAnalysis = failedAnalysis
                     )
                     newTaxCount = (updatedTaxes.size - existingTaxes.size).coerceAtLeast(0)
 
                     current.copy(
-                        pendingSmsSuggestionsJson = if (newPending.isEmpty()) current.pendingSmsSuggestionsJson
-                        else AlgPosteSmsCodec.encodeSuggestions(
-                            (newPending + existing).distinctBy { it.id.removePrefix("bal_op_") }
+                        pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(
+                            (newPending + cleanedExisting).distinctBy { it.id.removePrefix("bal_op_") }
                         ),
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
@@ -2194,6 +2304,16 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
             if (showFeedback) {
                 val msg = when {
+                    newFailedCount > 0 && addedCount > 0 -> if (isAr) {
+                        "تم اكتشاف $addedCount معاملة و رصد $newFailedCount تعاملات فاشلة!"
+                    } else {
+                        "Found $addedCount transactions & detected $newFailedCount failed/reversed ops!"
+                    }
+                    newFailedCount > 0 -> if (isAr) {
+                        "⚠ تم رصد $newFailedCount تعاملات فاشلة واستبعادها لمنع خلط الحساب!"
+                    } else {
+                        "⚠ Detected $newFailedCount failed/reversed transactions & excluded from ledger!"
+                    }
                     addedCount > 0 && newTaxCount > 0 -> if (isAr) {
                         "تم اكتشاف $addedCount معاملة و $newTaxCount فارق ضرائب/رسوم!"
                     } else {
@@ -2276,8 +2396,9 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
 
-            val (caughtNewTaxAmount, autoAddedFutureTaxCount) = withContext(Dispatchers.IO) {
+            val (caughtNewTaxAmount, caughtFailedRecoveredAmt, autoAddedFutureTaxCount) = withContext(Dispatchers.IO) {
                 var taxAmt = 0.0
+                var failedRecAmt = 0.0
                 prefsManager.updateSettings { current ->
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
                     val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
@@ -2286,21 +2407,43 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     } else existingHistory
                     val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
 
-                    val manualDeltaSuggestion = if (parsed == null && snapshot != null) {
-                        AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(mergedHistory)
-                            .firstOrNull { it.id.removePrefix("bal_op_") == snapshot.id }
-                    } else null
-                    val effectiveSuggestion = parsed ?: manualDeltaSuggestion
+                    val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                    val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
+                    val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                        snapshots = mergedHistory,
+                        existingEntries = existingFailed,
+                        dismissedIds = dismissedFailedIds
+                    )
+                    val prevFailedIds = existingFailed.map { it.id }.toSet()
+                    failedRecAmt = failedAnalysis.failedTransactions
+                        .firstOrNull { it.id !in prevFailedIds }
+                        ?.recoveredAmount ?: 0.0
 
+                    val excludedIds = failedAnalysis.excludedSuggestionSmsIds
+                    val manualDeltaSuggestion = if (parsed == null && snapshot != null && snapshot.id !in excludedIds) {
+                        AlgPosteSmsAnalyzer.detectBalanceOperationSuggestions(
+                            snapshots = mergedHistory,
+                            excludedSmsIds = excludedIds
+                        ).firstOrNull { it.id.removePrefix("bal_op_") == snapshot.id }
+                    } else null
+                    val parsedIfNotExcluded = parsed?.takeIf {
+                        it.id.removePrefix("bal_op_") !in excludedIds
+                    }
+                    val effectiveSuggestion = parsedIfNotExcluded ?: manualDeltaSuggestion
+
+                    val cleanedExisting = existing.filterNot {
+                        it.id.removePrefix("bal_op_") in excludedIds
+                    }
                     val updatedPending = if (effectiveSuggestion != null) {
                         val base = effectiveSuggestion.id.removePrefix("bal_op_")
-                        listOf(effectiveSuggestion) + existing.filterNot { it.id.removePrefix("bal_op_") == base }
-                    } else existing
+                        listOf(effectiveSuggestion) + cleanedExisting.filterNot { it.id.removePrefix("bal_op_") == base }
+                    } else cleanedExisting
 
                     val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                     val updatedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                         snapshots = mergedHistory,
-                        existingAnomalies = existingTaxes
+                        existingAnomalies = existingTaxes,
+                        failedAnalysis = failedAnalysis
                     )
                     val prevTaxIds = existingTaxes.map { it.id }.toSet()
                     taxAmt = updatedTaxes.firstOrNull { it.id !in prevTaxIds }?.taxAmount ?: 0.0
@@ -2309,6 +2452,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         pendingSmsSuggestionsJson = AlgPosteSmsCodec.encodeSuggestions(updatedPending),
                         smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                         detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(updatedTaxes),
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
                         latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                         latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                         latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
@@ -2319,7 +2463,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     prefsManager = prefsManager,
                     isArabic = isAr
                 )
-                taxAmt to autoResult.addedCount
+                Triple(taxAmt, failedRecAmt, autoResult.addedCount)
             }
 
             val msg = buildString {
@@ -2334,6 +2478,13 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                 } else if (snapshot != null) {
                     val balLabel = formatDzdAmount(snapshot.balance, if (isAr) "دج" else "DA")
                     append(if (isAr) "الرصيد المستخرج: $balLabel" else "Balance extracted: $balLabel")
+                }
+                if (caughtFailedRecoveredAmt > 0.0) {
+                    val recLabel = formatDzdAmount(caughtFailedRecoveredAmt, if (isAr) "دج" else "DA")
+                    append(
+                        if (isAr) " • ⚠ معاملة فاشلة مسترجعة: $recLabel!"
+                        else " • ⚠ Caught Failed Op Reversal: $recLabel!"
+                    )
                 }
                 if (caughtNewTaxAmount > 0.0) {
                     val taxLabel = formatDzdAmount(caughtNewTaxAmount, if (isAr) "دج" else "DA")
@@ -2425,7 +2576,7 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                         dao.getAllArchivedAlgPosteSmsList()
                     )
 
-                    // 2. Detect & merge tax anomalies against balance timeline
+                    // 2. Detect failed transactions first, then merge tax anomalies against balance timeline
                     var mergedTaxes: List<SmsTaxAnomalyEntry> = emptyList()
                     prefsManager.updateSettings { current ->
                         val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
@@ -2433,14 +2584,23 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                             .distinctBy { it.id }
                             .sortedBy { it.timestampMillis }
                         val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
+                        val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                        val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
+                        val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
+                            snapshots = mergedHistory,
+                            existingEntries = existingFailed,
+                            dismissedIds = dismissedFailedIds
+                        )
                         val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
                         mergedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
                             snapshots = mergedHistory,
-                            existingAnomalies = existingTaxes
+                            existingAnomalies = existingTaxes,
+                            failedAnalysis = failedAnalysis
                         )
                         current.copy(
                             smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
                             detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(mergedTaxes),
+                            detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
                             latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
                             latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
                             latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
@@ -2544,6 +2704,92 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearAllTaxAnomalies() {
         prefsManager.updateSettings { it.copy(detectedSmsTaxesJson = "[]") }
+    }
+
+    private fun findMatchingConflictingTransactions(
+        entry: SmsFailedTransactionEntry,
+        transactions: List<TransactionEntity>
+    ): List<TransactionEntity> {
+        val debitSnippet = entry.debitRawBody.trim().take(32)
+        val recoverySnippet = entry.recoveryRawBody.trim().take(32)
+        val isExplicitReversal = entry.detectionKind in setOf(
+            "EXPLICIT_REFUND_REVERSAL",
+            "EXPLICIT_REVERSAL_UNLINKED"
+        )
+        return transactions.filter { tx ->
+            val matchesFailedDebit = tx.type == TransactionType.EXPENSE &&
+                entry.debitAmount > 0.0 &&
+                kotlin.math.abs(tx.amount - entry.debitAmount) < 0.01 &&
+                kotlin.math.abs(tx.dateMillis - entry.debitTimestampMillis) <= 120_000L &&
+                (debitSnippet.isBlank() || tx.note.contains(debitSnippet, ignoreCase = true))
+
+            val matchesExplicitRefundIncome = isExplicitReversal &&
+                tx.type == TransactionType.INCOME &&
+                entry.recoveredAmount > 0.0 &&
+                kotlin.math.abs(tx.amount - entry.recoveredAmount) < 0.01 &&
+                kotlin.math.abs(tx.dateMillis - entry.recoveredTimestampMillis) <= 120_000L &&
+                (recoverySnippet.isBlank() || tx.note.contains(recoverySnippet, ignoreCase = true))
+
+            matchesFailedDebit || matchesExplicitRefundIncome
+        }
+    }
+
+    fun dismissFailedSmsTransaction(failedId: String) {
+        prefsManager.updateSettings { current ->
+            val updated = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                .filterNot { it.id == failedId }
+            val dismissed = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson) + failedId
+            current.copy(
+                detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(updated),
+                dismissedFailedSmsIdsJson = AlgPosteSmsCodec.encodeProcessedKeys(dismissed)
+            )
+        }
+    }
+
+    fun clearAllFailedSmsTransactions() {
+        prefsManager.updateSettings { current ->
+            val existingIds = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                .map { it.id }
+            val dismissed = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson) + existingIds
+            current.copy(
+                detectedFailedSmsTransactionsJson = "[]",
+                dismissedFailedSmsIdsJson = AlgPosteSmsCodec.encodeProcessedKeys(dismissed)
+            )
+        }
+    }
+
+    fun resolveFailedTransactionAndDeleteConflictingLedgerEntries(failedId: String) {
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            val failedList = AlgPosteSmsCodec.parseFailedTransactions(
+                settings.value.detectedFailedSmsTransactionsJson
+            )
+            val target = failedList.firstOrNull { it.id == failedId } ?: return@launch
+            val deletedCount = withContext(Dispatchers.IO) {
+                val allTx = dao.getAllTransactionsList()
+                val matches = findMatchingConflictingTransactions(target, allTx)
+                for (tx in matches) {
+                    dao.deleteTransaction(tx)
+                }
+                prefsManager.updateSettings { current ->
+                    val updated = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
+                        .map { item -> if (item.id == failedId) item.copy(isResolved = true) else item }
+                    current.copy(
+                        detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(updated)
+                    )
+                }
+                matches.size
+            }
+            _toastEvent.emit(
+                if (deletedCount > 0) {
+                    if (isAr) "تم حذف $deletedCount معاملة وهمية من الحسابات لمنع التناقض ✓"
+                    else "Removed $deletedCount ghost entry from ledger to keep balances accurate ✓"
+                } else {
+                    if (isAr) "تمت معالجة الحالة — لا توجد معاملات متضاربة في السجل ✓"
+                    else "Marked resolved — no conflicting ledger entries found ✓"
+                }
+            )
+        }
     }
 
     fun acceptSmsSuggestion(

@@ -38,13 +38,16 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -84,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.sms.AnnualSmsTaxesSummary
 import com.example.sms.SmsBalanceSnapshot
+import com.example.sms.SmsFailedTransactionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.formatDzdAmount
@@ -104,6 +108,7 @@ import kotlin.math.abs
 enum class SmsWorkspaceTab {
     TAXES,
     TRANSACTIONS,
+    FAILED,
     ARCHIVE
 }
 
@@ -517,12 +522,12 @@ fun SmsWorkspaceSegmentedTabs(
     selectedTab: SmsWorkspaceTab,
     taxesCount: Int,
     transactionsCount: Int,
+    failedCount: Int = 0,
     archiveCount: Int,
     isArabic: Boolean,
     colors: LiquidGlassColors,
     onSelectTab: (SmsWorkspaceTab) -> Unit
 ) {
-    val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
 
     data class TabSpec(
@@ -545,11 +550,19 @@ fun SmsWorkspaceSegmentedTabs(
         ),
         TabSpec(
             tab = SmsWorkspaceTab.TRANSACTIONS,
-            label = if (isArabic) "المعاملات" else "Transactions",
+            label = if (isArabic) "المعاملات" else "Activity",
             count = transactionsCount,
             icon = Icons.Default.SwapHoriz,
             accent = EmeraldNeon,
             tag = "sms_tab_transactions"
+        ),
+        TabSpec(
+            tab = SmsWorkspaceTab.FAILED,
+            label = if (isArabic) "الفاشلة" else "Failed",
+            count = failedCount,
+            icon = Icons.Default.Replay,
+            accent = RoseNeon,
+            tag = "sms_tab_failed"
         ),
         TabSpec(
             tab = SmsWorkspaceTab.ARCHIVE,
@@ -568,7 +581,7 @@ fun SmsWorkspaceSegmentedTabs(
             .background(colors.glassSurface)
             .border(0.9.dp, colors.glassBorderSubtle, RoundedCornerShape(18.dp))
             .padding(5.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         tabs.forEach { item ->
             val selected = selectedTab == item.tab
@@ -582,10 +595,10 @@ fun SmsWorkspaceSegmentedTabs(
                 animationSpec = tween(200),
                 label = "sms_tab_border_${item.tab.name}"
             )
-            Row(
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .defaultMinSize(minHeight = 52.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(bgColor)
                     .border(
@@ -598,22 +611,45 @@ fun SmsWorkspaceSegmentedTabs(
                         indication = ripple(color = item.accent),
                         onClick = { onSelectTab(item.tab) }
                     )
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
+                    .padding(horizontal = 4.dp, vertical = 7.dp)
                     .testTag(item.tag),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = null,
-                    tint = if (selected) item.accent else colors.textMuted,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = null,
+                        tint = if (selected) item.accent else colors.textMuted,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (item.count > 0 || selected) item.accent.copy(alpha = 0.16f)
+                                else colors.glassCard.copy(alpha = 0.65f)
+                            )
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "${item.count}",
+                            color = if (selected || item.count > 0) item.accent else colors.textMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(fontFeatureSettings = "tnum"),
+                            maxLines = 1
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = "${item.label} (${item.count})",
+                    text = item.label,
                     color = if (selected) item.accent else colors.textSecondary,
-                    fontSize = typo.bodySm,
+                    fontSize = 11.sp,
                     fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -984,7 +1020,9 @@ fun SmsCleanBalanceTimelineRow(
     isArabic: Boolean,
     isStealth: Boolean,
     currency: String,
-    colors: LiquidGlassColors
+    colors: LiquidGlassColors,
+    failedStatusLabel: String? = null,
+    failedStatusColor: Color = RoseNeon
 ) {
     var peekRaw by remember { mutableStateOf(false) }
     val typo = LocalAdaptiveTypography.current
@@ -1070,6 +1108,24 @@ fun SmsCleanBalanceTimelineRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (!failedStatusLabel.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(failedStatusColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = failedStatusLabel,
+                                color = failedStatusColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -1114,6 +1170,561 @@ fun SmsCleanBalanceTimelineRow(
                     .padding(10.dp)
             )
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SmsFailedTransactionsSummaryCard(
+    failedEntries: List<SmsFailedTransactionEntry>,
+    conflictingMap: Map<String, List<Long>>,
+    currencyCode: String,
+    isStealth: Boolean,
+    isArabic: Boolean,
+    colors: LiquidGlassColors
+) {
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+    val tnum = TextStyle(fontFeatureSettings = "tnum")
+
+    val totalRecovered = failedEntries.sumOf { it.recoveredAmount }
+    val totalUnrefundedFees = failedEntries.sumOf { it.unrefundedFeeAmount }
+    val conflictingCount = failedEntries.count { (conflictingMap[it.id]?.size ?: 0) > 0 }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("sms_failed_transactions_summary_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = RoseNeon.copy(alpha = 0.48f),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        cornerRadius = dimens.cornerRadiusLg,
+        breathingGlow = false
+    ) {
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                RoseNeon.copy(alpha = if (colors.isDark) 0.18f else 0.10f),
+                                EmeraldNeon.copy(alpha = if (colors.isDark) 0.08f else 0.04f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * (if (isRtl) 0.85f else 0.15f), size.height * 0.2f),
+                            radius = size.width * 0.72f
+                        )
+                    )
+                }
+                .padding(dimens.cardPadding)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(RoseNeon.copy(alpha = 0.16f))
+                                .border(0.9.dp, RoseNeon.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Replay,
+                                contentDescription = null,
+                                tint = RoseNeon,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (isArabic) "التعاملات الفاشلة (الوهمية)" else "Failed / Ghost Transactions",
+                                color = colors.textPrimary,
+                                fontSize = typo.bodyLg,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = if (isArabic) {
+                                    "رصد المبالغ المخصومة خطأً والمسترجعة تلقائياً أو برسالة"
+                                } else {
+                                    "Catches failed debits recovered on later SMS or refund alerts"
+                                },
+                                color = colors.textMuted,
+                                fontSize = typo.bodyXs
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background((if (conflictingCount > 0) AmberNeon else EmeraldNeon).copy(alpha = 0.14f))
+                            .border(
+                                0.9.dp,
+                                (if (conflictingCount > 0) AmberNeon else EmeraldNeon).copy(alpha = 0.42f),
+                                RoundedCornerShape(50)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = if (conflictingCount > 0) AmberNeon else EmeraldNeon,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = if (conflictingCount > 0) {
+                                if (isArabic) "تضارب مسجل ($conflictingCount)" else "Conflict ($conflictingCount)"
+                            } else {
+                                if (isArabic) "الحساب محمي ✓" else "Ledger Protected ✓"
+                            },
+                            color = if (conflictingCount > 0) AmberNeon else EmeraldNeon,
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = isolateLtr(formatDzdAmount(totalRecovered, currencyCode, isStealth)),
+                    color = EmeraldNeon,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = tnum,
+                    modifier = Modifier.testTag("sms_failed_total_recovered")
+                )
+                Text(
+                    text = if (isArabic) "إجمالي المبالغ الفاشلة المسترجعة للرصيد" else "Total failed debit funds returned to balance",
+                    color = colors.textMuted,
+                    fontSize = typo.bodyXs
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.glassSurface)
+                            .border(0.7.dp, colors.glassBorderSubtle, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (isArabic) "${failedEntries.size} عملية مرصودة" else "${failedEntries.size} caught ops",
+                            color = colors.textSecondary,
+                            fontSize = typo.bodyXs,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (totalUnrefundedFees >= 0.01) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(AmberNeon.copy(alpha = 0.14f))
+                                .border(0.7.dp, AmberNeon.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (isArabic) {
+                                    "رسوم بقيت مقتطعة: ${isolateLtr(formatDzdAmount(totalUnrefundedFees, currencyCode, isStealth))}"
+                                } else {
+                                    "Unrefunded fees: ${formatDzdAmount(totalUnrefundedFees, currencyCode, isStealth)}"
+                                },
+                                color = AmberNeon,
+                                fontSize = typo.bodyXs,
+                                fontWeight = FontWeight.Bold,
+                                style = tnum
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SmsFailedTransactionCard(
+    entry: SmsFailedTransactionEntry,
+    conflictingLedgerCount: Int,
+    isArabic: Boolean,
+    isStealth: Boolean,
+    currency: String,
+    colors: LiquidGlassColors,
+    onResolveConflicting: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showRawMessages by remember(entry.id) { mutableStateOf(false) }
+    val dimens = LocalAdaptiveDimens.current
+    val typo = LocalAdaptiveTypography.current
+    val tnum = TextStyle(fontFeatureSettings = "tnum")
+
+    val kindLabel = when (entry.detectionKind) {
+        "EXPLICIT_REFUND_REVERSAL" -> if (isArabic) "استرجاع برسالة إلغاء" else "Explicit Reversal"
+        "FAILED_WITH_FEE_KEPT" -> if (isArabic) "استرجاع صامت (رسوم مقتطعة)" else "Silent Return (Fee Kept)"
+        "MULTI_DEBIT_RECOVERY" -> if (isArabic) "استرجاع مجمع" else "Batch Recovery"
+        "EXPLICIT_FAILED_NO_DEDUCTION" -> if (isArabic) "فشل بدون خصم" else "Failed (No Debit)"
+        "EXPLICIT_REVERSAL_UNLINKED" -> if (isArabic) "إشعار إلغاء / استرجاع" else "Reversal Notice"
+        else -> if (isArabic) "رصد صامت بالرسالة القادمة" else "Silent Next-SMS Catch"
+    }
+    val kindAccent = when (entry.detectionKind) {
+        "FAILED_WITH_FEE_KEPT" -> AmberNeon
+        "EXPLICIT_REFUND_REVERSAL", "SILENT_BALANCE_JUMP", "MULTI_DEBIT_RECOVERY" -> EmeraldNeon
+        else -> RoseNeon
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("sms_failed_transaction_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = RoseNeon.copy(alpha = 0.42f),
+        shape = RoundedCornerShape(dimens.cornerRadiusLg),
+        cornerRadius = dimens.cornerRadiusLg
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.verticalGradient(listOf(RoseNeon, AmberNeon, EmeraldNeon))
+                    )
+            )
+            Column(modifier = Modifier.weight(1f).padding(dimens.cardPaddingSmall)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(RoseNeon.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = null,
+                            tint = RoseNeon,
+                            modifier = Modifier.size(dimens.iconSizeSm)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(dimens.spacingSm))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) entry.titleAr else entry.titleEn,
+                            color = colors.textPrimary,
+                            fontSize = typo.body,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(kindAccent.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "$kindLabel • ${entry.confidencePercent}%",
+                                    color = kindAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
+                            Text(
+                                text = isolateLtr(formatDate(entry.recoveredTimestampMillis, isArabic)),
+                                color = colors.textMuted,
+                                fontSize = typo.bodyXs,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(EmeraldNeon.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isStealth) "••••" else isolateLtr("+" + formatDzdAmount(entry.recoveredAmount, currency, false)),
+                                color = EmeraldNeon,
+                                fontSize = typo.bodySm,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = tnum,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isArabic) "تجاهل" else "Dismiss",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 4-step Balance Proof Grid
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.glassSurface)
+                        .border(0.7.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FailedProofCell(
+                            label = if (isArabic) "قبل الخصم" else "Before Debit",
+                            value = isolateLtr(formatDzdAmount(entry.balanceBeforeDebit, currency, isStealth)),
+                            valueColor = colors.textSecondary,
+                            mutedColor = colors.textMuted,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FailedProofCell(
+                            label = if (isArabic) "بعد الخصم الوهمي" else "After Ghost Debit",
+                            value = isolateLtr(formatDzdAmount(entry.balanceAfterDebit, currency, isStealth)),
+                            valueColor = RoseNeon,
+                            mutedColor = colors.textMuted,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    HorizontalDivider(color = colors.glassBorderSubtle.copy(alpha = 0.35f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FailedProofCell(
+                            label = if (isArabic) "المتوقع لاحقاً" else "Expected Next",
+                            value = isolateLtr(formatDzdAmount(entry.expectedBalanceBeforeRecovery, currency, isStealth)),
+                            valueColor = colors.textSecondary,
+                            mutedColor = colors.textMuted,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FailedProofCell(
+                            label = if (isArabic) "الفعلي عند الرجوع" else "Actual Returned",
+                            value = isolateLtr(formatDzdAmount(entry.actualBalanceAtRecovery, currency, isStealth)),
+                            valueColor = EmeraldNeon,
+                            mutedColor = colors.textMuted,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = if (isStealth) "••••••" else if (isArabic) entry.explanationAr else entry.explanationEn,
+                    color = colors.textSecondary,
+                    fontSize = typo.bodyXs,
+                    lineHeight = 16.sp
+                )
+
+                if (entry.debitRawBody.isNotBlank() || entry.recoveryRawBody.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (showRawMessages) {
+                            if (isArabic) "إخفاء نصوص الرسائل ▲" else "Hide SMS evidence ▲"
+                        } else {
+                            if (isArabic) "عرض نصوص رسالتي الخصم والاسترجاع ▼" else "Show debit & recovery SMS ▼"
+                        },
+                        color = CyanNeon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { showRawMessages = !showRawMessages }
+                            .padding(vertical = 6.dp, horizontal = 4.dp)
+                    )
+                    AnimatedVisibility(visible = showRawMessages) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (entry.debitRawBody.isNotBlank()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(RoseNeon.copy(alpha = 0.08f))
+                                        .border(0.6.dp, RoseNeon.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "1) رسالة الخصم الفاشلة:" else "1) Failed Debit SMS:",
+                                        color = RoseNeon,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isStealth) "••••••" else isolateLtr(entry.debitRawBody),
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            if (entry.recoveryRawBody.isNotBlank() && entry.recoverySmsId != entry.failedDebitSmsId) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(EmeraldNeon.copy(alpha = 0.08f))
+                                        .border(0.6.dp, EmeraldNeon.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "2) الرسالة الكاشفة للاسترجاع:" else "2) Recovery Reveal SMS:",
+                                        color = EmeraldNeon,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isStealth) "••••••" else isolateLtr(entry.recoveryRawBody),
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (conflictingLedgerCount > 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = dimens.buttonHeight)
+                            .clip(RoundedCornerShape(dimens.cornerRadiusSm))
+                            .background(RoseNeon.copy(alpha = 0.18f))
+                            .border(0.8.dp, RoseNeon.copy(alpha = 0.55f), RoundedCornerShape(dimens.cornerRadiusSm))
+                            .clickable(onClick = onResolveConflicting)
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                            .testTag("resolve_failed_tx_button"),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            tint = RoseNeon,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isArabic) {
+                                "حذف المعاملة الوهمية المسجلة لمنع التناقض ($conflictingLedgerCount)"
+                            } else {
+                                "Delete Ghost Ledger Entry to Fix Balance ($conflictingLedgerCount)"
+                            },
+                            color = RoseNeon,
+                            fontSize = typo.bodySm,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.13f))
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isArabic) {
+                                "مستبعدة تلقائياً من المصاريف والدخل لمنع الخلط ✓"
+                            } else {
+                                "Auto-excluded from Expenses & Income ✓"
+                            },
+                            color = EmeraldNeon,
+                            fontSize = typo.bodyXs,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FailedProofCell(
+    label: String,
+    value: String,
+    valueColor: Color,
+    mutedColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            color = mutedColor,
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.ExtraBold,
+            style = TextStyle(fontFeatureSettings = "tnum"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
