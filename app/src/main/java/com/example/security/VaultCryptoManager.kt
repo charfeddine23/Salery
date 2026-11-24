@@ -32,6 +32,9 @@ object VaultCryptoManager {
 
     private val secureRandom = SecureRandom()
 
+    @Volatile
+    private var cachedAesKey: SecretKey? = null
+
     fun encryptSensitive(plaintext: String): String {
         if (plaintext.isEmpty()) return ""
         if (plaintext.startsWith(ENC_PREFIX)) return plaintext
@@ -69,10 +72,14 @@ object VaultCryptoManager {
     }
 
     private fun getOrCreateAesKey(): SecretKey? {
+        cachedAesKey?.let { return it }
         return try {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
             keyStore.load(null)
-            (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+            (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let {
+                cachedAesKey = it
+                return it
+            }
 
             val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
             val spec = KeyGenParameterSpec.Builder(
@@ -84,7 +91,7 @@ object VaultCryptoManager {
                 .setKeySize(256)
                 .build()
             keyGen.init(spec)
-            keyGen.generateKey()
+            keyGen.generateKey().also { cachedAesKey = it }
         } catch (_: Throwable) {
             // Headless JVM unit test environments without AndroidKeyStore safely return null
             null

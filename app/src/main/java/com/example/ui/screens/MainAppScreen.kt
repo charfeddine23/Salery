@@ -189,14 +189,21 @@ fun MainAppScreen(
     }
 
     var canInstallPackages by remember {
-        mutableStateOf(AppUpdateManager.canRequestPackageInstalls(context))
+        mutableStateOf(false)
     }
     var pendingActionAfterInstallPerm by remember { mutableStateOf<String?>(null) }
     var forceShowPermissionsOnboarding by remember { mutableStateOf(false) }
     var allowOnboardingWindow by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(180L)
-        allowOnboardingWindow = true
+    LaunchedEffect(userSettings.hasLocalAccount) {
+        if (userSettings.hasLocalAccount) {
+            kotlinx.coroutines.delay(450L)
+            canInstallPackages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                AppUpdateManager.canRequestPackageInstalls(context)
+            }
+            allowOnboardingWindow = true
+        } else {
+            allowOnboardingWindow = false
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -331,16 +338,25 @@ fun MainAppScreen(
     val isScreenshotProtected = userSettings.screenshotProtectionEnabled
     DisposableEffect(context, lifecycleOwner, isScreenshotProtected) {
         val activity = context.findHostActivity()
+        var lastAppliedRecentsDisabled: Boolean? = null
         val applySecureWindowState: () -> Unit = {
             activity?.let { act ->
-                if (isScreenshotProtected) {
-                    act.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                } else {
-                    act.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                val win = act.window
+                if (win != null) {
+                    val hasSecure = (win.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+                    if (isScreenshotProtected && !hasSecure) {
+                        win.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else if (!isScreenshotProtected && hasSecure) {
+                        win.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    lastAppliedRecentsDisabled != isScreenshotProtected &&
+                    (isScreenshotProtected || lastAppliedRecentsDisabled != null)
+                ) {
                     try {
                         act.setRecentsScreenshotEnabled(!isScreenshotProtected)
+                        lastAppliedRecentsDisabled = isScreenshotProtected
                     } catch (_: Throwable) {
                     }
                 }
@@ -371,6 +387,33 @@ fun MainAppScreen(
                     viewModel.unlockAppByBiometrics()
                 }
             )
+        } else if (!userSettings.hasLocalAccount) {
+            var showLocalAccountSetup by remember(userSettings.hasLocalAccount) { mutableStateOf(false) }
+            if (!showLocalAccountSetup) {
+                AuthWelcomeScreen(
+                    isArabic = activeStrings is ArabicStrings,
+                    onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
+                    onCreateLocalAccount = { showLocalAccountSetup = true }
+                )
+            } else {
+                LocalAccountSetupScreen(
+                    isArabic = activeStrings is ArabicStrings,
+                    initialUsername = userSettings.localUsername,
+                    initialWilayaCode = userSettings.localWilayaCode,
+                    initialCommuneName = userSettings.localCommuneName,
+                    onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
+                    onBack = { showLocalAccountSetup = false },
+                    onCreateAccount = { username, wilayaCode, wilayaName, communeName ->
+                        showLocalAccountSetup = false
+                        viewModel.activateLocalAccount(
+                            username = username,
+                            wilayaCode = wilayaCode,
+                            wilayaName = wilayaName,
+                            communeName = communeName
+                        )
+                    }
+                )
+            }
         } else {
             // Respect the active language's layout direction for the entire interface and drawer
             CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
@@ -425,6 +468,10 @@ fun MainAppScreen(
                                 onCheckForUpdates = {
                                     scope.launch { drawerState.close() }
                                     viewModel.checkForUpdates(manual = true)
+                                },
+                                onOpenAuthScreen = {
+                                    scope.launch { drawerState.close() }
+                                    viewModel.signOutToAuthScreen()
                                 }
                             )
                         }

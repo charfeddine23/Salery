@@ -324,7 +324,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         // Check Smart Salary Scheduler, Debt Auto-Payments, clean obsolete update APKs, and scan ALG Poste SMS
         // off the Main Thread after a brief yield so Frame 1 completes within the SurfaceSyncGroup budget.
         viewModelScope.launch(Dispatchers.IO) {
-            delay(250L)
+            delay(350L)
+            try {
+                DebtReminderScheduler.createNotificationChannel(getApplication())
+            } catch (_: Throwable) {
+            }
             try {
                 AppUpdateManager.cleanupObsoleteUpdates(getApplication())
             } catch (_: Throwable) {
@@ -1914,6 +1918,45 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
             }
+        }
+    }
+
+    fun activateLocalAccount(
+        username: String = "",
+        wilayaCode: String = "",
+        wilayaName: String = "",
+        communeName: String = ""
+    ) {
+        val isAr = settings.value.language == "ar"
+        val cleanUsername = username.trim()
+        val cleanWilayaCode = wilayaCode.trim()
+        val cleanWilayaName = wilayaName.trim()
+        val cleanCommuneName = communeName.trim()
+        prefsManager.updateSettings {
+            it.copy(
+                hasLocalAccount = true,
+                localUsername = cleanUsername.ifEmpty { it.localUsername },
+                localWilayaCode = cleanWilayaCode.ifEmpty { it.localWilayaCode },
+                localWilayaName = cleanWilayaName.ifEmpty { it.localWilayaName },
+                localCommuneName = cleanCommuneName.ifEmpty { it.localCommuneName }
+            )
+        }
+        viewModelScope.launch {
+            _toastEvent.emit(
+                if (isAr) {
+                    if (cleanUsername.isNotEmpty()) "مرحباً $cleanUsername • تم إنشاء الحساب المحلي ✓"
+                    else "تم تفعيل الحساب المحلي بنجاح ✓"
+                } else {
+                    if (cleanUsername.isNotEmpty()) "Welcome $cleanUsername • Local account created ✓"
+                    else "Local account activated ✓"
+                }
+            )
+        }
+    }
+
+    fun signOutToAuthScreen() {
+        prefsManager.updateSettings {
+            it.copy(hasLocalAccount = false)
         }
     }
 

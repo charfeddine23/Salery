@@ -1,10 +1,6 @@
 package com.example
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -14,10 +10,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.notification.DebtReminderScheduler
 import com.example.ui.screens.MainAppScreen
 import com.example.ui.theme.VaultixTheme
 import com.example.viewmodel.VaultixViewModel
@@ -26,24 +20,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Defer notification channel & permission prompt until after Frame 1 commits
-        // so MainActivity's SurfaceSyncGroup never contends with a permission dialog window.
-        window.decorView.post {
-            if (isFinishing || isDestroyed) return@post
-            DebtReminderScheduler.createNotificationChannel(applicationContext)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) {
-                window.decorView.postDelayed({
-                    if (!isFinishing && !isDestroyed &&
-                        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-                    }
-                }, 650L)
-            }
-        }
 
         setContent {
             val viewModel: VaultixViewModel = viewModel()

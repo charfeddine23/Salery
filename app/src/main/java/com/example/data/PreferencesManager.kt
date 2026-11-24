@@ -69,7 +69,12 @@ data class UserSettings(
     val dismissedFailedSmsIdsJson: String = "[]",
     val autoAddTaxesEnabled: Boolean = false,
     val autoAddTaxesBaselineMillis: Long = 0L,
-    val hasCompletedPermissionsOnboarding: Boolean = false
+    val hasCompletedPermissionsOnboarding: Boolean = false,
+    val hasLocalAccount: Boolean = false,
+    val localUsername: String = "",
+    val localWilayaCode: String = "",
+    val localWilayaName: String = "",
+    val localCommuneName: String = ""
 )
 
 class PreferencesManager(context: Context) {
@@ -228,7 +233,12 @@ class PreferencesManager(context: Context) {
             dismissedFailedSmsIdsJson = safeString(all, "dismissed_failed_sms_ids_json", "[]"),
             autoAddTaxesEnabled = safeBoolean(all, "auto_add_taxes_enabled", false),
             autoAddTaxesBaselineMillis = safeLong(all, "auto_add_taxes_baseline_millis", 0L),
-            hasCompletedPermissionsOnboarding = safeBoolean(all, "has_completed_permissions_onboarding", false)
+            hasCompletedPermissionsOnboarding = safeBoolean(all, "has_completed_permissions_onboarding", false),
+            hasLocalAccount = safeBoolean(all, "has_local_account_v1", false),
+            localUsername = safeString(all, "local_username_v1", ""),
+            localWilayaCode = safeString(all, "local_wilaya_code_v1", ""),
+            localWilayaName = safeString(all, "local_wilaya_name_v1", ""),
+            localCommuneName = safeString(all, "local_commune_name_v1", "")
         )
     }
 
@@ -301,6 +311,11 @@ class PreferencesManager(context: Context) {
                 .putBoolean("auto_add_taxes_enabled", finalUpdated.autoAddTaxesEnabled)
                 .putLong("auto_add_taxes_baseline_millis", finalUpdated.autoAddTaxesBaselineMillis)
                 .putBoolean("has_completed_permissions_onboarding", finalUpdated.hasCompletedPermissionsOnboarding)
+                .putBoolean("has_local_account_v1", finalUpdated.hasLocalAccount)
+                .putString("local_username_v1", finalUpdated.localUsername)
+                .putString("local_wilaya_code_v1", finalUpdated.localWilayaCode)
+                .putString("local_wilaya_name_v1", finalUpdated.localWilayaName)
+                .putString("local_commune_name_v1", finalUpdated.localCommuneName)
                 .apply()
             _settingsFlow.value = finalUpdated
         } finally {

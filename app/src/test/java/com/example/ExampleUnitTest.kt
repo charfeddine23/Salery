@@ -2222,4 +2222,63 @@ class ExampleUnitTest {
     assertEquals(s3NextPurchase.id, suggestions[0].id)
     assertEquals(500.0, suggestions[0].amount, 0.01)
   }
+
+  @Test
+  fun algeriaLocationsCatalog_containsAll69WilayasAnd1541CommunesWithAccurateSearch() {
+    val assetFile = listOf(
+      java.io.File("src/main/assets/algeria_locations.json"),
+      java.io.File("app/src/main/assets/algeria_locations.json")
+    ).firstOrNull { it.exists() }
+      ?: throw AssertionError("algeria_locations.json not found from working directory ${java.io.File(".").absolutePath}")
+
+    val wilayas = com.example.data.AlgeriaLocationsCatalog.parseJson(assetFile.readText(Charsets.UTF_8))
+
+    assertEquals("Algeria must contain all 69 official wilayas (01..69)", 69, wilayas.size)
+    assertEquals((1..69).map { it.toString().padStart(2, '0') }, wilayas.map { it.code })
+
+    val totalCommunes = wilayas.sumOf { it.communes.size }
+    assertEquals("Algeria must contain all 1541 official communes", 1541, totalCommunes)
+
+    assertTrue("Every wilaya must have at least one commune", wilayas.all { it.communes.isNotEmpty() })
+    assertTrue(
+      "Every wilaya and commune must have non-blank Arabic and Latin names",
+      wilayas.all { w ->
+        w.nameAr.isNotBlank() && w.nameEn.isNotBlank() &&
+          w.communes.all { c -> c.nameAr.isNotBlank() && c.nameEn.isNotBlank() }
+      }
+    )
+
+    // Verify 2026 Law 26-06 newly promoted wilayas (59..69)
+    val expectedNewWilayas = mapOf(
+      "59" to "Aflou",
+      "60" to "Barika",
+      "61" to "El Kantara",
+      "62" to "Bir El Ater",
+      "63" to "El Aricha",
+      "64" to "Ksar Chellala",
+      "65" to "Aïn Oussera",
+      "66" to "Messaad",
+      "67" to "Ksar El Boukhari",
+      "68" to "Bou Saâda",
+      "69" to "El Abiodh Sidi Cheikh"
+    )
+    expectedNewWilayas.forEach { (code, expectedName) ->
+      val w = wilayas.firstOrNull { it.code == code }
+      assertNotNull("Wilaya $code must exist", w)
+      assertEquals(expectedName, w!!.nameEn)
+    }
+
+    // Verify Arabic & code search filtering
+    val algiersByArabic = com.example.data.AlgeriaLocationsCatalog.filterWilayas(wilayas, "الجزائر")
+    assertTrue(algiersByArabic.any { it.code == "16" })
+    val algiersByCode = com.example.data.AlgeriaLocationsCatalog.filterWilayas(wilayas, "16")
+    assertEquals(listOf("16"), algiersByCode.map { it.code })
+
+    val w16 = wilayas.first { it.code == "16" }
+    val babElOued = com.example.data.AlgeriaLocationsCatalog.filterCommunes(w16.communes, "باب الوادي")
+    assertTrue(babElOued.any { it.nameEn == "Bab El Oued" })
+
+    val allMatches = com.example.data.AlgeriaLocationsCatalog.searchAllCommunes(wilayas, "بوسعادة")
+    assertTrue(allMatches.any { it.wilaya.code == "68" && it.commune.nameEn == "Bou Saâda" })
+  }
 }

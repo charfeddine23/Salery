@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -87,6 +88,7 @@ fun SidebarDrawer(
     onSelectLanguage: (String) -> Unit,
     updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,
     onCheckForUpdates: () -> Unit = {},
+    onOpenAuthScreen: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -667,6 +669,77 @@ fun SidebarDrawer(
                                 .background(RoseNeon)
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Local Account / Return to Login Screen Action Card
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("open_auth_screen_drawer_button"),
+                backgroundColor = colors.glassCard,
+                borderColor = colors.glassBorderSubtle,
+                shape = RoundedCornerShape(18.dp),
+                onClick = onOpenAuthScreen
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = null,
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    val hasProfileName = userSettings.localUsername.isNotBlank()
+                    val locationSummary = listOf(userSettings.localCommuneName, userSettings.localWilayaName)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" • ")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (hasProfileName) {
+                                userSettings.localUsername
+                            } else if (isArabic) {
+                                "واجهة تسجيل الدخول"
+                            } else {
+                                "Sign-in Screen"
+                            },
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (locationSummary.isNotBlank()) {
+                                locationSummary
+                            } else if (isArabic) {
+                                "الحساب المحلي نشط • تبديل"
+                            } else {
+                                "Local account active • Switch"
+                            },
+                            color = colors.textMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 

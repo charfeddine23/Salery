@@ -37,13 +37,14 @@ fun VaultixLogoContainer(
     size: Dp = 44.dp,
     cornerRadius: Dp = 14.dp,
     padding: Dp = 6.dp,
-    containerAlpha: Float? = null
+    containerAlpha: Float? = null,
+    forceObsidianFrame: Boolean = false
 ) {
     val colors = LiquidGlassTheme.colors
-    val isDark = colors.isDark
+    val useDarkGlass = colors.isDark && !forceObsidianFrame
     val customAlpha = containerAlpha?.coerceIn(0f, 1f)
 
-    val backgroundBrush = if (isDark) {
+    val backgroundBrush = if (useDarkGlass) {
         Brush.verticalGradient(
             colors = listOf(
                 colors.glassSurface.copy(alpha = customAlpha ?: 0.90f),
@@ -59,7 +60,7 @@ fun VaultixLogoContainer(
         )
     }
 
-    val baseBorderColor = if (isDark) {
+    val baseBorderColor = if (useDarkGlass) {
         colors.glassBorder
     } else {
         Color(0xFF38BDF8).copy(alpha = 0.55f)
@@ -75,7 +76,7 @@ fun VaultixLogoContainer(
         Modifier
     } else {
         Modifier.shadow(
-            elevation = if (isDark) 4.dp else 6.dp,
+            elevation = if (useDarkGlass) 4.dp else 6.dp,
             shape = shape,
             spotColor = Color(0xFF00E5FF).copy(alpha = 0.25f)
         )
