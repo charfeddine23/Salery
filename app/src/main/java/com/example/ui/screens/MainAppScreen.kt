@@ -24,6 +24,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -498,7 +499,7 @@ fun MainAppScreen(
                                             onUpdateIndicatorClick = { viewModel.openUpdateDialogFromIndicator() },
                                             isStealthMode = userSettings.stealthMode,
                                             onToggleStealth = { viewModel.toggleStealthMode() },
-                                            frameless = false
+                                            frameless = currentRoute == "cards"
                                         )
                                     },
                                     bottomBar = {
@@ -512,7 +513,7 @@ fun MainAppScreen(
                                                     HubBottomBar(
                                                         currentRoute = currentRoute,
                                                         onRouteSelect = { currentRoute = it },
-                                                        frameless = false
+                                                        frameless = currentRoute == "cards"
                                                     )
                                                 }
                                                 androidx.compose.animation.AnimatedVisibility(
@@ -530,11 +531,19 @@ fun MainAppScreen(
                                         }
                                     }
                                 ) { innerPadding ->
+                                    val isCardsHub = currentRoute == "cards"
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(innerPadding)
-                                            .adaptiveContentWidth(dimens.contentMaxWidth),
+                                            .then(
+                                                if (isCardsHub) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier
+                                                        .padding(innerPadding)
+                                                        .adaptiveContentWidth(dimens.contentMaxWidth)
+                                                }
+                                            ),
                                         contentAlignment = Alignment.TopCenter
                                     ) {
                             when (currentRoute) {
@@ -557,7 +566,8 @@ fun MainAppScreen(
                                     },
                                     onRemoveThirdCard = {
                                         viewModel.removeThirdCard()
-                                    }
+                                    },
+                                    outerContentPadding = innerPadding
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
@@ -1101,7 +1111,7 @@ fun MainTopAppBar(
                         size = navButtonSize,
                         cornerRadius = dimens.cornerRadiusMd,
                         padding = 6.dp,
-                        containerAlpha = 1f
+                        containerAlpha = 0f
                     )
                     Box(
                         modifier = Modifier
@@ -1743,14 +1753,25 @@ fun LiquidGlassBottomBar(
             .padding(horizontal = dimens.screenPaddingH, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        GlassCard(
+        val dockShape = RoundedCornerShape(26.dp)
+        Box(
             modifier = Modifier
                 .widthIn(max = 580.dp)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
-            borderColor = colors.glassBorder,
-            backgroundColor = colors.glassCard.copy(alpha = 1f),
-            breathingGlow = false
+                .fillMaxWidth()
+                .clip(dockShape)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            colors.glassBorder,
+                            colors.glassBorder.copy(alpha = 0.45f),
+                            colors.glassBorder.copy(alpha = 0.30f),
+                            colors.glassBorder.copy(alpha = 0.65f)
+                        )
+                    ),
+                    shape = dockShape
+                )
+                .background(colors.glassCard.copy(alpha = 0.95f))
         ) {
             Row(
                 modifier = Modifier
@@ -1768,6 +1789,7 @@ fun LiquidGlassBottomBar(
                         "baridimob_sync" -> Color(0xFF818CF8)
                         else -> colors.primaryNeon
                     }
+                    val inactiveColor = colors.textSecondary.copy(alpha = 0.95f)
 
                     Column(
                         modifier = Modifier
@@ -1785,7 +1807,7 @@ fun LiquidGlassBottomBar(
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.label,
-                                tint = if (isSelected) activeColor else colors.textMuted,
+                                tint = if (isSelected) activeColor else inactiveColor,
                                 modifier = Modifier.size(22.dp)
                             )
                             if (item.route == "baridimob_sync" && pendingSmsCount > 0) {
@@ -1800,9 +1822,9 @@ fun LiquidGlassBottomBar(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = item.label,
-                            color = if (isSelected) activeColor else colors.textMuted,
+                            color = if (isSelected) activeColor else inactiveColor,
                             fontSize = typo.caption,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1847,11 +1869,7 @@ fun HubBottomBar(
                     "square" -> AmberNeon
                     else -> CyanNeon
                 }
-                val inactiveColor = if (frameless) {
-                    colors.textSecondary.copy(alpha = 0.88f)
-                } else {
-                    colors.textMuted
-                }
+                val inactiveColor = colors.textSecondary.copy(alpha = 0.95f)
 
                 Column(
                     modifier = Modifier
@@ -1892,25 +1910,28 @@ fun HubBottomBar(
             .padding(horizontal = dimens.screenPaddingH, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (frameless) {
-            dockRow(
-                Modifier
-                    .widthIn(max = 560.dp)
-                    .testTag("hub_bottom_banner")
-            )
-        } else {
-            GlassCard(
-                modifier = Modifier
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .testTag("hub_bottom_banner"),
-                shape = RoundedCornerShape(26.dp),
-                borderColor = colors.glassBorder,
-                backgroundColor = colors.glassCard.copy(alpha = 1f),
-                breathingGlow = false
-            ) {
-                dockRow(Modifier)
-            }
+        val dockShape = RoundedCornerShape(26.dp)
+        Box(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth()
+                .clip(dockShape)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            colors.glassBorder,
+                            colors.glassBorder.copy(alpha = 0.45f),
+                            colors.glassBorder.copy(alpha = 0.30f),
+                            colors.glassBorder.copy(alpha = 0.65f)
+                        )
+                    ),
+                    shape = dockShape
+                )
+                .background(colors.glassCard.copy(alpha = 0.95f))
+                .testTag("hub_bottom_banner")
+        ) {
+            dockRow(Modifier)
         }
     }
 }

@@ -64,10 +64,10 @@ fun SpLogoContainer(
     } else {
         Color(0xFF38BDF8).copy(alpha = 0.55f)
     }
-    val borderColor = if (customAlpha != null && customAlpha <= 0.15f) {
-        baseBorderColor.copy(alpha = (customAlpha * 2.4f).coerceAtLeast(0.05f))
-    } else {
-        baseBorderColor
+    val borderColor = when {
+        customAlpha != null && customAlpha <= 0.001f -> Color.Transparent
+        customAlpha != null && customAlpha <= 0.15f -> baseBorderColor.copy(alpha = (customAlpha * 2.4f).coerceAtLeast(0.05f))
+        else -> baseBorderColor
     }
 
     val shape = RoundedCornerShape(cornerRadius)
