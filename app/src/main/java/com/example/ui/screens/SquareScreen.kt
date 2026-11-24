@@ -40,6 +40,7 @@ import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.LocalEdgeFadeOuterPadding
 import com.example.ui.components.SquareCategoryTabStrip
 import com.example.ui.components.SquareExchangeTickerRow
 import com.example.ui.components.SquareGoldAccent
@@ -54,6 +55,7 @@ import com.example.ui.components.SquareTopAnchoredPullToRefresh
 import com.example.ui.components.SquareVenueFilter
 import com.example.ui.components.SquareVenueSubFilterStrip
 import com.example.ui.components.buildSquareTickerRows
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.components.sortSquareTickerRows
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -329,12 +331,15 @@ fun SquareScreen(
         }
     }
 
+    val outerTopPadding = LocalEdgeFadeOuterPadding.current.calculateTopPadding()
+
     SquareTopAnchoredPullToRefresh(
         isRefreshing = isRefreshing,
         isArabic = isArabic,
         onRefresh = { onRefresh(true) },
         onOpenSyncSettings = { showSyncSettingsDialog = true },
-        modifier = modifier
+        modifier = modifier,
+        topAnchorPadding = outerTopPadding
     ) {
         if (snapshot == null) {
             Box(
@@ -347,6 +352,7 @@ fun SquareScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = dimens.contentMaxWidth),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item {
@@ -404,6 +410,7 @@ fun SquareScreen(
                     modifier = Modifier
                         .weight(1.22f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
                 ) {
                     item {
@@ -456,6 +463,7 @@ fun SquareScreen(
                     modifier = Modifier
                         .weight(0.78f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item {
@@ -472,6 +480,7 @@ fun SquareScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = dimens.screenPaddingH),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
             ) {
                 item {

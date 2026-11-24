@@ -38,6 +38,7 @@ import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
 import com.example.ui.components.LiquidEmptyStateCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.StringsBundle
 import com.example.ui.i18n.formatDzd
@@ -90,6 +91,7 @@ fun IncomeScreen(
                 modifier = Modifier
                     .weight(0.9f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -143,6 +145,7 @@ fun IncomeScreen(
                 modifier = Modifier
                     .weight(1.1f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -187,6 +190,7 @@ fun IncomeScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }

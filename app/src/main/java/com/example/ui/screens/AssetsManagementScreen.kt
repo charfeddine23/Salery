@@ -55,6 +55,7 @@ import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.CryptoReadOnlySummaryCard
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GoldHoldingRowItem
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.components.formatAssetsSyncTimeCompact
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
@@ -120,6 +121,7 @@ fun AssetsManagementScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -152,6 +154,7 @@ fun AssetsManagementScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -173,6 +176,7 @@ fun AssetsManagementScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = dimens.screenPaddingH),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }

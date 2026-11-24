@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.example.market.GoldAssetHolding
 import com.example.market.SquareMarketSnapshot
 import com.example.ui.components.AssetsGoldEntryPanel
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.theme.LocalAdaptiveDimens
 
@@ -57,7 +58,8 @@ fun GoldAssetEditorScreen(
                 .fillMaxWidth()
                 .widthIn(max = 600.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = dimens.screenPaddingH, vertical = dimens.spacingMd),
+                .padding(edgeFadeVerticalContentPadding(extraTop = dimens.spacingMd, extraBottom = dimens.spacingMd))
+                .padding(horizontal = dimens.screenPaddingH),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             AssetsGoldEntryPanel(

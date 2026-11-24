@@ -3,16 +3,23 @@ package com.example.ui.components
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -22,39 +29,80 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.LiquidGlassTheme
 
+val LocalEdgeFadeOuterPadding = compositionLocalOf { PaddingValues(0.dp) }
+
+@Composable
+fun edgeFadeVerticalContentPadding(
+    extraTop: Dp = 0.dp,
+    extraBottom: Dp = 0.dp
+): PaddingValues {
+    val outer = LocalEdgeFadeOuterPadding.current
+    return PaddingValues(
+        top = outer.calculateTopPadding() + extraTop,
+        bottom = outer.calculateBottomPadding() + extraBottom
+    )
+}
+
 /**
  * Hosts full-bleed scrollable content and renders progressive Top & Bottom
  * "Fade-to-Blur Liquid Glass" edge veils behind frameless top/bottom navigation bars.
  *
- * Uses a single-pass [GraphicsLayer] capture synchronized with [scrollVersionProvider]
- * in the Draw phase (zero recomposition overhead during scroll), combined with
- * hardware RenderEffect blur (API 31+) masked via [BlendMode.DstIn] and a smooth
- * frosted liquid-glass mist gradient.
+ * Uses a single-pass [GraphicsLayer] capture synchronized via [NestedScrollConnection]
+ * and optional [scrollVersionProvider] in the Draw phase (zero recomposition overhead
+ * during scroll), combined with hardware RenderEffect blur (API 31+) masked via
+ * [BlendMode.DstIn] and a smooth frosted liquid-glass mist gradient.
  */
 @Composable
 fun FadeToBlurLiquidGlassHost(
     topEdgeHeight: Dp,
     bottomEdgeHeight: Dp,
-    scrollVersionProvider: () -> Int,
+    scrollVersionProvider: (() -> Int)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     val contentLayer = rememberGraphicsLayer()
     val colors = LiquidGlassTheme.colors
     val isDark = colors.isDark
+    var nestedScrollTick by remember { mutableIntStateOf(0) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    val scrollTracker = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (consumed.y != 0f || consumed.x != 0f) {
+                    nestedScrollTick++
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
+    val effectiveScrollVersion: () -> Int = {
+        (scrollVersionProvider?.invoke() ?: 0) + nestedScrollTick
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(scrollTracker)
+    ) {
         // 1. Sharp full-bleed scrollable content recorded into shared GraphicsLayer
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawWithContent {
-                    scrollVersionProvider()
+                    effectiveScrollVersion()
                     contentLayer.record {
                         this@drawWithContent.drawContent()
                     }
@@ -70,7 +118,7 @@ fun FadeToBlurLiquidGlassHost(
             TopLiquidGlassFadeVeil(
                 height = topBandHeight,
                 contentLayer = contentLayer,
-                scrollVersionProvider = scrollVersionProvider,
+                scrollVersionProvider = effectiveScrollVersion,
                 bgStart = colors.bgStart,
                 bgCenter = colors.bgCenter,
                 glassSurface = colors.glassSurface,
@@ -82,13 +130,13 @@ fun FadeToBlurLiquidGlassHost(
             )
         }
 
-        // 3. Bottom Fade-to-Blur Liquid Glass veil (behind frameless bottom dock)
+        // 3. Bottom Fade-to-Blur Liquid Glass veil (behind bottom dock)
         if (bottomEdgeHeight > 0.dp) {
             val bottomBandHeight = bottomEdgeHeight + 34.dp
             BottomLiquidGlassFadeVeil(
                 height = bottomBandHeight,
                 contentLayer = contentLayer,
-                scrollVersionProvider = scrollVersionProvider,
+                scrollVersionProvider = effectiveScrollVersion,
                 bgEnd = colors.bgEnd,
                 glassSurface = colors.glassSurface,
                 accentTint = colors.secondaryNeon,

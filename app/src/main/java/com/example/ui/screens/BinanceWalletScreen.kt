@@ -87,6 +87,7 @@ import com.example.crypto.CryptoMarketPriceEntry
 import com.example.data.UserSettings
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.LocalStealthMode
@@ -642,6 +643,7 @@ fun BinanceWalletScreen(
                 modifier = Modifier
                     .weight(0.95f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item {
@@ -657,6 +659,7 @@ fun BinanceWalletScreen(
                 modifier = Modifier
                     .weight(1.05f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item {
@@ -944,6 +947,7 @@ fun BinanceWalletScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item {

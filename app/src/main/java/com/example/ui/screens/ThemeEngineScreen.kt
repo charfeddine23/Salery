@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassPill
+import com.example.ui.components.LocalEdgeFadeOuterPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.AppThemeSpec
@@ -116,6 +117,8 @@ fun ThemeEngineScreen(
         filteredThemes.chunked(gridCols)
     }
 
+    val outerEdgePadding = LocalEdgeFadeOuterPadding.current
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -123,8 +126,8 @@ fun ThemeEngineScreen(
         contentPadding = PaddingValues(
             start = dimens.screenPaddingH,
             end = dimens.screenPaddingH,
-            top = 12.dp,
-            bottom = 32.dp
+            top = outerEdgePadding.calculateTopPadding() + 12.dp,
+            bottom = outerEdgePadding.calculateBottomPadding() + 32.dp
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {

@@ -88,6 +88,7 @@ import com.example.ui.components.EditCardDialog
 import com.example.ui.components.EditVisaCardDialog
 import com.example.ui.components.FadeToBlurLiquidGlassHost
 import com.example.ui.components.GlassCard
+import com.example.ui.components.LocalEdgeFadeOuterPadding
 import com.example.ui.components.SpLogoContainer
 import com.example.ui.components.formatCardDigitsDisplay
 import java.util.Locale
@@ -408,15 +409,12 @@ fun CardsHubScreen(
     }
 
     val listState = rememberLazyListState()
+    val localOuterPadding = LocalEdgeFadeOuterPadding.current
+    val hasExplicitOuterPadding = outerContentPadding.calculateTopPadding() > 0.dp ||
+        outerContentPadding.calculateBottomPadding() > 0.dp
+    val effectiveOuterPadding = if (hasExplicitOuterPadding) outerContentPadding else localOuterPadding
 
-    FadeToBlurLiquidGlassHost(
-        topEdgeHeight = outerContentPadding.calculateTopPadding(),
-        bottomEdgeHeight = outerContentPadding.calculateBottomPadding(),
-        scrollVersionProvider = {
-            listState.firstVisibleItemIndex * 100_000 + listState.firstVisibleItemScrollOffset
-        },
-        modifier = modifier.fillMaxSize()
-    ) {
+    val cardsBody: @Composable () -> Unit = {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -429,8 +427,8 @@ fun CardsHubScreen(
                 contentPadding = PaddingValues(
                     start = dimens.screenPaddingH,
                     end = dimens.screenPaddingH,
-                    top = outerContentPadding.calculateTopPadding(),
-                    bottom = outerContentPadding.calculateBottomPadding()
+                    top = effectiveOuterPadding.calculateTopPadding(),
+                    bottom = effectiveOuterPadding.calculateBottomPadding()
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
             ) {
@@ -513,6 +511,23 @@ fun CardsHubScreen(
             Spacer(modifier = Modifier.height(dimens.spacingLg))
         }
             }
+        }
+    }
+
+    if (hasExplicitOuterPadding) {
+        FadeToBlurLiquidGlassHost(
+            topEdgeHeight = outerContentPadding.calculateTopPadding(),
+            bottomEdgeHeight = outerContentPadding.calculateBottomPadding(),
+            scrollVersionProvider = {
+                listState.firstVisibleItemIndex * 100_000 + listState.firstVisibleItemScrollOffset
+            },
+            modifier = modifier.fillMaxSize()
+        ) {
+            cardsBody()
+        }
+    } else {
+        Box(modifier = modifier.fillMaxSize()) {
+            cardsBody()
         }
     }
 }

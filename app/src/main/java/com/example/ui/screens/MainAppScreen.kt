@@ -113,8 +113,10 @@ import com.example.ui.components.AddDebtDialog
 import com.example.ui.components.AddTransactionDialog
 import com.example.ui.components.BackupRestoreDialog
 import com.example.ui.components.DynamicMoneyBag
+import com.example.ui.components.FadeToBlurLiquidGlassHost
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
+import com.example.ui.components.LocalEdgeFadeOuterPadding
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.ScreenshotProtectionDialog
 import com.example.ui.components.SidebarDrawer
@@ -499,7 +501,7 @@ fun MainAppScreen(
                                             onUpdateIndicatorClick = { viewModel.openUpdateDialogFromIndicator() },
                                             isStealthMode = userSettings.stealthMode,
                                             onToggleStealth = { viewModel.toggleStealthMode() },
-                                            frameless = currentRoute == "cards"
+                                            frameless = true
                                         )
                                     },
                                     bottomBar = {
@@ -513,7 +515,7 @@ fun MainAppScreen(
                                                     HubBottomBar(
                                                         currentRoute = currentRoute,
                                                         onRouteSelect = { currentRoute = it },
-                                                        frameless = currentRoute == "cards"
+                                                        frameless = true
                                                     )
                                                 }
                                                 androidx.compose.animation.AnimatedVisibility(
@@ -531,21 +533,18 @@ fun MainAppScreen(
                                         }
                                     }
                                 ) { innerPadding ->
-                                    val isCardsHub = currentRoute == "cards"
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .then(
-                                                if (isCardsHub) {
-                                                    Modifier
-                                                } else {
-                                                    Modifier
-                                                        .padding(innerPadding)
-                                                        .adaptiveContentWidth(dimens.contentMaxWidth)
-                                                }
-                                            ),
-                                        contentAlignment = Alignment.TopCenter
+                                    FadeToBlurLiquidGlassHost(
+                                        topEdgeHeight = innerPadding.calculateTopPadding(),
+                                        bottomEdgeHeight = innerPadding.calculateBottomPadding(),
+                                        modifier = Modifier.fillMaxSize()
                                     ) {
+                                        CompositionLocalProvider(LocalEdgeFadeOuterPadding provides innerPadding) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .adaptiveContentWidth(dimens.contentMaxWidth),
+                                                contentAlignment = Alignment.TopCenter
+                                            ) {
                             when (currentRoute) {
                                 "cards" -> CardsHubScreen(
                                     summary = summary,
@@ -566,8 +565,7 @@ fun MainAppScreen(
                                     },
                                     onRemoveThirdCard = {
                                         viewModel.removeThirdCard()
-                                    },
-                                    outerContentPadding = innerPadding
+                                    }
                                 )
                                 "keys" -> KeysScreen(
                                     userSettings = userSettings,
@@ -908,6 +906,7 @@ fun MainAppScreen(
                                         viewModel.upsertGoldHolding(karat, grams, label, existingId)
                                     }
                                 )
+                                            }
                                         }
                                     }
                                 }
@@ -1036,6 +1035,7 @@ fun MainAppScreen(
         }
     }
 }
+}
 
 @Composable
 fun MainTopAppBar(
@@ -1077,22 +1077,47 @@ fun MainTopAppBar(
             // App Logo Menu Button (4 main screens) / Back Button (sub-screens) — min touch target 48dp
             val navButtonSize = dimens.buttonHeight.coerceAtLeast(48.dp)
             if (canGoBack) {
-                GlassCard(
-                    modifier = Modifier
-                        .size(navButtonSize)
-                        .testTag("top_bar_back_button"),
-                    shape = RoundedCornerShape(dimens.cornerRadiusMd),
-                    backgroundColor = colors.glassCard.copy(alpha = 1f),
-                    breathingGlow = false,
-                    onClick = onBackClick
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val backDesc = if (isArabic) "رجوع" else "Back"
+                if (frameless) {
+                    Box(
+                        modifier = Modifier
+                            .size(navButtonSize)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(bounded = false, radius = 24.dp, color = colors.primaryNeon),
+                                role = Role.Button,
+                                onClickLabel = backDesc,
+                                onClick = onBackClick
+                            )
+                            .testTag("top_bar_back_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (isArabic) "رجوع" else "Back",
+                            contentDescription = backDesc,
                             tint = colors.textPrimary,
                             modifier = Modifier.size(dimens.iconSizeMd)
                         )
+                    }
+                } else {
+                    GlassCard(
+                        modifier = Modifier
+                            .size(navButtonSize)
+                            .testTag("top_bar_back_button"),
+                        shape = RoundedCornerShape(dimens.cornerRadiusMd),
+                        backgroundColor = colors.glassCard.copy(alpha = 1f),
+                        breathingGlow = false,
+                        onClick = onBackClick
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = backDesc,
+                                tint = colors.textPrimary,
+                                modifier = Modifier.size(dimens.iconSizeMd)
+                            )
+                        }
                     }
                 }
             } else {
@@ -1974,14 +1999,26 @@ fun LiquidGlassNavigationRail(
             .padding(start = dimens.spacingMd, top = dimens.spacingSm, bottom = dimens.spacingSm),
         contentAlignment = Alignment.Center
     ) {
-        GlassCard(
+        val railShape = RoundedCornerShape(dimens.cornerRadiusXl)
+        Box(
             modifier = Modifier
                 .width(88.dp)
                 .fillMaxHeight()
-                .testTag(if (isInsideCard) "card_nav_rail" else "hub_nav_rail"),
-            shape = RoundedCornerShape(dimens.cornerRadiusXl),
-            cornerRadius = dimens.cornerRadiusXl,
-            backgroundColor = colors.glassCard
+                .clip(railShape)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            colors.glassBorder,
+                            colors.glassBorder.copy(alpha = 0.45f),
+                            colors.glassBorder.copy(alpha = 0.30f),
+                            colors.glassBorder.copy(alpha = 0.65f)
+                        )
+                    ),
+                    shape = railShape
+                )
+                .background(colors.glassCard.copy(alpha = 0.95f))
+                .testTag(if (isInsideCard) "card_nav_rail" else "hub_nav_rail")
         ) {
             Column(
                 modifier = Modifier
@@ -2003,6 +2040,7 @@ fun LiquidGlassNavigationRail(
                         "square" -> AmberNeon
                         else -> colors.primaryNeon
                     }
+                    val inactiveColor = colors.textSecondary.copy(alpha = 0.95f)
 
                     Column(
                         modifier = Modifier
@@ -2018,7 +2056,7 @@ fun LiquidGlassNavigationRail(
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.label,
-                                tint = if (isSelected) activeColor else colors.textMuted,
+                                tint = if (isSelected) activeColor else inactiveColor,
                                 modifier = Modifier.size(dimens.iconSizeMd)
                             )
                             if (item.route == "baridimob_sync" && pendingSmsCount > 0) {
@@ -2033,7 +2071,7 @@ fun LiquidGlassNavigationRail(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = item.label,
-                            color = if (isSelected) activeColor else colors.textMuted,
+                            color = if (isSelected) activeColor else inactiveColor,
                             fontSize = typo.caption,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,

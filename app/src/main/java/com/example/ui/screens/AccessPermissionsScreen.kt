@@ -69,6 +69,7 @@ import com.example.data.UserSettings
 import com.example.security.BiometricAuthManager
 import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.formatPercent
@@ -538,6 +539,7 @@ fun AccessPermissionsScreen(
                 modifier = Modifier
                     .weight(0.9f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -549,6 +551,7 @@ fun AccessPermissionsScreen(
                 modifier = Modifier
                     .weight(1.1f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -561,6 +564,7 @@ fun AccessPermissionsScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item {

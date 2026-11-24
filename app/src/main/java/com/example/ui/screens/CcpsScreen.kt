@@ -73,6 +73,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -564,6 +565,7 @@ fun CcpsScreen(
                 modifier = Modifier
                     .weight(0.9f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item(key = "ccp_header_tablet") {
@@ -581,6 +583,7 @@ fun CcpsScreen(
                 modifier = Modifier
                     .weight(1.1f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -678,6 +681,7 @@ fun CcpsScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item(key = "ccp_header") {

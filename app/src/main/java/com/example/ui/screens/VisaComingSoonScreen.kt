@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.GlassCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.isolateLtr
@@ -388,6 +389,7 @@ fun VisaComingSoonScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
             ) {
@@ -400,6 +402,7 @@ fun VisaComingSoonScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -413,6 +416,7 @@ fun VisaComingSoonScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
         ) {

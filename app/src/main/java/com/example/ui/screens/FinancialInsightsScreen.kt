@@ -34,6 +34,7 @@ import com.example.ui.components.SavingsQuickActionDock
 import com.example.ui.components.SavingsTransferDialog
 import com.example.ui.components.SavingsTransferMode
 import com.example.ui.components.SovereignSavingsHeroCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.LocalStealthMode
 import com.example.ui.theme.LocalAdaptiveDimens
@@ -109,6 +110,7 @@ fun FinancialInsightsScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -156,6 +158,7 @@ fun FinancialInsightsScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
+                    contentPadding = edgeFadeVerticalContentPadding(),
                     verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
                 ) {
                     item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -181,6 +184,7 @@ fun FinancialInsightsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = dimens.screenPaddingH),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }

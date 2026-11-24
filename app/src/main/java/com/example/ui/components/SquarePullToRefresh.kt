@@ -97,6 +97,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -126,6 +127,7 @@ fun SquareTopAnchoredPullToRefresh(
     onRefresh: () -> Unit,
     onOpenSyncSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    topAnchorPadding: Dp = 0.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     val colors = LiquidGlassTheme.colors
@@ -356,6 +358,7 @@ fun SquareTopAnchoredPullToRefresh(
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .padding(top = topAnchorPadding)
                 .fillMaxWidth()
                 .height(glowBandHeightDp)
                 .testTag("square_top_blur_glow"),

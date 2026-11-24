@@ -78,6 +78,7 @@ import com.example.sms.SmsSuggestionEntry
 import com.example.sms.SmsTaxAnomalyEntry
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidEmptyStateCard
+import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.components.SmsAnnualTaxSummaryCard
 import com.example.ui.components.SmsCleanArchiveRow
 import com.example.ui.components.SmsCleanBalanceTimelineRow
@@ -659,6 +660,7 @@ fun BaridiMobSmsSyncScreen(
                 modifier = Modifier
                     .weight(0.92f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item {
@@ -683,6 +685,7 @@ fun BaridiMobSmsSyncScreen(
                 modifier = Modifier
                     .weight(1.08f)
                     .fillMaxHeight(),
+                contentPadding = edgeFadeVerticalContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
             ) {
                 item { Spacer(modifier = Modifier.height(dimens.spacingXs)) }
@@ -695,6 +698,7 @@ fun BaridiMobSmsSyncScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(horizontal = dimens.screenPaddingH),
+            contentPadding = edgeFadeVerticalContentPadding(),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
         ) {
             item {
