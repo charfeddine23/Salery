@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 @Composable
-fun SaleryPulseTheme(
+fun VaultixTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     designStyle: String = "LIQUID_GLASS",
     content: @Composable () -> Unit

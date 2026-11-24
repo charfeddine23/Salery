@@ -120,7 +120,7 @@ import com.example.ui.components.LocalEdgeFadeOuterPadding
 import com.example.ui.components.SalarySchedulerDialog
 import com.example.ui.components.ScreenshotProtectionDialog
 import com.example.ui.components.SidebarDrawer
-import com.example.ui.components.SpLogoContainer
+import com.example.ui.components.VaultixLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
@@ -133,7 +133,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
-import com.example.viewmodel.SaleryPelseViewModel
+import com.example.viewmodel.VaultixViewModel
 import kotlinx.coroutines.launch
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -151,7 +151,7 @@ import com.example.update.hasVisibleTopIndicator
 
 @Composable
 fun MainAppScreen(
-    viewModel: SaleryPelseViewModel
+    viewModel: VaultixViewModel
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1152,7 +1152,7 @@ fun MainTopAppBar(
                         .testTag("top_bar_logo_menu_button"),
                     contentAlignment = Alignment.Center
                 ) {
-                    SpLogoContainer(
+                    VaultixLogoContainer(
                         size = navButtonSize,
                         cornerRadius = dimens.cornerRadiusMd,
                         padding = 6.dp,

@@ -1219,7 +1219,7 @@ object SquareMarketFetcher {
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json, text/html, */*")
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) SaleryPulse/1.0")
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) Vaultix/1.0")
             .build()
         return client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) error("HTTP ${resp.code} for $url")
@@ -1233,7 +1233,7 @@ object SquareMarketFetcher {
             .post(bodyJson.toRequestBody(jsonMediaType))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) SaleryPulse/1.0")
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) Vaultix/1.0")
             .build()
         return client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) error("HTTP ${resp.code} for $url")

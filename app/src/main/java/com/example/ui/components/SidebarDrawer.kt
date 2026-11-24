@@ -128,7 +128,7 @@ fun SidebarDrawer(
                     modifier = Modifier.padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SpLogoContainer(
+                    VaultixLogoContainer(
                         size = 52.dp,
                         cornerRadius = 16.dp,
                         padding = 5.dp
@@ -686,7 +686,7 @@ fun SidebarDrawer(
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SpLogoContainer(
+                    VaultixLogoContainer(
                         size = 42.dp,
                         cornerRadius = 13.dp,
                         padding = 4.dp

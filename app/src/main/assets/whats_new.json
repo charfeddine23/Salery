@@ -1,33 +1,33 @@
 {
-  "versionTag": "1.0.3",
+  "versionTag": "1.0.4",
   "features": [
     {
-      "badge": "الأصول والادخار • Assets & Saving",
-      "titleAr": "صفحة الأصول والادخار (الذهب والعملات الرقمية)",
-      "titleEn": "Assets & Saving (Gold & Crypto Sync)",
-      "descAr": "تم تطوير صفحة الأصول والادخار مع صفحة مستقلة لإدارة الذهب بالغرام والعيار وعرض إجمالي العملات الرقمية من بينانس، بمزامنة تلقائية من سكوار وبينانس، مع زر في إجمالي المدخرات لدمج قيمة الأصول مع المدخرات في المجموع الإجمالي.",
-      "descEn": "Upgraded Assets & Saving with a dedicated Manage Assets page for adding Gold holdings and viewing read-only Binance Crypto totals synced from Square & Binance, plus a toggle inside Total Reserved Savings to combine Assets + Cash Savings."
-    },
-    {
-      "badge": "التحديثات • Updates",
-      "titleAr": "زر الجديد في نافذة التحديث",
-      "titleEn": "What's New Button in Update Dialog",
-      "descAr": "إضافة زر (الجديد) داخل نافذة التحديثات لعرض شرح الميزات المضافة في آخر تحديث فقط مع استبدال الشرح القديم تلقائياً مع كل تحديث جديد.",
-      "descEn": "Added a New button inside the Update dialog displaying only the features introduced in the latest release, automatically replacing older release notes."
-    },
-    {
       "badge": "بريدي موب • BaridiMob SMS",
-      "titleAr": "تطوير مركز مزامنة بريدي موب والضرائب",
-      "titleEn": "BaridiMob Sync Redesign & Annual Taxes",
-      "descAr": "تحديث التبويبات إلى الضرائب والمعاملات والأرشيف مع خانة لإجمالي الضرائب خلال السنة الحالية منذ 1.1، ونقل زر التفعيل إلى الإعدادات.",
-      "descEn": "Redesigned sync tabs to Taxes (with YTD total anchored to 1.1), Transactions, and Archive, and moved the SMS sync toggle inside Settings."
+      "titleAr": "كشف التعاملات الفاشلة والوهمية بدقة",
+      "titleEn": "Failed & Ghost Transactions Detection",
+      "descAr": "رصد ذكي للمعاملات الوهمية عند خصم الرصيد ثم استرجاعه لاحقاً مع رسالة التحديث التالية، لمنع أي خلط أو تناقض في حسابات الرصيد والضرائب.",
+      "descEn": "Accurately detects ghost debits that were deducted and later refunded on the next BaridiMob SMS, keeping balances and tax logs completely clean."
     },
     {
-      "badge": "سكوار • Square",
-      "titleAr": "سحب التحديث التفاعلي وتأثير التوهج",
-      "titleEn": "Interactive Pull-to-Refresh & Glow Aura",
-      "descAr": "إزالة مربع التحديث الثابت وإضافة تلميح سحب تفاعلي وتوهج علوي ملتصق بالشاشة مع إمكانية السحب والانتظار ثانيتين لفتح إعدادات وقت المزامنة.",
-      "descEn": "Replaced the static refresh banner with a subtle pull gesture cue, top-attached glow blur, and a 2-second hold trigger for sync interval settings."
+      "badge": "الديون • Debts",
+      "titleAr": "إضافة دين جديد على دين قديم",
+      "titleEn": "Add New Debt Onto Existing Debt",
+      "descAr": "إمكانية دمج مبلغ دين إضافي مباشرة فوق سجل دين قائم مع تحديث المبلغ الإجمالي والمتبقي وملاحظة الزيادة وتاريخ التعديل.",
+      "descEn": "Add a new amount directly onto an existing debt record, updating total and remaining balances with automatic audit notes."
+    },
+    {
+      "badge": "المفاتيح والحسابات • Keys & CCPs",
+      "titleAr": "بطاقات مفاتيح وحسابات أنظف وأوضح",
+      "titleEn": "Streamlined Keys & CCPs Cards",
+      "descAr": "تبسيط حاويات المفاتيح وبطاقات CCP للاقتصار على الأيقونة واسم التطبيق ورمز التثبيت ومؤشر قوة كلمة المرور.",
+      "descEn": "Decluttered Vault Keys and CCP cards to show only the icon, app/owner title, pin badge, and password strength indicator."
+    },
+    {
+      "badge": "التصميم والعملات • UI & Crypto",
+      "titleAr": "تحويل العملات إلى USDT وشريط سفلي زجاجي محسن",
+      "titleEn": "Crypto-to-USDT Conversion & Refined Liquid Dock",
+      "descAr": "دعم تحويل الأصول الرقمية إلى USDT في المحفظة مع تحسين شفافية وإطار الشريط السفلي والعلوي عبر كافة الشاشات.",
+      "descEn": "Added crypto-to-USDT conversion in Binance Wallet along with unified subtle 5% glass dock styling across all screens."
     }
   ]
 }

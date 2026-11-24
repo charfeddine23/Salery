@@ -89,7 +89,7 @@ import com.example.ui.components.EditVisaCardDialog
 import com.example.ui.components.FadeToBlurLiquidGlassHost
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LocalEdgeFadeOuterPadding
-import com.example.ui.components.SpLogoContainer
+import com.example.ui.components.VaultixLogoContainer
 import com.example.ui.components.formatCardDigitsDisplay
 import java.util.Locale
 import com.example.ui.i18n.AppStrings
@@ -1540,7 +1540,7 @@ private fun VisaCardRealistic(
                         else -> {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    SpLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
+                                    VaultixLogoContainer(size = 20.dp, cornerRadius = 6.dp, padding = 2.dp)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Vaultix",

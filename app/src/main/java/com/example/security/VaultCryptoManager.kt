@@ -2,15 +2,17 @@ package com.example.security
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.Base64
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+fun List<Int>.toPatternHash(): String = joinToString("-")
 
 /**
  * Cryptographic storage & credential-hashing helpers for Vaultix:
@@ -39,8 +41,8 @@ object VaultCryptoManager {
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
             val iv = cipher.iv
             val ciphertext = cipher.doFinal(plaintext.toByteArray(StandardCharsets.UTF_8))
-            val ivB64 = Base64.getEncoder().encodeToString(iv)
-            val ctB64 = Base64.getEncoder().encodeToString(ciphertext)
+            val ivB64 = Base64.encodeToString(iv, Base64.NO_WRAP)
+            val ctB64 = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
             "$ENC_PREFIX$ivB64$$ctB64"
         } catch (_: Throwable) {
             plaintext
@@ -55,9 +57,9 @@ object VaultCryptoManager {
         if (parts.size != 2) return ""
         val secretKey = getOrCreateAesKey() ?: return ""
         return try {
-            val iv = Base64.getDecoder().decode(parts[0])
+            val iv = Base64.decode(parts[0], Base64.DEFAULT)
             if (iv.size != GCM_IV_BYTES) return ""
-            val ct = Base64.getDecoder().decode(parts[1])
+            val ct = Base64.decode(parts[1], Base64.DEFAULT)
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
             String(cipher.doFinal(ct), StandardCharsets.UTF_8)
@@ -152,14 +154,13 @@ object VaultCryptoManager {
         cipher.updateAAD(BACKUP_AAD.toByteArray(StandardCharsets.UTF_8))
         val ciphertext = cipher.doFinal(plaintextJson.toByteArray(StandardCharsets.UTF_8))
 
-        val encoder = Base64.getEncoder()
         return org.json.JSONObject().apply {
             put("vaultixBackupFormat", BACKUP_FORMAT_ID)
             put("kdf", BACKUP_KDF_ALGO)
             put("iterations", BACKUP_KDF_ITERATIONS)
-            put("saltB64", encoder.encodeToString(salt))
-            put("ivB64", encoder.encodeToString(iv))
-            put("ciphertextB64", encoder.encodeToString(ciphertext))
+            put("saltB64", Base64.encodeToString(salt, Base64.NO_WRAP))
+            put("ivB64", Base64.encodeToString(iv, Base64.NO_WRAP))
+            put("ciphertextB64", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
         }.toString(2)
     }
 
@@ -175,10 +176,9 @@ object VaultCryptoManager {
             val iterations = root.optInt("iterations", 0)
             if (iterations !in 10_000..1_000_000) return null
 
-            val decoder = Base64.getDecoder()
-            val salt = decoder.decode(root.getString("saltB64"))
-            val iv = decoder.decode(root.getString("ivB64"))
-            val ciphertext = decoder.decode(root.getString("ciphertextB64"))
+            val salt = Base64.decode(root.getString("saltB64"), Base64.DEFAULT)
+            val iv = Base64.decode(root.getString("ivB64"), Base64.DEFAULT)
+            val ciphertext = Base64.decode(root.getString("ciphertextB64"), Base64.DEFAULT)
             if (salt.size != BACKUP_SALT_BYTES || iv.size != GCM_IV_BYTES || ciphertext.isEmpty()) {
                 return null
             }

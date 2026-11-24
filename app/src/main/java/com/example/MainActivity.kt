@@ -19,8 +19,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.notification.DebtReminderScheduler
 import com.example.ui.screens.MainAppScreen
-import com.example.ui.theme.SaleryPulseTheme
-import com.example.viewmodel.SaleryPelseViewModel
+import com.example.ui.theme.VaultixTheme
+import com.example.viewmodel.VaultixViewModel
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +46,7 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            val viewModel: SaleryPelseViewModel = viewModel()
+            val viewModel: VaultixViewModel = viewModel()
             val userSettings by viewModel.settings.collectAsState()
 
             val isDarkTheme = when (userSettings.themeMode) {
@@ -55,7 +55,7 @@ class MainActivity : FragmentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            SaleryPulseTheme(
+            VaultixTheme(
                 darkTheme = isDarkTheme,
                 designStyle = userSettings.designStyle
             ) {

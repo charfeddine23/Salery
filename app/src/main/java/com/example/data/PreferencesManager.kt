@@ -20,10 +20,8 @@ data class UserSettings(
     val language: String = "en", // "en" or "ar"
     val themeMode: String = "DARK", // "DARK", "LIGHT", or "SYSTEM"
     val designStyle: String = "LIQUID_GLASS", // "LIQUID_GLASS" or "NEUMORPHISM"
-    val googleDriveConnected: Boolean = true,
     val lastBackupTimestamp: Long = 0L,
     val stealthMode: Boolean = false,
-    val vaultLockedAmount: Double = 0.0,
     val savingsWalletBalance: Double = 0.0,
     val savingsGoalAmount: Double = 0.0,
     val savingsHistoryJson: String = "[]",
@@ -181,10 +179,8 @@ class PreferencesManager(context: Context) {
             language = safeString(all, "app_language", "en"),
             themeMode = safeString(all, "theme_mode", "DARK"),
             designStyle = safeString(all, "design_style", "LIQUID_GLASS"),
-            googleDriveConnected = safeBoolean(all, "gdrive_connected", true),
             lastBackupTimestamp = safeLong(all, "last_backup_time", 0L),
             stealthMode = safeBoolean(all, "stealth_mode", false),
-            vaultLockedAmount = savedSavings,
             savingsWalletBalance = savedSavings,
             savingsGoalAmount = safeDouble(all, "savings_goal_amount", 0.0),
             savingsHistoryJson = safeString(all, "savings_history_json", "[]"),
@@ -239,12 +235,7 @@ class PreferencesManager(context: Context) {
     @Synchronized
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
         val currentLatest = loadSettings()
-        val updated = transform(currentLatest)
-        val finalUpdated = if (updated.savingsWalletBalance != updated.vaultLockedAmount) {
-            updated.copy(vaultLockedAmount = updated.savingsWalletBalance)
-        } else {
-            updated
-        }
+        val finalUpdated = transform(currentLatest)
         isSelfUpdating = true
         try {
             prefs.edit()
@@ -260,10 +251,8 @@ class PreferencesManager(context: Context) {
                 .putString("app_language", finalUpdated.language)
                 .putString("theme_mode", finalUpdated.themeMode)
                 .putString("design_style", finalUpdated.designStyle)
-                .putBoolean("gdrive_connected", finalUpdated.googleDriveConnected)
                 .putLong("last_backup_time", finalUpdated.lastBackupTimestamp)
                 .putBoolean("stealth_mode", finalUpdated.stealthMode)
-                .putString("vault_locked_amount", finalUpdated.savingsWalletBalance.toString())
                 .putString("savings_wallet_balance", finalUpdated.savingsWalletBalance.toString())
                 .putString("savings_goal_amount", finalUpdated.savingsGoalAmount.toString())
                 .putString("savings_history_json", finalUpdated.savingsHistoryJson)

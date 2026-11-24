@@ -3,7 +3,7 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Harmonized, elegant color palette for the Debts (depts) module in SaleryPulse.
+ * Harmonized, elegant color palette for the Debts (depts) module in Vaultix.
  *
  * Meticulously designed for both Light Mode and Dark Mode:
  * - Light Mode: Rich, luxurious jewel tones (cognac amber, deep sapphire azure, forest emerald, ruby red)

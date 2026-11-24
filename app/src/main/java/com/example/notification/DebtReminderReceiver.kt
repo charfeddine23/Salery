@@ -115,7 +115,7 @@ class DebtReminderReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.sp_brand_logo)
+            .setSmallIcon(R.drawable.ic_notification_vaultix)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))

@@ -21,7 +21,7 @@ import com.example.data.UserSettings
 import com.example.data.VaultAppPresets
 import com.example.data.VaultKeyEntry
 import com.example.security.VaultCryptoManager
-import com.example.ui.components.toPatternHash
+import com.example.security.toPatternHash
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.formatDzdAmount
@@ -121,7 +121,7 @@ internal fun computeSavingsBalanceAfterTransactionDelete(
     }
 }
 
-class SaleryPelseViewModel(application: Application) : AndroidViewModel(application) {
+class VaultixViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val dao = database.appDao()
     private val prefsManager = PreferencesManager(application)
@@ -592,7 +592,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     val updated = computeSavingsBalanceAfterTransactionDelete(transaction, current.savingsWalletBalance)
                     current.copy(
                         savingsWalletBalance = updated,
-                        vaultLockedAmount = updated,
                         savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
                     )
                 }
@@ -1471,7 +1470,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val updated = current.savingsWalletBalance + amount
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated,
                 savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
@@ -1499,7 +1497,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val updated = (current.savingsWalletBalance - actualWithdraw).coerceAtLeast(0.0)
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated,
                 savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
@@ -1539,7 +1536,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             val updated = (current.savingsWalletBalance - amount).coerceAtLeast(0.0)
             current.copy(
                 savingsWalletBalance = updated,
-                vaultLockedAmount = updated,
                 savingsHistoryJson = SavingsHistoryCodec.prepend(current.savingsHistoryJson, entry)
             )
         }
@@ -1621,10 +1617,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
             it.copy(lastBackupTimestamp = System.currentTimeMillis())
         }
         return output
-    }
-
-    suspend fun restoreFromJson(jsonStr: String): Boolean {
-        return restoreFromBackupWithOutcome(jsonStr, "") == BackupRestoreOutcome.SUCCESS
     }
 
     suspend fun restoreFromBackupWithOutcome(
@@ -3156,27 +3148,6 @@ class SaleryPelseViewModel(application: Application) : AndroidViewModel(applicat
                     if (convertedFully) "Converted all $qtyLabel $sourceSym to $usdtLabel USDT ✅"
                     else "Converted $qtyLabel $sourceSym to $usdtLabel USDT ✅"
                 }
-            )
-        }
-    }
-
-    fun upsertCryptoHolding(symbol: String, quantity: Double) {
-        saveCryptoHolding(holdingId = null, symbol = symbol, quantity = quantity)
-    }
-
-    fun removeCryptoHolding(symbol: String) {
-        val cleanSym = symbol.trim().uppercase()
-        if (cleanSym.isBlank()) return
-        val isAr = settings.value.language == "ar"
-        prefsManager.updateSettings { current ->
-            val filtered = BinanceCryptoCodec.parseHoldings(current.binanceHoldingsJson)
-                .filterNot { it.symbol.equals(cleanSym, ignoreCase = true) }
-            current.copy(binanceHoldingsJson = BinanceCryptoCodec.encodeHoldings(filtered))
-        }
-        viewModelScope.launch {
-            _toastEvent.emit(
-                if (isAr) "تمت إزالة $cleanSym من المحفظة"
-                else "Removed $cleanSym from Binance Wallet"
             )
         }
     }

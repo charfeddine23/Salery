@@ -40,10 +40,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Read app_name from strings.xml (fallback to SaleryPulse)
+          # Read app_name from strings.xml (fallback to Vaultix)
           APP_NAME=$(sed -n 's/.*<string name="app_name">\([^<]*\)<\/string>.*/\1/p' app/src/main/res/values/strings.xml | head -n 1 | tr -d '[:space:]')
           if [ -z "$APP_NAME" ]; then
-            APP_NAME="SaleryPulse"
+            APP_NAME="Vaultix"
           fi
 
           # Find the highest existing release patch/build number so updates ALWAYS increment monotonically

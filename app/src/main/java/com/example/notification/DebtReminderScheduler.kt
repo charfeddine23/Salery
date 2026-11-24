@@ -102,19 +102,11 @@ object DebtReminderScheduler {
         )
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    reminderTime,
-                    pendingIntent
-                )
-            } else {
-                alarmManager.set(
-                    AlarmManager.RTC_WAKEUP,
-                    reminderTime,
-                    pendingIntent
-                )
-            }
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                reminderTime,
+                pendingIntent
+            )
             Log.d(TAG, "Scheduled 24h debt reminder for debt ${debt.id} at $reminderTime")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule debt reminder", e)

@@ -21,7 +21,7 @@ import android.app.Application
 import com.example.data.PreferencesManager
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.EnglishStrings
-import com.example.viewmodel.SaleryPelseViewModel
+import com.example.viewmodel.VaultixViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -146,7 +146,7 @@ class PermanentSmsArchiveRobolectricTest {
             )
         }
 
-        val vm = SaleryPelseViewModel(app)
+        val vm = VaultixViewModel(app)
         val collectJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             vm.financialSummary.collect { }
         }
@@ -209,7 +209,7 @@ class PermanentSmsArchiveRobolectricTest {
             )
         }
 
-        val vm = SaleryPelseViewModel(app)
+        val vm = VaultixViewModel(app)
         vm.analyzeManualSmsSample("ALG Poste", "Frais -500.00 DA. Nouveau solde: -1 250,00 DA")
 
         val deadline = System.currentTimeMillis() + 4000L
@@ -235,7 +235,7 @@ class PermanentSmsArchiveRobolectricTest {
             )
         }
 
-        val vm = SaleryPelseViewModel(app)
+        val vm = VaultixViewModel(app)
         vm.setSavingsGoal(100000.0)
         assertEquals(100000.0, vm.settings.value.savingsGoalAmount, 0.01)
 
@@ -311,7 +311,7 @@ class PermanentSmsArchiveRobolectricTest {
             assertTrue(dao.getAllTransactionsList().isEmpty())
 
             // Enable Auto Add Taxes at activationTime -> MUST skip past_fee_1 and log ONLY future_fee_2
-            val vm = SaleryPelseViewModel(app)
+            val vm = VaultixViewModel(app)
             vm.setAutoAddTaxesEnabled(true, activationTimestampMillis = activationTime)
             assertTrue(prefs.settingsFlow.value.autoAddTaxesEnabled)
             assertEquals(activationTime, prefs.settingsFlow.value.autoAddTaxesBaselineMillis)

@@ -4,7 +4,7 @@ import com.example.data.ExpenseCategories
 import com.example.data.DebtType
 import com.example.data.TransactionType
 import com.example.data.UserSettings
-import com.example.ui.components.toPatternHash
+import com.example.security.toPatternHash
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.ArabicStrings
@@ -548,8 +548,8 @@ class ExampleUnitTest {
       releaseNotes = "Feature update",
       publishedAt = "2026-11-15T00:00:00Z",
       htmlUrl = "https://github.com/charfeddine23/Salery/releases",
-      apkName = "SaleryPulse-9.9.9.apk",
-      apkDownloadUrl = "https://example.com/SaleryPulse.apk",
+      apkName = "Vaultix-9.9.9.apk",
+      apkDownloadUrl = "https://example.com/Vaultix.apk",
       apkSizeBytes = 12_000_000L
     )
 

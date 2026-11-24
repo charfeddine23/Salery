@@ -100,7 +100,7 @@ val AppUpdateUiState.hasVisibleTopIndicator: Boolean
 
 /**
  * App updates are optional: users can install immediately, download in the background,
- * or dismiss and continue using SaleryPulse uninterrupted.
+ * or dismiss and continue using Vaultix uninterrupted.
  */
 val AppUpdateUiState.isMandatoryBlockActive: Boolean
     get() = false
@@ -176,7 +176,7 @@ object AppUpdateManager {
     }
 
     private fun sanitizeApkFileName(release: GitHubReleaseInfo): String {
-        return (release.apkName ?: "SaleryPulse-${release.versionName}.apk")
+        return (release.apkName ?: "Vaultix-${release.versionName}.apk")
             .replace(Regex("[^a-zA-Z0-9._-]"), "_")
             .let { if (it.lowercase(Locale.US).endsWith(".apk")) it else "$it.apk" }
     }
@@ -187,7 +187,7 @@ object AppUpdateManager {
                 .url(GITHUB_LATEST_RELEASE_API)
                 .header("Accept", "application/vnd.github+json")
                 .header("Cache-Control", "no-cache")
-                .header("User-Agent", "SaleryPulse-Android")
+                .header("User-Agent", "Vaultix-Android")
                 .build()
 
             httpClient.newCall(latestRequest).execute().use { response ->
@@ -205,7 +205,7 @@ object AppUpdateManager {
                 .url(GITHUB_RELEASES_LIST_API)
                 .header("Accept", "application/vnd.github+json")
                 .header("Cache-Control", "no-cache")
-                .header("User-Agent", "SaleryPulse-Android")
+                .header("User-Agent", "Vaultix-Android")
                 .build()
 
             httpClient.newCall(listRequest).execute().use { response ->
@@ -271,7 +271,7 @@ object AppUpdateManager {
             val request = Request.Builder()
                 .url(downloadUrl)
                 .header("Accept", "application/octet-stream")
-                .header("User-Agent", "SaleryPulse-Android")
+                .header("User-Agent", "Vaultix-Android")
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
@@ -530,7 +530,7 @@ object AppUpdateManager {
 
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
-                clipData = ClipData.newRawUri("SaleryPulse Update", uri)
+                clipData = ClipData.newRawUri("Vaultix Update", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 if (activity == null) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -571,7 +571,7 @@ object AppUpdateManager {
             @Suppress("DEPRECATION")
             val fallbackIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
                 data = uri
-                clipData = ClipData.newRawUri("SaleryPulse Update", uri)
+                clipData = ClipData.newRawUri("Vaultix Update", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
                 if (activity == null) {
@@ -603,7 +603,7 @@ fun parseGitHubReleaseJson(jsonStr: String): GitHubReleaseInfo? {
         if (tagName.isBlank()) return null
 
         val cleanVersion = tagName.removePrefix("v").removePrefix("V").trim()
-        val title = obj.optString("name", "").ifBlank { "SaleryPulse $tagName" }
+        val title = obj.optString("name", "").ifBlank { "Vaultix $tagName" }
         val notes = obj.optString("body", "").trim()
         val publishedAt = obj.optString("published_at", "").trim()
         val htmlUrl = obj.optString("html_url", GITHUB_REPO_URL).ifBlank { GITHUB_REPO_URL }

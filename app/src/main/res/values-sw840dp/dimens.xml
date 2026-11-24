@@ -34,7 +34,6 @@
     <dimen name="corner_radius_md">18dp</dimen>
     <dimen name="corner_radius_lg">28dp</dimen>
     <dimen name="corner_radius_xl">34dp</dimen>
-    <dimen name="corner_radius_pill">999dp</dimen>
 
     <!-- Icon & Component Dimensions -->
     <dimen name="icon_size_xs">18dp</dimen>

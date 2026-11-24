@@ -24,15 +24,15 @@ import com.example.ui.i18n.APP_NAME
 import com.example.ui.theme.LiquidGlassTheme
 
 /**
- * Luxurious dynamic container for the official "SP" brand logo.
- * 
+ * Luxurious dynamic container for the official Vaultix "VX" brand logo.
+ *
  * Ensures flawless contrast, razor-sharp visibility, and adaptive lighting:
  * - In Light Mode: Houses the logo inside a rich obsidian-slate crystal capsule (Color 0xFF0F172A)
- *   with luminous sapphire borders, ensuring the white/silver 'S' and golden 'P' pop vibrantly.
+ *   with luminous sapphire borders, ensuring the metallic cyan & gold "VX" emblem pops vibrantly.
  * - In Dark Mode: Uses translucent specular dark glass with specular neon highlights.
  */
 @Composable
-fun SpLogoContainer(
+fun VaultixLogoContainer(
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
     cornerRadius: Dp = 14.dp,
@@ -92,7 +92,7 @@ fun SpLogoContainer(
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.sp_brand_logo),
+            painter = painterResource(id = R.drawable.vaultix_brand_logo),
             contentDescription = APP_NAME,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit

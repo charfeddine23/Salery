@@ -36,12 +36,10 @@ object ClipboardSecurityHelper {
         val appContext = context.applicationContext
         val cb = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         val clip = ClipData.newPlainText(label, text)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val extras = PersistableBundle().apply {
-                putBoolean(EXTRA_IS_SENSITIVE, true)
-            }
-            clip.description.extras = extras
+        val extras = PersistableBundle().apply {
+            putBoolean(EXTRA_IS_SENSITIVE, true)
         }
+        clip.description.extras = extras
         cb.setPrimaryClip(clip)
 
         val digest = VaultCryptoManager.sha256Hex(text)

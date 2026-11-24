@@ -52,7 +52,7 @@ import androidx.fragment.app.FragmentActivity
 import com.example.security.BiometricAuthManager
 import com.example.ui.components.GlassBackground
 import com.example.ui.components.GlassCard
-import com.example.ui.components.SpLogoContainer
+import com.example.ui.components.VaultixLogoContainer
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
@@ -157,8 +157,8 @@ fun LockScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Official SaleryPulse "SP" Brand Logo in Dynamic Container
-                SpLogoContainer(
+                // Official Vaultix "VX" Brand Logo in Dynamic Container
+                VaultixLogoContainer(
                     size = if (layoutInfo.isCompactPhone) 64.dp else 76.dp,
                     cornerRadius = dimens.cornerRadiusXl,
                     padding = 8.dp
