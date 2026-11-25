@@ -6,6 +6,9 @@
     <cache-path
         name="apk_updates"
         path="updates/" />
+    <cache-path
+        name="backup_shares"
+        path="backups/" />
     <external-files-path
         name="ext_apk_updates"
         path="updates/" />

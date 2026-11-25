@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.data.AppDatabase
 import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.BackupPayload
@@ -21,7 +22,6 @@ import com.example.data.UserSettings
 import com.example.data.VaultAppPresets
 import com.example.data.VaultKeyEntry
 import com.example.security.VaultCryptoManager
-import com.example.security.toPatternHash
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.formatDzdAmount
@@ -873,7 +873,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         cvc: String,
         bankStyle: String = settings.value.classicCardBankStyle
     ) {
-        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }
+        val cleanName = holderName.trim().ifBlank {
+            settings.value.localUsername.trim().ifBlank { "CARDHOLDER" }
+        }
         val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
         val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
         val formattedExpiry = if (cleanExpiryDigits.length == 4) {
@@ -915,7 +917,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             "BINANCE" -> "BINANCE"
             else -> "DEFAULT"
         }
-        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase()
+        val cleanName = holderName.trim().ifBlank {
+            settings.value.localUsername.trim().ifBlank { "CARDHOLDER" }
+        }.uppercase()
         val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
         val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
         val formattedExpiry = if (cleanExpiryDigits.length == 4) {
@@ -962,7 +966,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             "BINANCE" -> "BINANCE"
             else -> "DEFAULT"
         }
-        val cleanName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase()
+        val cleanName = holderName.trim().ifBlank {
+            settings.value.localUsername.trim().ifBlank { "CARDHOLDER" }
+        }.uppercase()
         val cleanDigits = cardNumber.filter { it.isDigit() }.take(16)
         val cleanExpiryDigits = expiryDate.filter { it.isDigit() }.take(4)
         val formattedExpiry = if (cleanExpiryDigits.length == 4) {
@@ -1021,46 +1027,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun resetCardHubOrder() {
-        prefsManager.updateSettings {
-            it.copy(cardHubOrderJson = com.example.data.CardHubOrder.DEFAULT_JSON)
-        }
-        viewModelScope.launch {
-            val isAr = settings.value.language == "ar"
-            _toastEvent.emit(
-                if (isAr) "تمت إعادة الترتيب الافتراضي للبطاقات"
-                else "Card order reset to default"
-            )
-        }
-    }
-
-    // Pattern Lock Security with brute-force throttling
-    private var failedPatternAttempts: Int = 0
-    private var patternLockoutUntilMillis: Long = 0L
-
-    fun unlockApp(pattern: List<Int>): Boolean {
-        val now = System.currentTimeMillis()
-        if (now < patternLockoutUntilMillis) return false
-        val rawPattern = pattern.toPatternHash()
-        val storedHash = settings.value.patternLockHash
-        if (VaultCryptoManager.verifyPattern(rawPattern, storedHash)) {
-            failedPatternAttempts = 0
-            patternLockoutUntilMillis = 0L
-            if (!VaultCryptoManager.isSaltedPatternHash(storedHash)) {
-                val upgradedHash = VaultCryptoManager.hashPattern(rawPattern)
-                prefsManager.updateSettings { it.copy(patternLockHash = upgradedHash) }
-            }
-            _isAppLocked.value = false
-            return true
-        }
-        failedPatternAttempts += 1
-        if (failedPatternAttempts >= 5) {
-            patternLockoutUntilMillis = now + 30_000L
-            failedPatternAttempts = 0
-        }
-        return false
-    }
-
     // App Lock & Auto-Lock Lifecycle Security
     private var backgroundedAtMillis: Long = 0L
     @Volatile
@@ -1082,7 +1048,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             return
         }
         val cfg = settings.value
-        val hasActiveLock = cfg.biometricEnabled || (cfg.patternLockEnabled && cfg.patternLockHash.isNotBlank())
+        val hasActiveLock = cfg.biometricEnabled
         val timeoutSeconds = cfg.autoLockTimeoutSeconds
         val bgAt = backgroundedAtMillis
         backgroundedAtMillis = 0L
@@ -1098,7 +1064,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         collapseAllVaultContainersForSecurity()
         com.example.security.ClipboardSecurityHelper.clearIfSensitiveActive(getApplication())
         val cfg = settings.value
-        if (cfg.biometricEnabled || (cfg.patternLockEnabled && cfg.patternLockHash.isNotBlank())) {
+        if (cfg.biometricEnabled) {
             _isAppLocked.value = true
         }
     }
@@ -1148,29 +1114,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         _expandedKeyIds.value = emptySet()
         _revealedKeyIds.value = emptySet()
         _expandedCcpIds.value = emptySet()
-    }
-
-    fun saveNewPattern(pattern: List<Int>) {
-        val hash = VaultCryptoManager.hashPattern(pattern.toPatternHash())
-        prefsManager.updateSettings {
-            it.copy(
-                patternLockEnabled = true,
-                patternLockHash = hash
-            )
-        }
-        failedPatternAttempts = 0
-        patternLockoutUntilMillis = 0L
-        _isAppLocked.value = false
-    }
-
-    fun disablePatternLock() {
-        prefsManager.updateSettings {
-            it.copy(
-                patternLockEnabled = false,
-                patternLockHash = ""
-            )
-        }
-        _isAppLocked.value = false
     }
 
     fun setBiometricEnabled(enabled: Boolean) {
@@ -1625,7 +1568,32 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             classicCardNumber = userConfig.classicCardNumber,
             classicCardExpiry = userConfig.classicCardExpiry,
             classicCardCvc = userConfig.classicCardCvc,
-            archivedAlgPosteSms = archivedSms
+            archivedAlgPosteSms = archivedSms,
+            classicCardBankStyle = userConfig.classicCardBankStyle,
+            visaCardProvider = userConfig.visaCardProvider,
+            visaCardHolderName = userConfig.visaCardHolderName,
+            visaCardNumber = userConfig.visaCardNumber,
+            visaCardExpiry = userConfig.visaCardExpiry,
+            visaCardCvc = userConfig.visaCardCvc,
+            thirdCardEnabled = userConfig.thirdCardEnabled,
+            thirdCardProvider = userConfig.thirdCardProvider,
+            thirdCardHolderName = userConfig.thirdCardHolderName,
+            thirdCardNumber = userConfig.thirdCardNumber,
+            thirdCardExpiry = userConfig.thirdCardExpiry,
+            thirdCardCvc = userConfig.thirdCardCvc,
+            vaultKeysJson = userConfig.vaultKeysJson,
+            ccpAccountsJson = userConfig.ccpAccountsJson,
+            savingsWalletBalance = userConfig.savingsWalletBalance,
+            savingsGoalAmount = userConfig.savingsGoalAmount,
+            savingsHistoryJson = userConfig.savingsHistoryJson,
+            includeAssetsInSavingsTotal = userConfig.includeAssetsInSavingsTotal,
+            goldAssetHoldingsJson = userConfig.goldAssetHoldingsJson,
+            binanceHoldingsJson = userConfig.binanceHoldingsJson,
+            cardHubOrderJson = userConfig.cardHubOrderJson,
+            localUsername = userConfig.localUsername,
+            localWilayaCode = userConfig.localWilayaCode,
+            localWilayaName = userConfig.localWilayaName,
+            localCommuneName = userConfig.localCommuneName
         )
 
         val output = if (usePassphraseEncryption) {
@@ -1660,14 +1628,16 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val payload = BackupPayload.fromJsonString(plainJson)
             ?: return BackupRestoreOutcome.INVALID_FORMAT
 
-        dao.clearAllTransactions()
-        dao.clearAllDebts()
+        database.withTransaction {
+            dao.clearAllTransactions()
+            dao.clearAllDebts()
 
-        dao.insertTransactions(payload.transactions)
-        dao.insertDebts(payload.debts)
-        if (payload.archivedAlgPosteSms.isNotEmpty()) {
-            // Merge into permanent archive without deleting existing permanent SMS records
-            dao.insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
+            dao.insertTransactions(payload.transactions)
+            dao.insertDebts(payload.debts)
+            if (payload.archivedAlgPosteSms.isNotEmpty()) {
+                // Merge into permanent archive without deleting existing permanent SMS records
+                dao.insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
+            }
         }
 
         prefsManager.updateSettings {
@@ -1675,10 +1645,35 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 salaryAmount = payload.salaryAmount,
                 salaryPayday = payload.salaryPayday,
                 salaryEmployer = payload.salaryEmployer,
+                classicCardBankStyle = payload.classicCardBankStyle.ifBlank { it.classicCardBankStyle },
                 classicCardHolderName = payload.classicCardHolderName,
                 classicCardNumber = payload.classicCardNumber.ifBlank { it.classicCardNumber },
                 classicCardExpiry = payload.classicCardExpiry,
                 classicCardCvc = payload.classicCardCvc.ifBlank { it.classicCardCvc },
+                visaCardProvider = payload.visaCardProvider.ifBlank { it.visaCardProvider },
+                visaCardHolderName = payload.visaCardHolderName.ifBlank { it.visaCardHolderName },
+                visaCardNumber = payload.visaCardNumber.ifBlank { it.visaCardNumber },
+                visaCardExpiry = payload.visaCardExpiry.ifBlank { it.visaCardExpiry },
+                visaCardCvc = payload.visaCardCvc.ifBlank { it.visaCardCvc },
+                thirdCardEnabled = payload.thirdCardEnabled || it.thirdCardEnabled,
+                thirdCardProvider = payload.thirdCardProvider.ifBlank { it.thirdCardProvider },
+                thirdCardHolderName = payload.thirdCardHolderName.ifBlank { it.thirdCardHolderName },
+                thirdCardNumber = payload.thirdCardNumber.ifBlank { it.thirdCardNumber },
+                thirdCardExpiry = payload.thirdCardExpiry.ifBlank { it.thirdCardExpiry },
+                thirdCardCvc = payload.thirdCardCvc.ifBlank { it.thirdCardCvc },
+                vaultKeysJson = if (payload.vaultKeysJson != "[]" && payload.vaultKeysJson.isNotBlank()) payload.vaultKeysJson else it.vaultKeysJson,
+                ccpAccountsJson = if (payload.ccpAccountsJson != "[]" && payload.ccpAccountsJson.isNotBlank()) payload.ccpAccountsJson else it.ccpAccountsJson,
+                savingsWalletBalance = payload.savingsWalletBalance ?: it.savingsWalletBalance,
+                savingsGoalAmount = payload.savingsGoalAmount ?: it.savingsGoalAmount,
+                savingsHistoryJson = payload.savingsHistoryJson?.ifBlank { null } ?: it.savingsHistoryJson,
+                includeAssetsInSavingsTotal = payload.includeAssetsInSavingsTotal ?: it.includeAssetsInSavingsTotal,
+                goldAssetHoldingsJson = payload.goldAssetHoldingsJson?.ifBlank { null } ?: it.goldAssetHoldingsJson,
+                binanceHoldingsJson = payload.binanceHoldingsJson?.ifBlank { null } ?: it.binanceHoldingsJson,
+                cardHubOrderJson = payload.cardHubOrderJson?.ifBlank { null } ?: it.cardHubOrderJson,
+                localUsername = payload.localUsername?.ifBlank { null } ?: it.localUsername,
+                localWilayaCode = payload.localWilayaCode?.ifBlank { null } ?: it.localWilayaCode,
+                localWilayaName = payload.localWilayaName?.ifBlank { null } ?: it.localWilayaName,
+                localCommuneName = payload.localCommuneName?.ifBlank { null } ?: it.localCommuneName,
                 lastBackupTimestamp = System.currentTimeMillis()
             )
         }
@@ -1953,12 +1948,24 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val cleanWilayaName = wilayaName.trim()
         val cleanCommuneName = communeName.trim()
         prefsManager.updateSettings {
+            val isDefaultClassic = it.classicCardHolderName.isBlank() ||
+                it.classicCardHolderName.equals("CARDHOLDER", ignoreCase = true) ||
+                it.classicCardHolderName.equals("CHARFEDDINE KA", ignoreCase = true)
+            val isDefaultVisa = it.visaCardHolderName.isBlank() ||
+                it.visaCardHolderName.equals("CARDHOLDER", ignoreCase = true) ||
+                it.visaCardHolderName.equals("CHARFEDDINE KA", ignoreCase = true)
+            val isDefaultThird = it.thirdCardHolderName.isBlank() ||
+                it.thirdCardHolderName.equals("CARDHOLDER", ignoreCase = true) ||
+                it.thirdCardHolderName.equals("CHARFEDDINE KA", ignoreCase = true)
             it.copy(
                 hasLocalAccount = true,
                 localUsername = cleanUsername.ifEmpty { it.localUsername },
                 localWilayaCode = cleanWilayaCode.ifEmpty { it.localWilayaCode },
                 localWilayaName = cleanWilayaName.ifEmpty { it.localWilayaName },
-                localCommuneName = cleanCommuneName.ifEmpty { it.localCommuneName }
+                localCommuneName = cleanCommuneName.ifEmpty { it.localCommuneName },
+                classicCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultClassic) cleanUsername.uppercase() else it.classicCardHolderName,
+                visaCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultVisa) cleanUsername.uppercase() else it.visaCardHolderName,
+                thirdCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultThird) cleanUsername.uppercase() else it.thirdCardHolderName
             )
         }
         viewModelScope.launch {
@@ -2589,111 +2596,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     else "Auto Add Taxes disabled"
                 }
             )
-        }
-    }
-
-    private val isAutoAddingTaxes = java.util.concurrent.atomic.AtomicBoolean(false)
-
-    fun autoAddUnloggedTaxes(context: Context = getApplication()) {
-        if (!isAutoAddingTaxes.compareAndSet(false, true)) return
-        viewModelScope.launch {
-            try {
-                val cfg = settings.value
-                val isAr = cfg.language == "ar"
-                if (!cfg.autoAddTaxesEnabled || cfg.autoAddTaxesBaselineMillis <= 0L) {
-                    _toastEvent.emit(
-                        if (isAr) "الإضافة التلقائية للضرائب معطّلة حالياً"
-                        else "Auto Add Taxes is currently disabled"
-                    )
-                    return@launch
-                }
-                val summaryOutcome = withContext(Dispatchers.IO) {
-                    // 1. Refresh snapshots from live SMS inbox (if granted) + permanent archive
-                    val liveSnaps = if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
-                        val rawList = AlgPosteSmsInboxScanner.scanAllRawAlgPosteSms(context)
-                        val toArchive = rawList.mapNotNull { raw ->
-                            AlgPosteSmsAnalyzer.toArchivedEntity(
-                                sender = raw.sender,
-                                body = raw.body,
-                                timestampMillis = raw.dateMillis,
-                                captureSource = "INBOX",
-                                allowAnySenderForManualTest = false
-                            )
-                        }
-                        if (toArchive.isNotEmpty()) {
-                            dao.insertArchivedSmsIfMissing(toArchive)
-                        }
-                        AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
-                    } else {
-                        emptyList()
-                    }
-                    val archivedSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
-                        dao.getAllArchivedAlgPosteSmsList()
-                    )
-
-                    // 2. Detect failed transactions first, then merge tax anomalies against balance timeline
-                    var mergedTaxes: List<SmsTaxAnomalyEntry> = emptyList()
-                    prefsManager.updateSettings { current ->
-                        val existingHistory = AlgPosteSmsCodec.parseBalanceHistory(current.smsBalanceHistoryJson)
-                        val mergedHistory = (existingHistory + archivedSnaps + liveSnaps)
-                            .distinctBy { it.id }
-                            .sortedBy { it.timestampMillis }
-                        val latestSnap = mergedHistory.maxByOrNull { it.timestampMillis }
-                        val existingFailed = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
-                        val dismissedFailedIds = AlgPosteSmsCodec.parseProcessedKeys(current.dismissedFailedSmsIdsJson)
-                        val failedAnalysis = AlgPosteSmsAnalyzer.analyzeFailedTransactions(
-                            snapshots = mergedHistory,
-                            existingEntries = existingFailed,
-                            dismissedIds = dismissedFailedIds
-                        )
-                        val existingTaxes = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson)
-                        mergedTaxes = AlgPosteSmsAnalyzer.detectTaxAnomalies(
-                            snapshots = mergedHistory,
-                            existingAnomalies = existingTaxes,
-                            failedAnalysis = failedAnalysis
-                        )
-                        current.copy(
-                            smsBalanceHistoryJson = AlgPosteSmsCodec.encodeBalanceHistory(mergedHistory),
-                            detectedSmsTaxesJson = AlgPosteSmsCodec.encodeTaxAnomalies(mergedTaxes),
-                            detectedFailedSmsTransactionsJson = AlgPosteSmsCodec.encodeFailedTransactions(failedAnalysis.failedTransactions),
-                            latestSmsBalanceAmount = latestSnap?.balance ?: current.latestSmsBalanceAmount,
-                            latestSmsBalanceUpdatedAt = latestSnap?.timestampMillis ?: current.latestSmsBalanceUpdatedAt,
-                            latestSmsBalanceRawSnippet = latestSnap?.rawBody ?: current.latestSmsBalanceRawSnippet
-                        )
-                    }
-
-                    // 3. Log ONLY future unlogged taxes (detectedAtMillis >= autoAddTaxesBaselineMillis)
-                    val autoResult = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
-                        dao = dao,
-                        prefsManager = prefsManager,
-                        isArabic = isAr,
-                        candidateAnomalies = mergedTaxes
-                    )
-                    val baseline = settings.value.autoAddTaxesBaselineMillis
-                    val futureTaxesCount = mergedTaxes.count { it.detectedAtMillis >= baseline }
-                    Triple(autoResult.addedCount, autoResult.addedTotalDzd, futureTaxesCount)
-                }
-
-                val (addedCount, addedTotal, futureDetectedCount) = summaryOutcome
-                val msg = when {
-                    addedCount > 0 -> {
-                        val formattedTotal = formatDzdAmount(addedTotal, if (isAr) "دج" else "DA")
-                        if (isAr) "تمت إضافة $addedCount ضرائب مستقبلية ($formattedTotal) إلى المصاريف ✓"
-                        else "Added $addedCount future tax entries ($formattedTotal) to Expenses ✓"
-                    }
-                    futureDetectedCount > 0 -> {
-                        if (isAr) "جميع الضرائب المستقبلية ($futureDetectedCount) مسجلة مسبقاً ✓"
-                        else "All $futureDetectedCount future bank taxes are already logged ✓"
-                    }
-                    else -> {
-                        if (isAr) "لا توجد ضرائب مستقبلية جديدة بعد تفعيل الميزة"
-                        else "No new future bank taxes detected since enabling"
-                    }
-                }
-                _toastEvent.emit(msg)
-            } finally {
-                isAutoAddingTaxes.set(false)
-            }
         }
     }
 

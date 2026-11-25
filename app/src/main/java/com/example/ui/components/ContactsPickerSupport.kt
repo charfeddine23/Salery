@@ -235,10 +235,11 @@ fun InAppContactsPickerDialog(
         }
     }
 
+    val effectiveSecure = secureScreenshots || com.example.ui.theme.LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
-            securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            securePolicy = if (effectiveSecure) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
         CompositionLocalProvider(

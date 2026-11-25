@@ -308,7 +308,15 @@ fun KeysScreen(
             title = if (isArabic) "تأكيد الهوية لعرض كلمة السر" else "Verify Identity to Reveal Password",
             subtitle = if (isArabic) "تحقق بالبصمة لكشف كلمة المرور المحفوظة" else "Confirm biometrics to reveal this stored secret",
             cancelText = strings.cancel,
-            onVerified = { onToggleRevealKey(keyId) }
+            onVerified = { onToggleRevealKey(keyId) },
+            onRejected = { err ->
+                val msg = err?.takeIf { it.isNotBlank() } ?: if (isArabic) {
+                    "تعذر التحقق بالبصمة. تحقق من بصمة الجهاز ثم أعد المحاولة."
+                } else {
+                    "Biometric verification unavailable. Check device biometrics and try again."
+                }
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            }
         )
     }
 

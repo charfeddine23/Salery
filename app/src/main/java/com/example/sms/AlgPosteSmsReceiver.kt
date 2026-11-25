@@ -313,11 +313,20 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
                 if (isArabic) "اضغط لمراجعة الرسالة وإضافتها إلى الدخل" else "Tap to review and add to Income"
             }) + taxNote
 
+            val publicNotification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(if (isArabic) "بريد الجزائر" else "ALG Poste")
+                .setContentText(if (isArabic) "تم رصد حركة مالية جديدة — افتح التطبيق للمراجعة" else "New financial activity detected — open app to review")
+                .setAutoCancel(true)
+                .build()
+
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(bodyText)
                 .setStyle(NotificationCompat.BigTextStyle().bigText("$bodyText\n${suggestion.rawBody}"))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicNotification)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .build()
@@ -358,11 +367,20 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             }
             val summary = if (isArabic) caughtTax.explanationAr else caughtTax.explanationEn
 
+            val publicNotification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(if (isArabic) "تنبيه بريد الجزائر" else "ALG Poste Alert")
+                .setContentText(if (isArabic) "تم رصد رسوم أو فارق رصيد — افتح التطبيق للتفاصيل" else "Fee or balance discrepancy detected — open app for details")
+                .setAutoCancel(true)
+                .build()
+
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(summary)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicNotification)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .build()
@@ -397,11 +415,20 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
             else "Failed Transaction Reversed: +$formattedAmt ✓"
             val summary = if (isArabic) failedEntry.explanationAr else failedEntry.explanationEn
 
+            val publicNotification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(if (isArabic) "تحديث بريد الجزائر" else "ALG Poste Update")
+                .setContentText(if (isArabic) "تم رصد عملية مسترجعة — افتح التطبيق للتفاصيل" else "Reversed transaction detected — open app for details")
+                .setAutoCancel(true)
+                .build()
+
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(summary)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicNotification)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .build()

@@ -828,6 +828,11 @@ fun MainAppScreen(
                                     }
                                 )
                                 "visa_coming_soon" -> VisaComingSoonScreen(
+                                    provider = userSettings.visaCardProvider,
+                                    holderName = userSettings.visaCardHolderName.ifBlank {
+                                        userSettings.localUsername.ifBlank { "CARDHOLDER" }
+                                    },
+                                    cardNumber = userSettings.visaCardNumber,
                                     onBackClick = { currentRoute = "cards" }
                                 )
                                 "binance_wallet" -> BinanceWalletScreen(

@@ -32,9 +32,7 @@ class DebtReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
 
-        val isArabic = runCatching {
-            com.example.data.PreferencesManager(context.applicationContext).settingsFlow.value.language == "ar"
-        }.getOrDefault(false)
+        val isArabic = com.example.data.PreferencesManager.readLanguageFast(context) == "ar"
         val debtId = intent.getLongExtra(EXTRA_DEBT_ID, -1L)
         val personName = intent.getStringExtra(EXTRA_PERSON_NAME)
             ?: if (isArabic) "جهة اتصال" else "Contact"
@@ -58,18 +56,25 @@ class DebtReminderReceiver : BroadcastReceiver() {
             }
         }
 
-        // Verify with database that the debt has not been paid off in the meantime
+        // Keep BroadcastReceiver alive safely during async DB verification
+        val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
-            if (debtId > 0) {
-                val db = AppDatabase.getDatabase(context)
-                val debt = db.appDao().getDebtById(debtId)
-                if (debt != null && (debt.isPaid || debt.remainingAmount <= 0.001)) {
-                    Log.d(TAG, "Debt $debtId was already paid or settled. Notification suppressed.")
-                    return@launch
+            try {
+                if (debtId > 0) {
+                    val db = AppDatabase.getDatabase(context)
+                    val debt = db.appDao().getDebtById(debtId)
+                    if (debt != null && (debt.isPaid || debt.remainingAmount <= 0.001)) {
+                        Log.d(TAG, "Debt $debtId was already paid or settled. Notification suppressed.")
+                        return@launch
+                    }
                 }
-            }
 
-            postNotification(context, debtId, personName, remainingAmount, isOwedByMe)
+                postNotification(context, debtId, personName, remainingAmount, isOwedByMe)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error handling debt reminder broadcast", t)
+            } finally {
+                runCatching { pendingResult.finish() }
+            }
         }
     }
 
@@ -80,9 +85,7 @@ class DebtReminderReceiver : BroadcastReceiver() {
         amount: Double,
         isOwedByMe: Boolean
     ) {
-        val isArabic = runCatching {
-            com.example.data.PreferencesManager(context.applicationContext).settingsFlow.value.language == "ar"
-        }.getOrDefault(false)
+        val isArabic = com.example.data.PreferencesManager.readLanguageFast(context) == "ar"
         val formattedAmount = formatDzdAmount(amount, if (isArabic) "د.ج" else "DZD")
 
         val title = if (isArabic) {
@@ -114,6 +117,15 @@ class DebtReminderReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val publicNotification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_vaultix)
+            .setContentTitle(if (isArabic) "تذكير بموعد مالي" else "Financial Reminder")
+            .setContentText(if (isArabic) "افتح التطبيق لعرض تفاصيل التذكير" else "Open app to view reminder details")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .build()
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_vaultix)
             .setContentTitle(title)
@@ -121,6 +133,8 @@ class DebtReminderReceiver : BroadcastReceiver() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             .setDefaults(NotificationCompat.DEFAULT_ALL)

@@ -1,7 +1,10 @@
 package com.example.ui.components
 
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -250,11 +253,11 @@ fun BackupRestoreDialog(
     }
 
     fun executeVerifiedExport(shareMode: Boolean) {
-        if (encryptBackupWithPassword && exportPassphrase.length < 4) {
+        if (encryptBackupWithPassword && exportPassphrase.length < 6) {
             statusMessage = if (isArabic) {
-                "أدخل كلمة مرور من 4 أحرف على الأقل لتشفير النسخة."
+                "أدخل كلمة مرور من 6 أحرف على الأقل لتشفير النسخة."
             } else {
-                "Enter at least a 4-character password to encrypt this backup."
+                "Enter at least a 6-character password to encrypt this backup."
             }
             isErrorMessage = true
             return
@@ -273,12 +276,31 @@ fun BackupRestoreDialog(
                         val activePass = if (encryptBackupWithPassword) exportPassphrase else ""
                         val exported = onExportBackup(activePass)
                         if (shareMode) {
+                            val shareFilename = if (encryptBackupWithPassword) {
+                                "Vaultix_Encrypted_Backup.json"
+                            } else {
+                                "Vaultix_Backup.json"
+                            }
+                            val shareUri = withContext(Dispatchers.IO) {
+                                val shareDir = File(context.cacheDir, "backups").apply { mkdirs() }
+                                shareDir.listFiles()?.forEach { old ->
+                                    if (old.isFile && old.name.endsWith(".json")) {
+                                        old.delete()
+                                    }
+                                }
+                                val shareFile = File(shareDir, shareFilename)
+                                shareFile.writeText(exported, Charsets.UTF_8)
+                                FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    shareFile
+                                )
+                            }
                             isLoading = false
                             onBeforeExternalFlow()
-                            val suffix = if (encryptBackupWithPassword) "Encrypted.json" else "Backup.json"
-                            val sendIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, exported)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_STREAM, shareUri)
                                 putExtra(
                                     Intent.EXTRA_SUBJECT,
                                     if (isArabic) {
@@ -287,8 +309,9 @@ fun BackupRestoreDialog(
                                         "$APP_NAME Backup (${formatDate(System.currentTimeMillis(), false)})"
                                     }
                                 )
-                                putExtra(Intent.EXTRA_TITLE, "Vaultix_$suffix")
-                                type = "application/json"
+                                putExtra(Intent.EXTRA_TITLE, shareFilename)
+                                clipData = ClipData.newRawUri(shareFilename, shareUri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
                             context.startActivity(
                                 Intent.createChooser(

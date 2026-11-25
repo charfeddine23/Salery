@@ -110,22 +110,11 @@ interface StringsBundle {
     val themeDark: String
     val themeLight: String
     val themeSystem: String
-    val styleLiquidGlass: String
-    val styleNeumorphism: String
 
-    val patternLock: String
-    val drawPattern: String
-    val confirmPattern: String
-    val patternSaved: String
-    val patternMismatch: String
-    val patternTooShort: String
-    val unlockApp: String
     val biometricUnlock: String
-    val biometricUnlockDesc: String
     val biometricPromptTitle: String
     val biometricPromptSubtitle: String
     val biometricUnlockAction: String
-    val biometricNotAvailable: String
     val biometricSettingsTitle: String
     val biometricActive: String
     val biometricDisabled: String
@@ -190,14 +179,6 @@ interface StringsBundle {
     val alreadyUpToDate: String
     val updateCheckFailed: String
     val updateInstallPermNote: String
-
-    // Vault Encryption & Recovery Strings
-    val vaultSecurityIssueTitle: String
-    val vaultSecurityIssueKeystoreDesc: String
-    val vaultSecurityIssueCorruptedDesc: String
-    val vaultSecurityRetryButton: String
-    val vaultSecurityResetButton: String
-    val vaultSecurityResetConfirmDesc: String
 
     fun categoryName(cat: String): String
 }
@@ -296,22 +277,11 @@ object EnglishStrings : StringsBundle {
     override val themeDark = "Dark"
     override val themeLight = "Light"
     override val themeSystem = "System"
-    override val styleLiquidGlass = "Liquid Glass"
-    override val styleNeumorphism = "Neumorphism"
 
-    override val patternLock = "Pattern Gesture Lock"
-    override val drawPattern = "Draw your unlock gesture pattern"
-    override val confirmPattern = "Draw the pattern again to confirm"
-    override val patternSaved = "Gesture pattern saved securely"
-    override val patternMismatch = "Patterns do not match. Try again."
-    override val patternTooShort = "Connect at least 4 dots."
-    override val unlockApp = "Unlock Vaultix"
     override val biometricUnlock = "Biometric Unlock (Fingerprint / Face)"
-    override val biometricUnlockDesc = "Quick authentication via fingerprint or facial recognition"
     override val biometricPromptTitle = "Unlock Vaultix"
     override val biometricPromptSubtitle = "Touch fingerprint sensor or verify face to continue"
     override val biometricUnlockAction = "Unlock with Biometrics"
-    override val biometricNotAvailable = "Biometric hardware unavailable or not enrolled"
     override val biometricSettingsTitle = "Fingerprint Authentication"
     override val biometricActive = "Enabled"
     override val biometricDisabled = "Disabled"
@@ -320,7 +290,7 @@ object EnglishStrings : StringsBundle {
     override val breathingGlowActive = "Enabled • Liquid Glass v3 aura"
     override val breathingGlowDisabled = "Disabled • Static card surfaces"
     override val screenshotProtectionTitle = "No-Screenshot Mode"
-    override val screenshotProtectionActive = "Enabled • Blocked on Cards Hub"
+    override val screenshotProtectionActive = "Enabled • Blocked across app & Recents"
     override val screenshotProtectionDisabled = "Disabled • Screenshots allowed"
 
     override val backupDriveTitle = "Google Drive Backups"
@@ -375,13 +345,6 @@ object EnglishStrings : StringsBundle {
     override val alreadyUpToDate = "You are on the latest version"
     override val updateCheckFailed = "Could not connect to check for updates"
     override val updateInstallPermNote = "Allow installing apps from Vaultix to complete the update."
-
-    override val vaultSecurityIssueTitle = "Vault Protection Notice"
-    override val vaultSecurityIssueKeystoreDesc = "Some protected items could not be unlocked because device security keys changed or are temporarily unavailable. Your unaffected records remain safe."
-    override val vaultSecurityIssueCorruptedDesc = "Some saved records appear unreadable or modified on disk. You can retry unlocking or clear only the unreadable items."
-    override val vaultSecurityRetryButton = "Retry Unlock"
-    override val vaultSecurityResetButton = "Clear Unreadable"
-    override val vaultSecurityResetConfirmDesc = "Only the unreadable entries will be cleared. Your readable data stays untouched."
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {
@@ -505,22 +468,11 @@ object ArabicStrings : StringsBundle {
     override val themeDark = "داكن"
     override val themeLight = "فاتح"
     override val themeSystem = "تلقائي"
-    override val styleLiquidGlass = "زجاج سائل"
-    override val styleNeumorphism = "نيومورفيزم"
 
-    override val patternLock = "قفل النمط الإيمائي"
-    override val drawPattern = "ارسم نمط إيماءة فتح القفل"
-    override val confirmPattern = "أعد رسم النمط للتأكيد"
-    override val patternSaved = "تم حفظ نمط الإيماءة بنجاح"
-    override val patternMismatch = "الأنماط غير متطابقة. أعد المحاولة."
-    override val patternTooShort = "صل 4 نقاط على الأقل."
-    override val unlockApp = "فتح قفل $APP_NAME"
     override val biometricUnlock = "فتح القفل بالبصمة والتعرف على الوجه"
-    override val biometricUnlockDesc = "دخول سريع وآمن باستخدام بصمة الإصبع أو التعرف على الوجه"
     override val biometricPromptTitle = "فتح قفل $APP_NAME"
     override val biometricPromptSubtitle = "المس مستشعر البصمة أو تحقق من الوجه للمتابعة"
     override val biometricUnlockAction = "فتح القفل بالبصمة"
-    override val biometricNotAvailable = "ميزة البصمة غير متوفرة أو غير مسجلة بالجهاز"
     override val biometricSettingsTitle = "إعدادات التحقق بالبصمة"
     override val biometricActive = "مفعل"
     override val biometricDisabled = "معطل"
@@ -529,7 +481,7 @@ object ArabicStrings : StringsBundle {
     override val breathingGlowActive = "مفعل • إضاءة ديناميكية متوهجة"
     override val breathingGlowDisabled = "معطل • بطاقات ثابتة بدون توهج"
     override val screenshotProtectionTitle = "منع لقطات الشاشة"
-    override val screenshotProtectionActive = "مفعل • التصوير محظور في البطاقات"
+    override val screenshotProtectionActive = "مفعل • التصوير محظور في كل التطبيق"
     override val screenshotProtectionDisabled = "معطل • مسموح بتصوير الشاشة"
 
     override val backupDriveTitle = "إعدادات النسخ الاحتياطي"
@@ -584,13 +536,6 @@ object ArabicStrings : StringsBundle {
     override val alreadyUpToDate = "أنت تستخدم أحدث إصدار بالفعل"
     override val updateCheckFailed = "تعذر الاتصال للتحقق من التحديثات"
     override val updateInstallPermNote = "يرجى السماح بتثبيت التطبيقات من هذا المصدر لإتمام التحديث."
-
-    override val vaultSecurityIssueTitle = "تنبيه حماية الخزنة"
-    override val vaultSecurityIssueKeystoreDesc = "تعذر فتح بعض العناصر المحمية بسبب تغير مفاتيح أمان الجهاز أو عدم توفرها مؤقتاً. باقي بياناتك سليمة ومحفوظة بأمان."
-    override val vaultSecurityIssueCorruptedDesc = "يبدو أن بعض السجلات المحفوظة تالفة أو غير قابلة للقراءة. يمكنك إعادة المحاولة أو تصفية العناصر المتعذرة فقط."
-    override val vaultSecurityRetryButton = "إعادة المحاولة"
-    override val vaultSecurityResetButton = "مسح المتعذر فقط"
-    override val vaultSecurityResetConfirmDesc = "سيتم مسح السجلات غير القابلة للقراءة فقط، مع الحفاظ التام على بقية بياناتك."
 
     override fun categoryName(cat: String): String {
         return when (cat.lowercase()) {

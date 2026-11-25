@@ -49,12 +49,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.window.SecureFlagPolicy
+import com.example.ui.theme.LocalScreenshotProtection
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -520,9 +523,13 @@ fun LocalAccountSetupScreen(
             }
         }
 
+        val isScreenshotProtected = LocalScreenshotProtection.current
         ModalBottomSheet(
             onDismissRequest = { showWilayaSheet = false },
             sheetState = sheetState,
+            properties = ModalBottomSheetProperties(
+                securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            ),
             containerColor = SetupCreamBg,
             contentColor = SetupInkDark
         ) {
@@ -686,9 +693,13 @@ fun LocalAccountSetupScreen(
             }
         }
 
+        val isScreenshotProtected = LocalScreenshotProtection.current
         ModalBottomSheet(
             onDismissRequest = { showCommuneSheet = false },
             sheetState = sheetState,
+            properties = ModalBottomSheetProperties(
+                securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            ),
             containerColor = SetupCreamBg,
             contentColor = SetupInkDark
         ) {

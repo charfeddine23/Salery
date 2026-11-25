@@ -25,7 +25,7 @@ object StepUpAuthHelper {
         }
         val activity = findFragmentActivity(context)
         if (activity == null || !BiometricAuthManager.isBiometricAvailable(activity)) {
-            onVerified()
+            onRejected(null)
             return
         }
         BiometricAuthManager.authenticate(

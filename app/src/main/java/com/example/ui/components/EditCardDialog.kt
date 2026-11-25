@@ -77,6 +77,7 @@ import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -127,10 +128,11 @@ fun EditCardDialog(
     val isCvcValid = cvcDigits.isEmpty() || cvcDigits.length in 3..4
     val canSave = isNameValid && isCardNumberValid && isExpiryValid && isCvcValid
 
+    val effectiveSecure = secureScreenshots || LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
-            securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            securePolicy = if (effectiveSecure) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
         CompositionLocalProvider(
@@ -479,7 +481,7 @@ fun EditCardDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                    text = holderName.trim().ifBlank { "CARDHOLDER" }.uppercase(),
                                     color = if (isMcaFan) McaChampagneGold else Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -524,7 +526,7 @@ fun EditCardDialog(
                     label = strings.cardHolderNameLabel,
                     value = holderName,
                     onValueChange = { if (it.length <= 32) holderName = it },
-                    placeholder = "CHARFEDDINE KA",
+                    placeholder = "CARDHOLDER",
                     icon = Icons.Default.Person,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,

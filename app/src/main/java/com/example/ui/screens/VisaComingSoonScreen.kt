@@ -71,6 +71,9 @@ import com.example.ui.theme.LocalAdaptiveTypography
  */
 @Composable
 fun VisaComingSoonScreen(
+    provider: String = "DEFAULT",
+    holderName: String = "CARDHOLDER",
+    cardNumber: String = "",
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -206,13 +209,21 @@ fun VisaComingSoonScreen(
                     }
 
                     // Middle: Card Number Mask & EMV Chip placeholder
+                    val cleanDigits = cardNumber.filter { it.isDigit() }
+                    val maskedNumber = if (cleanDigits.length >= 4) {
+                        val first4 = if (cleanDigits.length >= 8) cleanDigits.take(4) else "••••"
+                        val last4 = cleanDigits.takeLast(4)
+                        "$first4  ••••  ••••  $last4"
+                    } else {
+                        "••••  ••••  ••••  ••••"
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = isolateLtr("4532  ••••  ••••  8829"),
+                            text = isolateLtr(maskedNumber),
                             color = Color(0xFFE2E8F0),
                             fontSize = typo.titleSm,
                             fontWeight = FontWeight.SemiBold,
@@ -231,7 +242,7 @@ fun VisaComingSoonScreen(
                         )
                     }
 
-                    // Bottom row: Cardholder Name & Official Visa Logo
+                    // Bottom row: Cardholder Name & Official Provider Logo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -245,7 +256,7 @@ fun VisaComingSoonScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "CHARFEDDINE KA",
+                                text = holderName.trim().ifBlank { "CARDHOLDER" }.uppercase(),
                                 color = Color.White,
                                 fontSize = typo.bodySm,
                                 fontWeight = FontWeight.ExtraBold,
@@ -255,12 +266,18 @@ fun VisaComingSoonScreen(
                             )
                         }
 
+                        val brandLabel = when (provider.uppercase()) {
+                            "REDOTPAY" -> "RedotPay"
+                            "BYBIT" -> "BYBIT"
+                            "BINANCE" -> "BINANCE"
+                            else -> if (isArabic) "فيزا" else "VISA"
+                        }
                         Text(
-                            text = if (isArabic) "فيزا" else "VISA",
+                            text = brandLabel,
                             color = Color.White,
                             fontSize = typo.titleLg,
                             fontWeight = FontWeight.Black,
-                            fontStyle = if (isArabic) FontStyle.Normal else FontStyle.Italic,
+                            fontStyle = if (isArabic && provider.equals("DEFAULT", ignoreCase = true)) FontStyle.Normal else FontStyle.Italic,
                             letterSpacing = if (isArabic) 0.sp else 2.sp
                         )
                     }

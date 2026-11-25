@@ -13,8 +13,6 @@ data class UserSettings(
     val salaryEmployer: String = "Enterprise Algiers",
     val salaryAutoCredit: Boolean = true,
     val lastCreditedMonthYear: String = "",
-    val patternLockEnabled: Boolean = false,
-    val patternLockHash: String = "",
     val biometricEnabled: Boolean = false,
     val autoLockTimeoutSeconds: Int = 30,
     val language: String = "en", // "en" or "ar"
@@ -28,7 +26,7 @@ data class UserSettings(
     val includeAssetsInSavingsTotal: Boolean = false,
     val goldAssetHoldingsJson: String = "[]",
     val classicCardBankStyle: String = "EDAHABIA",
-    val classicCardHolderName: String = "CHARFEDDINE KA",
+    val classicCardHolderName: String = "CARDHOLDER",
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
     val classicCardCvc: String = "",
@@ -37,13 +35,13 @@ data class UserSettings(
     val vaultKeysJson: String = "[]",
     val ccpAccountsJson: String = "[]",
     val visaCardProvider: String = "DEFAULT", // "DEFAULT", "REDOTPAY", "BYBIT", "BINANCE"
-    val visaCardHolderName: String = "CHARFEDDINE KA",
+    val visaCardHolderName: String = "CARDHOLDER",
     val visaCardNumber: String = "",
     val visaCardExpiry: String = "08/28",
     val visaCardCvc: String = "",
     val thirdCardEnabled: Boolean = false,
     val thirdCardProvider: String = "BINANCE", // "DEFAULT", "REDOTPAY", "BYBIT", "BINANCE"
-    val thirdCardHolderName: String = "CHARFEDDINE KA",
+    val thirdCardHolderName: String = "CARDHOLDER",
     val thirdCardNumber: String = "",
     val thirdCardExpiry: String = "08/28",
     val thirdCardCvc: String = "",
@@ -161,25 +159,49 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    private fun safeDecryptedString(all: Map<String, *>, key: String, default: String): String {
+    @Volatile
+    private var preservedEncryptedBlobs: Map<String, String> = emptyMap()
+
+    private fun safeDecryptedString(
+        all: Map<String, *>,
+        key: String,
+        default: String,
+        preserved: MutableMap<String, String>
+    ): String {
         val raw = safeString(all, key, default)
         if (raw == default && raw.isEmpty()) return default
-        val decrypted = VaultCryptoManager.decryptSensitive(raw)
+        val decrypted = VaultCryptoManager.decryptSensitiveOrNull(raw)
+        if (decrypted == null) {
+            preserved[key] = raw
+            return default
+        }
         return decrypted.ifEmpty { default }
+    }
+
+    private fun encodeSensitiveOrPreserve(
+        key: String,
+        value: String,
+        default: String,
+        preserved: Map<String, String>
+    ): String {
+        val failedBlob = preserved[key]
+        if (failedBlob != null && value == default) {
+            return failedBlob
+        }
+        return VaultCryptoManager.encryptSensitive(value)
     }
 
     private fun loadSettings(): UserSettings {
         val all = prefs.all
         val vaultFallback = safeDouble(all, "vault_locked_amount", 0.0)
         val savedSavings = safeDouble(all, "savings_wallet_balance", vaultFallback)
-        return UserSettings(
+        val failedEncrypted = HashMap<String, String>()
+        val loaded = UserSettings(
             salaryAmount = safeDouble(all, "salary_amount", 85000.0),
             salaryPayday = safeInt(all, "salary_payday", 25),
             salaryEmployer = safeString(all, "salary_employer", "Enterprise Algiers"),
             salaryAutoCredit = safeBoolean(all, "salary_auto_credit", true),
             lastCreditedMonthYear = safeString(all, "last_credited_month", ""),
-            patternLockEnabled = safeBoolean(all, "pattern_lock_enabled", false),
-            patternLockHash = safeString(all, "pattern_lock_hash", ""),
             biometricEnabled = safeBoolean(all, "biometric_enabled", false),
             autoLockTimeoutSeconds = safeInt(all, "auto_lock_timeout_seconds", 30),
             language = safeString(all, "app_language", "en"),
@@ -193,25 +215,25 @@ class PreferencesManager(context: Context) {
             includeAssetsInSavingsTotal = safeBoolean(all, "include_assets_in_savings_total", false),
             goldAssetHoldingsJson = safeString(all, "gold_asset_holdings_json", "[]"),
             classicCardBankStyle = safeString(all, "classic_card_bank_style", "EDAHABIA"),
-            classicCardHolderName = safeString(all, "classic_card_holder", "CHARFEDDINE KA"),
-            classicCardNumber = safeDecryptedString(all, "classic_card_number", ""),
+            classicCardHolderName = safeString(all, "classic_card_holder", "CARDHOLDER"),
+            classicCardNumber = safeDecryptedString(all, "classic_card_number", "", failedEncrypted),
             classicCardExpiry = safeString(all, "classic_card_expiry", "11/29"),
-            classicCardCvc = safeDecryptedString(all, "classic_card_cvc", ""),
+            classicCardCvc = safeDecryptedString(all, "classic_card_cvc", "", failedEncrypted),
             breathingGlowEnabled = safeBoolean(all, "breathing_glow_enabled", true),
             screenshotProtectionEnabled = safeBoolean(all, "screenshot_protection_enabled", false),
-            vaultKeysJson = safeDecryptedString(all, "vault_keys_json", "[]"),
-            ccpAccountsJson = safeDecryptedString(all, "ccp_accounts_json", "[]"),
+            vaultKeysJson = safeDecryptedString(all, "vault_keys_json", "[]", failedEncrypted),
+            ccpAccountsJson = safeDecryptedString(all, "ccp_accounts_json", "[]", failedEncrypted),
             visaCardProvider = safeString(all, "visa_card_provider", "DEFAULT"),
-            visaCardHolderName = safeString(all, "visa_card_holder", "CHARFEDDINE KA"),
-            visaCardNumber = safeDecryptedString(all, "visa_card_number", ""),
+            visaCardHolderName = safeString(all, "visa_card_holder", "CARDHOLDER"),
+            visaCardNumber = safeDecryptedString(all, "visa_card_number", "", failedEncrypted),
             visaCardExpiry = safeString(all, "visa_card_expiry", "08/28"),
-            visaCardCvc = safeDecryptedString(all, "visa_card_cvc", ""),
+            visaCardCvc = safeDecryptedString(all, "visa_card_cvc", "", failedEncrypted),
             thirdCardEnabled = safeBoolean(all, "third_card_enabled", false),
             thirdCardProvider = safeString(all, "third_card_provider", "BINANCE"),
-            thirdCardHolderName = safeString(all, "third_card_holder", "CHARFEDDINE KA"),
-            thirdCardNumber = safeDecryptedString(all, "third_card_number", ""),
+            thirdCardHolderName = safeString(all, "third_card_holder", "CARDHOLDER"),
+            thirdCardNumber = safeDecryptedString(all, "third_card_number", "", failedEncrypted),
             thirdCardExpiry = safeString(all, "third_card_expiry", "08/28"),
-            thirdCardCvc = safeDecryptedString(all, "third_card_cvc", ""),
+            thirdCardCvc = safeDecryptedString(all, "third_card_cvc", "", failedEncrypted),
             binanceHoldingsJson = safeString(all, "binance_holdings_json", "[]"),
             binancePricesJson = safeString(all, "binance_prices_json", "[]"),
             binanceLastPriceSyncMillis = safeLong(all, "binance_last_price_sync_millis", 0L),
@@ -242,11 +264,14 @@ class PreferencesManager(context: Context) {
             localCommuneName = safeString(all, "local_commune_name_v1", ""),
             cardHubOrderJson = safeString(all, "card_hub_order_json_v1", CardHubOrder.DEFAULT_JSON)
         )
+        preservedEncryptedBlobs = failedEncrypted
+        return loaded
     }
 
     @Synchronized
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
         val currentLatest = loadSettings()
+        val preserved = preservedEncryptedBlobs
         val finalUpdated = transform(currentLatest)
         isSelfUpdating = true
         try {
@@ -256,8 +281,8 @@ class PreferencesManager(context: Context) {
                 .putString("salary_employer", finalUpdated.salaryEmployer)
                 .putBoolean("salary_auto_credit", finalUpdated.salaryAutoCredit)
                 .putString("last_credited_month", finalUpdated.lastCreditedMonthYear)
-                .putBoolean("pattern_lock_enabled", finalUpdated.patternLockEnabled)
-                .putString("pattern_lock_hash", finalUpdated.patternLockHash)
+                .remove("pattern_lock_enabled")
+                .remove("pattern_lock_hash")
                 .putBoolean("biometric_enabled", finalUpdated.biometricEnabled)
                 .putInt("auto_lock_timeout_seconds", finalUpdated.autoLockTimeoutSeconds)
                 .putString("app_language", finalUpdated.language)
@@ -272,24 +297,48 @@ class PreferencesManager(context: Context) {
                 .putString("gold_asset_holdings_json", finalUpdated.goldAssetHoldingsJson)
                 .putString("classic_card_bank_style", finalUpdated.classicCardBankStyle)
                 .putString("classic_card_holder", finalUpdated.classicCardHolderName)
-                .putString("classic_card_number", VaultCryptoManager.encryptSensitive(finalUpdated.classicCardNumber))
+                .putString(
+                    "classic_card_number",
+                    encodeSensitiveOrPreserve("classic_card_number", finalUpdated.classicCardNumber, "", preserved)
+                )
                 .putString("classic_card_expiry", finalUpdated.classicCardExpiry)
-                .putString("classic_card_cvc", VaultCryptoManager.encryptSensitive(finalUpdated.classicCardCvc))
+                .putString(
+                    "classic_card_cvc",
+                    encodeSensitiveOrPreserve("classic_card_cvc", finalUpdated.classicCardCvc, "", preserved)
+                )
                 .putBoolean("breathing_glow_enabled", finalUpdated.breathingGlowEnabled)
                 .putBoolean("screenshot_protection_enabled", finalUpdated.screenshotProtectionEnabled)
-                .putString("vault_keys_json", VaultCryptoManager.encryptSensitive(finalUpdated.vaultKeysJson))
-                .putString("ccp_accounts_json", VaultCryptoManager.encryptSensitive(finalUpdated.ccpAccountsJson))
+                .putString(
+                    "vault_keys_json",
+                    encodeSensitiveOrPreserve("vault_keys_json", finalUpdated.vaultKeysJson, "[]", preserved)
+                )
+                .putString(
+                    "ccp_accounts_json",
+                    encodeSensitiveOrPreserve("ccp_accounts_json", finalUpdated.ccpAccountsJson, "[]", preserved)
+                )
                 .putString("visa_card_provider", finalUpdated.visaCardProvider)
                 .putString("visa_card_holder", finalUpdated.visaCardHolderName)
-                .putString("visa_card_number", VaultCryptoManager.encryptSensitive(finalUpdated.visaCardNumber))
+                .putString(
+                    "visa_card_number",
+                    encodeSensitiveOrPreserve("visa_card_number", finalUpdated.visaCardNumber, "", preserved)
+                )
                 .putString("visa_card_expiry", finalUpdated.visaCardExpiry)
-                .putString("visa_card_cvc", VaultCryptoManager.encryptSensitive(finalUpdated.visaCardCvc))
+                .putString(
+                    "visa_card_cvc",
+                    encodeSensitiveOrPreserve("visa_card_cvc", finalUpdated.visaCardCvc, "", preserved)
+                )
                 .putBoolean("third_card_enabled", finalUpdated.thirdCardEnabled)
                 .putString("third_card_provider", finalUpdated.thirdCardProvider)
                 .putString("third_card_holder", finalUpdated.thirdCardHolderName)
-                .putString("third_card_number", VaultCryptoManager.encryptSensitive(finalUpdated.thirdCardNumber))
+                .putString(
+                    "third_card_number",
+                    encodeSensitiveOrPreserve("third_card_number", finalUpdated.thirdCardNumber, "", preserved)
+                )
                 .putString("third_card_expiry", finalUpdated.thirdCardExpiry)
-                .putString("third_card_cvc", VaultCryptoManager.encryptSensitive(finalUpdated.thirdCardCvc))
+                .putString(
+                    "third_card_cvc",
+                    encodeSensitiveOrPreserve("third_card_cvc", finalUpdated.thirdCardCvc, "", preserved)
+                )
                 .putString("binance_holdings_json", finalUpdated.binanceHoldingsJson)
                 .putString("binance_prices_json", finalUpdated.binancePricesJson)
                 .putLong("binance_last_price_sync_millis", finalUpdated.binanceLastPriceSyncMillis)
@@ -323,6 +372,19 @@ class PreferencesManager(context: Context) {
             _settingsFlow.value = finalUpdated
         } finally {
             isSelfUpdating = false
+        }
+    }
+
+    companion object {
+        private const val PREFS_NAME = "salerypelse_prefs"
+
+        fun readLanguageFast(context: Context): String {
+            return runCatching {
+                context.applicationContext
+                    .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getString("app_language", "en")
+                    ?: "en"
+            }.getOrDefault("en")
         }
     }
 }

@@ -307,7 +307,7 @@ fun EditVisaCardDialog(
                 // Live Mini Official Card Preview
                 VisaProviderMiniPreview(
                     provider = selectedProvider,
-                    holderName = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                    holderName = holderName.trim().ifBlank { "CARDHOLDER" }.uppercase(),
                     cardDigits = cardNumberDigits,
                     expiryDigits = expiryDigits,
                     cvcDigits = cvcDigits
@@ -321,7 +321,7 @@ fun EditVisaCardDialog(
                     icon = Icons.Default.Person,
                     value = holderName,
                     onValueChange = { holderName = it.take(32) },
-                    placeholder = "CHARFEDDINE KA",
+                    placeholder = "CARDHOLDER",
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                     isError = !isNameValid,
                     testTag = "visa_holder_input"
@@ -426,7 +426,7 @@ fun EditVisaCardDialog(
                             }
                             onSave(
                                 selectedProvider,
-                                holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                holderName.trim().ifBlank { "CARDHOLDER" }.uppercase(),
                                 cardNumberDigits,
                                 formattedExpiry,
                                 cvcDigits

@@ -52,22 +52,24 @@ object VaultCryptoManager {
         }
     }
 
-    fun decryptSensitive(stored: String): String {
+    fun decryptSensitive(stored: String): String = decryptSensitiveOrNull(stored).orEmpty()
+
+    fun decryptSensitiveOrNull(stored: String): String? {
         if (stored.isEmpty()) return ""
         if (!stored.startsWith(ENC_PREFIX)) return stored // Legacy plaintext migration compatibility
         val payload = stored.removePrefix(ENC_PREFIX)
         val parts = payload.split('$')
-        if (parts.size != 2) return ""
-        val secretKey = getOrCreateAesKey() ?: return ""
+        if (parts.size != 2) return null
+        val secretKey = getOrCreateAesKey() ?: return null
         return try {
             val iv = Base64.decode(parts[0], Base64.DEFAULT)
-            if (iv.size != GCM_IV_BYTES) return ""
+            if (iv.size != GCM_IV_BYTES) return null
             val ct = Base64.decode(parts[1], Base64.DEFAULT)
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
             String(cipher.doFinal(ct), StandardCharsets.UTF_8)
         } catch (_: Throwable) {
-            ""
+            null
         }
     }
 

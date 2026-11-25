@@ -310,7 +310,7 @@ fun SidebarDrawer(
                 )
             }
 
-            if (userSettings.biometricEnabled || userSettings.patternLockEnabled) {
+            if (userSettings.biometricEnabled) {
                 val timeoutOptions = listOf(
                     0 to (if (isArabic) "فوري" else "Instant"),
                     30 to (if (isArabic) "30 ث" else "30s"),

@@ -1773,7 +1773,6 @@ class ExampleUnitTest {
       }
     }
     assertTrue(ArabicStrings.visaComingSoonDesc.contains("Vaultix"))
-    assertTrue(ArabicStrings.unlockApp.contains("Vaultix"))
   }
 
   @Test

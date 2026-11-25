@@ -12,11 +12,36 @@ data class BackupPayload(
     val salaryAmount: Double,
     val salaryPayday: Int,
     val salaryEmployer: String,
-    val classicCardHolderName: String = "CHARFEDDINE KA",
+    val classicCardHolderName: String = "CARDHOLDER",
     val classicCardNumber: String = "",
     val classicCardExpiry: String = "11/29",
     val classicCardCvc: String = "",
-    val archivedAlgPosteSms: List<ArchivedAlgPosteSmsEntity> = emptyList()
+    val archivedAlgPosteSms: List<ArchivedAlgPosteSmsEntity> = emptyList(),
+    val classicCardBankStyle: String = "EDAHABIA",
+    val visaCardProvider: String = "DEFAULT",
+    val visaCardHolderName: String = "",
+    val visaCardNumber: String = "",
+    val visaCardExpiry: String = "08/28",
+    val visaCardCvc: String = "",
+    val thirdCardEnabled: Boolean = false,
+    val thirdCardProvider: String = "BINANCE",
+    val thirdCardHolderName: String = "",
+    val thirdCardNumber: String = "",
+    val thirdCardExpiry: String = "08/28",
+    val thirdCardCvc: String = "",
+    val vaultKeysJson: String = "[]",
+    val ccpAccountsJson: String = "[]",
+    val savingsWalletBalance: Double? = null,
+    val savingsGoalAmount: Double? = null,
+    val savingsHistoryJson: String? = null,
+    val includeAssetsInSavingsTotal: Boolean? = null,
+    val goldAssetHoldingsJson: String? = null,
+    val binanceHoldingsJson: String? = null,
+    val cardHubOrderJson: String? = null,
+    val localUsername: String? = null,
+    val localWilayaCode: String? = null,
+    val localWilayaName: String? = null,
+    val localCommuneName: String? = null
 ) {
     fun toJsonString(includeSensitiveCardFields: Boolean = false): String {
         val root = JSONObject()
@@ -34,11 +59,77 @@ data class BackupPayload(
 
         // Classic Card Details (sensitive PAN/CVC are excluded from plaintext JSON backups)
         val cardObj = JSONObject()
+        cardObj.put("bankStyle", classicCardBankStyle)
         cardObj.put("holderName", classicCardHolderName)
         cardObj.put("cardNumber", if (includeSensitiveCardFields) classicCardNumber else "")
         cardObj.put("expiryDate", classicCardExpiry)
         cardObj.put("cvc", if (includeSensitiveCardFields) classicCardCvc else "")
         root.put("classicCardSettings", cardObj)
+
+        // Visa / Crypto Card Details
+        val visaObj = JSONObject()
+        visaObj.put("provider", visaCardProvider)
+        visaObj.put("holderName", visaCardHolderName)
+        visaObj.put("cardNumber", if (includeSensitiveCardFields) visaCardNumber else "")
+        visaObj.put("expiryDate", visaCardExpiry)
+        visaObj.put("cvc", if (includeSensitiveCardFields) visaCardCvc else "")
+        root.put("visaCardSettings", visaObj)
+
+        // Third Card Details
+        val thirdObj = JSONObject()
+        thirdObj.put("enabled", thirdCardEnabled)
+        thirdObj.put("provider", thirdCardProvider)
+        thirdObj.put("holderName", thirdCardHolderName)
+        thirdObj.put("cardNumber", if (includeSensitiveCardFields) thirdCardNumber else "")
+        thirdObj.put("expiryDate", thirdCardExpiry)
+        thirdObj.put("cvc", if (includeSensitiveCardFields) thirdCardCvc else "")
+        root.put("thirdCardSettings", thirdObj)
+
+        // Encrypted-Only Secrets (Keys Vault & CCP Accounts — always redacted in plaintext backups)
+        val vaultSecretsObj = JSONObject()
+        vaultSecretsObj.put("vaultKeysJson", if (includeSensitiveCardFields) vaultKeysJson else "[]")
+        vaultSecretsObj.put("ccpAccountsJson", if (includeSensitiveCardFields) ccpAccountsJson else "[]")
+        root.put("vaultSecrets", vaultSecretsObj)
+
+        // Savings & Assets Settings
+        if (
+            savingsWalletBalance != null ||
+            savingsGoalAmount != null ||
+            savingsHistoryJson != null ||
+            includeAssetsInSavingsTotal != null
+        ) {
+            val savingsObj = JSONObject()
+            if (savingsWalletBalance != null) savingsObj.put("walletBalance", savingsWalletBalance)
+            if (savingsGoalAmount != null) savingsObj.put("goalAmount", savingsGoalAmount)
+            if (savingsHistoryJson != null) savingsObj.put("historyJson", savingsHistoryJson)
+            if (includeAssetsInSavingsTotal != null) savingsObj.put("includeAssetsInTotal", includeAssetsInSavingsTotal)
+            root.put("savingsSettings", savingsObj)
+        }
+
+        if (goldAssetHoldingsJson != null || binanceHoldingsJson != null) {
+            val assetsObj = JSONObject()
+            if (goldAssetHoldingsJson != null) assetsObj.put("goldAssetHoldingsJson", goldAssetHoldingsJson)
+            if (binanceHoldingsJson != null) assetsObj.put("binanceHoldingsJson", binanceHoldingsJson)
+            root.put("assetHoldings", assetsObj)
+        }
+
+        if (cardHubOrderJson != null) {
+            root.put("cardHubOrderJson", cardHubOrderJson)
+        }
+
+        if (
+            localUsername != null ||
+            localWilayaCode != null ||
+            localWilayaName != null ||
+            localCommuneName != null
+        ) {
+            val localAccountObj = JSONObject()
+            if (localUsername != null) localAccountObj.put("username", localUsername)
+            if (localWilayaCode != null) localAccountObj.put("wilayaCode", localWilayaCode)
+            if (localWilayaName != null) localAccountObj.put("wilayaName", localWilayaName)
+            if (localCommuneName != null) localAccountObj.put("communeName", localCommuneName)
+            root.put("localAccount", localAccountObj)
+        }
 
         // Transactions
         val transArray = JSONArray()
@@ -121,25 +212,85 @@ data class BackupPayload(
                 val salaryEmployer = salaryObj?.optString("employer", "Enterprise Algiers") ?: "Enterprise Algiers"
 
                 val cardObj = root.optJSONObject("classicCardSettings")
-                val classicCardHolderName = cardObj?.optString("holderName", "CHARFEDDINE KA") ?: "CHARFEDDINE KA"
+                val classicCardBankStyle = cardObj?.optString("bankStyle", "EDAHABIA") ?: "EDAHABIA"
+                val classicCardHolderName = cardObj?.optString("holderName", "CARDHOLDER") ?: "CARDHOLDER"
                 val classicCardNumber = cardObj?.optString("cardNumber", "") ?: ""
                 val classicCardExpiry = cardObj?.optString("expiryDate", "11/29") ?: "11/29"
                 val classicCardCvc = cardObj?.optString("cvc", "") ?: ""
+
+                val visaObj = root.optJSONObject("visaCardSettings")
+                val visaCardProvider = visaObj?.optString("provider", "DEFAULT") ?: "DEFAULT"
+                val visaCardHolderName = visaObj?.optString("holderName", "") ?: ""
+                val visaCardNumber = visaObj?.optString("cardNumber", "") ?: ""
+                val visaCardExpiry = visaObj?.optString("expiryDate", "08/28") ?: "08/28"
+                val visaCardCvc = visaObj?.optString("cvc", "") ?: ""
+
+                val thirdObj = root.optJSONObject("thirdCardSettings")
+                val thirdCardEnabled = thirdObj?.optBoolean("enabled", false) ?: false
+                val thirdCardProvider = thirdObj?.optString("provider", "BINANCE") ?: "BINANCE"
+                val thirdCardHolderName = thirdObj?.optString("holderName", "") ?: ""
+                val thirdCardNumber = thirdObj?.optString("cardNumber", "") ?: ""
+                val thirdCardExpiry = thirdObj?.optString("expiryDate", "08/28") ?: "08/28"
+                val thirdCardCvc = thirdObj?.optString("cvc", "") ?: ""
+
+                val vaultSecretsObj = root.optJSONObject("vaultSecrets")
+                val vaultKeysJson = vaultSecretsObj?.optString("vaultKeysJson", "[]") ?: "[]"
+                val ccpAccountsJson = vaultSecretsObj?.optString("ccpAccountsJson", "[]") ?: "[]"
+
+                val savingsObj = root.optJSONObject("savingsSettings")
+                val savingsWalletBalance = savingsObj?.takeIf { it.has("walletBalance") && !it.isNull("walletBalance") }
+                    ?.optDouble("walletBalance", Double.NaN)
+                    ?.takeIf { it.isFinite() && it >= 0.0 }
+                val savingsGoalAmount = savingsObj?.takeIf { it.has("goalAmount") && !it.isNull("goalAmount") }
+                    ?.optDouble("goalAmount", Double.NaN)
+                    ?.takeIf { it.isFinite() && it >= 0.0 }
+                val savingsHistoryJson = savingsObj?.takeIf { it.has("historyJson") && !it.isNull("historyJson") }
+                    ?.optString("historyJson", "[]")
+                val includeAssetsInSavingsTotal = savingsObj?.takeIf {
+                    it.has("includeAssetsInTotal") && !it.isNull("includeAssetsInTotal")
+                }?.optBoolean("includeAssetsInTotal")
+
+                val assetsObj = root.optJSONObject("assetHoldings")
+                val goldAssetHoldingsJson = assetsObj?.takeIf {
+                    it.has("goldAssetHoldingsJson") && !it.isNull("goldAssetHoldingsJson")
+                }?.optString("goldAssetHoldingsJson", "[]")
+                val binanceHoldingsJson = assetsObj?.takeIf {
+                    it.has("binanceHoldingsJson") && !it.isNull("binanceHoldingsJson")
+                }?.optString("binanceHoldingsJson", "[]")
+
+                val cardHubOrderJson = if (root.has("cardHubOrderJson") && !root.isNull("cardHubOrderJson")) {
+                    root.optString("cardHubOrderJson", "")
+                } else null
+
+                val localAccountObj = root.optJSONObject("localAccount")
+                val localUsername = localAccountObj?.takeIf { it.has("username") && !it.isNull("username") }
+                    ?.optString("username", "")
+                val localWilayaCode = localAccountObj?.takeIf { it.has("wilayaCode") && !it.isNull("wilayaCode") }
+                    ?.optString("wilayaCode", "")
+                val localWilayaName = localAccountObj?.takeIf { it.has("wilayaName") && !it.isNull("wilayaName") }
+                    ?.optString("wilayaName", "")
+                val localCommuneName = localAccountObj?.takeIf { it.has("communeName") && !it.isNull("communeName") }
+                    ?.optString("communeName", "")
 
                 val transList = mutableListOf<TransactionEntity>()
                 val transArray = root.optJSONArray("transactions")
                 if (transArray != null) {
                     for (i in 0 until transArray.length()) {
-                        val obj = transArray.getJSONObject(i)
-                        val txAmount = obj.getDouble("amount")
+                        val obj = transArray.optJSONObject(i) ?: continue
+                        val txType = runCatching { TransactionType.valueOf(obj.optString("type", "")) }.getOrNull()
+                            ?: continue
+                        val txAmount = obj.optDouble("amount", Double.NaN)
                         if (!txAmount.isFinite() || txAmount < 0.0) continue
+                        val category = obj.optString("category", "")
+                        val title = obj.optString("title", "")
+                        if (category.isBlank() && title.isBlank()) continue
                         transList.add(
                             TransactionEntity(
                                 id = 0, // Auto-generate new IDs on restore
-                                type = TransactionType.valueOf(obj.getString("type")),
+                                type = txType,
                                 amount = txAmount,
-                                category = obj.getString("category"),
-                                title = obj.getString("title"),
+                                category = category.ifBlank { "other" },
+                                title = title.ifBlank { category.ifBlank { "Transaction" } },
                                 note = obj.optString("note", ""),
                                 dateMillis = obj.optLong("dateMillis", System.currentTimeMillis()),
                                 isSalaryCredit = obj.optBoolean("isSalaryCredit", false),
@@ -153,9 +304,13 @@ data class BackupPayload(
                 val debtsArray = root.optJSONArray("debts")
                 if (debtsArray != null) {
                     for (i in 0 until debtsArray.length()) {
-                        val obj = debtsArray.getJSONObject(i)
-                        val debtAmount = obj.getDouble("amount")
+                        val obj = debtsArray.optJSONObject(i) ?: continue
+                        val debtType = runCatching { DebtType.valueOf(obj.optString("type", "")) }.getOrNull()
+                            ?: continue
+                        val debtAmount = obj.optDouble("amount", Double.NaN)
                         if (!debtAmount.isFinite() || debtAmount < 0.0) continue
+                        val personName = obj.optString("personName", "").trim()
+                        if (personName.isBlank()) continue
                         val rawRemaining = obj.optDouble("remainingAmount", debtAmount)
                         val safeRemaining = if (rawRemaining.isFinite() && rawRemaining >= 0.0) rawRemaining else debtAmount
                         val rawMonthly = obj.optDouble("monthlyInstallmentAmount", 0.0)
@@ -163,14 +318,14 @@ data class BackupPayload(
                         debtsList.add(
                             DebtEntity(
                                 id = 0,
-                                type = DebtType.valueOf(obj.getString("type")),
-                                personName = obj.getString("personName"),
+                                type = debtType,
+                                personName = personName,
                                 amount = debtAmount,
                                 note = obj.optString("note", ""),
-                                dueDateMillis = obj.getLong("dueDateMillis"),
+                                dueDateMillis = obj.optLong("dueDateMillis", System.currentTimeMillis()),
                                 autoPayOnDueDate = obj.optBoolean("autoPayOnDueDate", true),
                                 isPaid = obj.optBoolean("isPaid", false),
-                                paidDateMillis = if (obj.has("paidDateMillis")) obj.getLong("paidDateMillis") else null,
+                                paidDateMillis = if (obj.has("paidDateMillis") && !obj.isNull("paidDateMillis")) obj.optLong("paidDateMillis") else null,
                                 createdDateMillis = obj.optLong("createdDateMillis", System.currentTimeMillis()),
                                 isRecurringMonthlyInstallment = obj.optBoolean("isRecurringMonthlyInstallment", false),
                                 monthlyInstallmentAmount = safeMonthly,
@@ -186,10 +341,19 @@ data class BackupPayload(
                 val smsArchiveArray = root.optJSONArray("archivedAlgPosteSms")
                 if (smsArchiveArray != null) {
                     for (i in 0 until smsArchiveArray.length()) {
-                        val obj = smsArchiveArray.getJSONObject(i)
+                        val obj = smsArchiveArray.optJSONObject(i) ?: continue
                         val smsId = obj.optString("id", "")
                         val rawBody = obj.optString("rawBody", "")
                         if (smsId.isBlank() || rawBody.isBlank()) continue
+                        val extractedBalance = if (obj.has("extractedBalance") && !obj.isNull("extractedBalance")) {
+                            obj.optDouble("extractedBalance", Double.NaN).takeIf { it.isFinite() }
+                        } else null
+                        val extractedTxAmount = if (obj.has("extractedTxAmount") && !obj.isNull("extractedTxAmount")) {
+                            obj.optDouble("extractedTxAmount", Double.NaN).takeIf { it.isFinite() }
+                        } else null
+                        val extractedIsExpense = if (obj.has("extractedIsExpense") && !obj.isNull("extractedIsExpense")) {
+                            obj.optBoolean("extractedIsExpense")
+                        } else null
                         smsArchiveList.add(
                             ArchivedAlgPosteSmsEntity(
                                 id = smsId,
@@ -198,15 +362,9 @@ data class BackupPayload(
                                 receivedAtMillis = obj.optLong("receivedAtMillis", System.currentTimeMillis()),
                                 capturedAtMillis = obj.optLong("capturedAtMillis", System.currentTimeMillis()),
                                 captureSource = obj.optString("captureSource", "BACKUP"),
-                                extractedBalance = if (obj.has("extractedBalance") && !obj.isNull("extractedBalance")) {
-                                    obj.getDouble("extractedBalance")
-                                } else null,
-                                extractedTxAmount = if (obj.has("extractedTxAmount") && !obj.isNull("extractedTxAmount")) {
-                                    obj.getDouble("extractedTxAmount")
-                                } else null,
-                                extractedIsExpense = if (obj.has("extractedIsExpense") && !obj.isNull("extractedIsExpense")) {
-                                    obj.getBoolean("extractedIsExpense")
-                                } else null,
+                                extractedBalance = extractedBalance,
+                                extractedTxAmount = extractedTxAmount,
+                                extractedIsExpense = extractedIsExpense,
                                 hasExplicitFeeKeyword = obj.optBoolean("hasExplicitFeeKeyword", false),
                                 matchedRule = obj.optString("matchedRule", "UNRECOGNIZED"),
                                 studyStatus = obj.optString("studyStatus", "NEEDS_STUDY")
@@ -228,7 +386,32 @@ data class BackupPayload(
                     classicCardNumber = classicCardNumber,
                     classicCardExpiry = classicCardExpiry,
                     classicCardCvc = classicCardCvc,
-                    archivedAlgPosteSms = smsArchiveList
+                    archivedAlgPosteSms = smsArchiveList,
+                    classicCardBankStyle = classicCardBankStyle,
+                    visaCardProvider = visaCardProvider,
+                    visaCardHolderName = visaCardHolderName,
+                    visaCardNumber = visaCardNumber,
+                    visaCardExpiry = visaCardExpiry,
+                    visaCardCvc = visaCardCvc,
+                    thirdCardEnabled = thirdCardEnabled,
+                    thirdCardProvider = thirdCardProvider,
+                    thirdCardHolderName = thirdCardHolderName,
+                    thirdCardNumber = thirdCardNumber,
+                    thirdCardExpiry = thirdCardExpiry,
+                    thirdCardCvc = thirdCardCvc,
+                    vaultKeysJson = vaultKeysJson,
+                    ccpAccountsJson = ccpAccountsJson,
+                    savingsWalletBalance = savingsWalletBalance,
+                    savingsGoalAmount = savingsGoalAmount,
+                    savingsHistoryJson = savingsHistoryJson,
+                    includeAssetsInSavingsTotal = includeAssetsInSavingsTotal,
+                    goldAssetHoldingsJson = goldAssetHoldingsJson,
+                    binanceHoldingsJson = binanceHoldingsJson,
+                    cardHubOrderJson = cardHubOrderJson,
+                    localUsername = localUsername,
+                    localWilayaCode = localWilayaCode,
+                    localWilayaName = localWilayaName,
+                    localCommuneName = localCommuneName
                 )
             }.getOrNull()
         }

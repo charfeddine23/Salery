@@ -173,4 +173,137 @@ class SecurityAuditUnitTest {
             VaultCryptoManager.sha256Hex("secret-copy")
         )
     }
+
+    @Test
+    fun stepUpAuth_failsClosedWhenBiometricRequiredAndHostActivityUnavailable() {
+        val appContext = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        var verified = false
+        var rejected = false
+
+        com.example.security.StepUpAuthHelper.verifyIfEnabled(
+            context = appContext,
+            requireBiometric = true,
+            title = "Verify",
+            subtitle = "Confirm",
+            cancelText = "Cancel",
+            onVerified = { verified = true },
+            onRejected = { rejected = true }
+        )
+
+        assertFalse(verified)
+        assertTrue(rejected)
+
+        // When requireBiometric is false, action proceeds cleanly
+        var unguardedVerified = false
+        com.example.security.StepUpAuthHelper.verifyIfEnabled(
+            context = appContext,
+            requireBiometric = false,
+            title = "Verify",
+            subtitle = "Confirm",
+            cancelText = "Cancel",
+            onVerified = { unguardedVerified = true },
+            onRejected = { }
+        )
+        assertTrue(unguardedVerified)
+    }
+
+    @Test
+    fun preferencesReadLanguageFast_readsStoredLanguageWithoutFullSettingsLoad() {
+        val appContext = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = com.example.data.PreferencesManager(appContext)
+        prefs.updateSettings { it.copy(language = "ar") }
+        assertEquals("ar", com.example.data.PreferencesManager.readLanguageFast(appContext))
+        prefs.updateSettings { it.copy(language = "en") }
+        assertEquals("en", com.example.data.PreferencesManager.readLanguageFast(appContext))
+    }
+
+    @Test
+    fun backupRestore_skipsUnknownEnumsWithoutDiscardingValidRecords() {
+        val mixedJson = """
+            {
+              "transactions": [
+                { "type": "FUTURE_TX_TYPE", "amount": 500.0, "category": "other", "title": "Future" },
+                { "type": "INCOME", "amount": 2500.0, "category": "salary", "title": "Valid Income" }
+              ],
+              "debts": [
+                { "type": "FUTURE_DEBT_TYPE", "personName": "Unknown", "amount": 100.0 },
+                { "type": "OWED_TO_ME", "personName": "Karim", "amount": 3000.0, "dueDateMillis": 2000000 }
+              ]
+            }
+        """.trimIndent()
+        val parsed = BackupPayload.fromJsonString(mixedJson)
+        assertNotNull(parsed)
+        assertEquals(1, parsed!!.transactions.size)
+        assertEquals("Valid Income", parsed.transactions[0].title)
+        assertEquals(1, parsed.debts.size)
+        assertEquals("Karim", parsed.debts[0].personName)
+    }
+
+    @Test
+    fun fullVaultBackup_redactsAllCardsAndVaultSecretsInPlaintext_andPreservesWhenEncrypted() {
+        val payload = BackupPayload(
+            exportTimestamp = 1_763_200_000_000L,
+            appVersion = "1.0.5",
+            developer = "Vaultix",
+            transactions = emptyList(),
+            debts = emptyList(),
+            salaryAmount = 90000.0,
+            salaryPayday = 25,
+            salaryEmployer = "Algiers Corp",
+            classicCardHolderName = "CARDHOLDER",
+            classicCardNumber = "6280000011112222",
+            classicCardExpiry = "11/29",
+            classicCardCvc = "111",
+            visaCardProvider = "REDOTPAY",
+            visaCardHolderName = "CARDHOLDER",
+            visaCardNumber = "4152000033334444",
+            visaCardExpiry = "08/28",
+            visaCardCvc = "222",
+            thirdCardEnabled = true,
+            thirdCardProvider = "BYBIT",
+            thirdCardHolderName = "CARDHOLDER",
+            thirdCardNumber = "5316000055556666",
+            thirdCardExpiry = "09/29",
+            thirdCardCvc = "333",
+            vaultKeysJson = "[{\"id\":\"vk1\",\"secret\":\"super-secret-pass\"}]",
+            ccpAccountsJson = "[{\"id\":\"ccp1\",\"rip\":\"00799999001234567890\"}]",
+            savingsWalletBalance = 50000.0,
+            localUsername = "Amine",
+            localWilayaCode = "16",
+            localWilayaName = "Alger",
+            localCommuneName = "Hydra"
+        )
+
+        val plaintext = payload.toJsonString(includeSensitiveCardFields = false)
+        assertFalse(plaintext.contains("6280000011112222"))
+        assertFalse(plaintext.contains("4152000033334444"))
+        assertFalse(plaintext.contains("5316000055556666"))
+        assertFalse(plaintext.contains("super-secret-pass"))
+        assertFalse(plaintext.contains("00799999001234567890"))
+        assertTrue(plaintext.contains("Amine"))
+
+        val plainParsed = BackupPayload.fromJsonString(plaintext)
+        assertNotNull(plainParsed)
+        assertEquals("", plainParsed!!.visaCardNumber)
+        assertEquals("", plainParsed.thirdCardNumber)
+        assertEquals("[]", plainParsed.vaultKeysJson)
+        assertEquals("[]", plainParsed.ccpAccountsJson)
+        assertEquals(50000.0, plainParsed.savingsWalletBalance!!, 0.01)
+        assertEquals("16", plainParsed.localWilayaCode)
+
+        val encrypted = VaultCryptoManager.encryptBackupWithPassphrase(
+            payload.toJsonString(includeSensitiveCardFields = true),
+            "StrongPass2026!"
+        )
+        val decrypted = VaultCryptoManager.decryptBackupWithPassphrase(encrypted, "StrongPass2026!")
+        assertNotNull(decrypted)
+        val encParsed = BackupPayload.fromJsonString(decrypted!!)
+        assertNotNull(encParsed)
+        assertEquals("4152000033334444", encParsed!!.visaCardNumber)
+        assertEquals("222", encParsed.visaCardCvc)
+        assertEquals("5316000055556666", encParsed.thirdCardNumber)
+        assertTrue(encParsed.vaultKeysJson.contains("super-secret-pass"))
+        assertTrue(encParsed.ccpAccountsJson.contains("00799999001234567890"))
+        assertEquals("", VaultCryptoManager.decryptSensitiveOrNull(""))
+    }
 }

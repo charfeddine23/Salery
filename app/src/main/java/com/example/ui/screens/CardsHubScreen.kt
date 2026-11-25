@@ -200,7 +200,15 @@ fun CardsHubScreen(
             title = if (isArabic) "تأكيد الهوية لعرض بيانات البطاقة" else "Verify Identity for Card Details",
             subtitle = if (isArabic) "تحقق بالبصمة قبل عرض أو تعديل رقم البطاقة ورمز CVC" else "Confirm biometrics before viewing or editing card number & CVC",
             cancelText = strings.cancel,
-            onVerified = onVerified
+            onVerified = onVerified,
+            onRejected = { err ->
+                val msg = err?.takeIf { it.isNotBlank() } ?: if (isArabic) {
+                    "تعذر التحقق بالبصمة. تحقق من بصمة الجهاز ثم أعد المحاولة."
+                } else {
+                    "Biometric verification unavailable. Check device biometrics and try again."
+                }
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            }
         )
     }
 
@@ -1150,7 +1158,7 @@ private fun EdahabiaCardRealistic(
                                 verticalAlignment = Alignment.Bottom
                             ) {
                                 Text(
-                                    text = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                    text = userSettings.classicCardHolderName.ifBlank { "CARDHOLDER" }.uppercase(),
                                     color = McaChampagneGold,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -1345,7 +1353,7 @@ private fun EdahabiaCardRealistic(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                text = userSettings.classicCardHolderName.ifBlank { "CARDHOLDER" }.uppercase(),
                                 color = Color.White,
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -2145,7 +2153,7 @@ private fun VisaCardRealistic(
                             letterSpacing = if (isArabic) 0.sp else 0.4.sp
                         )
                         Text(
-                            text = holderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                            text = holderName.ifBlank { "CARDHOLDER" }.uppercase(),
                             color = primaryTextColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
