@@ -88,10 +88,19 @@ object BinanceCryptoCatalog {
         CryptoAssetSpec(
             symbol = "USDT",
             nameEn = "Tether USD",
-            nameAr = "تيثر الدولارية",
+            nameAr = "تيثر (USDT)",
             binancePair = "USDTUSDT",
             coingeckoId = "tether",
             accentHex = 0xFF26A17B,
+            isStablecoin = true
+        ),
+        CryptoAssetSpec(
+            symbol = "USDC",
+            nameEn = "USD Coin",
+            nameAr = "دولار رقمي (USDC)",
+            binancePair = "USDCUSDT",
+            coingeckoId = "usd-coin",
+            accentHex = 0xFF2775CA,
             isStablecoin = true
         ),
         CryptoAssetSpec(
@@ -191,7 +200,7 @@ object BinanceCryptoCatalog {
             if (h.quantity <= 0.0) continue
             val sym = h.symbol.uppercase(Locale.US)
             val unitPrice = when {
-                sym == "USDT" -> prices[sym]?.priceUsd ?: 1.0
+                sym == "USDT" || sym == "USDC" -> prices[sym]?.priceUsd ?: 1.0
                 else -> prices[sym]?.priceUsd ?: 0.0
             }
             total += h.quantity * unitPrice
@@ -251,13 +260,24 @@ object BinanceCryptoCatalog {
             )
         }
         if (result.isNotEmpty()) {
-            result["USDT"] = CryptoMarketPriceEntry(
-                symbol = "USDT",
-                priceUsd = 1.0,
-                change24hPercent = 0.0,
-                updatedAtMillis = timestampMillis,
-                source = "Binance"
-            )
+            if (!result.containsKey("USDT")) {
+                result["USDT"] = CryptoMarketPriceEntry(
+                    symbol = "USDT",
+                    priceUsd = 1.0,
+                    change24hPercent = 0.0,
+                    updatedAtMillis = timestampMillis,
+                    source = "Binance"
+                )
+            }
+            if (!result.containsKey("USDC")) {
+                result["USDC"] = CryptoMarketPriceEntry(
+                    symbol = "USDC",
+                    priceUsd = 1.0,
+                    change24hPercent = 0.0,
+                    updatedAtMillis = timestampMillis,
+                    source = "Binance"
+                )
+            }
         }
         return result
     }
@@ -387,7 +407,7 @@ object BinanceMarketPriceFetcher {
         val binanceResult = runCatching {
             val symbolsJson = BinanceCryptoCatalog.encodeBinanceSymbolsParam(
                 BinanceCryptoCatalog.majorAssets
-                    .filter { !it.isStablecoin }
+                    .filter { !it.binancePair.equals("USDTUSDT", ignoreCase = true) }
                     .map { it.binancePair }
             )
 

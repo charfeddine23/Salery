@@ -122,7 +122,7 @@ fun BinanceWalletScreen(
     onRefreshPrices: (force: Boolean) -> Unit,
     onSaveHolding: (holdingId: String?, symbol: String, quantity: Double, note: String) -> Unit,
     onRemoveHolding: (holdingId: String) -> Unit,
-    onConvertHoldingToUsdt: (holdingId: String, convertQuantity: Double) -> Unit = { _, _ -> },
+    onConvertHoldingToUsdt: (holdingId: String, convertQuantity: Double, targetSymbol: String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBackClick() }
@@ -223,7 +223,7 @@ fun BinanceWalletScreen(
                     dialogTarget = null
                 }
             } else null,
-            onConvertToUsdt = if (matchingHolding != null && !matchingHolding.symbol.equals("USDT", ignoreCase = true)) {
+            onConvertToUsdt = if (matchingHolding != null) {
                 {
                     dialogTarget = null
                     convertTarget = matchingHolding
@@ -255,8 +255,8 @@ fun BinanceWalletScreen(
             secureScreenshots = userSettings.screenshotProtectionEnabled,
             onRefreshLivePrice = { onRefreshPrices(true) },
             onDismiss = { convertTarget = null },
-            onConfirmConvert = { convertQty ->
-                onConvertHoldingToUsdt(latestHolding.id, convertQty)
+            onConfirmConvert = { convertQty, targetSym ->
+                onConvertHoldingToUsdt(latestHolding.id, convertQty, targetSym)
                 convertTarget = null
             }
         )
@@ -514,6 +514,140 @@ fun BinanceWalletScreen(
         }
     }
 
+    val stablecoinsCard: @Composable () -> Unit = {
+        val usdtSpec = remember { BinanceCryptoCatalog.findBySymbol("USDT") }
+        val usdcSpec = remember { BinanceCryptoCatalog.findBySymbol("USDC") }
+        val stableSpecs = remember(usdtSpec, usdcSpec) { listOfNotNull(usdtSpec, usdcSpec) }
+        if (stableSpecs.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = if (isArabic) "العملات الرقمية المستقرة (USDT & USDC)" else "Dollar Stablecoins (USDT & USDC)",
+                    color = colors.textPrimary,
+                    fontSize = typo.body,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    stableSpecs.forEach { spec ->
+                        val accent = Color(spec.accentHex)
+                        val livePrice = prices[spec.symbol]
+                        val unitPrice = livePrice?.priceUsd ?: 1.0
+                        val heldQty = holdings
+                            .filter { it.symbol.equals(spec.symbol, ignoreCase = true) }
+                            .sumOf { it.quantity }
+                        GlassCard(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("crypto_stablecoin_${spec.symbol.lowercase()}_card"),
+                            backgroundColor = colors.glassCard,
+                            borderColor = accent.copy(alpha = if (heldQty > 0.0) 0.72f else 0.42f),
+                            shape = RoundedCornerShape(16.dp),
+                            cornerRadius = 16.dp,
+                            onClick = {
+                                dialogTarget = CryptoDialogTarget(
+                                    holdingId = null,
+                                    symbol = spec.symbol,
+                                    initialQuantity = 0.0,
+                                    initialNote = ""
+                                )
+                            }
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(CircleShape)
+                                                .background(accent.copy(alpha = 0.22f))
+                                                .border(1.dp, accent.copy(alpha = 0.65f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "$",
+                                                color = accent,
+                                                fontSize = typo.body,
+                                                fontWeight = FontWeight.Black
+                                            )
+                                        }
+                                        Column {
+                                            Text(
+                                                text = spec.symbol,
+                                                color = colors.textPrimary,
+                                                fontSize = typo.body,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = if (spec.symbol == "USDT") "Tether" else "USD Coin",
+                                                color = colors.textMuted,
+                                                fontSize = typo.caption,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(accent.copy(alpha = 0.18f))
+                                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "+",
+                                            color = accent,
+                                            fontSize = typo.bodySm,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = isolateLtr(formatCryptoUnitPrice(unitPrice)),
+                                        color = accent,
+                                        fontSize = typo.bodySm,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = if (isStealth) {
+                                            "••••"
+                                        } else if (heldQty > 0.0) {
+                                            isolateLtr("${formatCryptoQuantity(heldQty)} ${spec.symbol}")
+                                        } else {
+                                            if (isArabic) "إضافة رصيد" else "Add balance"
+                                        },
+                                        color = if (heldQty > 0.0) colors.textPrimary else colors.textMuted,
+                                        fontSize = typo.caption,
+                                        fontWeight = if (heldQty > 0.0) FontWeight.Bold else FontWeight.Medium,
+                                        fontFamily = if (heldQty > 0.0) FontFamily.Monospace else FontFamily.Default,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     val quickAddCarousel: @Composable () -> Unit = {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -555,16 +689,16 @@ fun BinanceWalletScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
+                                        .size(32.dp)
                                         .clip(CircleShape)
                                         .background(accent.copy(alpha = 0.20f))
                                         .border(1.dp, accent.copy(alpha = 0.65f), CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = asset.symbol.take(3),
+                                        text = asset.symbol,
                                         color = accent,
-                                        fontSize = typo.caption,
+                                        fontSize = if (asset.symbol.length >= 4) 8.5.sp else typo.caption,
                                         fontWeight = FontWeight.Black,
                                         maxLines = 1
                                     )
@@ -612,8 +746,8 @@ fun BinanceWalletScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             val priceText = when {
-                                asset.isStablecoin -> "$1.00"
                                 livePrice != null -> formatCryptoUnitPrice(livePrice.priceUsd)
+                                asset.isStablecoin -> "$1.00"
                                 else -> "---"
                             }
                             Text(
@@ -651,6 +785,7 @@ fun BinanceWalletScreen(
                     headerActionBar()
                 }
                 item { portfolioHeroCard() }
+                item { stablecoinsCard() }
                 item { quickAddCarousel() }
                 item { Spacer(modifier = Modifier.height(dimens.spacingXl)) }
             }
@@ -955,6 +1090,7 @@ fun BinanceWalletScreen(
                 headerActionBar()
             }
             item { portfolioHeroCard() }
+            item { stablecoinsCard() }
             item { quickAddCarousel() }
 
         // My Added Holdings Header
@@ -1238,49 +1374,54 @@ fun BinanceWalletScreen(
                             }
                         }
 
-                        if (!spec.isStablecoin && !spec.symbol.equals("USDT", ignoreCase = true)) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(EmeraldNeon.copy(alpha = 0.12f))
-                                    .border(1.dp, EmeraldNeon.copy(alpha = 0.34f), RoundedCornerShape(12.dp))
-                                    .clickable { convertTarget = holding }
-                                    .testTag("convert_crypto_${spec.symbol.lowercase()}_${holding.id}")
-                                    .padding(horizontal = 12.dp, vertical = 9.dp)
+                        val targetConvertLabel = if (spec.symbol.equals("USDT", ignoreCase = true)) {
+                            "USDC"
+                        } else if (spec.symbol.equals("USDC", ignoreCase = true)) {
+                            "USDT"
+                        } else {
+                            "USDT / USDC"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(EmeraldNeon.copy(alpha = 0.12f))
+                                .border(1.dp, EmeraldNeon.copy(alpha = 0.34f), RoundedCornerShape(12.dp))
+                                .clickable { convertTarget = holding }
+                                .testTag("convert_crypto_${spec.symbol.lowercase()}_${holding.id}")
+                                .padding(horizontal = 12.dp, vertical = 9.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CurrencyExchange,
-                                            contentDescription = null,
-                                            tint = EmeraldNeon,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Text(
-                                            text = if (isArabic) "تحويل إلى USDT بالسعر اللحظي" else "Convert to USDT at Live Price",
-                                            color = EmeraldNeon,
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    if (!isStealth && unitPrice > 0.0) {
-                                        Text(
-                                            text = isolateLtr("≈ ${formatCryptoQuantity(totalUsd)} USDT"),
-                                            color = colors.textSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.CurrencyExchange,
+                                        contentDescription = null,
+                                        tint = EmeraldNeon,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = if (isArabic) "تحويل إلى $targetConvertLabel بالسعر اللحظي" else "Convert to $targetConvertLabel",
+                                        color = EmeraldNeon,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (!isStealth && unitPrice > 0.0) {
+                                    Text(
+                                        text = isolateLtr("≈ ${formatCryptoQuantity(totalUsd)} $"),
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
                                 }
                             }
                         }
@@ -1895,14 +2036,14 @@ private fun AddOrEditCryptoDialog(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = if (isArabic) "تحويل (كلي أو جزئي) إلى USDT" else "Convert (Full or Partial) to USDT",
+                                    text = if (isArabic) "تحويل (كلي أو جزئي) إلى USDT / USDC" else "Convert to USDT / USDC",
                                     color = EmeraldNeon,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             Text(
-                                text = "USDT",
+                                text = "USDT / USDC",
                                 color = colors.textPrimary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -1959,7 +2100,7 @@ private fun ConvertCryptoToUsdtDialog(
     secureScreenshots: Boolean,
     onRefreshLivePrice: () -> Unit,
     onDismiss: () -> Unit,
-    onConfirmConvert: (convertQuantity: Double) -> Unit
+    onConfirmConvert: (convertQuantity: Double, targetSymbol: String) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
@@ -1971,8 +2112,21 @@ private fun ConvertCryptoToUsdtDialog(
         onRefreshLivePrice()
     }
 
+    val availableTargets = remember(asset.symbol) {
+        when (asset.symbol.uppercase(Locale.US)) {
+            "USDT" -> listOf("USDC")
+            "USDC" -> listOf("USDT")
+            else -> listOf("USDT", "USDC")
+        }
+    }
+    var targetSymbol by remember(asset.symbol) { mutableStateOf(availableTargets.first()) }
+
     val marketEntry = prices[asset.symbol.uppercase(Locale.US)]
-    val unitPrice = marketEntry?.priceUsd ?: 0.0
+    val unitPrice = when {
+        asset.isStablecoin -> marketEntry?.priceUsd ?: 1.0
+        else -> marketEntry?.priceUsd ?: 0.0
+    }
+    val targetUnitPrice = (prices[targetSymbol]?.priceUsd ?: 1.0).takeIf { it > 0.0 } ?: 1.0
     val changePct = marketEntry?.change24hPercent ?: 0.0
 
     var convertAmountText by remember(holding.id, holding.quantity) {
@@ -1995,7 +2149,7 @@ private fun ConvertCryptoToUsdtDialog(
     val remainingQty = (holding.quantity - clampedConvertQty).let {
         if (it <= 1e-9 || it <= holding.quantity * 1e-7) 0.0 else it
     }
-    val usdtReceived = clampedConvertQty * unitPrice
+    val targetReceived = (clampedConvertQty * unitPrice) / targetUnitPrice
     val canConvert = isValidQty && unitPrice > 0.0
 
     Dialog(
@@ -2027,7 +2181,7 @@ private fun ConvertCryptoToUsdtDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (isArabic) "تحويل ${asset.nameAr} إلى USDT" else "Convert ${asset.symbol} to USDT",
+                                text = if (isArabic) "تحويل ${asset.nameAr} إلى $targetSymbol" else "Convert ${asset.symbol} to $targetSymbol",
                                 color = colors.textPrimary,
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold
@@ -2304,6 +2458,42 @@ private fun ConvertCryptoToUsdtDialog(
                         }
                     }
 
+                    if (availableTargets.size > 1) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            availableTargets.forEach { sym ->
+                                val selected = targetSymbol == sym
+                                val accent = Color(BinanceCryptoCatalog.findBySymbol(sym)?.accentHex ?: 0xFF26A17B)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (selected) accent.copy(alpha = 0.22f) else colors.glassCard)
+                                        .border(
+                                            width = if (selected) 1.5.dp else 1.dp,
+                                            color = if (selected) accent else colors.glassBorderSubtle,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { targetSymbol = sym }
+                                        .testTag("convert_target_${sym.lowercase()}")
+                                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "تحويل إلى $sym" else "To $sym",
+                                        color = if (selected) accent else colors.textSecondary,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Live Conversion Output Preview
@@ -2322,14 +2512,14 @@ private fun ConvertCryptoToUsdtDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (isArabic) "ستحصل على (USDT)" else "You Receive (USDT)",
+                                text = if (isArabic) "ستحصل على ($targetSymbol)" else "You Receive ($targetSymbol)",
                                 color = colors.textSecondary,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = if (unitPrice > 0.0) {
-                                    isolateLtr("+${formatCryptoQuantity(usdtReceived)} USDT")
+                                    isolateLtr("+${formatCryptoQuantity(targetReceived)} $targetSymbol")
                                 } else "---",
                                 color = EmeraldNeon,
                                 fontSize = 15.5.sp,
@@ -2384,7 +2574,7 @@ private fun ConvertCryptoToUsdtDialog(
                                 .testTag("confirm_convert_to_usdt_btn"),
                             onClick = {
                                 if (canConvert) {
-                                    onConfirmConvert(clampedConvertQty)
+                                    onConfirmConvert(clampedConvertQty, targetSymbol)
                                 }
                             }
                         )

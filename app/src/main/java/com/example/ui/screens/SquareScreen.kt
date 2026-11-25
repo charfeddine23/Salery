@@ -128,6 +128,7 @@ fun SquareScreen(
 
     // Converter state
     var converterIsGold by remember { mutableStateOf(true) }
+    var converterUsedGold by remember { mutableStateOf(false) }
     var converterInput by remember { mutableStateOf("10") }
     var selectedKarat by remember { mutableIntStateOf(18) }
     var selectedCurrencyCode by remember { mutableStateOf("EUR") }
@@ -231,6 +232,8 @@ fun SquareScreen(
             snapshot = snapshot,
             isGoldMode = converterIsGold,
             onModeChange = { converterIsGold = it },
+            isUsedGold = converterUsedGold,
+            onUsedGoldChange = { converterUsedGold = it },
             amountInput = converterInput,
             onAmountChange = { converterInput = it },
             selectedKarat = selectedKarat,
@@ -302,10 +305,12 @@ fun SquareScreen(
                                 when (row) {
                                     is SquareTickerRowModel.SpotGold -> {
                                         converterIsGold = true
+                                        converterUsedGold = false
                                         selectedKarat = 24
                                     }
                                     is SquareTickerRowModel.GoldKarat -> {
                                         converterIsGold = true
+                                        converterUsedGold = row.item.isUsed
                                         selectedKarat = row.item.karat
                                     }
                                     is SquareTickerRowModel.CurrencyFx -> {

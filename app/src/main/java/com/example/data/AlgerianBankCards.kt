@@ -2,6 +2,7 @@ package com.example.data
 
 enum class AlgerianBankMotif {
     EDAHABIA_ZELLIGE,
+    MCA_FAN,
     EMERALD_ARCS,
     SOVEREIGN_RINGS,
     DIAGONAL_RIBBONS,
@@ -43,6 +44,22 @@ object AlgerianBankCardCatalog {
             glowSecondaryHex = 0xFF0284C7,
             defaultNumberPrefix = "6280  26••  ••••  9842",
             motif = AlgerianBankMotif.EDAHABIA_ZELLIGE
+        ),
+        AlgerianBankCardSpec(
+            id = "EDAHABIA_MCA",
+            shortCode = "MCA FAN",
+            shortCodeAr = "مولودية الجزائر",
+            nameEn = "Edahabia • MC Alger FAN",
+            nameAr = "الذهبية • مولودية الجزائر",
+            cardTypeLabel = "FAN",
+            cardTypeLabelAr = "FAN",
+            gradientHexes = listOf(0xFF00955B, 0xFF00834F, 0xFF006E42, 0xFF005B35, 0xFF004829),
+            accentHex = 0xFFEEDB8B,
+            secondaryTextHex = 0xFFF3DFA2,
+            glowPrimaryHex = 0xFF00A86B,
+            glowSecondaryHex = 0xFFE12D39,
+            defaultNumberPrefix = "1921  0104  1976  2025",
+            motif = AlgerianBankMotif.MCA_FAN
         ),
         AlgerianBankCardSpec(
             id = "BNA",

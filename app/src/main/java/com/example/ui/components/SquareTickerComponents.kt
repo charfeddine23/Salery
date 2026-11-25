@@ -79,6 +79,7 @@ enum class SquarePrimaryTab {
     ALL,
     FAVORITES,
     GOLD,
+    USED_GOLD,
     CURRENCIES,
     CALC
 }
@@ -137,7 +138,7 @@ sealed interface SquareTickerRowModel {
         override val primaryNumericPrice: Double,
         override val changeOrSpreadValue: Double,
         override val sortName: String,
-        override val testTagId: String = "square_karat_${item.karat}"
+        override val testTagId: String = if (item.isUsed) "square_used_karat_${item.karat}" else "square_karat_${item.karat}"
     ) : SquareTickerRowModel
 
     data class CurrencyFx(
@@ -163,6 +164,8 @@ private val TickerRedPill = Color(0xFFF6465D)
 private val TickerNeutralPill = Color(0xFF475569)
 private val PinHighlightColor = Color(0xFFF97316)
 
+private val UsedGoldAccent = Color(0xFFE08E26)
+
 @Composable
 fun SquareCategoryTabStrip(
     selectedTab: SquarePrimaryTab,
@@ -179,6 +182,7 @@ fun SquareCategoryTabStrip(
             "square_filter_favorites"
         ),
         Triple(SquarePrimaryTab.GOLD, if (isArabic) "الذهب" else "Gold", "square_filter_gold"),
+        Triple(SquarePrimaryTab.USED_GOLD, if (isArabic) "الذهب المستعمل" else "Used Gold", "square_filter_used_gold"),
         Triple(SquarePrimaryTab.CURRENCIES, if (isArabic) "العملات" else "Currencies", "square_filter_currencies"),
         Triple(SquarePrimaryTab.CALC, if (isArabic) "الحاسبة" else "Converter", "square_filter_calc")
     )
@@ -333,7 +337,7 @@ fun SquareVenueSubFilterStrip(
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                text = if (isArabic) "ابحث عن عيار أو عملة (عيار 18، يورو، دولار...)" else "Filter gold or currency (18K, EUR, USD...)",
+                                text = if (isArabic) "ابحث عن عيار، مستعمل أو عملة (عيار 18، كاسر، يورو...)" else "Filter gold, used gold or currency (18K, used, EUR...)",
                                 color = colors.textMuted,
                                 fontSize = 12.sp
                             )
@@ -541,16 +545,28 @@ fun SquareExchangeTickerRow(
                                 if (isArabic) "فوري" else "Spot"
                             )
                             is SquareTickerRowModel.GoldKarat -> Triple(
-                                if (isArabic) "عيار ${row.item.karat}" else "${row.item.karat}K",
+                                if (row.item.isUsed) {
+                                    if (isArabic) "مستعمل ${row.item.karat}" else "${row.item.karat}K Used"
+                                } else {
+                                    if (isArabic) "عيار ${row.item.karat}" else "${row.item.karat}K"
+                                },
                                 if (isArabic) {
                                     if (venueFilter == SquareVenueFilter.USD) "/ دولار" else "/ دج"
                                 } else {
                                     if (venueFilter == SquareVenueFilter.USD) "/USD" else "/DZD"
                                 },
-                                when (venueFilter) {
-                                    SquareVenueFilter.BANK -> if (isArabic) "بنك" else "Bank"
-                                    SquareVenueFilter.USD -> if (isArabic) "1 غ" else "1g"
-                                    else -> if (isArabic) "سكوار" else "Square"
+                                if (row.item.isUsed) {
+                                    when (venueFilter) {
+                                        SquareVenueFilter.BANK -> if (isArabic) "كاسر • بنك" else "Scrap • Bank"
+                                        SquareVenueFilter.USD -> if (isArabic) "الكاسر 1غ" else "Scrap 1g"
+                                        else -> if (isArabic) "الكاسر" else "Scrap"
+                                    }
+                                } else {
+                                    when (venueFilter) {
+                                        SquareVenueFilter.BANK -> if (isArabic) "بنك" else "Bank"
+                                        SquareVenueFilter.USD -> if (isArabic) "1 غ" else "1g"
+                                        else -> if (isArabic) "سكوار" else "Square"
+                                    }
                                 }
                             )
                             is SquareTickerRowModel.CurrencyFx -> Triple(
@@ -563,6 +579,8 @@ fun SquareExchangeTickerRow(
                                 }
                             )
                         }
+
+                        val isUsedGoldRow = row is SquareTickerRowModel.GoldKarat && row.item.isUsed
 
                         Text(
                             text = baseText,
@@ -585,13 +603,20 @@ fun SquareExchangeTickerRow(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(colors.glassSurface.copy(alpha = 0.9f))
-                                .border(0.6.dp, colors.glassBorderSubtle, RoundedCornerShape(4.dp))
+                                .background(
+                                    if (isUsedGoldRow) UsedGoldAccent.copy(alpha = 0.20f)
+                                    else colors.glassSurface.copy(alpha = 0.9f)
+                                )
+                                .border(
+                                    0.6.dp,
+                                    if (isUsedGoldRow) UsedGoldAccent.copy(alpha = 0.6f) else colors.glassBorderSubtle,
+                                    RoundedCornerShape(4.dp)
+                                )
                                 .padding(horizontal = 5.dp, vertical = 1.5.dp)
                         ) {
                             Text(
                                 text = tagText,
-                                color = colors.textSecondary,
+                                color = if (isUsedGoldRow) UsedGoldAccent else colors.textSecondary,
                                 fontSize = typo.caption,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
@@ -629,8 +654,13 @@ fun SquareExchangeTickerRow(
                                 val bankShort = if (row.item.pricePerGramDzdBank > 0.0) {
                                     isolateLtr(formatTickerCompact(row.item.pricePerGramDzdBank))
                                 } else "--"
-                                if (isArabic) "${isolateLtr(row.item.purityLabel)} | بنك $bankShort"
-                                else "${row.item.purityLabel} | Bank $bankShort"
+                                if (row.item.isUsed) {
+                                    if (isArabic) "${isolateLtr(row.item.purityLabel)} | ذهب مستعمل • بنك $bankShort"
+                                    else "${row.item.purityLabel} | Used Scrap • Bank $bankShort"
+                                } else {
+                                    if (isArabic) "${isolateLtr(row.item.purityLabel)} | بنك $bankShort"
+                                    else "${row.item.purityLabel} | Bank $bankShort"
+                                }
                             }
                             is SquareTickerRowModel.CurrencyFx -> {
                                 val localizedLabel = if (isArabic) "مقابل الدينار" else row.rate.nameEn
@@ -833,6 +863,8 @@ private fun TickerLeadingEmblem(
         }
         is SquareTickerRowModel.GoldKarat -> {
             val isPrime = row.item.karat == 24 || row.item.karat == 18
+            val accentTint = if (row.item.isUsed) UsedGoldAccent else SquareGoldAccent
+            val deepTint = if (row.item.isUsed) Color(0xFF9A3412) else SquareGoldDeep
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -840,21 +872,21 @@ private fun TickerLeadingEmblem(
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                SquareGoldAccent.copy(alpha = if (isPrime) 0.28f else 0.16f),
-                                SquareGoldDeep.copy(alpha = 0.18f)
+                                accentTint.copy(alpha = if (isPrime) 0.28f else 0.16f),
+                                deepTint.copy(alpha = 0.20f)
                             )
                         )
                     )
                     .border(
                         width = 1.dp,
-                        color = SquareGoldAccent.copy(alpha = if (isPrime) 0.65f else 0.35f),
+                        color = accentTint.copy(alpha = if (isPrime || row.item.isUsed) 0.65f else 0.35f),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (isArabic) "ع${row.item.karat}" else "${row.item.karat}K",
-                    color = SquareGoldAccent,
+                    color = accentTint,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -932,9 +964,13 @@ private fun TickerExpandedTray(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TrayMetricBox(
-                        label = if (isArabic) "غرام (سكوار)" else "1g Square",
+                        label = if (row.item.isUsed) {
+                            if (isArabic) "مستعمل (سكوار)" else "1g Used Square"
+                        } else {
+                            if (isArabic) "غرام (سكوار)" else "1g Square"
+                        },
                         value = "${formatTickerCompact(row.item.pricePerGramDzdParallel)} $unitDzd",
-                        valueColor = SquareGoldAccent,
+                        valueColor = if (row.item.isUsed) UsedGoldAccent else SquareGoldAccent,
                         modifier = Modifier.weight(1f),
                         colors = colors
                     )
@@ -946,11 +982,29 @@ private fun TickerExpandedTray(
                         colors = colors
                     )
                     TrayMetricBox(
-                        label = if (isArabic) "غرام (البنك)" else "1g Bank",
+                        label = if (row.item.isUsed) {
+                            if (isArabic) "مستعمل (البنك)" else "1g Used Bank"
+                        } else {
+                            if (isArabic) "غرام (البنك)" else "1g Bank"
+                        },
                         value = "${formatTickerCompact(row.item.pricePerGramDzdBank)} $unitDzd",
                         valueColor = colors.textPrimary,
                         modifier = Modifier.weight(1f),
                         colors = colors
+                    )
+                }
+                if (row.item.isUsed) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (isArabic) {
+                            "سعر تقديري لشراء الذهب المستعمل (الكاسر) بهامش -5٪ عن الذهب الخام"
+                        } else {
+                            "Estimated used/scrap dealer buyback price (-5% vs raw melt spot)"
+                        },
+                        color = UsedGoldAccent,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -1118,6 +1172,8 @@ fun SquareQuickConverterCard(
     snapshot: SquareMarketSnapshot,
     isGoldMode: Boolean,
     onModeChange: (Boolean) -> Unit,
+    isUsedGold: Boolean = false,
+    onUsedGoldChange: (Boolean) -> Unit = {},
     amountInput: String,
     onAmountChange: (String) -> Unit,
     selectedKarat: Int,
@@ -1132,13 +1188,20 @@ fun SquareQuickConverterCard(
     val parallelAccent = CyanNeon
     val dimens = LocalAdaptiveDimens.current
     val typo = LocalAdaptiveTypography.current
+    val activeGoldKarats = remember(snapshot, isUsedGold) {
+        if (isUsedGold) {
+            snapshot.usedGoldKarats.ifEmpty { SquareMarketCatalog.deriveUsedGoldKarats(snapshot.goldKarats) }
+        } else {
+            snapshot.goldKarats
+        }
+    }
 
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("square_quick_converter"),
         backgroundColor = colors.glassCard,
-        borderColor = SquareGoldAccent.copy(alpha = 0.35f),
+        borderColor = (if (isGoldMode && isUsedGold) UsedGoldAccent else SquareGoldAccent).copy(alpha = 0.35f),
         shape = RoundedCornerShape(dimens.cornerRadiusLg),
         cornerRadius = dimens.cornerRadiusLg
     ) {
@@ -1155,7 +1218,7 @@ fun SquareQuickConverterCard(
                     Icon(
                         imageVector = Icons.Default.Calculate,
                         contentDescription = null,
-                        tint = SquareGoldAccent,
+                        tint = if (isGoldMode && isUsedGold) UsedGoldAccent else SquareGoldAccent,
                         modifier = Modifier.size(dimens.iconSizeSm)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -1206,6 +1269,63 @@ fun SquareQuickConverterCard(
                 }
             }
 
+            if (isGoldMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (!isUsedGold) SquareGoldAccent.copy(alpha = 0.20f) else colors.glassSurface)
+                            .border(
+                                0.8.dp,
+                                if (!isUsedGold) SquareGoldAccent.copy(alpha = 0.55f) else colors.glassBorderSubtle,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { onUsedGoldChange(false) }
+                            .testTag("square_converter_new_gold")
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isArabic) "ذهب خام / جديد" else "Raw / New Gold",
+                            color = if (!isUsedGold) SquareGoldAccent else colors.textSecondary,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isUsedGold) UsedGoldAccent.copy(alpha = 0.22f) else colors.glassSurface)
+                            .border(
+                                0.8.dp,
+                                if (isUsedGold) UsedGoldAccent.copy(alpha = 0.65f) else colors.glassBorderSubtle,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { onUsedGoldChange(true) }
+                            .testTag("square_converter_used_gold")
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isArabic) "ذهب مستعمل (كاسر)" else "Used Gold (Scrap)",
+                            color = if (isUsedGold) UsedGoldAccent else colors.textSecondary,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             // Option Selector Row
@@ -1216,16 +1336,17 @@ fun SquareQuickConverterCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (isGoldMode) {
-                    snapshot.goldKarats.forEach { k ->
+                    activeGoldKarats.forEach { k ->
                         val active = k.karat == selectedKarat
+                        val chipAccent = if (isUsedGold) UsedGoldAccent else SquareGoldAccent
                         Box(
                             modifier = Modifier
                                 .defaultMinSize(minHeight = 36.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (active) SquareGoldAccent.copy(alpha = 0.22f) else colors.glassSurface)
+                                .background(if (active) chipAccent.copy(alpha = 0.22f) else colors.glassSurface)
                                 .border(
                                     0.8.dp,
-                                    if (active) SquareGoldAccent.copy(alpha = 0.6f) else colors.glassBorderSubtle,
+                                    if (active) chipAccent.copy(alpha = 0.6f) else colors.glassBorderSubtle,
                                     RoundedCornerShape(10.dp)
                                 )
                                 .clickable { onSelectKarat(k.karat) }
@@ -1233,8 +1354,12 @@ fun SquareQuickConverterCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isArabic) "عيار ${k.karat}" else "${k.karat}K",
-                                color = if (active) SquareGoldAccent else colors.textSecondary,
+                                text = if (isArabic) {
+                                    if (isUsedGold) "مستعمل ${k.karat}" else "عيار ${k.karat}"
+                                } else {
+                                    if (isUsedGold) "${k.karat}K Used" else "${k.karat}K"
+                                },
+                                color = if (active) chipAccent else colors.textSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1345,8 +1470,8 @@ fun SquareQuickConverterCard(
 
             // Breakdown Result Boxes
             if (isGoldMode) {
-                val k = snapshot.goldKarats.firstOrNull { it.karat == selectedKarat }
-                    ?: snapshot.goldKarats.firstOrNull()
+                val k = activeGoldKarats.firstOrNull { it.karat == selectedKarat }
+                    ?: activeGoldKarats.firstOrNull()
                 val totalSquare = (k?.pricePerGramDzdParallel ?: 0.0) * qty
                 val totalBank = (k?.pricePerGramDzdBank ?: 0.0) * qty
                 val totalUsd = (k?.pricePerGramUsd ?: 0.0) * qty
@@ -1358,7 +1483,7 @@ fun SquareQuickConverterCard(
                     TrayMetricBox(
                         label = if (isArabic) "القيمة (سكوار)" else "Square Value",
                         value = if (totalSquare > 0.0) "${formatTickerCompact(totalSquare)} $unitDzd" else "---",
-                        valueColor = SquareGoldAccent,
+                        valueColor = if (isUsedGold) UsedGoldAccent else SquareGoldAccent,
                         modifier = Modifier.weight(1.1f),
                         colors = colors
                     )
@@ -1487,6 +1612,54 @@ fun buildSquareTickerRows(
         }
     }
 
+    if (primaryTab == SquarePrimaryTab.ALL || primaryTab == SquarePrimaryTab.FAVORITES || primaryTab == SquarePrimaryTab.GOLD || primaryTab == SquarePrimaryTab.USED_GOLD) {
+        val usedList = if (primaryTab == SquarePrimaryTab.USED_GOLD) {
+            snapshot.usedGoldKarats.ifEmpty { SquareMarketCatalog.deriveUsedGoldKarats(snapshot.goldKarats) }
+        } else {
+            snapshot.usedGoldKarats
+        }
+        usedList.forEach { rawK ->
+            val k = if (rawK.isUsed) rawK else rawK.copy(isUsed = true)
+            val numericPrice = when (venueFilter) {
+                SquareVenueFilter.BANK -> k.pricePerGramDzdBank
+                SquareVenueFilter.USD -> k.pricePerGramUsd
+                else -> if (k.pricePerGramDzdParallel > 0.0) k.pricePerGramDzdParallel else k.pricePerGramDzdBank
+            }
+            val (changePct, prevKaratPrice, hasKaratBase) = when (venueFilter) {
+                SquareVenueFilter.BANK -> if (k.has24hBaseline && k.previousGramDzdBank > 0.0) {
+                    Triple(k.change24hBankPercent, k.previousGramDzdBank, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+                SquareVenueFilter.USD -> if (k.has24hBaseline && k.previousGramUsd > 0.0) {
+                    Triple(k.change24hUsdPercent, k.previousGramUsd, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+                else -> if (k.has24hBaseline && k.previousGramDzdParallel > 0.0 && k.pricePerGramDzdParallel > 0.0) {
+                    Triple(k.change24hParallelPercent, k.previousGramDzdParallel, true)
+                } else if (k.has24hBaseline && k.previousGramDzdBank > 0.0) {
+                    Triple(k.change24hBankPercent, k.previousGramDzdBank, true)
+                } else {
+                    Triple(snapshot.gold24hChangePercent, 0.0, false)
+                }
+            }
+            rows.add(
+                SquareTickerRowModel.GoldKarat(
+                    id = "XAU_USED_${k.karat}K",
+                    item = k,
+                    change24hPct = changePct,
+                    previousPrice = prevKaratPrice,
+                    hasBaseline = hasKaratBase,
+                    sourceName = snapshot.goldSource,
+                    primaryNumericPrice = numericPrice,
+                    changeOrSpreadValue = changePct,
+                    sortName = "XAU_USED_${k.karat.toString().padStart(2, '0')}K"
+                )
+            )
+        }
+    }
+
     if (primaryTab == SquarePrimaryTab.ALL || primaryTab == SquarePrimaryTab.FAVORITES || primaryTab == SquarePrimaryTab.CURRENCIES) {
         snapshot.currencies.forEach { fx ->
             val hasBoth = fx.parallelSellDzd > 0.0 && fx.bankRateDzd > 0.0
@@ -1538,7 +1711,8 @@ fun buildSquareTickerRows(
             is SquareTickerRowModel.GoldKarat ->
                 "${row.item.karat}k".contains(cleanQuery) ||
                     row.item.titleEn.lowercase(Locale.US).contains(cleanQuery) ||
-                    row.item.titleAr.contains(cleanQuery)
+                    row.item.titleAr.contains(cleanQuery) ||
+                    (row.item.isUsed && ("used".contains(cleanQuery) || "scrap".contains(cleanQuery) || "مستعمل".contains(cleanQuery) || "كاسر".contains(cleanQuery)))
             is SquareTickerRowModel.CurrencyFx ->
                 row.rate.code.lowercase(Locale.US).contains(cleanQuery) ||
                     row.rate.nameEn.lowercase(Locale.US).contains(cleanQuery) ||

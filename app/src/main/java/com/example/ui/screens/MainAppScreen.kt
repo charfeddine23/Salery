@@ -614,6 +614,9 @@ fun MainAppScreen(
                                     },
                                     onRemoveThirdCard = {
                                         viewModel.removeThirdCard()
+                                    },
+                                    onUpdateCardOrder = { newOrder ->
+                                        viewModel.updateCardHubOrder(newOrder)
                                     }
                                 )
                                 "keys" -> KeysScreen(
@@ -843,8 +846,8 @@ fun MainAppScreen(
                                     onRemoveHolding = { holdingId ->
                                         viewModel.removeCryptoHoldingById(holdingId)
                                     },
-                                    onConvertHoldingToUsdt = { holdingId, convertQuantity ->
-                                        viewModel.convertCryptoHoldingToUsdt(holdingId, convertQuantity)
+                                    onConvertHoldingToUsdt = { holdingId, convertQuantity, targetSymbol ->
+                                        viewModel.convertCryptoHoldingToUsdt(holdingId, convertQuantity, targetSymbol)
                                     }
                                 )
                                 "income" -> IncomeScreen(

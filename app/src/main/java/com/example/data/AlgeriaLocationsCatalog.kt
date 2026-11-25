@@ -1,7 +1,8 @@
 package com.example.data
 
 import android.content.Context
-import org.json.JSONArray
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import java.util.Locale
 
 data class AlgerianCommune(
@@ -29,6 +30,18 @@ data class AlgeriaCommuneMatch(
 object AlgeriaLocationsCatalog {
     private const val ASSET_FILE_NAME = "algeria_locations.json"
 
+    private val moshi: Moshi by lazy { Moshi.Builder().build() }
+    private val wilayaListType by lazy {
+        Types.newParameterizedType(
+            List::class.java,
+            Types.newParameterizedType(
+                Map::class.java,
+                String::class.java,
+                Any::class.java
+            )
+        )
+    }
+
     @Volatile
     private var cachedWilayas: List<AlgerianWilaya>? = null
 
@@ -46,21 +59,23 @@ object AlgeriaLocationsCatalog {
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
     fun parseJson(jsonText: String): List<AlgerianWilaya> {
         if (jsonText.isBlank()) return emptyList()
-        val array = JSONArray(jsonText)
-        val result = ArrayList<AlgerianWilaya>(array.length())
-        for (i in 0 until array.length()) {
-            val wObj = array.getJSONObject(i)
-            val code = wObj.optString("code", "").trim()
-            val nameAr = wObj.optString("ar", "").trim()
-            val nameEn = wObj.optString("en", "").trim()
-            val cArray = wObj.optJSONArray("communes") ?: JSONArray()
-            val communes = ArrayList<AlgerianCommune>(cArray.length())
-            for (j in 0 until cArray.length()) {
-                val cObj = cArray.getJSONObject(j)
-                val cAr = cObj.optString("ar", "").trim()
-                val cEn = cObj.optString("en", "").trim()
+        val adapter = moshi.adapter<List<Map<String, Any?>>>(wilayaListType)
+        val rawList = adapter.fromJson(jsonText).orEmpty()
+        val result = ArrayList<AlgerianWilaya>(rawList.size)
+        for (wObj in rawList) {
+            val code = (wObj["code"] as? String).orEmpty().trim()
+            val nameAr = (wObj["ar"] as? String).orEmpty().trim()
+            val nameEn = (wObj["en"] as? String).orEmpty().trim()
+            val cRawList = (wObj["communes"] as? List<*>)
+                ?.mapNotNull { it as? Map<*, *> }
+                .orEmpty()
+            val communes = ArrayList<AlgerianCommune>(cRawList.size)
+            for (cObj in cRawList) {
+                val cAr = (cObj["ar"] as? String).orEmpty().trim()
+                val cEn = (cObj["en"] as? String).orEmpty().trim()
                 if (cAr.isNotEmpty() || cEn.isNotEmpty()) {
                     communes.add(
                         AlgerianCommune(

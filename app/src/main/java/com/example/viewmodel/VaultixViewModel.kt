@@ -1014,6 +1014,26 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateCardHubOrder(order: List<com.example.data.CardHubSlot>) {
+        val encoded = com.example.data.CardHubOrder.encode(order)
+        prefsManager.updateSettings {
+            it.copy(cardHubOrderJson = encoded)
+        }
+    }
+
+    fun resetCardHubOrder() {
+        prefsManager.updateSettings {
+            it.copy(cardHubOrderJson = com.example.data.CardHubOrder.DEFAULT_JSON)
+        }
+        viewModelScope.launch {
+            val isAr = settings.value.language == "ar"
+            _toastEvent.emit(
+                if (isAr) "تمت إعادة الترتيب الافتراضي للبطاقات"
+                else "Card order reset to default"
+            )
+        }
+    }
+
     // Pattern Lock Security with brute-force throttling
     private var failedPatternAttempts: Int = 0
     private var patternLockoutUntilMillis: Long = 0L
@@ -3102,17 +3122,25 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun convertCryptoHoldingToUsdt(
         holdingId: String,
-        convertQuantity: Double
+        convertQuantity: Double,
+        targetStablecoin: String = "USDT"
     ) {
         if (holdingId.isBlank() || !convertQuantity.isFinite() || convertQuantity <= 0.0) return
+        val targetSym = targetStablecoin.trim().uppercase(Locale.US).let {
+            if (it == "USDC") "USDC" else "USDT"
+        }
         val isAr = settings.value.language == "ar"
         val currentPrices = BinanceCryptoCodec.parsePrices(settings.value.binancePricesJson)
         val currentList = BinanceCryptoCodec.parseHoldings(settings.value.binanceHoldingsJson)
         val sourceEntry = currentList.firstOrNull { it.id == holdingId } ?: return
         val sourceSym = sourceEntry.symbol.trim().uppercase(Locale.US)
-        if (sourceSym == "USDT") return
+        if (sourceSym == targetSym) return
 
-        val unitPriceUsd = currentPrices[sourceSym]?.priceUsd ?: 0.0
+        val unitPriceUsd = when {
+            sourceSym == "USDT" || sourceSym == "USDC" -> currentPrices[sourceSym]?.priceUsd ?: 1.0
+            else -> currentPrices[sourceSym]?.priceUsd ?: 0.0
+        }
+        val targetPriceUsd = (currentPrices[targetSym]?.priceUsd ?: 1.0).takeIf { it > 0.0 } ?: 1.0
         if (unitPriceUsd <= 0.0 || !unitPriceUsd.isFinite()) {
             viewModelScope.launch {
                 _toastEvent.emit(
@@ -3124,8 +3152,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val actualConvertQty = convertQuantity.coerceAtMost(sourceEntry.quantity)
-        val usdtReceived = actualConvertQty * unitPriceUsd
-        if (actualConvertQty <= 0.0 || usdtReceived <= 0.0 || !usdtReceived.isFinite()) return
+        val targetReceived = (actualConvertQty * unitPriceUsd) / targetPriceUsd
+        if (actualConvertQty <= 0.0 || targetReceived <= 0.0 || !targetReceived.isFinite()) return
 
         val now = System.currentTimeMillis()
         var convertedFully = false
@@ -3148,20 +3176,20 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
 
-            // Credit USDT received into existing general USDT holding or create a new USDT entry
-            val generalUsdtIdx = mutable.indexOfFirst {
-                it.symbol.equals("USDT", ignoreCase = true) && it.note.isBlank()
+            // Credit target stablecoin (USDT/USDC) received into existing general holding or create a new entry
+            val generalTargetIdx = mutable.indexOfFirst {
+                it.symbol.equals(targetSym, ignoreCase = true) && it.note.isBlank()
             }
-            val targetUsdtIdx = if (generalUsdtIdx >= 0) {
-                generalUsdtIdx
+            val targetIdx = if (generalTargetIdx >= 0) {
+                generalTargetIdx
             } else {
-                mutable.indexOfFirst { it.symbol.equals("USDT", ignoreCase = true) }
+                mutable.indexOfFirst { it.symbol.equals(targetSym, ignoreCase = true) }
             }
 
-            if (targetUsdtIdx >= 0) {
-                val existingUsdt = mutable[targetUsdtIdx]
-                mutable[targetUsdtIdx] = existingUsdt.copy(
-                    quantity = existingUsdt.quantity + usdtReceived,
+            if (targetIdx >= 0) {
+                val existingTarget = mutable[targetIdx]
+                mutable[targetIdx] = existingTarget.copy(
+                    quantity = existingTarget.quantity + targetReceived,
                     updatedAtMillis = now
                 )
             } else {
@@ -3169,8 +3197,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     0,
                     CryptoHoldingEntry(
                         id = java.util.UUID.randomUUID().toString(),
-                        symbol = "USDT",
-                        quantity = usdtReceived,
+                        symbol = targetSym,
+                        quantity = targetReceived,
                         updatedAtMillis = now,
                         note = ""
                     )
@@ -3181,15 +3209,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val qtyLabel = String.format(Locale.US, "%.4f", actualConvertQty).trimEnd('0').trimEnd('.')
-        val usdtLabel = String.format(Locale.US, "%,.2f", usdtReceived)
+        val receivedLabel = String.format(Locale.US, "%,.2f", targetReceived)
         viewModelScope.launch {
             _toastEvent.emit(
                 if (isAr) {
-                    if (convertedFully) "تم تحويل كامل رصيد $sourceSym ($qtyLabel) إلى $usdtLabel USDT ✅"
-                    else "تم تحويل $qtyLabel $sourceSym إلى $usdtLabel USDT ✅"
+                    if (convertedFully) "تم تحويل كامل رصيد $sourceSym ($qtyLabel) إلى $receivedLabel $targetSym ✅"
+                    else "تم تحويل $qtyLabel $sourceSym إلى $receivedLabel $targetSym ✅"
                 } else {
-                    if (convertedFully) "Converted all $qtyLabel $sourceSym to $usdtLabel USDT ✅"
-                    else "Converted $qtyLabel $sourceSym to $usdtLabel USDT ✅"
+                    if (convertedFully) "Converted all $qtyLabel $sourceSym to $receivedLabel $targetSym ✅"
+                    else "Converted $qtyLabel $sourceSym to $receivedLabel $targetSym ✅"
                 }
             )
         }

@@ -1,16 +1,26 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,20 +28,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -40,8 +59,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,8 +83,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -75,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.PI
@@ -83,13 +110,19 @@ import kotlin.math.sin
 import com.example.data.AlgerianBankCardCatalog
 import com.example.data.AlgerianBankCardSpec
 import com.example.data.AlgerianBankMotif
+import com.example.data.CardHubOrder
+import com.example.data.CardHubSlot
 import com.example.data.UserSettings
 import com.example.ui.components.EditCardDialog
 import com.example.ui.components.EditVisaCardDialog
 import com.example.ui.components.FadeToBlurLiquidGlassHost
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LocalEdgeFadeOuterPadding
+import com.example.ui.components.McaChampagneGold
+import com.example.ui.components.McaClubCalligraphyMark
+import com.example.ui.components.McaShieldCrest
 import com.example.ui.components.VaultixLogoContainer
+import com.example.ui.components.drawMcaFanCardBackground
 import com.example.ui.components.formatCardDigitsDisplay
 import java.util.Locale
 import com.example.ui.i18n.AppStrings
@@ -126,6 +159,7 @@ fun CardsHubScreen(
     onUpdateVisaCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
     onUpdateThirdCard: (provider: String, holderName: String, cardNumber: String, expiryDate: String, cvc: String) -> Unit = { _, _, _, _, _ -> },
     onRemoveThirdCard: () -> Unit = {},
+    onUpdateCardOrder: (List<CardHubSlot>) -> Unit = {},
     outerContentPadding: PaddingValues = PaddingValues(0.dp),
     modifier: Modifier = Modifier
 ) {
@@ -143,6 +177,21 @@ fun CardsHubScreen(
     var showEditClassicCardDialog by remember { mutableStateOf(false) }
     var showEditVisaCardDialog by remember { mutableStateOf(false) }
     var showEditThirdCardDialog by remember { mutableStateOf(false) }
+    var isReorderMode by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isReorderMode) {
+        isReorderMode = false
+    }
+
+    val orderedSlots = remember(userSettings.cardHubOrderJson) {
+        CardHubOrder.parse(userSettings.cardHubOrderJson)
+    }
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val spacingPx = with(density) { dimens.spacingLg.toPx() }
+    var draggedSlot by remember { mutableStateOf<CardHubSlot?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val slotHeights = remember { mutableStateMapOf<CardHubSlot, Float>() }
 
     fun openCardEditorWithStepUp(onVerified: () -> Unit) {
         com.example.security.StepUpAuthHelper.verifyIfEnabled(
@@ -215,10 +264,14 @@ fun CardsHubScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (bankSpec.id == "EDAHABIA") {
-                        strings.edahabiaCardTitle
-                    } else {
-                        if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCodeAr})" else bankSpec.nameEn
+                    text = when (bankSpec.id) {
+                        "EDAHABIA" -> strings.edahabiaCardTitle
+                        "EDAHABIA_MCA" -> if (isArabic) {
+                            "البطاقة الذهبية • مولودية الجزائر"
+                        } else {
+                            "Edahabia • MC Alger FAN"
+                        }
+                        else -> if (isArabic) "${bankSpec.nameAr} (${bankSpec.shortCodeAr})" else bankSpec.nameEn
                     },
                     color = colors.textPrimary,
                     fontSize = typo.body,
@@ -408,6 +461,14 @@ fun CardsHubScreen(
         }
     }
 
+    val renderSlot: @Composable (CardHubSlot, Modifier) -> Unit = { slot, slotMod ->
+        when (slot) {
+            CardHubSlot.CLASSIC -> primaryCardSection(slotMod)
+            CardHubSlot.VISA -> secondaryCardSection(slotMod)
+            CardHubSlot.THIRD -> thirdCardSection(slotMod)
+        }
+    }
+
     val listState = rememberLazyListState()
     val localOuterPadding = LocalEdgeFadeOuterPadding.current
     val hasExplicitOuterPadding = outerContentPadding.calculateTopPadding() > 0.dp ||
@@ -432,8 +493,8 @@ fun CardsHubScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
             ) {
-        // Section Header: Contextual subtitle & Active Badges (TopAppBar already displays Cards Hub title)
-        item {
+        // Section Header: Contextual subtitle, Reorder Toggle & Active Badges
+        item(key = "cards_hub_header") {
             Spacer(modifier = Modifier.height(dimens.spacingXs))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -451,63 +512,246 @@ fun CardsHubScreen(
 
                 Spacer(modifier = Modifier.width(dimens.spacingSm))
 
-                // Security & Status Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f))
-                        .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(EmeraldNeon)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (userSettings.thirdCardEnabled) {
-                                if (isArabic) "3 بطاقات نشطة" else "3 Cards Active"
-                            } else {
-                                strings.activeCardsCount
-                            },
-                            color = colors.textPrimary,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
+                    // Reorder Cards Toggle Chip
+                    Box(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isReorderMode) {
+                                    CyanNeon.copy(alpha = if (isDark) 0.24f else 0.16f)
+                                } else {
+                                    if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f)
+                                }
+                            )
+                            .border(
+                                width = if (isReorderMode) 1.3.dp else 1.dp,
+                                color = if (isReorderMode) CyanNeon.copy(alpha = 0.72f) else colors.glassBorderSubtle,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable {
+                                draggedSlot = null
+                                dragOffsetY = 0f
+                                isReorderMode = !isReorderMode
+                            }
+                            .testTag("cards_hub_reorder_toggle")
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.SwapVert,
+                                contentDescription = if (isArabic) {
+                                    if (isReorderMode) "حفظ ترتيب البطاقات" else "ترتيب البطاقات"
+                                } else {
+                                    if (isReorderMode) "Done reordering" else "Reorder cards"
+                                },
+                                tint = if (isReorderMode) CyanNeon else colors.textPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isArabic) {
+                                    if (isReorderMode) "تم" else "ترتيب"
+                                } else {
+                                    if (isReorderMode) "Done" else "Order"
+                                },
+                                color = if (isReorderMode) CyanNeon else colors.textPrimary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // Security & Status Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f))
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldNeon)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (userSettings.thirdCardEnabled) {
+                                    if (isArabic) "3 بطاقات" else "3 Cards"
+                                } else {
+                                    strings.activeCardsCount
+                                },
+                                color = colors.textPrimary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
+
+            AnimatedVisibility(
+                visible = isReorderMode,
+                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+                exit = fadeOut(tween(150)) + shrinkVertically(tween(180))
+            ) {
+                ReorderInstructionBanner(
+                    isArabic = isArabic,
+                    isCustomOrder = orderedSlots != CardHubOrder.DEFAULT_ORDER,
+                    onReset = {
+                        draggedSlot = null
+                        dragOffsetY = 0f
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onUpdateCardOrder(CardHubOrder.DEFAULT_ORDER)
+                    },
+                    onDone = {
+                        draggedSlot = null
+                        dragOffsetY = 0f
+                        isReorderMode = false
+                    }
+                )
+            }
         }
 
-        if (layoutInfo.columns >= 2) {
-            item {
+        if (!isReorderMode && layoutInfo.columns >= 2) {
+            item(key = "tablet_top_row_${orderedSlots[0].id}_${orderedSlots[1].id}") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(dimens.spacingLg),
                     verticalAlignment = Alignment.Top
                 ) {
-                    primaryCardSection(Modifier.weight(1f))
-                    secondaryCardSection(Modifier.weight(1f))
+                    renderSlot(orderedSlots[0], Modifier.weight(1f))
+                    renderSlot(orderedSlots[1], Modifier.weight(1f))
                 }
             }
-            item {
-                thirdCardSection(
+            item(key = "tablet_bottom_${orderedSlots[2].id}") {
+                renderSlot(
+                    orderedSlots[2],
                     Modifier
                         .fillMaxWidth()
                         .widthIn(max = 540.dp)
                 )
             }
         } else {
-            item { primaryCardSection(Modifier.fillMaxWidth()) }
-            item { secondaryCardSection(Modifier.fillMaxWidth()) }
-            item { thirdCardSection(Modifier.fillMaxWidth()) }
+            itemsIndexed(
+                items = orderedSlots,
+                key = { _, slot -> slot.id }
+            ) { index, slot ->
+                val isBeingDragged = isReorderMode && draggedSlot == slot
+                val currentOrdered by rememberUpdatedState(orderedSlots)
+                val currentOnUpdateOrder by rememberUpdatedState(onUpdateCardOrder)
+
+                val itemBaseModifier = if (isReorderMode) {
+                    Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 560.dp)
+                        .zIndex(if (isBeingDragged) 2f else 0f)
+                        .onSizeChanged { slotHeights[slot] = it.height.toFloat() }
+                        .graphicsLayer {
+                            if (isBeingDragged) {
+                                translationY = dragOffsetY
+                                scaleX = 1.02f
+                                scaleY = 1.02f
+                            }
+                        }
+                        .animateItem(
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                }
+
+                if (isReorderMode) {
+                    ReorderableCardSlotFrame(
+                        slot = slot,
+                        index = index,
+                        totalCount = orderedSlots.size,
+                        isArabic = isArabic,
+                        isDark = isDark,
+                        isDragging = isBeingDragged,
+                        onMoveUp = {
+                            val updated = CardHubOrder.moveUp(orderedSlots, slot)
+                            if (updated != orderedSlots) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onUpdateCardOrder(updated)
+                            }
+                        },
+                        onMoveDown = {
+                            val updated = CardHubOrder.moveDown(orderedSlots, slot)
+                            if (updated != orderedSlots) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onUpdateCardOrder(updated)
+                            }
+                        },
+                        dragHandleModifier = Modifier.pointerInput(slot) {
+                            detectVerticalDragGestures(
+                                onDragStart = {
+                                    draggedSlot = slot
+                                    dragOffsetY = 0f
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onDragEnd = {
+                                    draggedSlot = null
+                                    dragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    draggedSlot = null
+                                    dragOffsetY = 0f
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val liveOrder = currentOrdered
+                                    val liveIdx = liveOrder.indexOf(slot)
+                                    if (liveIdx < 0) return@detectVerticalDragGestures
+                                    dragOffsetY += dragAmount
+
+                                    if (dragOffsetY > 0f && liveIdx < liveOrder.lastIndex) {
+                                        val nextSlot = liveOrder[liveIdx + 1]
+                                        val neighborHeight = (slotHeights[nextSlot] ?: 560f) + spacingPx
+                                        if (dragOffsetY > neighborHeight * 0.52f) {
+                                            val updated = CardHubOrder.move(liveOrder, liveIdx, liveIdx + 1)
+                                            currentOnUpdateOrder(updated)
+                                            dragOffsetY -= neighborHeight
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    } else if (dragOffsetY < 0f && liveIdx > 0) {
+                                        val prevSlot = liveOrder[liveIdx - 1]
+                                        val neighborHeight = (slotHeights[prevSlot] ?: 560f) + spacingPx
+                                        if (-dragOffsetY > neighborHeight * 0.52f) {
+                                            val updated = CardHubOrder.move(liveOrder, liveIdx, liveIdx - 1)
+                                            currentOnUpdateOrder(updated)
+                                            dragOffsetY += neighborHeight
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                }
+                            )
+                        },
+                        modifier = itemBaseModifier
+                    ) {
+                        renderSlot(slot, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    renderSlot(slot, itemBaseModifier)
+                }
+            }
         }
 
-        item {
+        item(key = "cards_hub_bottom_spacer") {
             Spacer(modifier = Modifier.height(dimens.spacingLg))
         }
             }
@@ -650,6 +894,7 @@ private fun EdahabiaCardRealistic(
     val isStealth = LocalStealthMode.current
     val haptic = LocalHapticFeedback.current
     val isEdahabia = bankSpec.motif == AlgerianBankMotif.EDAHABIA_ZELLIGE
+    val isMcaFan = bankSpec.motif == AlgerianBankMotif.MCA_FAN
     val bankAccent = Color(bankSpec.accentHex)
     val bankSecondary = Color(bankSpec.secondaryTextHex)
     val bankGlowPrimary = Color(bankSpec.glowPrimaryHex)
@@ -755,17 +1000,17 @@ private fun EdahabiaCardRealistic(
                     shape = RoundedCornerShape(22.dp)
                 )
         ) {
-            // Card Surface Artwork: Classic Edahabia Zellige or selected Algerian CIB Bank geometric motif
+            // Card Surface Artwork: Classic Edahabia Zellige, MCA FAN Edition, or selected CIB Bank motif
             val isRtlCard = LocalLayoutDirection.current == LayoutDirection.Rtl
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val drawArtwork: DrawScope.() -> Unit = {
-                    if (isEdahabia) {
-                        drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
-                    } else {
-                        drawAlgerianBankArtwork(bankSpec = bankSpec, holdProgress = holdAnim.value)
+                    when {
+                        isEdahabia -> drawClassicEdahabiaArtwork(holdProgress = holdAnim.value)
+                        isMcaFan -> drawMcaFanCardBackground(holdProgress = holdAnim.value)
+                        else -> drawAlgerianBankArtwork(bankSpec = bankSpec, holdProgress = holdAnim.value)
                     }
                 }
-                if (isRtlCard) {
+                if (isRtlCard && !isMcaFan) {
                     scale(scaleX = -1f, scaleY = 1f, pivot = center) {
                         drawArtwork()
                     }
@@ -774,72 +1019,266 @@ private fun EdahabiaCardRealistic(
                 }
             }
 
-            // Card Inner Content (Mirrors naturally with LocalLayoutDirection, kept clear of trailing mosaic)
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = 18.dp,
-                        end = if (isEdahabia) 52.dp else 18.dp,
-                        top = 14.dp,
-                        bottom = 14.dp
-                    ),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Top Row: Brand Title & Algérie Poste or Algerian CIB Crest
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(horizontalAlignment = Alignment.Start) {
+            val hasSmsBal = userSettings.latestSmsBalanceUpdatedAt > 0L || userSettings.latestSmsBalanceAmount >= 0.0
+            val hubCardBalance = if (hasSmsBal) {
+                userSettings.latestSmsBalanceAmount
+            } else {
+                summary.totalBalance
+            }
+            val classicDigits = userSettings.classicCardNumber.filter { it.isDigit() }
+            val classicDisplayNum = if (classicDigits.isEmpty()) {
+                if (isStealth) "••••  ••••  ••••  ••••" else bankSpec.defaultNumberPrefix
+            } else {
+                formatCardDigitsDisplay(userSettings.classicCardNumber, isStealth)
+            }
+            val expFormatted = userSettings.classicCardExpiry
+                .ifBlank { "11/29" }
+                .replace("/", " / ")
+
+            if (isMcaFan) {
+                // Physical Mouloudia FAN card layout matches uploaded reference in both Arabic & English
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val cardW = maxWidth
+
+                        // Top-left "FAN" metallic gold title
                         Text(
-                            text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
-                            color = bankSecondary,
-                            fontSize = if (isEdahabia) 11.sp else 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (isArabic) bankSpec.cardTypeLabelAr else bankSpec.cardTypeLabel,
-                            color = Color.White,
-                            fontSize = if (isEdahabia) 20.sp else 18.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = if (isArabic) 0.sp else 1.4.sp,
-                            lineHeight = 21.sp,
+                            text = "FAN",
+                            color = McaChampagneGold,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.4.sp,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(start = 18.dp, top = 14.dp),
                             style = TextStyle(
                                 shadow = Shadow(
-                                    color = Color(0xFF0F172A).copy(alpha = 0.45f),
-                                    offset = Offset(0f, 1.5f),
+                                    color = Color(0xFF02341D).copy(alpha = 0.72f),
+                                    offset = Offset(0.8f, 1.4f),
                                     blurRadius = 3f
                                 )
                             )
                         )
-                    }
 
-                    if (isEdahabia) {
-                        AlgeriePosteWhiteLogo(isArabic = isArabic)
-                    } else {
-                        AlgerianCibBankBadge(bankSpec = bankSpec, isArabic = isArabic)
+                        // Center-right MCA Shield Crest straddling the curved gold swoosh
+                        McaShieldCrest(
+                            modifier = Modifier
+                                .offset(x = cardW * 0.515f, y = 10.dp)
+                                .size(width = 58.dp, height = 74.dp)
+                        )
+
+                        // Top-right Algérie Poste white/cream logo inside the crimson zone
+                        AlgeriePosteWhiteLogo(
+                            isArabic = false,
+                            emblemTint = Color(0xFFFFF8E6),
+                            subtitleTint = Color(0xFFFFEAB3),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 11.dp, end = 13.dp)
+                        )
+
+                        // Mid-left Gold EMV Chip + Calligraphic "العميد / مولودية الجزائر"
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(start = 18.dp, top = 62.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            McaClubCalligraphyMark()
+                        }
+
+                        // Subtle Balance Glass Pill on right side below Algérie Poste (clear of MCA crest)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 66.dp, end = 12.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF042214).copy(alpha = 0.62f))
+                                .border(0.9.dp, McaChampagneGold.copy(alpha = 0.62f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = if (isArabic) "الرصيد" else "Balance",
+                                    color = McaChampagneGold,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 9.sp
+                                )
+                                Text(
+                                    text = formatDzd(hubCardBalance),
+                                    color = if (hasSmsBal && hubCardBalance < 0.0) Color(0xFFFDA4AF) else Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.2.sp,
+                                    lineHeight = 13.sp
+                                )
+                            }
+                        }
+
+                        // Lower section: Embossed Gold Card Number, Holder Name, EXP DATE & CVC
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = classicDisplayNum,
+                                color = McaChampagneGold,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.1.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color(0xFF02311A).copy(alpha = 0.85f),
+                                        offset = Offset(1f, 1.5f),
+                                        blurRadius = 2.5f
+                                    )
+                                )
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Text(
+                                    text = userSettings.classicCardHolderName.ifBlank { "CHARFEDDINE KA" }.uppercase(),
+                                    color = McaChampagneGold,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                    style = TextStyle(
+                                        shadow = Shadow(
+                                            color = Color(0xFF02311A).copy(alpha = 0.78f),
+                                            offset = Offset(0.5f, 1f),
+                                            blurRadius = 1.8f
+                                        )
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Row(
+                                    modifier = Modifier.padding(end = 18.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "EXP DATE",
+                                            color = Color(0xFFE7CE78),
+                                            fontSize = 7.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = expFormatted,
+                                            color = McaChampagneGold,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "CVC",
+                                            color = Color(0xFFE7CE78),
+                                            fontSize = 7.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = if (isStealth || userSettings.classicCardCvc.isBlank()) "•••" else userSettings.classicCardCvc,
+                                            color = McaChampagneGold,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-
-                // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            } else {
+                // Card Inner Content (Mirrors naturally with LocalLayoutDirection, kept clear of trailing mosaic)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = 18.dp,
+                            end = if (isEdahabia) 52.dp else 18.dp,
+                            top = 14.dp,
+                            bottom = 14.dp
+                        ),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ContactlessWaves(
-                            modifier = Modifier.size(18.dp),
-                            tint = bankSecondary.copy(alpha = 0.88f)
-                        )
+                    // Top Row: Brand Title & Algérie Poste or Algerian CIB Crest
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
+                                color = bankSecondary,
+                                fontSize = if (isEdahabia) 11.sp else 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = if (isArabic) bankSpec.cardTypeLabelAr else bankSpec.cardTypeLabel,
+                                color = Color.White,
+                                fontSize = if (isEdahabia) 20.sp else 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = if (isArabic) 0.sp else 1.4.sp,
+                                lineHeight = 21.sp,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color(0xFF0F172A).copy(alpha = 0.45f),
+                                        offset = Offset(0f, 1.5f),
+                                        blurRadius = 3f
+                                    )
+                                )
+                            )
+                        }
+
+                        if (isEdahabia) {
+                            AlgeriePosteWhiteLogo(isArabic = isArabic)
+                        } else {
+                            AlgerianCibBankBadge(bankSpec = bankSpec, isArabic = isArabic)
+                        }
                     }
+
+                    // Middle Row: Gold EMV Chip + Contactless Waves & Subtle Live Balance Pill
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            EmvChipRealistic(modifier = Modifier.size(width = 42.dp, height = 31.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            ContactlessWaves(
+                                modifier = Modifier.size(18.dp),
+                                tint = bankSecondary.copy(alpha = 0.88f)
+                            )
+                        }
 
                         // Live Total Balance Glass Pill
                         Box(
@@ -857,12 +1296,6 @@ private fun EdahabiaCardRealistic(
                                     fontWeight = FontWeight.SemiBold,
                                     lineHeight = 10.sp
                                 )
-                                val hasSmsBal = userSettings.latestSmsBalanceUpdatedAt > 0L || userSettings.latestSmsBalanceAmount >= 0.0
-                                val hubCardBalance = if (hasSmsBal) {
-                                    userSettings.latestSmsBalanceAmount
-                                } else {
-                                    summary.totalBalance
-                                }
                                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Text(
                                         text = formatDzd(hubCardBalance),
@@ -878,12 +1311,6 @@ private fun EdahabiaCardRealistic(
                     }
 
                     // Card Number: Embossed Pure White Monospace Digits (micro-LTR)
-                    val classicDigits = userSettings.classicCardNumber.filter { it.isDigit() }
-                    val classicDisplayNum = if (classicDigits.isEmpty()) {
-                        if (isStealth) "••••  ••••  ••••  ••••" else bankSpec.defaultNumberPrefix
-                    } else {
-                        formatCardDigitsDisplay(userSettings.classicCardNumber, isStealth)
-                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -950,9 +1377,6 @@ private fun EdahabiaCardRealistic(
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = if (isArabic) 0.sp else 0.5.sp
                                 )
-                                val expFormatted = userSettings.classicCardExpiry
-                                    .ifBlank { "11/29" }
-                                    .replace("/", " / ")
                                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Text(
                                         text = expFormatted,
@@ -984,6 +1408,7 @@ private fun EdahabiaCardRealistic(
                             }
                         }
                     }
+                }
             }
 
             // Floating Hold-to-Edit Progress Badge while user is holding for 1 second
@@ -2009,7 +2434,12 @@ private fun ContactlessWaves(modifier: Modifier = Modifier, tint: Color = Color.
  * Stylized white Algérie Poste crescent-wing emblem matching the Classic Blue card.
  */
 @Composable
-private fun AlgeriePosteWhiteLogo(isArabic: Boolean = false, modifier: Modifier = Modifier) {
+private fun AlgeriePosteWhiteLogo(
+    isArabic: Boolean = false,
+    emblemTint: Color = Color.White,
+    subtitleTint: Color = Color(0xFFBAE6FD),
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -2043,11 +2473,11 @@ private fun AlgeriePosteWhiteLogo(isArabic: Boolean = false, modifier: Modifier 
                 )
                 close()
             }
-            drawPath(path = crescentPath, color = Color.White)
+            drawPath(path = crescentPath, color = emblemTint)
 
             // Slanted postal bar beneath crest
             drawLine(
-                color = Color.White,
+                color = emblemTint,
                 start = Offset(w * 0.18f, h * 0.88f),
                 end = Offset(w * 0.82f, h * 0.72f),
                 strokeWidth = 3.2f,
@@ -2057,7 +2487,7 @@ private fun AlgeriePosteWhiteLogo(isArabic: Boolean = false, modifier: Modifier 
         Spacer(modifier = Modifier.height(1.dp))
         Text(
             text = "بريد الجزائر",
-            color = Color.White,
+            color = emblemTint,
             fontSize = 8.5.sp,
             fontWeight = FontWeight.ExtraBold,
             lineHeight = 9.sp
@@ -2065,7 +2495,7 @@ private fun AlgeriePosteWhiteLogo(isArabic: Boolean = false, modifier: Modifier 
         if (!isArabic) {
             Text(
                 text = "ALGÉRIE POSTE",
-                color = Color(0xFFBAE6FD),
+                color = subtitleTint,
                 fontSize = 5.8.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.4.sp,
@@ -2393,6 +2823,9 @@ private fun DrawScope.drawAlgerianBankArtwork(
     val secondary = Color(bankSpec.secondaryTextHex)
 
     when (bankSpec.motif) {
+        AlgerianBankMotif.MCA_FAN -> {
+            drawMcaFanCardBackground(holdProgress = holdProgress)
+        }
         AlgerianBankMotif.EMERALD_ARCS,
         AlgerianBankMotif.EDAHABIA_ZELLIGE -> {
             drawCircle(
@@ -2484,4 +2917,276 @@ private fun DrawScope.drawAlgerianBankArtwork(
         )
     }
 }
+
+@Composable
+private fun ReorderInstructionBanner(
+    isArabic: Boolean,
+    isCustomOrder: Boolean,
+    onReset: () -> Unit,
+    onDone: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val typo = LocalAdaptiveTypography.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        CyanNeon.copy(alpha = if (colors.isDark) 0.16f else 0.12f),
+                        EmeraldNeon.copy(alpha = if (colors.isDark) 0.10f else 0.08f)
+                    )
+                )
+            )
+            .border(1.dp, CyanNeon.copy(alpha = 0.42f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = null,
+                    tint = CyanNeon,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isArabic) {
+                        "اسحب من المقبض أو استخدم الأسهم لترتيب البطاقات"
+                    } else {
+                        "Drag handle or use arrows to reorder cards"
+                    },
+                    color = colors.textPrimary,
+                    fontSize = typo.caption,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (isCustomOrder) {
+                    Box(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.glassCard)
+                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(10.dp))
+                            .clickable(onClick = onReset)
+                            .testTag("cards_hub_reorder_reset")
+                            .padding(horizontal = 9.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.RestartAlt,
+                                contentDescription = if (isArabic) "إعادة الترتيب الافتراضي" else "Reset card order",
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isArabic) "افتراضي" else "Reset",
+                                color = colors.textSecondary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(EmeraldNeon.copy(alpha = 0.20f))
+                        .border(1.dp, EmeraldNeon.copy(alpha = 0.60f), RoundedCornerShape(10.dp))
+                        .clickable(onClick = onDone)
+                        .testTag("cards_hub_reorder_done")
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = if (isArabic) "إنهاء الترتيب" else "Finish reordering",
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isArabic) "حفظ" else "Save",
+                            color = EmeraldNeon,
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderableCardSlotFrame(
+    slot: CardHubSlot,
+    index: Int,
+    totalCount: Int,
+    isArabic: Boolean,
+    isDark: Boolean,
+    isDragging: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    dragHandleModifier: Modifier,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val typo = LocalAdaptiveTypography.current
+
+    val slotLabel = when (slot) {
+        CardHubSlot.CLASSIC -> if (isArabic) "البطاقة الأساسية" else "Primary Card"
+        CardHubSlot.VISA -> if (isArabic) "البطاقة الدولية" else "Secondary Card"
+        CardHubSlot.THIRD -> if (isArabic) "البطاقة الثالثة" else "Third Card"
+    }
+
+    val frameBorderColor = when {
+        isDragging -> EmeraldNeon
+        else -> CyanNeon.copy(alpha = if (isDark) 0.48f else 0.42f)
+    }
+
+    Column(
+        modifier = modifier
+            .shadow(
+                elevation = if (isDragging) 18.dp else 0.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = EmeraldNeon.copy(alpha = 0.45f)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                if (isDark) Color(0xFF0B1324).copy(alpha = 0.72f)
+                else Color.White.copy(alpha = 0.78f)
+            )
+            .border(
+                width = if (isDragging) 2.dp else 1.2.dp,
+                color = frameBorderColor,
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CyanNeon.copy(alpha = 0.18f))
+                        .border(1.dp, CyanNeon.copy(alpha = 0.50f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "#${index + 1}",
+                        color = CyanNeon,
+                        fontSize = typo.caption,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = slotLabel,
+                    color = colors.textPrimary,
+                    fontSize = typo.bodySm,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = index > 0,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("card_move_up_${slot.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = if (isArabic) "نقل للأعلى" else "Move up",
+                        tint = if (index > 0) colors.textPrimary else colors.textMuted.copy(alpha = 0.35f)
+                    )
+                }
+
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = index < totalCount - 1,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("card_move_down_${slot.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isArabic) "نقل للأسفل" else "Move down",
+                        tint = if (index < totalCount - 1) colors.textPrimary else colors.textMuted.copy(alpha = 0.35f)
+                    )
+                }
+
+                Box(
+                    modifier = dragHandleModifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isDragging) EmeraldNeon.copy(alpha = 0.24f)
+                            else CyanNeon.copy(alpha = 0.14f)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isDragging) EmeraldNeon else CyanNeon.copy(alpha = 0.42f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .testTag("card_drag_handle_${slot.id}"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = if (isArabic) "اسحب لإعادة الترتيب" else "Drag to reorder",
+                        tint = if (isDragging) EmeraldNeon else CyanNeon,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        content()
+    }
+}
+
 

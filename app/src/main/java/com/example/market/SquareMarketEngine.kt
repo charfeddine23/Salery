@@ -22,8 +22,9 @@ import kotlin.math.abs
 const val DEFAULT_SQUARE_SYNC_INTERVAL_MINUTES = 60
 const val SQUARE_REFRESH_INTERVAL_MILLIS = DEFAULT_SQUARE_SYNC_INTERVAL_MINUTES * 60_000L // 1 hour
 val SQUARE_SYNC_INTERVAL_OPTIONS_MINUTES = listOf(5, 15, 30, 60, 180, 360, 720, 1440, 0)
-const val SQUARE_SNAPSHOT_VERSION = 3
+const val SQUARE_SNAPSHOT_VERSION = 4
 const val TROY_OUNCE_IN_GRAMS = 31.1034768
+const val USED_GOLD_MELT_FACTOR = 0.95
 
 data class HardCurrencySpec(
     val code: String,
@@ -49,7 +50,8 @@ data class GoldKaratPrice(
     val previousGramDzdParallel: Double = 0.0,
     val previousGramDzdBank: Double = 0.0,
     val previousGramUsd: Double = 0.0,
-    val has24hBaseline: Boolean = false
+    val has24hBaseline: Boolean = false,
+    val isUsed: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -83,6 +85,7 @@ data class SquareMarketSnapshot(
     val bankSourceCount: Int = 0,
     val parallelSourceCount: Int = 0,
     val goldKarats: List<GoldKaratPrice> = emptyList(),
+    val usedGoldKarats: List<GoldKaratPrice> = emptyList(),
     val currencies: List<CurrencySquareRate> = emptyList(),
     val updatedAtMillis: Long = System.currentTimeMillis(),
     val previousGoldOzUsd: Double = 0.0,
@@ -361,6 +364,15 @@ object SquareMarketCatalog {
         Triple(9, "37.5%", "9K Gold" to "عيار 9")
     )
 
+    val usedKarats: List<Triple<Int, String, Pair<String, String>>> = listOf(
+        Triple(24, "99.9%", "24K Used / Scrap" to "ذهب مستعمل عيار 24 (الكاسر)"),
+        Triple(22, "91.6%", "22K Used Gold" to "ذهب مستعمل عيار 22"),
+        Triple(21, "87.5%", "21K Used Gold" to "ذهب مستعمل عيار 21"),
+        Triple(18, "75.0%", "18K Used Jewelry (Scrap)" to "ذهب مستعمل عيار 18 (الكاسر)"),
+        Triple(14, "58.3%", "14K Used Gold" to "ذهب مستعمل عيار 14"),
+        Triple(9, "37.5%", "9K Used Gold" to "ذهب مستعمل عيار 9")
+    )
+
     val trackedCurrencies: List<HardCurrencySpec> = listOf(
         HardCurrencySpec("EUR", "Euro", "اليورو الأوروبي", "🇪🇺", "€", 0xFF38BDF8),
         HardCurrencySpec("USD", "US Dollar", "الدولار الأمريكي", "🇺🇸", "$", 0xFF10B981),
@@ -459,8 +471,20 @@ object SquareMarketCatalog {
                 usdPrice = fetched.goldOzUsd
             )
         }
+        val effectiveUsedGold = if (fetched.usedGoldKarats.isNotEmpty()) {
+            fetched.usedGoldKarats
+        } else {
+            deriveUsedGoldKarats(fetched.goldKarats)
+        }
         fetched.goldKarats.forEach { k ->
             extractedToday["XAU_${k.karat}K"] = SquareAssetPricePoint(
+                primaryPrice = k.pricePerGramDzdParallel,
+                secondaryPrice = k.pricePerGramDzdBank,
+                usdPrice = k.pricePerGramUsd
+            )
+        }
+        effectiveUsedGold.forEach { k ->
+            extractedToday["XAU_USED_${k.karat}K"] = SquareAssetPricePoint(
                 primaryPrice = k.pricePerGramDzdParallel,
                 secondaryPrice = k.pricePerGramDzdBank,
                 usdPrice = k.pricePerGramUsd
@@ -488,6 +512,13 @@ object SquareMarketCatalog {
                     )
                     fetched.goldKarats.forEach { k ->
                         val key = "XAU_${k.karat}K"
+                        val existingPt = seededInitialPrev[key] ?: SquareAssetPricePoint()
+                        seededInitialPrev[key] = existingPt.copy(
+                            usdPrice = if (k.pricePerGramUsd > 0.0) k.pricePerGramUsd / divisor else existingPt.usdPrice
+                        )
+                    }
+                    effectiveUsedGold.forEach { k ->
+                        val key = "XAU_USED_${k.karat}K"
                         val existingPt = seededInitialPrev[key] ?: SquareAssetPricePoint()
                         seededInitialPrev[key] = existingPt.copy(
                             usdPrice = if (k.pricePerGramUsd > 0.0) k.pricePerGramUsd / divisor else existingPt.usdPrice
@@ -572,6 +603,25 @@ object SquareMarketCatalog {
             )
         }
 
+        val updatedUsedKarats = effectiveUsedGold.map { k ->
+            val prevK = nextState.previousDayPrices["XAU_USED_${k.karat}K"]
+            val prevPar = prevK?.primaryPrice ?: 0.0
+            val prevBnk = prevK?.secondaryPrice ?: 0.0
+            val prevUsd = prevK?.usdPrice ?: 0.0
+            k.copy(
+                change24hParallelPercent = pctChange(k.pricePerGramDzdParallel, prevPar),
+                change24hBankPercent = pctChange(k.pricePerGramDzdBank, prevBnk),
+                change24hUsdPercent = pctChange(k.pricePerGramUsd, prevUsd),
+                previousGramDzdParallel = prevPar,
+                previousGramDzdBank = prevBnk,
+                previousGramUsd = prevUsd,
+                has24hBaseline = (k.pricePerGramDzdParallel > 0.0 && prevPar > 0.0) ||
+                    (k.pricePerGramDzdBank > 0.0 && prevBnk > 0.0) ||
+                    (k.pricePerGramUsd > 0.0 && prevUsd > 0.0),
+                isUsed = true
+            )
+        }
+
         val updatedCurrencies = fetched.currencies.map { fx ->
             val prevFx = nextState.previousDayPrices[fx.code]
             val prevPar = prevFx?.primaryPrice ?: 0.0
@@ -590,6 +640,7 @@ object SquareMarketCatalog {
             version = SQUARE_SNAPSHOT_VERSION,
             gold24hChangePercent = computedSpotChange,
             goldKarats = updatedKarats,
+            usedGoldKarats = updatedUsedKarats,
             currencies = updatedCurrencies,
             previousGoldOzUsd = prevSpotUsd,
             hasGold24hBaseline = spotHasBaseline,
@@ -615,7 +666,55 @@ object SquareMarketCatalog {
                 titleAr = titles.second,
                 pricePerGramUsd = gramUsd,
                 pricePerGramDzdParallel = if (usdParallelDzd > 0.0) gramUsd * usdParallelDzd else 0.0,
-                pricePerGramDzdBank = if (usdBankDzd > 0.0) gramUsd * usdBankDzd else 0.0
+                pricePerGramDzdBank = if (usdBankDzd > 0.0) gramUsd * usdBankDzd else 0.0,
+                isUsed = false
+            )
+        }
+    }
+
+    fun buildUsedGoldKarats(
+        goldOzUsd: Double,
+        usdBankDzd: Double,
+        usdParallelDzd: Double,
+        meltFactor: Double = USED_GOLD_MELT_FACTOR
+    ): List<GoldKaratPrice> {
+        if (goldOzUsd <= 0.0) return emptyList()
+        val base24kUsd = goldOzUsd / TROY_OUNCE_IN_GRAMS
+        return usedKarats.map { (karat, purity, titles) ->
+            val factor = (karat.toDouble() / 24.0) * meltFactor
+            val gramUsd = base24kUsd * factor
+            GoldKaratPrice(
+                karat = karat,
+                purityLabel = purity,
+                titleEn = titles.first,
+                titleAr = titles.second,
+                pricePerGramUsd = gramUsd,
+                pricePerGramDzdParallel = if (usdParallelDzd > 0.0) gramUsd * usdParallelDzd else 0.0,
+                pricePerGramDzdBank = if (usdBankDzd > 0.0) gramUsd * usdBankDzd else 0.0,
+                isUsed = true
+            )
+        }
+    }
+
+    fun deriveUsedGoldKarats(
+        goldKarats: List<GoldKaratPrice>,
+        meltFactor: Double = USED_GOLD_MELT_FACTOR
+    ): List<GoldKaratPrice> {
+        if (goldKarats.isEmpty()) return emptyList()
+        val titlesByKarat = usedKarats.associateBy({ it.first }, { it.third })
+        return goldKarats.map { k ->
+            val usedTitles = titlesByKarat[k.karat]
+                ?: ("${k.karat}K Used Gold" to "ذهب مستعمل عيار ${k.karat}")
+            k.copy(
+                titleEn = usedTitles.first,
+                titleAr = usedTitles.second,
+                pricePerGramUsd = k.pricePerGramUsd * meltFactor,
+                pricePerGramDzdParallel = k.pricePerGramDzdParallel * meltFactor,
+                pricePerGramDzdBank = k.pricePerGramDzdBank * meltFactor,
+                previousGramDzdParallel = k.previousGramDzdParallel * meltFactor,
+                previousGramDzdBank = k.previousGramDzdBank * meltFactor,
+                previousGramUsd = k.previousGramUsd * meltFactor,
+                isUsed = true
             )
         }
     }
@@ -1181,7 +1280,13 @@ object SquareMarketCodec {
         if (json.isBlank()) return null
         return try {
             val parsed = snapshotAdapter.fromJson(json) ?: return null
-            if (parsed.goldKarats.isEmpty() && parsed.currencies.isEmpty()) null else parsed
+            if (parsed.goldKarats.isEmpty() && parsed.currencies.isEmpty()) {
+                null
+            } else if (parsed.usedGoldKarats.isEmpty() && parsed.goldKarats.isNotEmpty()) {
+                parsed.copy(usedGoldKarats = SquareMarketCatalog.deriveUsedGoldKarats(parsed.goldKarats))
+            } else {
+                parsed
+            }
         } catch (_: Throwable) {
             null
         }
@@ -1416,6 +1521,15 @@ object SquareMarketFetcher {
             } else {
                 emptyList()
             }
+            val usedGoldKarats = if (goldQuote != null) {
+                SquareMarketCatalog.buildUsedGoldKarats(
+                    goldOzUsd = goldQuote.priceOzUsd,
+                    usdBankDzd = bankRates["USD"] ?: 0.0,
+                    usdParallelDzd = usdParallelRef
+                )
+            } else {
+                emptyList()
+            }
 
             if (goldKarats.isEmpty() && currencies.isEmpty()) {
                 return@coroutineScope Result.failure(IllegalStateException("Empty market snapshot"))
@@ -1438,6 +1552,7 @@ object SquareMarketFetcher {
                     bankSourceCount = bankSourceCount,
                     parallelSourceCount = parallelSourceCount,
                     goldKarats = goldKarats,
+                    usedGoldKarats = usedGoldKarats,
                     currencies = currencies,
                     updatedAtMillis = now
                 )

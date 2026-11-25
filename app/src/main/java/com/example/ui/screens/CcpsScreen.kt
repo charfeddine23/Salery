@@ -4,12 +4,12 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -86,11 +86,11 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -101,6 +101,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -225,27 +226,6 @@ fun CcpsScreen(
         }
     }
 
-    // Shared infinite animations matching KeysScreen silky-smooth 90fps luxury vault containers
-    val ccpTransition = rememberInfiniteTransition(label = "ccps_vault_shimmer")
-    val shimmerPhase by ccpTransition.animateFloat(
-        initialValue = -0.25f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 4200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ccp_shimmer_phase"
-    )
-    val pulsePhase by ccpTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ccp_pulse_phase"
-    )
-
     var showAddOrEditDialog by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<CcpAccountEntry?>(null) }
     var holdActionTargetAccount by remember { mutableStateOf<CcpAccountEntry?>(null) }
@@ -286,8 +266,6 @@ fun CcpsScreen(
             existing = editingAccount,
             secureScreenshots = userSettings.screenshotProtectionEnabled,
             isAtCapacity = editingAccount == null && accounts.size >= HubVaultCodec.MAX_CCP_PROFILES,
-            shimmerPhase = shimmerPhase,
-            pulsePhase = pulsePhase,
             onDismiss = {
                 showAddOrEditDialog = false
                 editingAccount = null
@@ -610,7 +588,14 @@ fun CcpsScreen(
                     items(filteredAccounts, key = { it.id }) { acc ->
                         val isExpanded = acc.id in expandedCcpIds
                         val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
-                        Box(modifier = Modifier.animateItem()) {
+                        Box(
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 380f
+                                )
+                            )
+                        ) {
                             CcpAccountCard(
                             account = acc,
                             isExpanded = isExpanded,
@@ -715,7 +700,14 @@ fun CcpsScreen(
                 items(filteredAccounts, key = { it.id }) { acc ->
                     val isExpanded = acc.id in expandedCcpIds
                     val isDigitsVisible = !isStealth && (acc.id !in hiddenCcpIds)
-                    Box(modifier = Modifier.animateItem()) {
+                    Box(
+                        modifier = Modifier.animateItem(
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = 380f
+                            )
+                        )
+                    ) {
                         CcpAccountCard(
                         account = acc,
                         isExpanded = isExpanded,
@@ -886,7 +878,6 @@ private fun CcpAccountCard(
         }
     }
 
-    val cardScale = 1f - (holdAnim.value * 0.015f)
     val borderCol = when {
         holdAnim.value > 0.05f -> brandPrimary
         account.isPinned -> AmberNeon.copy(alpha = if (colors.isDark) 0.65f else 0.72f)
@@ -896,7 +887,11 @@ private fun CcpAccountCard(
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(cardScale)
+            .graphicsLayer {
+                val s = 1f - (holdAnim.value * 0.015f)
+                scaleX = s
+                scaleY = s
+            }
             .testTag("ccp_vault_card_${account.id}"),
         shape = RoundedCornerShape(18.dp),
         cornerRadius = 18.dp,
@@ -919,12 +914,6 @@ private fun CcpAccountCard(
                             onToggleExpand()
                         }
                     }
-                )
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
                 )
         ) {
             // Top 0.5s hold progress indicator
@@ -987,11 +976,36 @@ private fun CcpAccountCard(
                     }
                 }
 
-                // Expanded Structured Utility Rows
+                // Expanded Structured Utility Rows (single critically damped spring for zero-jank expand/collapse)
                 AnimatedVisibility(
                     visible = isExpanded,
-                    enter = fadeIn(tween(200)) + expandVertically(tween(240)),
-                    exit = fadeOut(tween(160)) + shrinkVertically(tween(200))
+                    enter = fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 220,
+                            delayMillis = 35,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + expandVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 380f,
+                            visibilityThreshold = IntSize.VisibilityThreshold
+                        ),
+                        expandFrom = Alignment.Top
+                    ),
+                    exit = fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + shrinkVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 420f,
+                            visibilityThreshold = IntSize.VisibilityThreshold
+                        ),
+                        shrinkTowards = Alignment.Top
+                    )
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1279,8 +1293,6 @@ private fun AddOrEditCcpAccountDialog(
     existing: CcpAccountEntry?,
     secureScreenshots: Boolean,
     isAtCapacity: Boolean,
-    shimmerPhase: Float,
-    pulsePhase: Float,
     onDismiss: () -> Unit,
     onSave: (
         firstName: String,
@@ -1300,6 +1312,26 @@ private fun AddOrEditCcpAccountDialog(
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
     val context = LocalContext.current
+
+    val ccpTransition = rememberInfiniteTransition(label = "ccps_dialog_shimmer")
+    val shimmerPhase by ccpTransition.animateFloat(
+        initialValue = -0.25f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ccp_shimmer_phase"
+    )
+    val pulsePhase by ccpTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ccp_pulse_phase"
+    )
 
     val initialPreset = remember(existing) {
         if (existing != null) VaultAppPresets.resolveForCcpEntry(existing).id else "algerie_poste"

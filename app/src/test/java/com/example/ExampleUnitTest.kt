@@ -947,15 +947,19 @@ class ExampleUnitTest {
   @Test
   fun algerianBankCardCatalog_andThirdCardSettings_areComplete() {
     val banks = com.example.data.AlgerianBankCardCatalog.all
-    assertEquals(17, banks.size)
+    assertEquals(18, banks.size)
     val expectedIds = listOf(
-      "EDAHABIA", "BNA", "CPA", "BEA", "BADR", "BDL", "CNEP",
+      "EDAHABIA", "EDAHABIA_MCA", "BNA", "CPA", "BEA", "BADR", "BDL", "CNEP",
       "AGB", "SGA", "BNP", "NATIXIS", "HOUSING", "AL_BARAKA",
       "AL_SALAM", "TRUST", "ABC", "FRANSABANK"
     )
     expectedIds.forEach { id ->
       assertEquals(id, com.example.data.AlgerianBankCardCatalog.findById(id).id)
     }
+    assertEquals(
+      com.example.data.AlgerianBankMotif.MCA_FAN,
+      com.example.data.AlgerianBankCardCatalog.findById("EDAHABIA_MCA").motif
+    )
     assertEquals("EDAHABIA", com.example.data.AlgerianBankCardCatalog.findById("UNKNOWN").id)
 
     val defaults = UserSettings()
@@ -2280,5 +2284,186 @@ class ExampleUnitTest {
 
     val allMatches = com.example.data.AlgeriaLocationsCatalog.searchAllCommunes(wilayas, "بوسعادة")
     assertTrue(allMatches.any { it.wilaya.code == "68" && it.commune.nameEn == "Bou Saâda" })
+  }
+
+  @Test
+  fun cardHubOrder_parsesMovesEncodesAndResetsSafely() {
+    val defaultOrder = com.example.data.CardHubOrder.parse(null)
+    assertEquals(
+      listOf(
+        com.example.data.CardHubSlot.CLASSIC,
+        com.example.data.CardHubSlot.VISA,
+        com.example.data.CardHubSlot.THIRD
+      ),
+      defaultOrder
+    )
+
+    // Move THIRD up twice -> THIRD, CLASSIC, VISA
+    val movedOnce = com.example.data.CardHubOrder.moveUp(defaultOrder, com.example.data.CardHubSlot.THIRD)
+    val movedTwice = com.example.data.CardHubOrder.moveUp(movedOnce, com.example.data.CardHubSlot.THIRD)
+    assertEquals(
+      listOf(
+        com.example.data.CardHubSlot.THIRD,
+        com.example.data.CardHubSlot.CLASSIC,
+        com.example.data.CardHubSlot.VISA
+      ),
+      movedTwice
+    )
+
+    // Encode & parse round-trip
+    val encoded = com.example.data.CardHubOrder.encode(movedTwice)
+    assertEquals(movedTwice, com.example.data.CardHubOrder.parse(encoded))
+
+    // Move CLASSIC down -> THIRD, VISA, CLASSIC
+    val movedDown = com.example.data.CardHubOrder.moveDown(movedTwice, com.example.data.CardHubSlot.CLASSIC)
+    assertEquals(
+      listOf(
+        com.example.data.CardHubSlot.THIRD,
+        com.example.data.CardHubSlot.VISA,
+        com.example.data.CardHubSlot.CLASSIC
+      ),
+      movedDown
+    )
+
+    // Boundary safety & partial/invalid input recovery
+    assertEquals(movedDown, com.example.data.CardHubOrder.moveUp(movedDown, com.example.data.CardHubSlot.THIRD))
+    assertEquals(movedDown, com.example.data.CardHubOrder.moveDown(movedDown, com.example.data.CardHubSlot.CLASSIC))
+    assertEquals(
+      listOf(
+        com.example.data.CardHubSlot.VISA,
+        com.example.data.CardHubSlot.CLASSIC,
+        com.example.data.CardHubSlot.THIRD
+      ),
+      com.example.data.CardHubOrder.parse("[\"VISA\",\"UNKNOWN\",\"VISA\"]")
+    )
+  }
+
+  @Test
+  fun squareMarket_usedGoldKarats_24hComparisonAndTickerFiltering_workAccurately() {
+    val goldOzUsd = 3110.34768 // $100/g raw 24K
+    val karats = com.example.market.SquareMarketCatalog.buildGoldKarats(
+      goldOzUsd = goldOzUsd,
+      usdBankDzd = 135.0,
+      usdParallelDzd = 240.0
+    )
+    val usedKarats = com.example.market.SquareMarketCatalog.buildUsedGoldKarats(
+      goldOzUsd = goldOzUsd,
+      usdBankDzd = 135.0,
+      usdParallelDzd = 240.0
+    )
+    assertEquals(karats.size, usedKarats.size)
+    assertTrue(usedKarats.all { it.isUsed })
+
+    // Used 18K: 75.0 USD raw melt * 0.95 = 71.25 USD/g -> 71.25 * 240 = 17,100 DZD Parallel
+    val used18 = usedKarats.first { it.karat == 18 }
+    assertEquals(71.25, used18.pricePerGramUsd, 0.01)
+    assertEquals(17100.0, used18.pricePerGramDzdParallel, 0.5)
+    assertEquals(71.25 * 135.0, used18.pricePerGramDzdBank, 0.5)
+
+    // Legacy snapshot hydration populates usedGoldKarats automatically on parse
+    val legacyEncoded = com.example.market.SquareMarketCodec.encodeSnapshot(
+      com.example.market.SquareMarketSnapshot(
+        version = 3,
+        goldOzUsd = goldOzUsd,
+        goldKarats = karats,
+        usedGoldKarats = emptyList()
+      )
+    )
+    val hydrated = com.example.market.SquareMarketCodec.parseSnapshot(legacyEncoded)
+    assertNotNull(hydrated)
+    assertEquals(karats.size, hydrated!!.usedGoldKarats.size)
+    assertTrue(hydrated.usedGoldKarats.all { it.isUsed })
+
+    // USED_GOLD tab & search filtering isolate used gold rows cleanly
+    val usedRows = com.example.ui.components.buildSquareTickerRows(
+      snapshot = hydrated,
+      primaryTab = com.example.ui.components.SquarePrimaryTab.USED_GOLD,
+      venueFilter = com.example.ui.components.SquareVenueFilter.ALL,
+      pinnedIds = emptySet(),
+      searchQuery = "مستعمل"
+    )
+    assertEquals(usedKarats.size, usedRows.size)
+    assertTrue(usedRows.all { it.id.startsWith("XAU_USED_") })
+
+    // 24h comparison tracks XAU_USED_* keys across day rollover
+    val utc = java.util.TimeZone.getTimeZone("UTC")
+    val day1 = 1_763_200_000_000L
+    val day2 = day1 + 24 * 3_600_000L
+    val snapDay1 = com.example.market.SquareMarketSnapshot(
+      goldOzUsd = 3000.0,
+      goldKarats = com.example.market.SquareMarketCatalog.buildGoldKarats(3000.0, 135.0, 240.0),
+      usedGoldKarats = com.example.market.SquareMarketCatalog.buildUsedGoldKarats(3000.0, 135.0, 240.0),
+      updatedAtMillis = day1
+    )
+    val (_, base1) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = snapDay1,
+      storedBaselineJson = "",
+      nowMillis = day1,
+      timeZone = utc
+    )
+    val snapDay2 = com.example.market.SquareMarketSnapshot(
+      goldOzUsd = 3150.0, // +5%
+      goldKarats = com.example.market.SquareMarketCatalog.buildGoldKarats(3150.0, 135.0, 240.0),
+      usedGoldKarats = com.example.market.SquareMarketCatalog.buildUsedGoldKarats(3150.0, 135.0, 240.0),
+      updatedAtMillis = day2
+    )
+    val (comparedDay2, _) = com.example.market.SquareMarketCatalog.apply24hPriceComparison(
+      fetched = snapDay2,
+      storedBaselineJson = base1,
+      nowMillis = day2,
+      timeZone = utc
+    )
+    val day2Used18 = comparedDay2.usedGoldKarats.first { it.karat == 18 }
+    assertTrue(day2Used18.has24hBaseline)
+    assertEquals(5.0, day2Used18.change24hParallelPercent, 0.05)
+  }
+
+  @Test
+  fun binanceCryptoCatalog_supportsUsdtAndUsdcLiveParsingAndValuation() {
+    val usdtSpec = com.example.crypto.BinanceCryptoCatalog.findBySymbol("USDT")
+    val usdcSpec = com.example.crypto.BinanceCryptoCatalog.findBySymbol("USDC")
+    assertNotNull(usdtSpec)
+    assertNotNull(usdcSpec)
+    assertTrue(usdtSpec!!.isStablecoin)
+    assertTrue(usdcSpec!!.isStablecoin)
+    assertEquals("USDCUSDT", usdcSpec.binancePair)
+    assertEquals("usd-coin", usdcSpec.coingeckoId)
+
+    val now = 1_763_200_000_000L
+    val binanceJson = """
+      [
+        {"symbol":"XRPUSDT","lastPrice":"2.50","priceChangePercent":"3.00"},
+        {"symbol":"USDCUSDT","lastPrice":"0.9998","priceChangePercent":"-0.01"}
+      ]
+    """.trimIndent()
+    val binanceParsed = com.example.crypto.BinanceCryptoCatalog.parseBinance24hrResponse(binanceJson, now)
+    assertEquals(1.0, binanceParsed["USDT"]!!.priceUsd, 0.001)
+    assertEquals(0.9998, binanceParsed["USDC"]!!.priceUsd, 0.0001)
+
+    val cgJson = """
+      {
+        "tether":{"usd":1.001,"usd_24h_change":0.02},
+        "usd-coin":{"usd":0.9999,"usd_24h_change":-0.01}
+      }
+    """.trimIndent()
+    val cgParsed = com.example.crypto.BinanceCryptoCatalog.parseCoinGeckoResponse(cgJson, now)
+    assertEquals(1.001, cgParsed["USDT"]!!.priceUsd, 0.0001)
+    assertEquals(0.9999, cgParsed["USDC"]!!.priceUsd, 0.0001)
+
+    // Portfolio total counts both USDT and USDC even with empty price cache (fallback $1.00)
+    val stableHoldings = listOf(
+      com.example.crypto.CryptoHoldingEntry(symbol = "USDT", quantity = 250.0),
+      com.example.crypto.CryptoHoldingEntry(symbol = "USDC", quantity = 150.0)
+    )
+    assertEquals(
+      400.0,
+      com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(stableHoldings, emptyMap()),
+      0.01
+    )
+    assertEquals(
+      250.0 + 150.0 * 0.9998,
+      com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(stableHoldings, binanceParsed),
+      0.01
+    )
   }
 }

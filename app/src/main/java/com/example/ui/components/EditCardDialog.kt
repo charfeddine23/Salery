@@ -246,7 +246,13 @@ fun EditCardDialog(
                                     .size(10.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        Brush.linearGradient(listOf(primaryColor, accentColor))
+                                        if (bank.motif == AlgerianBankMotif.MCA_FAN) {
+                                            Brush.linearGradient(
+                                                listOf(Color(0xFF00955B), Color(0xFFEEDB8B), Color(0xFFE6313E))
+                                            )
+                                        } else {
+                                            Brush.linearGradient(listOf(primaryColor, accentColor))
+                                        }
                                     )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -254,6 +260,7 @@ fun EditCardDialog(
                                 Text(
                                     text = when {
                                         isArabic && bank.id == "EDAHABIA" -> "الذهبية"
+                                        isArabic && bank.id == "EDAHABIA_MCA" -> "الذهبية • المولودية"
                                         isArabic -> bank.nameAr
                                         bank.id == "EDAHABIA" -> "Edahabia"
                                         else -> bank.shortCode
@@ -280,6 +287,7 @@ fun EditCardDialog(
                 val bankAccent = Color(bankSpec.accentHex)
                 val bankSecondaryText = Color(bankSpec.secondaryTextHex)
                 val isEdahabia = bankSpec.motif == AlgerianBankMotif.EDAHABIA_ZELLIGE
+                val isMcaFan = bankSpec.motif == AlgerianBankMotif.MCA_FAN
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -292,69 +300,75 @@ fun EditCardDialog(
                             )
                         )
                         .drawBehind {
-                            if (isEdahabia) {
-                                val boundary = Path().apply {
-                                    moveTo(size.width * 0.85f, 0f)
-                                    quadraticTo(
-                                        size.width * 0.90f, size.height * 0.45f,
-                                        size.width * 0.86f, size.height
-                                    )
-                                }
-                                val clipP = Path().apply {
-                                    addPath(boundary)
-                                    lineTo(size.width, size.height)
-                                    lineTo(size.width, 0f)
-                                    close()
-                                }
-                                clipPath(clipP) {
-                                    drawRect(
-                                        color = Color(0xFF1E3A8A),
-                                        topLeft = Offset(size.width * 0.83f, 0f),
-                                        size = Size(size.width * 0.19f, size.height)
-                                    )
-                                    val miniColors = listOf(
-                                        Color(0xFFFACC15),
-                                        Color.White,
-                                        Color(0xFF38BDF8),
-                                        Color(0xFF1D4ED8)
-                                    )
-                                    val cw = size.width * 0.065f
-                                    val ch = size.height / 3.8f
-                                    for (r in -1..5) {
-                                        for (c in 0..3) {
-                                            val cx = size.width * 0.84f + c * cw + (if (r % 2 == 0) 0f else cw * 0.5f)
-                                            val cy = r * ch
-                                            val tile = Path().apply {
-                                                moveTo(cx, cy - ch * 0.5f)
-                                                lineTo(cx + cw * 0.5f, cy)
-                                                lineTo(cx, cy + ch * 0.5f)
-                                                lineTo(cx - cw * 0.5f, cy)
-                                                close()
+                            when {
+                                isEdahabia -> {
+                                    val boundary = Path().apply {
+                                        moveTo(size.width * 0.85f, 0f)
+                                        quadraticTo(
+                                            size.width * 0.90f, size.height * 0.45f,
+                                            size.width * 0.86f, size.height
+                                        )
+                                    }
+                                    val clipP = Path().apply {
+                                        addPath(boundary)
+                                        lineTo(size.width, size.height)
+                                        lineTo(size.width, 0f)
+                                        close()
+                                    }
+                                    clipPath(clipP) {
+                                        drawRect(
+                                            color = Color(0xFF1E3A8A),
+                                            topLeft = Offset(size.width * 0.83f, 0f),
+                                            size = Size(size.width * 0.19f, size.height)
+                                        )
+                                        val miniColors = listOf(
+                                            Color(0xFFFACC15),
+                                            Color.White,
+                                            Color(0xFF38BDF8),
+                                            Color(0xFF1D4ED8)
+                                        )
+                                        val cw = size.width * 0.065f
+                                        val ch = size.height / 3.8f
+                                        for (r in -1..5) {
+                                            for (c in 0..3) {
+                                                val cx = size.width * 0.84f + c * cw + (if (r % 2 == 0) 0f else cw * 0.5f)
+                                                val cy = r * ch
+                                                val tile = Path().apply {
+                                                    moveTo(cx, cy - ch * 0.5f)
+                                                    lineTo(cx + cw * 0.5f, cy)
+                                                    lineTo(cx, cy + ch * 0.5f)
+                                                    lineTo(cx - cw * 0.5f, cy)
+                                                    close()
+                                                }
+                                                drawPath(tile, miniColors[(r + c + 4) % miniColors.size])
                                             }
-                                            drawPath(tile, miniColors[(r + c + 4) % miniColors.size])
                                         }
                                     }
+                                    drawPath(
+                                        path = boundary,
+                                        color = Color(0xFF93C5FD).copy(alpha = 0.45f),
+                                        style = Stroke(width = 1.2f)
+                                    )
                                 }
-                                drawPath(
-                                    path = boundary,
-                                    color = Color(0xFF93C5FD).copy(alpha = 0.45f),
-                                    style = Stroke(width = 1.2f)
-                                )
-                            } else {
-                                drawCircle(
-                                    color = bankAccent.copy(alpha = 0.14f),
-                                    radius = size.height * 0.55f,
-                                    center = Offset(size.width * 0.88f, size.height * 0.42f),
-                                    style = Stroke(width = 14f)
-                                )
-                                val ribbon = Path().apply {
-                                    moveTo(size.width * 0.52f, 0f)
-                                    lineTo(size.width * 0.72f, 0f)
-                                    lineTo(size.width * 0.44f, size.height)
-                                    lineTo(size.width * 0.24f, size.height)
-                                    close()
+                                isMcaFan -> {
+                                    drawMcaFanCardBackground()
                                 }
-                                drawPath(ribbon, bankAccent.copy(alpha = 0.09f))
+                                else -> {
+                                    drawCircle(
+                                        color = bankAccent.copy(alpha = 0.14f),
+                                        radius = size.height * 0.55f,
+                                        center = Offset(size.width * 0.88f, size.height * 0.42f),
+                                        style = Stroke(width = 14f)
+                                    )
+                                    val ribbon = Path().apply {
+                                        moveTo(size.width * 0.52f, 0f)
+                                        lineTo(size.width * 0.72f, 0f)
+                                        lineTo(size.width * 0.44f, size.height)
+                                        lineTo(size.width * 0.24f, size.height)
+                                        close()
+                                    }
+                                    drawPath(ribbon, bankAccent.copy(alpha = 0.09f))
+                                }
                             }
                         }
                         .border(
@@ -371,36 +385,76 @@ fun EditCardDialog(
                 ) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(horizontalAlignment = Alignment.Start) {
-                                    Text(
-                                        text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
-                                        color = bankSecondaryText,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        lineHeight = 9.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                            if (isMcaFan) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text(
+                                            text = "FAN",
+                                            color = McaChampagneGold,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 1.sp,
+                                            lineHeight = 14.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        McaClubCalligraphyMark(compact = true)
+                                    }
+                                    McaShieldCrest(
+                                        modifier = Modifier.size(width = 34.dp, height = 42.dp),
+                                        compact = true
                                     )
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "بريد الجزائر",
+                                            color = Color.White,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            lineHeight = 9.sp
+                                        )
+                                        Text(
+                                            text = "ALGÉRIE POSTE",
+                                            color = Color(0xFFFFF3C4),
+                                            fontSize = 6.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text(
+                                            text = if (isEdahabia) "الذهبية" else bankSpec.nameAr,
+                                            color = bankSecondaryText,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            lineHeight = 9.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = bankSpec.cardTypeLabel,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 1.1.sp,
+                                            lineHeight = 13.sp
+                                        )
+                                    }
                                     Text(
-                                        text = bankSpec.cardTypeLabel,
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 1.1.sp,
-                                        lineHeight = 13.sp
+                                        text = if (isEdahabia) "بريد الجزائر" else "CIB • ${bankSpec.shortCode}",
+                                        color = bankAccent,
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
-                                Text(
-                                    text = if (isEdahabia) "بريد الجزائر" else "CIB • ${bankSpec.shortCode}",
-                                    color = bankAccent,
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
                             }
 
                             val previewNumber = if (cardNumberDigits.isBlank()) {
@@ -410,7 +464,7 @@ fun EditCardDialog(
                             }
                             Text(
                                 text = previewNumber,
-                                color = Color.White,
+                                color = if (isMcaFan) McaChampagneGold else Color.White,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -426,7 +480,7 @@ fun EditCardDialog(
                             ) {
                                 Text(
                                     text = holderName.trim().ifBlank { "CHARFEDDINE KA" }.uppercase(),
-                                    color = Color.White,
+                                    color = if (isMcaFan) McaChampagneGold else Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,

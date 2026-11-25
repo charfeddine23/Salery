@@ -4,12 +4,12 @@ import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -88,11 +88,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -104,6 +104,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -240,27 +241,6 @@ fun KeysScreen(
     var editingKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
     var holdActionTargetKey by remember { mutableStateOf<VaultKeyEntry?>(null) }
 
-    // Shared infinite animations for silky-smooth 90fps luxury vault containers
-    val vaultTransition = rememberInfiniteTransition(label = "keys_vault_shimmer")
-    val shimmerPhase by vaultTransition.animateFloat(
-        initialValue = -0.25f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 4200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer_phase"
-    )
-    val pulsePhase by vaultTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_phase"
-    )
-
     holdActionTargetKey?.let { targetKey ->
         val preset = remember(targetKey.appPresetId, targetKey.label) {
             VaultAppPresets.resolveForEntry(targetKey)
@@ -293,8 +273,6 @@ fun KeysScreen(
         AddOrEditVaultKeyDialog(
             existing = editingKey,
             secureScreenshots = userSettings.screenshotProtectionEnabled,
-            shimmerPhase = shimmerPhase,
-            pulsePhase = pulsePhase,
             onDismiss = {
                 showAddOrEditDialog = false
                 editingKey = null
@@ -638,7 +616,14 @@ fun KeysScreen(
                     items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
                         val isVisible = !isStealth && (entry.id in revealedKeyIds)
                         val isExpanded = entry.id in expandedKeyIds
-                        Box(modifier = Modifier.animateItem()) {
+                        Box(
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 380f
+                                )
+                            )
+                        ) {
                             VaultKeyRowCard(
                             entry = entry,
                             analysis = analysis,
@@ -712,7 +697,14 @@ fun KeysScreen(
                 items(filteredItems, key = { it.first.id }) { (entry, analysis) ->
                     val isVisible = !isStealth && (entry.id in revealedKeyIds)
                     val isExpanded = entry.id in expandedKeyIds
-                    Box(modifier = Modifier.animateItem()) {
+                    Box(
+                        modifier = Modifier.animateItem(
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = 380f
+                            )
+                        )
+                    ) {
                         VaultKeyRowCard(
                             entry = entry,
                             analysis = analysis,
@@ -844,7 +836,6 @@ private fun VaultKeyRowCard(
         }
     }
 
-    val cardScale = 1f - (holdAnim.value * 0.015f)
     val borderCol = when {
         holdAnim.value > 0.05f -> brandPrimary
         entry.isPinned -> AmberNeon.copy(alpha = if (colors.isDark) 0.65f else 0.72f)
@@ -854,7 +845,11 @@ private fun VaultKeyRowCard(
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(cardScale)
+            .graphicsLayer {
+                val s = 1f - (holdAnim.value * 0.015f)
+                scaleX = s
+                scaleY = s
+            }
             .testTag("vault_key_card_${preset.id}"),
         shape = RoundedCornerShape(18.dp),
         cornerRadius = 18.dp,
@@ -877,12 +872,6 @@ private fun VaultKeyRowCard(
                             onToggleExpand()
                         }
                     }
-                )
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
                 )
         ) {
             // Top 0.5s hold progress indicator
@@ -964,11 +953,36 @@ private fun VaultKeyRowCard(
                     }
                 }
 
-                // 3. Structured Expanded Utility Panel
+                // 3. Structured Expanded Utility Panel (single critically damped spring for zero-jank expand/collapse)
                 AnimatedVisibility(
                     visible = isExpanded,
-                    enter = fadeIn(tween(200)) + expandVertically(tween(240)),
-                    exit = fadeOut(tween(160)) + shrinkVertically(tween(200))
+                    enter = fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 220,
+                            delayMillis = 35,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + expandVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 380f,
+                            visibilityThreshold = IntSize.VisibilityThreshold
+                        ),
+                        expandFrom = Alignment.Top
+                    ),
+                    exit = fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + shrinkVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 420f,
+                            visibilityThreshold = IntSize.VisibilityThreshold
+                        ),
+                        shrinkTowards = Alignment.Top
+                    )
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1194,14 +1208,32 @@ private fun VaultKeyRowCard(
 private fun AddOrEditVaultKeyDialog(
     existing: VaultKeyEntry?,
     secureScreenshots: Boolean,
-    shimmerPhase: Float,
-    pulsePhase: Float,
     onDismiss: () -> Unit,
     onSave: (label: String, username: String, secret: String, category: String, note: String, isPinned: Boolean, appPresetId: String) -> Unit
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val isArabic = strings is ArabicStrings
+
+    val vaultTransition = rememberInfiniteTransition(label = "keys_dialog_shimmer")
+    val shimmerPhase by vaultTransition.animateFloat(
+        initialValue = -0.25f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_phase"
+    )
+    val pulsePhase by vaultTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_phase"
+    )
 
     val initialPreset = remember(existing) {
         if (existing != null) VaultAppPresets.resolveForEntry(existing).id else "custom"
