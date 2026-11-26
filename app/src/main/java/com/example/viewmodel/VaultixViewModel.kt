@@ -2411,6 +2411,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         GoogleAuthHelper.onGoogleSignInClicked(
             context = context,
             scope = viewModelScope,
+            isArabic = isAr,
             onAuthSuccess = { user ->
                 updateGoogleAuthFromFirebaseUser(user)
                 activateGoogleConnectedAccount(user)

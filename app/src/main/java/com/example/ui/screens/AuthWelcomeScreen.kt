@@ -105,6 +105,10 @@ private val AuthErrorRed = Color(0xFFB91C1C)
 private val AuthEmerald = Color(0xFF047857)
 private val AuthWarmAmber = Color(0xFFB45309)
 
+private val AUTH_EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+
+private fun isValidAuthEmail(email: String): Boolean = AUTH_EMAIL_REGEX.matches(email.trim())
+
 private enum class AuthPageMode {
     LOGIN,
     SIGN_UP
@@ -148,14 +152,18 @@ fun AuthWelcomeScreen(
 
     val focusManager = LocalFocusManager.current
 
-    // If login fails because account does not exist, automatically take user to Sign-Up with email prefilled
+    // If login fails because email isn't registered yet, cleanly transfer user to Sign-Up with email & password prefilled
     LaunchedEffect(errorState) {
         if (errorState != null && errorState.accountNotFound && pageMode == AuthPageMode.LOGIN) {
-            if (loginEmail.isNotBlank() && signUpEmail.isBlank()) {
+            if (loginEmail.isNotBlank()) {
                 signUpEmail = loginEmail.trim()
+            }
+            if (loginPassword.isNotBlank() && signUpPassword.isBlank()) {
+                signUpPassword = loginPassword
             }
             redirectedFromMissingAccount = true
             localValidationError = null
+            onClearAuthError()
             pageMode = AuthPageMode.SIGN_UP
         }
     }
@@ -165,8 +173,11 @@ fun AuthWelcomeScreen(
         localValidationError = null
         redirectedFromMissingAccount = false
         onClearAuthError()
-        if (loginEmail.isNotBlank() && signUpEmail.isBlank()) {
+        if (loginEmail.isNotBlank()) {
             signUpEmail = loginEmail.trim()
+        }
+        if (loginPassword.isNotBlank() && signUpPassword.isBlank()) {
+            signUpPassword = loginPassword
         }
         pageMode = AuthPageMode.SIGN_UP
     }
@@ -176,6 +187,9 @@ fun AuthWelcomeScreen(
         localValidationError = null
         redirectedFromMissingAccount = false
         onClearAuthError()
+        if (signUpEmail.isNotBlank() && loginEmail.isBlank()) {
+            loginEmail = signUpEmail.trim()
+        }
         pageMode = AuthPageMode.LOGIN
     }
 
@@ -348,7 +362,65 @@ fun AuthWelcomeScreen(
                     lineHeight = 18.sp
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Clear 2-tab mode switcher at the top so users can jump straight to creating an account with any new email
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.88f))
+                        .border(1.dp, AuthRoyalIndigo.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val isLoginTab = pageMode == AuthPageMode.LOGIN
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isLoginTab) AuthRoyalIndigo else Color.Transparent)
+                            .clickable(enabled = !isLoading) {
+                                if (!isLoginTab) switchToLogin()
+                            }
+                            .testTag("auth_tab_login"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isArabic) "تسجيل الدخول" else "Sign In",
+                            color = if (isLoginTab) Color.White else AuthInkDark,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (!isLoginTab) AuthRoyalDeep else Color.Transparent)
+                            .clickable(enabled = !isLoading) {
+                                if (isLoginTab) switchToSignUp()
+                            }
+                            .testTag("auth_tab_signup"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isArabic) "إنشاء حساب جديد" else "Create Account",
+                            color = if (!isLoginTab) Color.White else AuthInkDark,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 val displayedError = localValidationError ?: errorState?.message
 
@@ -503,7 +575,7 @@ fun AuthWelcomeScreen(
                                                 onDone = {
                                                     focusManager.clearFocus()
                                                     val cleanEmail = loginEmail.trim()
-                                                    if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+                                                    if (!isValidAuthEmail(cleanEmail)) {
                                                         localValidationError = if (isArabic) {
                                                             "يرجى إدخال بريد إلكتروني صحيح"
                                                         } else {
@@ -536,7 +608,7 @@ fun AuthWelcomeScreen(
                                             onClick = {
                                                 focusManager.clearFocus()
                                                 val cleanEmail = loginEmail.trim()
-                                                if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+                                                if (!isValidAuthEmail(cleanEmail)) {
                                                     localValidationError = if (isArabic) {
                                                         "يرجى إدخال بريد إلكتروني صحيح"
                                                     } else {
@@ -681,9 +753,9 @@ fun AuthWelcomeScreen(
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = if (isArabic) {
-                                                    "لم يُعثر على حساب بهذا البريد — أنشئ حسابك السحابي الآن"
+                                                    "هذا البريد غير مسجّل بعد — يمكنك فتح حساب جديد بأي بريد إلكتروني بإكمال الاسم واللقب واسم المستخدم"
                                                 } else {
-                                                    "No account found for that email — create your cloud account below"
+                                                    "This email is new — create a new account with any email by completing your name and username below"
                                                 },
                                                 color = AuthInkDark,
                                                 fontSize = 12.sp,
@@ -799,7 +871,34 @@ fun AuthWelcomeScreen(
                                             imeAction = ImeAction.Done
                                         ),
                                         keyboardActions = KeyboardActions(
-                                            onDone = { focusManager.clearFocus() }
+                                            onDone = {
+                                                focusManager.clearFocus()
+                                                val cleanFirst = firstName.trim()
+                                                val cleanLast = lastName.trim()
+                                                val cleanUser = username.trim()
+                                                val cleanEmail = signUpEmail.trim()
+                                                when {
+                                                    cleanFirst.isEmpty() -> {
+                                                        localValidationError = if (isArabic) "يرجى إدخال الاسم" else "Please enter your first name"
+                                                    }
+                                                    cleanLast.isEmpty() -> {
+                                                        localValidationError = if (isArabic) "يرجى إدخال اللقب" else "Please enter your last name"
+                                                    }
+                                                    cleanUser.isEmpty() -> {
+                                                        localValidationError = if (isArabic) "يرجى إدخال اسم المستخدم" else "Please enter a username"
+                                                    }
+                                                    !isValidAuthEmail(cleanEmail) -> {
+                                                        localValidationError = if (isArabic) "يرجى إدخال بريد إلكتروني صحيح" else "Please enter a valid email address"
+                                                    }
+                                                    signUpPassword.length < 6 -> {
+                                                        localValidationError = if (isArabic) "كلمة السر يجب أن تكون 6 أحرف على الأقل" else "Password must be at least 6 characters"
+                                                    }
+                                                    else -> {
+                                                        localValidationError = null
+                                                        onEmailSignUp(cleanFirst, cleanLast, cleanUser, cleanEmail, signUpPassword)
+                                                    }
+                                                }
+                                            }
                                         ),
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -830,7 +929,7 @@ fun AuthWelcomeScreen(
                                                 cleanUser.isEmpty() -> {
                                                     localValidationError = if (isArabic) "يرجى إدخال اسم المستخدم" else "Please enter a username"
                                                 }
-                                                cleanEmail.isEmpty() || !cleanEmail.contains("@") -> {
+                                                !isValidAuthEmail(cleanEmail) -> {
                                                     localValidationError = if (isArabic) "يرجى إدخال بريد إلكتروني صحيح" else "Please enter a valid email address"
                                                 }
                                                 signUpPassword.length < 6 -> {

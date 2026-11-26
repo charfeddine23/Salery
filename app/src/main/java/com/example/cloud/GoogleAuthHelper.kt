@@ -9,6 +9,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -105,6 +106,7 @@ object GoogleAuthHelper {
         context: Context,
         credentialManager: CredentialManager = CredentialManager.create(context),
         scope: CoroutineScope,
+        isArabic: Boolean = false,
         onAuthSuccess: (FirebaseUser) -> Unit,
         onAuthError: (String) -> Unit,
         onAuthCancelled: () -> Unit = {}
@@ -152,6 +154,15 @@ object GoogleAuthHelper {
             } catch (e: GetCredentialCancellationException) {
                 Log.w(TAG, "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
                 onAuthCancelled()
+            } catch (e: NoCredentialException) {
+                Log.w(TAG, "No Google credential available on device: ${e.message}", e)
+                onAuthError(
+                    if (isArabic) {
+                        "لا يوجد حساب Google محفوظ على الجهاز — أضف حساباً أو أنشئ حساباً جديداً بأي بريد إلكتروني"
+                    } else {
+                        "No Google account found on this device — add one or create a new account with any email"
+                    }
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -251,14 +262,14 @@ object GoogleAuthHelper {
         val code = (e as? FirebaseAuthException)?.errorCode.orEmpty()
         return when (code) {
             "ERROR_USER_NOT_FOUND" -> if (isArabic) {
-                "لا يوجد حساب مسجّل بهذا البريد الإلكتروني — يمكنك إنشاء حساب جديد الآن"
+                "هذا البريد غير مسجّل بعد — يمكنك فتح حساب جديد الآن"
             } else {
-                "No account found for this email — create a new account now"
+                "No account registered with this email yet — create a new account now"
             }
             "ERROR_INVALID_CREDENTIAL", "ERROR_WRONG_PASSWORD" -> if (isArabic) {
-                "بيانات الدخول غير صحيحة أو لا يوجد حساب مسجّل بهذا البريد"
+                "كلمة السر غير صحيحة أو هذا البريد جديد — يمكنك فتح حساب جديد الآن"
             } else {
-                "Invalid email/password or account does not exist yet"
+                "Incorrect password or new email — you can create a new account now"
             }
             "ERROR_INVALID_EMAIL" -> if (isArabic) {
                 "صيغة البريد الإلكتروني غير صالحة"
@@ -266,19 +277,19 @@ object GoogleAuthHelper {
                 "Invalid email address format"
             }
             "ERROR_EMAIL_ALREADY_IN_USE" -> if (isArabic) {
-                "هذا البريد الإلكتروني مسجّل مسبقاً — جرّب تسجيل الدخول"
+                "هذا البريد الإلكتروني مسجّل مسبقاً — انتقل لتسجيل الدخول بكلمة السر الخاصة بك"
             } else {
-                "This email is already registered — try signing in"
+                "This email is already registered — switch to Sign In with your password"
             }
             "ERROR_WEAK_PASSWORD" -> if (isArabic) {
                 "كلمة السر ضعيفة — استخدم 6 أحرف على الأقل"
             } else {
                 "Password is too weak — use at least 6 characters"
             }
-            "ERROR_OPERATION_NOT_ALLOWED" -> if (isArabic) {
-                "يرجى تفعيل تسجيل الدخول بالبريد وكلمة السر في Firebase Console"
+            "ERROR_OPERATION_NOT_ALLOWED", "ERROR_ADMIN_RESTRICTED_OPERATION" -> if (isArabic) {
+                "يرجى تفعيل مزوّد Email/Password في Firebase Console لفتح حسابات جديدة بالبريد"
             } else {
-                "Please enable Email/Password sign-in provider in Firebase Console"
+                "Please enable the Email/Password provider in Firebase Console to allow email sign-ups"
             }
             "ERROR_TOO_MANY_REQUESTS" -> if (isArabic) {
                 "محاولات كثيرة متتالية، انتظر قليلاً ثم أعد المحاولة"
