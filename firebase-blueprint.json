@@ -1,0 +1,196 @@
+{
+  "entities": {
+    "CloudUserProfile": {
+      "title": "CloudUserProfile",
+      "description": "Authenticated Vaultix user profile and sync metadata stored under users/{userId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching path owner." },
+        "displayName": { "type": "string", "description": "Google account display name." },
+        "email": { "type": "string", "description": "Google account email (owner-private)." },
+        "photoUrl": { "type": "string", "description": "Google profile photo URL." },
+        "localUsername": { "type": "string", "description": "Local Vaultix display username." },
+        "localWilayaCode": { "type": "string", "description": "Algerian Wilaya code." },
+        "localWilayaName": { "type": "string", "description": "Algerian Wilaya name." },
+        "localCommuneName": { "type": "string", "description": "Algerian Commune name." },
+        "language": { "type": "string", "enum": ["en", "ar"] },
+        "themeMode": { "type": "string", "enum": ["DARK", "LIGHT", "SYSTEM"] },
+        "designStyle": { "type": "string", "description": "Active theme engine preset ID." },
+        "lastSyncedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last sync." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp." }
+      },
+      "required": ["userId", "lastSyncedAt", "createdAt", "updatedAt"]
+    },
+    "CloudTransaction": {
+      "title": "CloudTransaction",
+      "description": "User financial transaction synced under users/{userId}/transactions/{transactionId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE"] },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "note": { "type": "string" },
+        "dateMillis": { "type": "integer" },
+        "salaryCredit": { "type": "boolean" },
+        "paidFromSavings": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "amount", "category", "title", "note", "dateMillis", "salaryCredit", "paidFromSavings", "createdAt", "updatedAt"]
+    },
+    "CloudDebt": {
+      "title": "CloudDebt",
+      "description": "User debt record synced under users/{userId}/debts/{debtId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["OWED_BY_ME", "OWED_TO_ME"] },
+        "personName": { "type": "string" },
+        "amount": { "type": "number" },
+        "note": { "type": "string" },
+        "dueDateMillis": { "type": "integer" },
+        "autoPayOnDueDate": { "type": "boolean" },
+        "paid": { "type": "boolean" },
+        "paidDateMillis": { "type": "integer" },
+        "createdDateMillis": { "type": "integer" },
+        "recurringMonthlyInstallment": { "type": "boolean" },
+        "monthlyInstallmentAmount": { "type": "number" },
+        "installmentDayOfMonth": { "type": "integer" },
+        "remainingAmount": { "type": "number" },
+        "lastInstallmentCreditedMonth": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "type",
+        "personName",
+        "amount",
+        "note",
+        "dueDateMillis",
+        "autoPayOnDueDate",
+        "paid",
+        "createdDateMillis",
+        "recurringMonthlyInstallment",
+        "monthlyInstallmentAmount",
+        "installmentDayOfMonth",
+        "remainingAmount",
+        "lastInstallmentCreditedMonth",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudVaultSettings": {
+      "title": "CloudVaultSettings",
+      "description": "Non-sensitive Vaultix preferences, card styles (no PAN/CVC), savings, and portfolio holdings.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "salaryAmount": { "type": "number" },
+        "salaryPayday": { "type": "integer" },
+        "salaryEmployer": { "type": "string" },
+        "salaryAutoCredit": { "type": "boolean" },
+        "savingsWalletBalance": { "type": "number" },
+        "savingsGoalAmount": { "type": "number" },
+        "savingsHistoryJson": { "type": "string" },
+        "includeAssetsInSavingsTotal": { "type": "boolean" },
+        "goldAssetHoldingsJson": { "type": "string" },
+        "binanceHoldingsJson": { "type": "string" },
+        "cardHubOrderJson": { "type": "string" },
+        "classicCardBankStyle": { "type": "string" },
+        "classicCardHolderName": { "type": "string" },
+        "classicCardExpiry": { "type": "string" },
+        "visaCardProvider": { "type": "string" },
+        "visaCardHolderName": { "type": "string" },
+        "visaCardExpiry": { "type": "string" },
+        "thirdCardEnabled": { "type": "boolean" },
+        "thirdCardProvider": { "type": "string" },
+        "thirdCardHolderName": { "type": "string" },
+        "thirdCardExpiry": { "type": "string" },
+        "localUsername": { "type": "string" },
+        "localWilayaCode": { "type": "string" },
+        "localWilayaName": { "type": "string" },
+        "localCommuneName": { "type": "string" },
+        "language": { "type": "string", "enum": ["en", "ar"] },
+        "themeMode": { "type": "string", "enum": ["DARK", "LIGHT", "SYSTEM"] },
+        "designStyle": { "type": "string" },
+        "stealthMode": { "type": "boolean" },
+        "breathingGlowEnabled": { "type": "boolean" },
+        "screenshotProtectionEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "salaryAmount",
+        "salaryPayday",
+        "salaryEmployer",
+        "salaryAutoCredit",
+        "savingsWalletBalance",
+        "savingsGoalAmount",
+        "savingsHistoryJson",
+        "includeAssetsInSavingsTotal",
+        "goldAssetHoldingsJson",
+        "binanceHoldingsJson",
+        "cardHubOrderJson",
+        "classicCardBankStyle",
+        "classicCardHolderName",
+        "classicCardExpiry",
+        "visaCardProvider",
+        "visaCardHolderName",
+        "visaCardExpiry",
+        "thirdCardEnabled",
+        "thirdCardProvider",
+        "thirdCardHolderName",
+        "thirdCardExpiry",
+        "language",
+        "themeMode",
+        "designStyle",
+        "stealthMode",
+        "breathingGlowEnabled",
+        "screenshotProtectionEnabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudEncryptedBackup": {
+      "title": "CloudEncryptedBackup",
+      "description": "Passphrase-encrypted AES-256-GCM vault backup envelope (zero plaintext secrets).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "format": { "type": "string", "enum": ["VAULTIX_ENC_V1"] },
+        "envelopeJson": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "format", "envelopeJson", "appVersion", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/CloudUserProfile" },
+      "description": "Owner-isolated user profile and cloud sync summary."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/CloudTransaction" },
+      "description": "User's synced income and expense ledger entries."
+    },
+    "/users/{userId}/debts/{debtId}": {
+      "schema": { "$ref": "#/entities/CloudDebt" },
+      "description": "User's synced debt records."
+    },
+    "/users/{userId}/vault_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/CloudVaultSettings" },
+      "description": "Non-sensitive Vaultix preferences and portfolio holdings (never raw card PAN/CVC or raw vault keys)."
+    },
+    "/users/{userId}/encrypted_backups/{backupId}": {
+      "schema": { "$ref": "#/entities/CloudEncryptedBackup" },
+      "description": "End-to-end encrypted AES-256-GCM vault snapshot envelopes."
+    }
+  }
+}

@@ -56,12 +56,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cloud.CloudSyncUiState
+import com.example.cloud.GoogleAuthUiState
 import com.example.data.UserSettings
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
+import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.isolateLtr
 import com.example.ui.screens.readAppPermissionsSummary
 import com.example.ui.theme.CyanNeon
@@ -70,6 +73,14 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.ThemeEngineCatalog
 import com.example.update.AppUpdateUiState
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun SidebarDrawer(
@@ -89,6 +100,13 @@ fun SidebarDrawer(
     updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,
     onCheckForUpdates: () -> Unit = {},
     onOpenAuthScreen: () -> Unit = {},
+    googleAuthState: GoogleAuthUiState = GoogleAuthUiState.SignedOut,
+    cloudSyncState: CloudSyncUiState = CloudSyncUiState.Idle,
+    lastCloudSyncMillis: Long = 0L,
+    onGoogleSignIn: () -> Unit = {},
+    onGoogleSignOut: () -> Unit = {},
+    onCloudSyncNow: () -> Unit = {},
+    onRestoreFromCloud: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
@@ -674,6 +692,20 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Google Sign-In & Cloud Firestore Sync Card
+            SidebarCloudSyncCard(
+                isArabic = isArabic,
+                googleAuthState = googleAuthState,
+                cloudSyncState = cloudSyncState,
+                lastCloudSyncMillis = lastCloudSyncMillis,
+                onGoogleSignIn = onGoogleSignIn,
+                onGoogleSignOut = onGoogleSignOut,
+                onCloudSyncNow = onCloudSyncNow,
+                onRestoreFromCloud = onRestoreFromCloud
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             // Local Account / Return to Login Screen Action Card
             GlassCard(
                 modifier = Modifier
@@ -909,6 +941,293 @@ private fun DrawerActionItem(
                 color = colors.textMuted,
                 fontSize = 11.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun SidebarCloudSyncCard(
+    isArabic: Boolean,
+    googleAuthState: GoogleAuthUiState,
+    cloudSyncState: CloudSyncUiState,
+    lastCloudSyncMillis: Long,
+    onGoogleSignIn: () -> Unit,
+    onGoogleSignOut: () -> Unit,
+    onCloudSyncNow: () -> Unit,
+    onRestoreFromCloud: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    val signedIn = googleAuthState as? GoogleAuthUiState.SignedIn
+    val isAuthLoading = googleAuthState is GoogleAuthUiState.Loading
+    val authError = (googleAuthState as? GoogleAuthUiState.Error)?.message
+    val isSyncing = cloudSyncState is CloudSyncUiState.Syncing
+
+    val accentColor = when {
+        signedIn != null && cloudSyncState is CloudSyncUiState.Error -> RoseNeon
+        signedIn != null -> EmeraldNeon
+        authError != null -> RoseNeon
+        else -> colors.primaryNeon
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("cloud_sync_drawer_card"),
+        backgroundColor = colors.glassCard,
+        borderColor = accentColor.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(accentColor.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isAuthLoading || isSyncing) {
+                        CircularProgressIndicator(
+                            color = accentColor,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = when {
+                                signedIn != null -> Icons.Default.CloudSync
+                                authError != null -> Icons.Default.CloudOff
+                                else -> Icons.Default.CloudQueue
+                            },
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (signedIn != null) {
+                            signedIn.displayName
+                        } else if (isArabic) {
+                            "المزامنة السحابية (Google)"
+                        } else {
+                            "Google Cloud Sync"
+                        },
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val subtitle = when {
+                        isAuthLoading -> if (isArabic) "جاري تسجيل الدخول بـ Google..." else "Signing in with Google..."
+                        signedIn != null -> signedIn.email.ifBlank {
+                            if (isArabic) "متصل بـ Firebase" else "Connected to Firebase"
+                        }
+                        authError != null -> authError
+                        else -> if (isArabic) {
+                            "سجّل الدخول لمزامنة بياناتك عبر Firestore"
+                        } else {
+                            "Sign in to sync transactions & debts"
+                        }
+                    }
+                    Text(
+                        text = subtitle,
+                        color = if (authError != null && signedIn == null) RoseNeon else colors.textMuted,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (signedIn != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val statusText = when (cloudSyncState) {
+                    is CloudSyncUiState.Syncing -> if (isArabic) "جاري المزامنة مع Firestore..." else "Syncing with Firestore..."
+                    is CloudSyncUiState.Success -> if (isArabic) {
+                        "متزامن • ${cloudSyncState.transactionCount} معاملة • ${cloudSyncState.debtCount} ديون"
+                    } else {
+                        "Synced • ${cloudSyncState.transactionCount} tx • ${cloudSyncState.debtCount} debts"
+                    }
+                    is CloudSyncUiState.Error -> cloudSyncState.message
+                    is CloudSyncUiState.Idle -> if (lastCloudSyncMillis > 0L) {
+                        val dateLabel = isolateLtr(formatDate(lastCloudSyncMillis, isArabic))
+                        if (isArabic) "آخر مزامنة: $dateLabel" else "Last sync: $dateLabel"
+                    } else {
+                        if (isArabic) "المخزن المحلي النشط جاهز للمزامنة" else "Offline-first vault ready to sync"
+                    }
+                }
+                val statusColor = when (cloudSyncState) {
+                    is CloudSyncUiState.Error -> RoseNeon
+                    is CloudSyncUiState.Success -> EmeraldNeon
+                    is CloudSyncUiState.Syncing -> colors.primaryNeon
+                    is CloudSyncUiState.Idle -> colors.textSecondary
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.glassSurface.copy(alpha = 0.65f))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (cloudSyncState is CloudSyncUiState.Error) Icons.Default.ErrorOutline else Icons.Default.CloudDone,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = statusText,
+                        color = statusColor,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.primaryNeon.copy(alpha = 0.18f))
+                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .clickable(enabled = !isSyncing, onClick = onCloudSyncNow)
+                            .padding(vertical = 10.dp, horizontal = 8.dp)
+                            .testTag("drawer_cloud_sync_now_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = null,
+                                tint = colors.primaryNeon,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isArabic) "مزامنة" else "Sync",
+                                color = colors.primaryNeon,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.14f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.40f), RoundedCornerShape(10.dp))
+                            .clickable(enabled = !isSyncing, onClick = onRestoreFromCloud)
+                            .padding(vertical = 10.dp, horizontal = 8.dp)
+                            .testTag("drawer_cloud_restore_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = EmeraldNeon,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isArabic) "استعادة" else "Restore",
+                                color = EmeraldNeon,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(RoseNeon.copy(alpha = 0.10f))
+                        .border(1.dp, RoseNeon.copy(alpha = 0.30f), RoundedCornerShape(10.dp))
+                        .clickable(enabled = !isSyncing, onClick = onGoogleSignOut)
+                        .padding(vertical = 9.dp, horizontal = 10.dp)
+                        .testTag("drawer_google_signout_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = null,
+                            tint = RoseNeon,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isArabic) "تسجيل الخروج من Google" else "Sign out of Google",
+                            color = RoseNeon,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(colors.primaryNeon.copy(alpha = 0.18f))
+                        .border(1.dp, colors.primaryNeon.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
+                        .clickable(enabled = !isAuthLoading, onClick = onGoogleSignIn)
+                        .padding(vertical = 10.dp, horizontal = 12.dp)
+                        .testTag("drawer_google_signin_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CloudUpload,
+                            contentDescription = null,
+                            tint = colors.primaryNeon,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                        Text(
+                            text = if (isAuthLoading) {
+                                if (isArabic) "جاري الاتصال..." else "Connecting..."
+                            } else if (isArabic) {
+                                "تسجيل الدخول عبر Google"
+                            } else {
+                                "Sign in with Google"
+                            },
+                            color = colors.primaryNeon,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }

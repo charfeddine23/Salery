@@ -1,0 +1,313 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 254)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             (!('localUsername' in data) || (data.localUsername is string && data.localUsername.size() <= 80)) &&
+             (!('localWilayaCode' in data) || (data.localWilayaCode is string && data.localWilayaCode.size() <= 10)) &&
+             (!('localWilayaName' in data) || (data.localWilayaName is string && data.localWilayaName.size() <= 100)) &&
+             (!('localCommuneName' in data) || (data.localCommuneName is string && data.localCommuneName.size() <= 100)) &&
+             (!('language' in data) || data.language in ['en', 'ar']) &&
+             (!('themeMode' in data) || data.themeMode in ['DARK', 'LIGHT', 'SYSTEM']) &&
+             (!('designStyle' in data) || (data.designStyle is string && data.designStyle.size() <= 64)) &&
+             isValidTimestamp(data.lastSyncedAt) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.type in ['INCOME', 'EXPENSE'] &&
+             data.amount is number && data.amount >= 0 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 64 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+             data.note is string && data.note.size() <= 500 &&
+             data.dateMillis is int && data.dateMillis >= 0 &&
+             data.salaryCredit is bool &&
+             data.paidFromSavings is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidDebt(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.type in ['OWED_BY_ME', 'OWED_TO_ME'] &&
+             data.personName is string && data.personName.size() >= 1 && data.personName.size() <= 120 &&
+             data.amount is number && data.amount >= 0 &&
+             data.note is string && data.note.size() <= 500 &&
+             data.dueDateMillis is int && data.dueDateMillis >= 0 &&
+             data.autoPayOnDueDate is bool &&
+             data.paid is bool &&
+             (!('paidDateMillis' in data) || (data.paidDateMillis is int && data.paidDateMillis >= 0)) &&
+             data.createdDateMillis is int && data.createdDateMillis >= 0 &&
+             data.recurringMonthlyInstallment is bool &&
+             data.monthlyInstallmentAmount is number && data.monthlyInstallmentAmount >= 0 &&
+             data.installmentDayOfMonth is int && data.installmentDayOfMonth >= 1 && data.installmentDayOfMonth <= 31 &&
+             data.remainingAmount is number && data.remainingAmount >= 0 &&
+             data.lastInstallmentCreditedMonth is string && data.lastInstallmentCreditedMonth.size() <= 20 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidVaultSettings(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.salaryAmount is number && data.salaryAmount >= 0 &&
+             data.salaryPayday is int && data.salaryPayday >= 1 && data.salaryPayday <= 31 &&
+             data.salaryEmployer is string && data.salaryEmployer.size() <= 120 &&
+             data.salaryAutoCredit is bool &&
+             data.savingsWalletBalance is number && data.savingsWalletBalance >= 0 &&
+             data.savingsGoalAmount is number && data.savingsGoalAmount >= 0 &&
+             data.savingsHistoryJson is string && data.savingsHistoryJson.size() <= 200000 &&
+             data.includeAssetsInSavingsTotal is bool &&
+             data.goldAssetHoldingsJson is string && data.goldAssetHoldingsJson.size() <= 100000 &&
+             data.binanceHoldingsJson is string && data.binanceHoldingsJson.size() <= 100000 &&
+             data.cardHubOrderJson is string && data.cardHubOrderJson.size() <= 2000 &&
+             data.classicCardBankStyle is string && data.classicCardBankStyle.size() <= 40 &&
+             data.classicCardHolderName is string && data.classicCardHolderName.size() <= 80 &&
+             data.classicCardExpiry is string && data.classicCardExpiry.size() <= 16 &&
+             data.visaCardProvider is string && data.visaCardProvider.size() <= 40 &&
+             data.visaCardHolderName is string && data.visaCardHolderName.size() <= 80 &&
+             data.visaCardExpiry is string && data.visaCardExpiry.size() <= 16 &&
+             data.thirdCardEnabled is bool &&
+             data.thirdCardProvider is string && data.thirdCardProvider.size() <= 40 &&
+             data.thirdCardHolderName is string && data.thirdCardHolderName.size() <= 80 &&
+             data.thirdCardExpiry is string && data.thirdCardExpiry.size() <= 16 &&
+             (!('localUsername' in data) || (data.localUsername is string && data.localUsername.size() <= 80)) &&
+             (!('localWilayaCode' in data) || (data.localWilayaCode is string && data.localWilayaCode.size() <= 10)) &&
+             (!('localWilayaName' in data) || (data.localWilayaName is string && data.localWilayaName.size() <= 100)) &&
+             (!('localCommuneName' in data) || (data.localCommuneName is string && data.localCommuneName.size() <= 100)) &&
+             data.language in ['en', 'ar'] &&
+             data.themeMode in ['DARK', 'LIGHT', 'SYSTEM'] &&
+             data.designStyle is string && data.designStyle.size() <= 64 &&
+             data.stealthMode is bool &&
+             data.breathingGlowEnabled is bool &&
+             data.screenshotProtectionEnabled is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidEncryptedBackup(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.format == 'VAULTIX_ENC_V1' &&
+             data.envelopeJson is string && data.envelopeJson.size() >= 1 && data.envelopeJson.size() <= 750000 &&
+             data.appVersion is string && data.appVersion.size() >= 1 && data.appVersion.size() <= 32 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'lastSyncedAt', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'email', 'photoUrl',
+                         'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
+                         'language', 'themeMode', 'designStyle',
+                         'lastSyncedAt', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'email', 'photoUrl',
+                         'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
+                         'language', 'themeMode', 'designStyle',
+                         'lastSyncedAt', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /transactions/{transactionId} {
+        allow get: if isOwner(userId) && isValidId(transactionId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'type', 'amount', 'category', 'title', 'note',
+                           'dateMillis', 'salaryCredit', 'paidFromSavings', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'type', 'amount', 'category', 'title', 'note',
+                           'dateMillis', 'salaryCredit', 'paidFromSavings', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidTransaction(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTransaction(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'type', 'amount', 'category', 'title', 'note',
+                           'dateMillis', 'salaryCredit', 'paidFromSavings', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      match /debts/{debtId} {
+        allow get: if isOwner(userId) && isValidId(debtId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(debtId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'type', 'personName', 'amount', 'note', 'dueDateMillis',
+                           'autoPayOnDueDate', 'paid', 'createdDateMillis',
+                           'recurringMonthlyInstallment', 'monthlyInstallmentAmount',
+                           'installmentDayOfMonth', 'remainingAmount',
+                           'lastInstallmentCreditedMonth', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'type', 'personName', 'amount', 'note', 'dueDateMillis',
+                           'autoPayOnDueDate', 'paid', 'paidDateMillis', 'createdDateMillis',
+                           'recurringMonthlyInstallment', 'monthlyInstallmentAmount',
+                           'installmentDayOfMonth', 'remainingAmount',
+                           'lastInstallmentCreditedMonth', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidDebt(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(debtId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidDebt(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'type', 'personName', 'amount', 'note', 'dueDateMillis',
+                           'autoPayOnDueDate', 'paid', 'paidDateMillis', 'createdDateMillis',
+                           'recurringMonthlyInstallment', 'monthlyInstallmentAmount',
+                           'installmentDayOfMonth', 'remainingAmount',
+                           'lastInstallmentCreditedMonth', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(debtId);
+      }
+
+      match /vault_settings/{settingId} {
+        allow get: if isOwner(userId) && isValidId(settingId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(settingId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
+                           'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
+                           'includeAssetsInSavingsTotal', 'goldAssetHoldingsJson', 'binanceHoldingsJson',
+                           'cardHubOrderJson', 'classicCardBankStyle', 'classicCardHolderName',
+                           'classicCardExpiry', 'visaCardProvider', 'visaCardHolderName', 'visaCardExpiry',
+                           'thirdCardEnabled', 'thirdCardProvider', 'thirdCardHolderName', 'thirdCardExpiry',
+                           'language', 'themeMode', 'designStyle', 'stealthMode',
+                           'breathingGlowEnabled', 'screenshotProtectionEnabled', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
+                           'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
+                           'includeAssetsInSavingsTotal', 'goldAssetHoldingsJson', 'binanceHoldingsJson',
+                           'cardHubOrderJson', 'classicCardBankStyle', 'classicCardHolderName',
+                           'classicCardExpiry', 'visaCardProvider', 'visaCardHolderName', 'visaCardExpiry',
+                           'thirdCardEnabled', 'thirdCardProvider', 'thirdCardHolderName', 'thirdCardExpiry',
+                           'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
+                           'language', 'themeMode', 'designStyle', 'stealthMode',
+                           'breathingGlowEnabled', 'screenshotProtectionEnabled', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidVaultSettings(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(settingId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidVaultSettings(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
+                           'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
+                           'includeAssetsInSavingsTotal', 'goldAssetHoldingsJson', 'binanceHoldingsJson',
+                           'cardHubOrderJson', 'classicCardBankStyle', 'classicCardHolderName',
+                           'classicCardExpiry', 'visaCardProvider', 'visaCardHolderName', 'visaCardExpiry',
+                           'thirdCardEnabled', 'thirdCardProvider', 'thirdCardHolderName', 'thirdCardExpiry',
+                           'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
+                           'language', 'themeMode', 'designStyle', 'stealthMode',
+                           'breathingGlowEnabled', 'screenshotProtectionEnabled', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(settingId);
+      }
+
+      match /encrypted_backups/{backupId} {
+        allow get: if isOwner(userId) && isValidId(backupId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(backupId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'format', 'envelopeJson', 'appVersion', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'format', 'envelopeJson', 'appVersion', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidEncryptedBackup(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(backupId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidEncryptedBackup(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'format', 'envelopeJson', 'appVersion', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(backupId);
+      }
+    }
+  }
+}

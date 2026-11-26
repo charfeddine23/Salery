@@ -184,8 +184,17 @@ fun MainAppScreen(
     val goldHoldings by viewModel.goldHoldings.collectAsState()
     val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
     val squareMarketError by viewModel.squareMarketError.collectAsState()
+    val googleAuthState by viewModel.googleAuthState.collectAsState()
+    val cloudSyncState by viewModel.cloudSyncState.collectAsState()
+    val lastCloudSyncMillis by viewModel.lastCloudSyncMillis.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
         com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(binanceHoldings, binancePrices)
+    }
+
+    LaunchedEffect(Unit) {
+        if (!userSettings.hasLocalAccount) {
+            viewModel.attemptSilentGoogleSignIn(context)
+        }
     }
 
     var canInstallPackages by remember {
@@ -392,7 +401,11 @@ fun MainAppScreen(
             if (!showLocalAccountSetup) {
                 AuthWelcomeScreen(
                     isArabic = activeStrings is ArabicStrings,
+                    googleAuthState = googleAuthState,
                     onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
+                    onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                    onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
+                    onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
                     onCreateLocalAccount = { showLocalAccountSetup = true }
                 )
             } else {
@@ -472,7 +485,14 @@ fun MainAppScreen(
                                 onOpenAuthScreen = {
                                     scope.launch { drawerState.close() }
                                     viewModel.signOutToAuthScreen()
-                                }
+                                },
+                                googleAuthState = googleAuthState,
+                                cloudSyncState = cloudSyncState,
+                                lastCloudSyncMillis = lastCloudSyncMillis,
+                                onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                                onCloudSyncNow = { viewModel.syncNowWithCloud(showFeedback = true) },
+                                onRestoreFromCloud = { viewModel.restoreFromCloud(showFeedback = true) }
                             )
                         }
                     }
@@ -1043,10 +1063,13 @@ fun MainAppScreen(
                 BackupRestoreDialog(
                     lastBackupTimestamp = userSettings.lastBackupTimestamp,
                     requireStepUpAuth = userSettings.biometricEnabled,
+                    isGoogleSignedIn = googleAuthState is com.example.cloud.GoogleAuthUiState.SignedIn,
                     onBeforeExternalFlow = { viewModel.suppressNextAutoLockForExternalFlow() },
                     onDismiss = { showBackupRestoreDialog = false },
                     onExportBackup = { passphrase -> viewModel.exportBackupJson(passphrase) },
-                    onRestoreBackup = { raw, passphrase -> viewModel.restoreFromBackupWithOutcome(raw, passphrase) }
+                    onRestoreBackup = { raw, passphrase -> viewModel.restoreFromBackupWithOutcome(raw, passphrase) },
+                    onUploadEncryptedCloudBackup = { passphrase -> viewModel.uploadEncryptedBackupToCloud(passphrase) },
+                    onRestoreEncryptedCloudBackup = { passphrase -> viewModel.restoreEncryptedBackupFromCloud(passphrase) }
                 )
             }
 

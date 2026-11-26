@@ -70,8 +70,24 @@ import com.example.market.SquareMarketCatalog
 import com.example.market.SquareMarketCodec
 import com.example.market.SquareMarketFetcher
 import com.example.market.SquareMarketSnapshot
+import com.example.cloud.CloudDebt
+import com.example.cloud.CloudPulledVault
+import com.example.cloud.CloudSyncUiState
+import com.example.cloud.CloudTransaction
+import com.example.cloud.CloudUserProfile
+import com.example.cloud.CloudVaultSettings
+import com.example.cloud.GoogleAuthHelper
+import com.example.cloud.GoogleAuthUiState
+import com.example.cloud.VaultixCloudRepository
+import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.auth
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.roundToLong
 
 data class FinancialSummary(
     val totalBalance: Double = 0.0,
@@ -119,6 +135,77 @@ internal fun computeSavingsBalanceAfterTransactionDelete(
     } else {
         safeSavings
     }
+}
+
+internal fun buildTransactionDedupeKey(
+    typeName: String,
+    amount: Double,
+    category: String,
+    title: String,
+    dateMillis: Long
+): String {
+    val cents = (amount.coerceAtLeast(0.0) * 100.0).roundToLong()
+    return "$typeName|$cents|${category.trim().lowercase(Locale.US)}|${title.trim().lowercase(Locale.US)}|$dateMillis"
+}
+
+internal fun buildDebtDedupeKey(
+    typeName: String,
+    personName: String,
+    amount: Double,
+    createdDateMillis: Long
+): String {
+    val cents = (amount.coerceAtLeast(0.0) * 100.0).roundToLong()
+    return "$typeName|${personName.trim().lowercase(Locale.US)}|$cents|$createdDateMillis"
+}
+
+internal fun applyCloudVaultSettingsSafely(
+    current: UserSettings,
+    cloud: CloudVaultSettings,
+    overwritePreferences: Boolean = true
+): UserSettings {
+    if (!overwritePreferences) return current
+    val resolvedUsername = cloud.localUsername?.trim()?.takeIf { it.isNotEmpty() } ?: current.localUsername
+    val resolvedWilayaCode = cloud.localWilayaCode?.trim()?.takeIf { it.isNotEmpty() } ?: current.localWilayaCode
+    val resolvedWilayaName = cloud.localWilayaName?.trim()?.takeIf { it.isNotEmpty() } ?: current.localWilayaName
+    val resolvedCommuneName = cloud.localCommuneName?.trim()?.takeIf { it.isNotEmpty() } ?: current.localCommuneName
+
+    // Never overwrite encrypted secrets: card numbers, CVCs, vaultKeysJson, ccpAccountsJson, or SMS snippets.
+    return current.copy(
+        hasLocalAccount = true,
+        salaryAmount = cloud.salaryAmount.takeIf { it.isFinite() && it >= 0.0 } ?: current.salaryAmount,
+        salaryPayday = cloud.salaryPayday.coerceIn(1, 31),
+        salaryEmployer = cloud.salaryEmployer.ifBlank { current.salaryEmployer },
+        salaryAutoCredit = cloud.salaryAutoCredit,
+        savingsWalletBalance = cloud.savingsWalletBalance.takeIf { it.isFinite() && it >= 0.0 }
+            ?: current.savingsWalletBalance,
+        savingsGoalAmount = cloud.savingsGoalAmount.takeIf { it.isFinite() && it >= 0.0 }
+            ?: current.savingsGoalAmount,
+        savingsHistoryJson = cloud.savingsHistoryJson.ifBlank { current.savingsHistoryJson },
+        includeAssetsInSavingsTotal = cloud.includeAssetsInSavingsTotal,
+        goldAssetHoldingsJson = cloud.goldAssetHoldingsJson.ifBlank { current.goldAssetHoldingsJson },
+        binanceHoldingsJson = cloud.binanceHoldingsJson.ifBlank { current.binanceHoldingsJson },
+        cardHubOrderJson = cloud.cardHubOrderJson.ifBlank { current.cardHubOrderJson },
+        classicCardBankStyle = cloud.classicCardBankStyle.ifBlank { current.classicCardBankStyle },
+        classicCardHolderName = cloud.classicCardHolderName.ifBlank { current.classicCardHolderName },
+        classicCardExpiry = cloud.classicCardExpiry.ifBlank { current.classicCardExpiry },
+        visaCardProvider = cloud.visaCardProvider.ifBlank { current.visaCardProvider },
+        visaCardHolderName = cloud.visaCardHolderName.ifBlank { current.visaCardHolderName },
+        visaCardExpiry = cloud.visaCardExpiry.ifBlank { current.visaCardExpiry },
+        thirdCardEnabled = cloud.thirdCardEnabled,
+        thirdCardProvider = cloud.thirdCardProvider.ifBlank { current.thirdCardProvider },
+        thirdCardHolderName = cloud.thirdCardHolderName.ifBlank { current.thirdCardHolderName },
+        thirdCardExpiry = cloud.thirdCardExpiry.ifBlank { current.thirdCardExpiry },
+        localUsername = resolvedUsername,
+        localWilayaCode = resolvedWilayaCode,
+        localWilayaName = resolvedWilayaName,
+        localCommuneName = resolvedCommuneName,
+        language = if (cloud.language == "ar") "ar" else "en",
+        themeMode = cloud.themeMode.takeIf { it in setOf("DARK", "LIGHT", "SYSTEM") } ?: current.themeMode,
+        designStyle = cloud.designStyle.ifBlank { current.designStyle },
+        stealthMode = cloud.stealthMode,
+        breathingGlowEnabled = cloud.breathingGlowEnabled,
+        screenshotProtectionEnabled = cloud.screenshotProtectionEnabled
+    )
 }
 
 class VaultixViewModel(application: Application) : AndroidViewModel(application) {
@@ -315,10 +402,65 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
+    // Firebase Auth (Google Sign-In) & Cloud Firestore Sync State
+    private val cloudPrefs by lazy {
+        getApplication<Application>().getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
+    }
+
+    private val _googleAuthState = MutableStateFlow<GoogleAuthUiState>(GoogleAuthUiState.SignedOut)
+    val googleAuthState: StateFlow<GoogleAuthUiState> = _googleAuthState.asStateFlow()
+
+    private val _cloudSyncState = MutableStateFlow<CloudSyncUiState>(CloudSyncUiState.Idle)
+    val cloudSyncState: StateFlow<CloudSyncUiState> = _cloudSyncState.asStateFlow()
+
+    private val _lastCloudSyncMillis = MutableStateFlow(
+        cloudPrefs.getLong("last_cloud_sync_millis", 0L)
+    )
+    val lastCloudSyncMillis: StateFlow<Long> = _lastCloudSyncMillis.asStateFlow()
+
+    private val _cloudUserProfile = MutableStateFlow<CloudUserProfile?>(null)
+    val cloudUserProfile: StateFlow<CloudUserProfile?> = _cloudUserProfile.asStateFlow()
+
+    private var cloudProfileObserverJob: Job? = null
+    @Volatile
+    private var silentGoogleSignInAttempted = false
+
+    private val firebaseAuth: FirebaseAuth? by lazy {
+        runCatching {
+            val appCtx = getApplication<Application>()
+            if (FirebaseApp.getApps(appCtx).isEmpty()) {
+                FirebaseApp.initializeApp(appCtx)
+            }
+            Firebase.auth
+        }.getOrNull()
+    }
+
+    private val cloudRepository: VaultixCloudRepository? by lazy {
+        val auth = firebaseAuth ?: return@lazy null
+        runCatching {
+            VaultixCloudRepository(
+                db = VaultixCloudRepository.resolveFirestore(getApplication()),
+                auth = auth
+            )
+        }.getOrNull()
+    }
+
+    private val firebaseAuthStateListener = FirebaseAuth.AuthStateListener { auth ->
+        updateGoogleAuthFromFirebaseUser(auth.currentUser)
+    }
+
     init {
         // Initialize lock state based on biometric preference
         if (settings.value.biometricEnabled) {
             _isAppLocked.value = true
+        }
+
+        // Safely attach Firebase Auth listener (gracefully skipped in Robolectric if uninitialized)
+        runCatching {
+            firebaseAuth?.let { auth ->
+                updateGoogleAuthFromFirebaseUser(auth.currentUser)
+                auth.addAuthStateListener(firebaseAuthStateListener)
+            }
         }
 
         // Check Smart Salary Scheduler, Debt Auto-Payments, clean obsolete update APKs, and scan ALG Poste SMS
@@ -1985,6 +2127,489 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         prefsManager.updateSettings {
             it.copy(hasLocalAccount = false)
         }
+    }
+
+    // ==================== Google Sign-In & Cloud Firestore Sync ====================
+
+    private fun updateGoogleAuthFromFirebaseUser(user: FirebaseUser?) {
+        if (user != null) {
+            val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: user.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
+                ?: settings.value.localUsername.ifBlank { "Vaultix User" }
+            _googleAuthState.value = GoogleAuthUiState.SignedIn(
+                uid = user.uid,
+                displayName = resolvedName,
+                email = user.email.orEmpty(),
+                photoUrl = user.photoUrl?.toString()
+            )
+            startCloudProfileListener(user.uid)
+        } else {
+            stopCloudProfileListener()
+            _cloudUserProfile.value = null
+            if (_googleAuthState.value is GoogleAuthUiState.SignedIn) {
+                _googleAuthState.value = GoogleAuthUiState.SignedOut
+            }
+            if (_cloudSyncState.value !is CloudSyncUiState.Idle) {
+                _cloudSyncState.value = CloudSyncUiState.Idle
+            }
+        }
+    }
+
+    private fun startCloudProfileListener(uid: String) {
+        val repo = cloudRepository ?: return
+        cloudProfileObserverJob?.cancel()
+        cloudProfileObserverJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.observeUserProfile(uid).collect { profile ->
+                    _cloudUserProfile.value = profile
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                // Handled gracefully offline or after sign-out; offline Room storage remains primary source of truth.
+            }
+        }
+    }
+
+    private fun stopCloudProfileListener() {
+        cloudProfileObserverJob?.cancel()
+        cloudProfileObserverJob = null
+    }
+
+    fun attemptSilentGoogleSignIn(context: Context) {
+        if (silentGoogleSignInAttempted) return
+        silentGoogleSignInAttempted = true
+        val auth = firebaseAuth ?: return
+        if (auth.currentUser != null) {
+            updateGoogleAuthFromFirebaseUser(auth.currentUser)
+            return
+        }
+        val explicitSignedOut = cloudPrefs.getBoolean("google_explicit_signed_out", false)
+        if (explicitSignedOut) return
+
+        GoogleAuthHelper.attemptAutoSignIn(
+            context = context,
+            scope = viewModelScope,
+            onAuthSuccess = { user ->
+                updateGoogleAuthFromFirebaseUser(user)
+                activateGoogleConnectedAccount(user)
+                viewModelScope.launch {
+                    syncAfterGoogleSignIn(user, showFeedback = false)
+                }
+            },
+            onUnauthenticated = {
+                // Stay SignedOut silently until user taps Sign In
+            }
+        )
+    }
+
+    fun signInWithGoogle(context: Context) {
+        if (_googleAuthState.value is GoogleAuthUiState.Loading) return
+        val isAr = settings.value.language == "ar"
+        suppressNextAutoLockForExternalFlow()
+        cloudPrefs.edit().putBoolean("google_explicit_signed_out", false).apply()
+        _googleAuthState.value = GoogleAuthUiState.Loading
+
+        GoogleAuthHelper.onGoogleSignInClicked(
+            context = context,
+            scope = viewModelScope,
+            onAuthSuccess = { user ->
+                updateGoogleAuthFromFirebaseUser(user)
+                activateGoogleConnectedAccount(user)
+                viewModelScope.launch {
+                    syncAfterGoogleSignIn(user, showFeedback = true)
+                }
+            },
+            onAuthCancelled = {
+                val existingUser = firebaseAuth?.currentUser
+                if (existingUser != null) {
+                    updateGoogleAuthFromFirebaseUser(existingUser)
+                } else {
+                    _googleAuthState.value = GoogleAuthUiState.SignedOut
+                }
+                viewModelScope.launch {
+                    _toastEvent.emit(
+                        if (isAr) "تم إلغاء تسجيل الدخول بحساب Google"
+                        else "Google Sign-In cancelled"
+                    )
+                }
+            },
+            onAuthError = { errorMsg ->
+                _googleAuthState.value = GoogleAuthUiState.Error(errorMsg)
+                viewModelScope.launch {
+                    _toastEvent.emit(
+                        if (isAr) "فشل تسجيل الدخول عبر Google: $errorMsg"
+                        else "Google Sign-In failed: $errorMsg"
+                    )
+                }
+            }
+        )
+    }
+
+    fun continueWithSignedInGoogleAccount() {
+        val user = firebaseAuth?.currentUser ?: return
+        activateGoogleConnectedAccount(user)
+        viewModelScope.launch {
+            syncAfterGoogleSignIn(user, showFeedback = true)
+        }
+    }
+
+    private fun activateGoogleConnectedAccount(user: FirebaseUser) {
+        val googleName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+            ?: user.email?.substringBefore('@')?.trim().orEmpty()
+        prefsManager.updateSettings { current ->
+            val resolvedName = current.localUsername.ifBlank { googleName }
+            val isDefaultClassic = current.classicCardHolderName.isBlank() ||
+                current.classicCardHolderName.equals("CARDHOLDER", ignoreCase = true)
+            val isDefaultVisa = current.visaCardHolderName.isBlank() ||
+                current.visaCardHolderName.equals("CARDHOLDER", ignoreCase = true)
+            val isDefaultThird = current.thirdCardHolderName.isBlank() ||
+                current.thirdCardHolderName.equals("CARDHOLDER", ignoreCase = true)
+            current.copy(
+                hasLocalAccount = true,
+                localUsername = resolvedName,
+                classicCardHolderName = if (resolvedName.isNotEmpty() && isDefaultClassic) resolvedName.uppercase() else current.classicCardHolderName,
+                visaCardHolderName = if (resolvedName.isNotEmpty() && isDefaultVisa) resolvedName.uppercase() else current.visaCardHolderName,
+                thirdCardHolderName = if (resolvedName.isNotEmpty() && isDefaultThird) resolvedName.uppercase() else current.thirdCardHolderName
+            )
+        }
+    }
+
+    fun signOutGoogleAccount(context: Context) {
+        val isAr = settings.value.language == "ar"
+        cloudPrefs.edit().putBoolean("google_explicit_signed_out", true).apply()
+        GoogleAuthHelper.signOut(
+            context = context,
+            scope = viewModelScope,
+            beforeFirebaseSignOut = {
+                stopCloudProfileListener()
+                _cloudUserProfile.value = null
+                _cloudSyncState.value = CloudSyncUiState.Idle
+            },
+            onSignOutComplete = {
+                _googleAuthState.value = GoogleAuthUiState.SignedOut
+                viewModelScope.launch {
+                    _toastEvent.emit(
+                        if (isAr) "تم تسجيل الخروج من Google • بياناتك المحلية لا تزال محفوظة"
+                        else "Signed out of Google • Your offline encrypted vault stays safe"
+                    )
+                }
+            }
+        )
+    }
+
+    private suspend fun syncAfterGoogleSignIn(
+        user: FirebaseUser,
+        showFeedback: Boolean
+    ) {
+        val repo = cloudRepository ?: return
+        val isAr = settings.value.language == "ar"
+        _cloudSyncState.value = CloudSyncUiState.Syncing
+
+        // 1. Pull any existing cloud data under users/{uid}/... first and safely merge into offline Room DB
+        val pullResult = withContext(Dispatchers.IO) {
+            repo.pullVaultFromCloud()
+        }
+        pullResult.getOrNull()?.let { pulled ->
+            mergePulledCloudIntoLocal(pulled)
+        }
+
+        // 2. Push unified local vault back up to users/{uid}/...
+        val (txList, debtList, latestSettings) = withContext(Dispatchers.IO) {
+            Triple(dao.getAllTransactionsList(), dao.getAllDebtsList(), settings.value)
+        }
+        val pushResult = withContext(Dispatchers.IO) {
+            repo.pushVaultToCloud(user, latestSettings, txList, debtList)
+        }
+        pushResult.onSuccess { summary ->
+            recordLastCloudSyncMillis(summary.syncedAtMillis)
+            _cloudSyncState.value = CloudSyncUiState.Success(
+                syncedAtMillis = summary.syncedAtMillis,
+                transactionCount = summary.transactionCount,
+                debtCount = summary.debtCount
+            )
+            if (showFeedback) {
+                _toastEvent.emit(
+                    if (isAr) "تم تسجيل الدخول والمزامنة السحابية (${summary.transactionCount} معاملة) ✓"
+                    else "Signed in & synced (${summary.transactionCount} transactions) ✓"
+                )
+            }
+        }.onFailure { err ->
+            val msg = friendlyCloudErrorMessage(err, isAr)
+            _cloudSyncState.value = CloudSyncUiState.Error(msg)
+            if (showFeedback) {
+                _toastEvent.emit(
+                    if (isAr) "تم تسجيل الدخول محلياً، وتعذرت المزامنة: $msg"
+                    else "Signed in, but cloud sync failed: $msg"
+                )
+            }
+        }
+    }
+
+    fun syncNowWithCloud(showFeedback: Boolean = true) {
+        val user = firebaseAuth?.currentUser
+        val repo = cloudRepository
+        val isAr = settings.value.language == "ar"
+        if (user == null || repo == null) {
+            val msg = if (isAr) "سجّل الدخول بحساب Google أولاً للمزامنة" else "Sign in with Google first to sync"
+            _cloudSyncState.value = CloudSyncUiState.Error(msg)
+            if (showFeedback) {
+                viewModelScope.launch { _toastEvent.emit(msg) }
+            }
+            return
+        }
+        if (_cloudSyncState.value is CloudSyncUiState.Syncing) return
+
+        viewModelScope.launch {
+            _cloudSyncState.value = CloudSyncUiState.Syncing
+            val (txList, debtList, latestSettings) = withContext(Dispatchers.IO) {
+                Triple(dao.getAllTransactionsList(), dao.getAllDebtsList(), settings.value)
+            }
+            val result = withContext(Dispatchers.IO) {
+                repo.pushVaultToCloud(user, latestSettings, txList, debtList)
+            }
+            result.onSuccess { summary ->
+                recordLastCloudSyncMillis(summary.syncedAtMillis)
+                _cloudSyncState.value = CloudSyncUiState.Success(
+                    syncedAtMillis = summary.syncedAtMillis,
+                    transactionCount = summary.transactionCount,
+                    debtCount = summary.debtCount
+                )
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تمت المزامنة السحابية (${summary.transactionCount} معاملة • ${summary.debtCount} ديون) ☁️"
+                        else "Cloud sync complete (${summary.transactionCount} tx • ${summary.debtCount} debts) ☁️"
+                    )
+                }
+            }.onFailure { err ->
+                val msg = friendlyCloudErrorMessage(err, isAr)
+                _cloudSyncState.value = CloudSyncUiState.Error(msg)
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تعذرت المزامنة السحابية: $msg"
+                        else "Cloud sync failed: $msg"
+                    )
+                }
+            }
+        }
+    }
+
+    fun restoreFromCloud(showFeedback: Boolean = true) {
+        val user = firebaseAuth?.currentUser
+        val repo = cloudRepository
+        val isAr = settings.value.language == "ar"
+        if (user == null || repo == null) {
+            val msg = if (isAr) "سجّل الدخول بحساب Google أولاً للاستعادة" else "Sign in with Google first to restore"
+            _cloudSyncState.value = CloudSyncUiState.Error(msg)
+            if (showFeedback) {
+                viewModelScope.launch { _toastEvent.emit(msg) }
+            }
+            return
+        }
+        if (_cloudSyncState.value is CloudSyncUiState.Syncing) return
+
+        viewModelScope.launch {
+            _cloudSyncState.value = CloudSyncUiState.Syncing
+            val pullResult = withContext(Dispatchers.IO) {
+                repo.pullVaultFromCloud()
+            }
+            pullResult.onSuccess { pulled ->
+                val (addedTx, addedDebts) = mergePulledCloudIntoLocal(
+                    pulled = pulled,
+                    forceApplyNonSensitiveSettings = true
+                )
+                val now = System.currentTimeMillis()
+                recordLastCloudSyncMillis(now)
+                val totalTx = withContext(Dispatchers.IO) { dao.getAllTransactionsList().size }
+                val totalDebts = withContext(Dispatchers.IO) { dao.getAllDebtsList().size }
+                _cloudSyncState.value = CloudSyncUiState.Success(
+                    syncedAtMillis = now,
+                    transactionCount = totalTx,
+                    debtCount = totalDebts
+                )
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تمت الاستعادة من السحابة (+$addedTx معاملة • +$addedDebts ديون) ✓"
+                        else "Restored from Cloud (+$addedTx tx • +$addedDebts debts) ✓"
+                    )
+                }
+            }.onFailure { err ->
+                val msg = friendlyCloudErrorMessage(err, isAr)
+                _cloudSyncState.value = CloudSyncUiState.Error(msg)
+                if (showFeedback) {
+                    _toastEvent.emit(
+                        if (isAr) "تعذرت الاستعادة من السحابة: $msg"
+                        else "Cloud restore failed: $msg"
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun uploadEncryptedBackupToCloud(passphrase: String): Result<Unit> {
+        val isAr = settings.value.language == "ar"
+        val repo = cloudRepository ?: return Result.failure(
+            IllegalStateException(if (isAr) "الخدمة السحابية غير مهيأة" else "Cloud repository unavailable")
+        )
+        if (passphrase.length < 6) {
+            return Result.failure(
+                IllegalArgumentException(
+                    if (isAr) "كلمة المرور يجب أن تكون 6 أحرف على الأقل"
+                    else "Passphrase must be at least 6 characters"
+                )
+            )
+        }
+        val encryptedEnvelope = exportBackupJson(passphrase)
+        return withContext(Dispatchers.IO) {
+            repo.pushEncryptedBackupEnvelope(encryptedEnvelope)
+        }.onSuccess {
+            val now = System.currentTimeMillis()
+            recordLastCloudSyncMillis(now)
+        }
+    }
+
+    suspend fun restoreEncryptedBackupFromCloud(passphrase: String): Result<BackupRestoreOutcome> {
+        val isAr = settings.value.language == "ar"
+        val repo = cloudRepository ?: return Result.failure(
+            IllegalStateException(if (isAr) "الخدمة السحابية غير مهيأة" else "Cloud repository unavailable")
+        )
+        val pullResult = withContext(Dispatchers.IO) {
+            repo.pullEncryptedBackupEnvelope()
+        }
+        return pullResult.mapCatching { envelope ->
+            if (envelope.isNullOrBlank()) {
+                throw IllegalStateException(
+                    if (isAr) "لا توجد نسخة سحابية مشفرة محفوظة بعد"
+                    else "No encrypted cloud backup found yet"
+                )
+            }
+            restoreFromBackupWithOutcome(envelope, passphrase)
+        }
+    }
+
+    private suspend fun mergePulledCloudIntoLocal(
+        pulled: CloudPulledVault,
+        forceApplyNonSensitiveSettings: Boolean = false
+    ): Pair<Int, Int> {
+        var addedTx = 0
+        var addedDebts = 0
+        var hadExistingLocalRecords = false
+
+        database.withTransaction {
+            val existingTx = dao.getAllTransactionsList()
+            val existingDebts = dao.getAllDebtsList()
+            hadExistingLocalRecords = existingTx.isNotEmpty() || existingDebts.isNotEmpty()
+
+            val seenTxKeys = existingTx.mapTo(HashSet()) {
+                buildTransactionDedupeKey(it.type.name, it.amount, it.category, it.title, it.dateMillis)
+            }
+            val missingTx = mutableListOf<TransactionEntity>()
+            for (cloudTx in pulled.transactions) {
+                val txType = runCatching { TransactionType.valueOf(cloudTx.type) }.getOrNull() ?: continue
+                if (!cloudTx.amount.isFinite() || cloudTx.amount < 0.0) continue
+                val key = buildTransactionDedupeKey(
+                    txType.name,
+                    cloudTx.amount,
+                    cloudTx.category,
+                    cloudTx.title,
+                    cloudTx.dateMillis
+                )
+                if (seenTxKeys.add(key)) {
+                    missingTx.add(
+                        TransactionEntity(
+                            type = txType,
+                            amount = cloudTx.amount,
+                            category = cloudTx.category.ifBlank { "other" },
+                            title = cloudTx.title.ifBlank { cloudTx.category.ifBlank { "Transaction" } },
+                            note = cloudTx.note,
+                            dateMillis = cloudTx.dateMillis.coerceAtLeast(0L),
+                            isSalaryCredit = cloudTx.salaryCredit,
+                            isPaidFromSavings = cloudTx.paidFromSavings
+                        )
+                    )
+                }
+            }
+            if (missingTx.isNotEmpty()) {
+                dao.insertTransactions(missingTx)
+                addedTx = missingTx.size
+            }
+
+            val seenDebtKeys = existingDebts.mapTo(HashSet()) {
+                buildDebtDedupeKey(it.type.name, it.personName, it.amount, it.createdDateMillis)
+            }
+            val missingDebts = mutableListOf<DebtEntity>()
+            for (cloudDebt in pulled.debts) {
+                val debtType = runCatching { DebtType.valueOf(cloudDebt.type) }.getOrNull() ?: continue
+                if (!cloudDebt.amount.isFinite() || cloudDebt.amount < 0.0) continue
+                val key = buildDebtDedupeKey(
+                    debtType.name,
+                    cloudDebt.personName,
+                    cloudDebt.amount,
+                    cloudDebt.createdDateMillis
+                )
+                if (seenDebtKeys.add(key)) {
+                    missingDebts.add(
+                        DebtEntity(
+                            type = debtType,
+                            personName = cloudDebt.personName.trim().ifBlank { "Contact" },
+                            amount = cloudDebt.amount,
+                            note = cloudDebt.note,
+                            dueDateMillis = cloudDebt.dueDateMillis.coerceAtLeast(0L),
+                            autoPayOnDueDate = cloudDebt.autoPayOnDueDate,
+                            isPaid = cloudDebt.paid,
+                            paidDateMillis = cloudDebt.paidDateMillis,
+                            createdDateMillis = cloudDebt.createdDateMillis.coerceAtLeast(0L),
+                            isRecurringMonthlyInstallment = cloudDebt.recurringMonthlyInstallment,
+                            monthlyInstallmentAmount = cloudDebt.monthlyInstallmentAmount.coerceAtLeast(0.0),
+                            installmentDayOfMonth = cloudDebt.installmentDayOfMonth.coerceIn(1, 31),
+                            remainingAmount = cloudDebt.remainingAmount.coerceAtLeast(0.0),
+                            lastInstallmentCreditedMonth = cloudDebt.lastInstallmentCreditedMonth
+                        )
+                    )
+                }
+            }
+            if (missingDebts.isNotEmpty()) {
+                dao.insertDebts(missingDebts)
+                addedDebts = missingDebts.size
+            }
+        }
+
+        pulled.settings?.let { cloudSettings ->
+            val shouldOverwrite = forceApplyNonSensitiveSettings || !hadExistingLocalRecords
+            prefsManager.updateSettings { current ->
+                applyCloudVaultSettingsSafely(
+                    current = current,
+                    cloud = cloudSettings,
+                    overwritePreferences = shouldOverwrite
+                )
+            }
+        }
+        return addedTx to addedDebts
+    }
+
+    private fun recordLastCloudSyncMillis(timestamp: Long) {
+        _lastCloudSyncMillis.value = timestamp
+        cloudPrefs.edit().putLong("last_cloud_sync_millis", timestamp).apply()
+    }
+
+    private fun friendlyCloudErrorMessage(err: Throwable, isAr: Boolean): String {
+        val raw = err.localizedMessage?.takeIf { it.isNotBlank() } ?: ""
+        return when {
+            raw.contains("PERMISSION_DENIED", ignoreCase = true) ->
+                if (isAr) "تم رفض الصلاحية في قواعد Firestore" else "Permission denied by Firestore rules"
+            raw.contains("UNAVAILABLE", ignoreCase = true) || raw.contains("network", ignoreCase = true) ->
+                if (isAr) "لا يوجد اتصال بالسحابة حالياً • البيانات محفوظة محلياً" else "Offline — local vault remains up to date"
+            raw.isNotBlank() -> raw
+            else -> if (isAr) "خطأ غير متوقع في المزامنة" else "Unexpected cloud sync error"
+        }
+    }
+
+    override fun onCleared() {
+        stopCloudProfileListener()
+        runCatching {
+            firebaseAuth?.removeAuthStateListener(firebaseAuthStateListener)
+        }
+        super.onCleared()
     }
 
     // BaridiMob / ALG Poste SMS & Alert Sync Actions

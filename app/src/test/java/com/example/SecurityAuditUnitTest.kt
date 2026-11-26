@@ -306,4 +306,84 @@ class SecurityAuditUnitTest {
         assertTrue(encParsed.ccpAccountsJson.contains("00799999001234567890"))
         assertEquals("", VaultCryptoManager.decryptSensitiveOrNull(""))
     }
+
+    @Test
+    fun cloudSyncSettingsMerge_preservesLocalEncryptedSecretsAndUpdatesSafePreferences() {
+        val local = com.example.data.UserSettings(
+            salaryAmount = 85000.0,
+            classicCardNumber = "6280111122223333",
+            classicCardCvc = "321",
+            visaCardNumber = "4152444455556666",
+            visaCardCvc = "654",
+            thirdCardNumber = "5316777788889999",
+            thirdCardCvc = "987",
+            vaultKeysJson = "[{\"id\":\"k1\",\"secret\":\"top-secret\"}]",
+            ccpAccountsJson = "[{\"id\":\"c1\",\"rip\":\"00799999000011112222\"}]",
+            latestSmsBalanceRawSnippet = "Solde: 50000 DA"
+        )
+        val remote = com.example.cloud.CloudVaultSettings(
+            salaryAmount = 120000.0,
+            salaryPayday = 27,
+            salaryEmployer = "TechDZ",
+            savingsWalletBalance = 35000.0,
+            savingsGoalAmount = 100000.0,
+            language = "ar",
+            themeMode = "LIGHT",
+            localUsername = "Charfeddine"
+        )
+
+        val merged = com.example.viewmodel.applyCloudVaultSettingsSafely(local, remote, overwritePreferences = true)
+        assertTrue(merged.hasLocalAccount)
+        assertEquals(120000.0, merged.salaryAmount, 0.01)
+        assertEquals(27, merged.salaryPayday)
+        assertEquals("TechDZ", merged.salaryEmployer)
+        assertEquals(35000.0, merged.savingsWalletBalance, 0.01)
+        assertEquals("ar", merged.language)
+        assertEquals("LIGHT", merged.themeMode)
+        assertEquals("Charfeddine", merged.localUsername)
+
+        // Encrypted on-device secrets remain 100% intact
+        assertEquals("6280111122223333", merged.classicCardNumber)
+        assertEquals("321", merged.classicCardCvc)
+        assertEquals("4152444455556666", merged.visaCardNumber)
+        assertEquals("654", merged.visaCardCvc)
+        assertEquals("5316777788889999", merged.thirdCardNumber)
+        assertEquals("987", merged.thirdCardCvc)
+        assertEquals("[{\"id\":\"k1\",\"secret\":\"top-secret\"}]", merged.vaultKeysJson)
+        assertEquals("[{\"id\":\"c1\",\"rip\":\"00799999000011112222\"}]", merged.ccpAccountsJson)
+        assertEquals("Solde: 50000 DA", merged.latestSmsBalanceRawSnippet)
+    }
+
+    @Test
+    fun cloudSyncDedupeKeys_matchEquivalentRecordsDeterministically() {
+        val txKeyA = com.example.viewmodel.buildTransactionDedupeKey(
+            typeName = "EXPENSE",
+            amount = 1500.0,
+            category = "Food",
+            title = "Lunch ",
+            dateMillis = 1_763_200_000_000L
+        )
+        val txKeyB = com.example.viewmodel.buildTransactionDedupeKey(
+            typeName = "EXPENSE",
+            amount = 1500.00,
+            category = "food",
+            title = "lunch",
+            dateMillis = 1_763_200_000_000L
+        )
+        assertEquals(txKeyA, txKeyB)
+
+        val debtKeyA = com.example.viewmodel.buildDebtDedupeKey(
+            typeName = "OWED_TO_ME",
+            personName = "Karim ",
+            amount = 4200.0,
+            createdDateMillis = 1_763_100_000_000L
+        )
+        val debtKeyB = com.example.viewmodel.buildDebtDedupeKey(
+            typeName = "OWED_TO_ME",
+            personName = "karim",
+            amount = 4200.0,
+            createdDateMillis = 1_763_100_000_000L
+        )
+        assertEquals(debtKeyA, debtKeyB)
+    }
 }

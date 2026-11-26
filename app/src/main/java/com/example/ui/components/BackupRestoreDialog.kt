@@ -103,10 +103,13 @@ import kotlinx.coroutines.withContext
 fun BackupRestoreDialog(
     lastBackupTimestamp: Long,
     requireStepUpAuth: Boolean = false,
+    isGoogleSignedIn: Boolean = false,
     onBeforeExternalFlow: () -> Unit = {},
     onDismiss: () -> Unit,
     onExportBackup: suspend (passphrase: String) -> String,
-    onRestoreBackup: suspend (rawContent: String, passphrase: String) -> BackupRestoreOutcome
+    onRestoreBackup: suspend (rawContent: String, passphrase: String) -> BackupRestoreOutcome,
+    onUploadEncryptedCloudBackup: (suspend (passphrase: String) -> Result<Unit>)? = null,
+    onRestoreEncryptedCloudBackup: (suspend (passphrase: String) -> Result<BackupRestoreOutcome>)? = null
 ) {
     val strings = AppStrings.current
     val isArabic = strings is ArabicStrings
@@ -585,6 +588,144 @@ fun BackupRestoreDialog(
                         openDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                     }
                 )
+
+                if (isGoogleSignedIn && onUploadEncryptedCloudBackup != null && onRestoreEncryptedCloudBackup != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    var cloudPassphrase by remember { mutableStateOf("") }
+                    var showCloudPass by remember { mutableStateOf(false) }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.primaryNeon.copy(alpha = 0.08f))
+                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                            .padding(14.dp)
+                            .testTag("encrypted_cloud_vault_section")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.EnhancedEncryption,
+                                contentDescription = null,
+                                tint = colors.primaryNeon,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isArabic) "خزنة السحابة المشفرة (Firebase)" else "Encrypted Cloud Vault (Firebase)",
+                                color = colors.textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isArabic) {
+                                "يتم تشفير النسخة الكاملة بـ AES-256 قبل رفعها إلى users/{uid}"
+                            } else {
+                                "AES-256 encrypted before upload so even raw keys & card details stay private."
+                            },
+                            color = colors.textMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = cloudPassphrase,
+                            onValueChange = { cloudPassphrase = it },
+                            singleLine = true,
+                            label = {
+                                Text(
+                                    text = if (isArabic) "كلمة مرور الخزنة السحابية (6+ أحرف)" else "Cloud Vault Passphrase (6+ chars)",
+                                    fontSize = 11.5.sp
+                                )
+                            },
+                            visualTransformation = if (showCloudPass) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showCloudPass = !showCloudPass }) {
+                                    Icon(
+                                        imageVector = if (showCloudPass) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = colors.textSecondary
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("cloud_vault_passphrase_input"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary,
+                                focusedBorderColor = colors.primaryNeon,
+                                unfocusedBorderColor = colors.glassBorderSubtle
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            GlassButton(
+                                text = if (isArabic) "رفع مشفّر" else "Upload E2EE",
+                                icon = Icons.Default.CloudUpload,
+                                containerColor = colors.primaryNeon,
+                                contentColor = if (colors.isDark) Color(0xFF0F172A) else Color.White,
+                                modifier = Modifier.weight(1f),
+                                enabled = !isLoading && cloudPassphrase.length >= 6,
+                                onClick = {
+                                    isLoading = true
+                                    scope.launch {
+                                        val res = onUploadEncryptedCloudBackup(cloudPassphrase)
+                                        isLoading = false
+                                        res.onSuccess {
+                                            statusMessage = if (isArabic) "تم رفع النسخة المشفرة إلى السحابة ✓" else "Encrypted backup uploaded to Firestore ✓"
+                                            isErrorMessage = false
+                                        }.onFailure { err ->
+                                            statusMessage = err.localizedMessage ?: strings.restoreError
+                                            isErrorMessage = true
+                                        }
+                                    }
+                                }
+                            )
+                            GlassButton(
+                                text = if (isArabic) "استعادة" else "Restore E2EE",
+                                icon = Icons.Default.CloudDownload,
+                                containerColor = colors.glassCard,
+                                contentColor = colors.textPrimary,
+                                modifier = Modifier.weight(1f),
+                                enabled = !isLoading && cloudPassphrase.length >= 6,
+                                onClick = {
+                                    isLoading = true
+                                    scope.launch {
+                                        val res = onRestoreEncryptedCloudBackup(cloudPassphrase)
+                                        isLoading = false
+                                        res.onSuccess { outcome ->
+                                            when (outcome) {
+                                                BackupRestoreOutcome.SUCCESS -> {
+                                                    statusMessage = strings.restoreSuccess
+                                                    isErrorMessage = false
+                                                    cloudPassphrase = ""
+                                                }
+                                                BackupRestoreOutcome.WRONG_PASSWORD_OR_TAMPERED -> {
+                                                    statusMessage = if (isArabic) "كلمة مرور السحابة غير صحيحة." else "Incorrect cloud passphrase."
+                                                    isErrorMessage = true
+                                                }
+                                                BackupRestoreOutcome.INVALID_FORMAT -> {
+                                                    statusMessage = strings.restoreError
+                                                    isErrorMessage = true
+                                                }
+                                            }
+                                        }.onFailure { err ->
+                                            statusMessage = err.localizedMessage ?: strings.restoreError
+                                            isErrorMessage = true
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
 
                 // Encrypted Restore Passphrase Prompt (shown automatically if selected/pasted file is encrypted)
                 AnimatedVisibility(visible = pendingEncryptedRestoreContent != null) {
