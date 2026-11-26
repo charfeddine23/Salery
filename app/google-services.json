@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "214222358174",
+    "project_id": "vaultix-2a1b7",
+    "storage_bucket": "vaultix-2a1b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:214222358174:android:ee65c59194145c6ef85d8f",
+        "android_client_info": {
+          "package_name": "com.aistudio.salerypelse.kdczfn"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "214222358174-avqgvj3nmc1aujapmb0lud7er1raak7d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.salerypelse.kdczfn",
+            "certificate_hash": "dde1cbb6528bccf479e438fc0428d770f1893270"
+          }
+        },
+        {
+          "client_id": "214222358174-s5k3on29vrjkoo2c7siv31pjknvundrs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.salerypelse.kdczfn",
+            "certificate_hash": "dd9368a12e030061796027f85a6292a60d46c5d6"
+          }
+        },
+        {
+          "client_id": "214222358174-1l7pmk9ttlg3enubgm965oa064f6jqov.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzwwVgixSp7S36kPjgh13gcFWhygoPEDk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "214222358174-1l7pmk9ttlg3enubgm965oa064f6jqov.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
