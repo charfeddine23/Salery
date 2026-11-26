@@ -520,89 +520,72 @@ fun CardsHubScreen(
 
                 Spacer(modifier = Modifier.width(dimens.spacingSm))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Reorder Cards Toggle Chip
-                    Box(
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isReorderMode) {
-                                    CyanNeon.copy(alpha = if (isDark) 0.24f else 0.16f)
-                                } else {
-                                    if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f)
-                                }
-                            )
-                            .border(
-                                width = if (isReorderMode) 1.3.dp else 1.dp,
-                                color = if (isReorderMode) CyanNeon.copy(alpha = 0.72f) else colors.glassBorderSubtle,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                draggedSlot = null
-                                dragOffsetY = 0f
-                                isReorderMode = !isReorderMode
+                // Merged Active Cards Count + Sort Arrows Toggle Pill
+                Box(
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isReorderMode) {
+                                CyanNeon.copy(alpha = if (isDark) 0.24f else 0.16f)
+                            } else {
+                                if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f)
                             }
-                            .testTag("cards_hub_reorder_toggle")
-                            .padding(horizontal = 10.dp, vertical = 7.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.SwapVert,
-                                contentDescription = if (isArabic) {
-                                    if (isReorderMode) "حفظ ترتيب البطاقات" else "ترتيب البطاقات"
-                                } else {
-                                    if (isReorderMode) "Done reordering" else "Reorder cards"
-                                },
-                                tint = if (isReorderMode) CyanNeon else colors.textPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isArabic) {
-                                    if (isReorderMode) "تم" else "ترتيب"
-                                } else {
-                                    if (isReorderMode) "Done" else "Order"
-                                },
-                                color = if (isReorderMode) CyanNeon else colors.textPrimary,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                        )
+                        .border(
+                            width = if (isReorderMode) 1.3.dp else 1.dp,
+                            color = if (isReorderMode) CyanNeon.copy(alpha = 0.72f) else colors.glassBorderSubtle,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable {
+                            draggedSlot = null
+                            dragOffsetY = 0f
+                            isReorderMode = !isReorderMode
                         }
-                    }
-
-                    // Security & Status Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isDark) colors.glassCard else Color.White.copy(alpha = 0.9f))
-                            .border(1.dp, colors.glassBorderSubtle, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                        .testTag("cards_hub_reorder_toggle")
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(EmeraldNeon)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (userSettings.thirdCardEnabled) {
-                                    if (isArabic) "3 بطاقات" else "3 Cards"
-                                } else {
-                                    strings.activeCardsCount
-                                },
-                                color = colors.textPrimary,
-                                fontSize = typo.caption,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(EmeraldNeon)
+                        )
+                        Text(
+                            text = if (userSettings.thirdCardEnabled) {
+                                if (isArabic) "3 بطاقات نشطة" else "3 Cards Active"
+                            } else {
+                                strings.activeCardsCount
+                            },
+                            color = if (isReorderMode) CyanNeon else colors.textPrimary,
+                            fontSize = typo.caption,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(13.dp)
+                                .background(
+                                    if (isReorderMode) CyanNeon.copy(alpha = 0.45f)
+                                    else colors.glassBorderSubtle
+                                )
+                        )
+                        Icon(
+                            imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.SwapVert,
+                            contentDescription = if (isArabic) {
+                                if (isReorderMode) "حفظ ترتيب البطاقات" else "ترتيب البطاقات"
+                            } else {
+                                if (isReorderMode) "Done reordering" else "Reorder cards"
+                            },
+                            tint = if (isReorderMode) CyanNeon else colors.textPrimary,
+                            modifier = Modifier.size(17.dp)
+                        )
                     }
                 }
             }
