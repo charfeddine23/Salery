@@ -11,6 +11,8 @@ import com.google.firebase.firestore.ServerTimestamp
 data class CloudUserProfile(
     @DocumentId val id: String = "",
     val userId: String = "",
+    val firstName: String? = null,
+    val lastName: String? = null,
     val displayName: String? = null,
     val email: String? = null,
     val photoUrl: String? = null,
@@ -67,8 +69,9 @@ data class CloudDebt(
 )
 
 /**
- * Non-sensitive synced Vaultix preferences and portfolio holdings.
- * Never includes card PANs, CVCs, vaultKeysJson, ccpAccountsJson, or SMS snippets.
+ * Non-sensitive synced Vaultix preferences, savings, salary, and card metadata stored at
+ * users/{uid}/vault_settings/primary.
+ * Never includes card PANs, CVCs, vaultKeysJson, ccpAccountsJson, SMS raw snippets, or passwords.
  */
 @Keep
 @IgnoreExtraProperties
@@ -79,6 +82,10 @@ data class CloudVaultSettings(
     val salaryPayday: Int = 25,
     val salaryEmployer: String = "Enterprise Algiers",
     val salaryAutoCredit: Boolean = true,
+    val lastCreditedMonthYear: String = "",
+    val biometricEnabled: Boolean = false,
+    val autoLockTimeoutSeconds: Int = 30,
+    val hasCompletedPermissionsOnboarding: Boolean = false,
     val savingsWalletBalance: Double = 0.0,
     val savingsGoalAmount: Double = 0.0,
     val savingsHistoryJson: String = "[]",
@@ -96,6 +103,8 @@ data class CloudVaultSettings(
     val thirdCardProvider: String = "BINANCE",
     val thirdCardHolderName: String = "CARDHOLDER",
     val thirdCardExpiry: String = "08/28",
+    val firstName: String? = null,
+    val lastName: String? = null,
     val localUsername: String? = null,
     val localWilayaCode: String? = null,
     val localWilayaName: String? = null,
@@ -106,6 +115,54 @@ data class CloudVaultSettings(
     val stealthMode: Boolean = false,
     val breathingGlowEnabled: Boolean = true,
     val screenshotProtectionEnabled: Boolean = false,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+/**
+ * Synced Gold, Binance Crypto, and Square Market assets & pricing state stored at
+ * users/{uid}/vault_settings/assets.
+ */
+@Keep
+@IgnoreExtraProperties
+data class CloudVaultAssets(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val goldAssetHoldingsJson: String = "[]",
+    val binanceHoldingsJson: String = "[]",
+    val binancePricesJson: String = "[]",
+    val binanceLastPriceSyncMillis: Long = 0L,
+    val squareMarketSnapshotJson: String = "",
+    val squareLastPriceSyncMillis: Long = 0L,
+    val squareDailyBaselineJson: String = "",
+    val squarePinnedIdsJson: String = "[\"XAU_SPOT\",\"XAU_24K\",\"XAU_18K\",\"EUR\",\"USD\"]",
+    val squareSyncIntervalMinutes: Int = 60,
+    val squareEnabledSourceIdsJson: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+/**
+ * Synced BaridiMob SMS parser state, balance timeline, caught taxes, and failed transaction alerts
+ * stored at users/{uid}/vault_settings/sms_sync (never stores raw private SMS message bodies).
+ */
+@Keep
+@IgnoreExtraProperties
+data class CloudVaultSmsSync(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val baridiMobSmsSyncEnabled: Boolean = true,
+    val pendingSmsSuggestionsJson: String = "[]",
+    val processedSmsKeysJson: String = "[]",
+    val smsSyncBaselineTimestampMillis: Long = 0L,
+    val latestSmsBalanceAmount: Double = -1.0,
+    val latestSmsBalanceUpdatedAt: Long = 0L,
+    val smsBalanceHistoryJson: String = "[]",
+    val detectedSmsTaxesJson: String = "[]",
+    val detectedFailedSmsTransactionsJson: String = "[]",
+    val dismissedFailedSmsIdsJson: String = "[]",
+    val autoAddTaxesEnabled: Boolean = false,
+    val autoAddTaxesBaselineMillis: Long = 0L,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -131,6 +188,8 @@ data class CloudSyncSummary(
 data class CloudPulledVault(
     val profile: CloudUserProfile?,
     val settings: CloudVaultSettings?,
+    val assets: CloudVaultAssets? = null,
+    val smsSync: CloudVaultSmsSync? = null,
     val transactions: List<CloudTransaction>,
     val debts: List<CloudDebt>
 )
@@ -144,7 +203,10 @@ sealed interface GoogleAuthUiState {
         val email: String,
         val photoUrl: String? = null
     ) : GoogleAuthUiState
-    data class Error(val message: String) : GoogleAuthUiState
+    data class Error(
+        val message: String,
+        val accountNotFound: Boolean = false
+    ) : GoogleAuthUiState
 }
 
 sealed interface CloudSyncUiState {

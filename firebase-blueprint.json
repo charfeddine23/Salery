@@ -6,10 +6,12 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "Firebase Auth UID matching path owner." },
-        "displayName": { "type": "string", "description": "Google account display name." },
-        "email": { "type": "string", "description": "Google account email (owner-private)." },
-        "photoUrl": { "type": "string", "description": "Google profile photo URL." },
-        "localUsername": { "type": "string", "description": "Local Vaultix display username." },
+        "firstName": { "type": "string", "description": "User first name." },
+        "lastName": { "type": "string", "description": "User last name." },
+        "displayName": { "type": "string", "description": "Account display name." },
+        "email": { "type": "string", "description": "Account email (owner-private)." },
+        "photoUrl": { "type": "string", "description": "Profile photo URL." },
+        "localUsername": { "type": "string", "description": "Vaultix username." },
         "localWilayaCode": { "type": "string", "description": "Algerian Wilaya code." },
         "localWilayaName": { "type": "string", "description": "Algerian Wilaya name." },
         "localCommuneName": { "type": "string", "description": "Algerian Commune name." },
@@ -85,7 +87,7 @@
     },
     "CloudVaultSettings": {
       "title": "CloudVaultSettings",
-      "description": "Non-sensitive Vaultix preferences, card styles (no PAN/CVC), savings, and portfolio holdings.",
+      "description": "Non-sensitive Vaultix core preferences, salary, savings, card styles (no PAN/CVC), and portfolio holdings stored at vault_settings/primary.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -93,6 +95,10 @@
         "salaryPayday": { "type": "integer" },
         "salaryEmployer": { "type": "string" },
         "salaryAutoCredit": { "type": "boolean" },
+        "lastCreditedMonthYear": { "type": "string" },
+        "biometricEnabled": { "type": "boolean" },
+        "autoLockTimeoutSeconds": { "type": "integer" },
+        "hasCompletedPermissionsOnboarding": { "type": "boolean" },
         "savingsWalletBalance": { "type": "number" },
         "savingsGoalAmount": { "type": "number" },
         "savingsHistoryJson": { "type": "string" },
@@ -110,6 +116,8 @@
         "thirdCardProvider": { "type": "string" },
         "thirdCardHolderName": { "type": "string" },
         "thirdCardExpiry": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
         "localUsername": { "type": "string" },
         "localWilayaCode": { "type": "string" },
         "localWilayaName": { "type": "string" },
@@ -156,6 +164,80 @@
         "updatedAt"
       ]
     },
+    "CloudVaultAssets": {
+      "title": "CloudVaultAssets",
+      "description": "Synced Gold, Binance Crypto, and Square Market portfolio and pricing settings stored at vault_settings/assets.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "goldAssetHoldingsJson": { "type": "string" },
+        "binanceHoldingsJson": { "type": "string" },
+        "binancePricesJson": { "type": "string" },
+        "binanceLastPriceSyncMillis": { "type": "integer" },
+        "squareMarketSnapshotJson": { "type": "string" },
+        "squareLastPriceSyncMillis": { "type": "integer" },
+        "squareDailyBaselineJson": { "type": "string" },
+        "squarePinnedIdsJson": { "type": "string" },
+        "squareSyncIntervalMinutes": { "type": "integer" },
+        "squareEnabledSourceIdsJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "goldAssetHoldingsJson",
+        "binanceHoldingsJson",
+        "binancePricesJson",
+        "binanceLastPriceSyncMillis",
+        "squareMarketSnapshotJson",
+        "squareLastPriceSyncMillis",
+        "squareDailyBaselineJson",
+        "squarePinnedIdsJson",
+        "squareSyncIntervalMinutes",
+        "squareEnabledSourceIdsJson",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudVaultSmsSync": {
+      "title": "CloudVaultSmsSync",
+      "description": "Synced BaridiMob SMS parser configuration, balance timeline, caught taxes, and failed transaction alerts stored at vault_settings/sms_sync (never raw SMS snippets).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "baridiMobSmsSyncEnabled": { "type": "boolean" },
+        "pendingSmsSuggestionsJson": { "type": "string" },
+        "processedSmsKeysJson": { "type": "string" },
+        "smsSyncBaselineTimestampMillis": { "type": "integer" },
+        "latestSmsBalanceAmount": { "type": "number" },
+        "latestSmsBalanceUpdatedAt": { "type": "integer" },
+        "smsBalanceHistoryJson": { "type": "string" },
+        "detectedSmsTaxesJson": { "type": "string" },
+        "detectedFailedSmsTransactionsJson": { "type": "string" },
+        "dismissedFailedSmsIdsJson": { "type": "string" },
+        "autoAddTaxesEnabled": { "type": "boolean" },
+        "autoAddTaxesBaselineMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "baridiMobSmsSyncEnabled",
+        "pendingSmsSuggestionsJson",
+        "processedSmsKeysJson",
+        "smsSyncBaselineTimestampMillis",
+        "latestSmsBalanceAmount",
+        "latestSmsBalanceUpdatedAt",
+        "smsBalanceHistoryJson",
+        "detectedSmsTaxesJson",
+        "detectedFailedSmsTransactionsJson",
+        "dismissedFailedSmsIdsJson",
+        "autoAddTaxesEnabled",
+        "autoAddTaxesBaselineMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "CloudEncryptedBackup": {
       "title": "CloudEncryptedBackup",
       "description": "Passphrase-encrypted AES-256-GCM vault backup envelope (zero plaintext secrets).",
@@ -184,9 +266,17 @@
       "schema": { "$ref": "#/entities/CloudDebt" },
       "description": "User's synced debt records."
     },
-    "/users/{userId}/vault_settings/{settingId}": {
+    "/users/{userId}/vault_settings/primary": {
       "schema": { "$ref": "#/entities/CloudVaultSettings" },
-      "description": "Non-sensitive Vaultix preferences and portfolio holdings (never raw card PAN/CVC or raw vault keys)."
+      "description": "Core non-sensitive Vaultix preferences, savings, salary, and visual card styles."
+    },
+    "/users/{userId}/vault_settings/assets": {
+      "schema": { "$ref": "#/entities/CloudVaultAssets" },
+      "description": "Synced Gold, Binance Crypto, and Square Market assets & market snapshot."
+    },
+    "/users/{userId}/vault_settings/sms_sync": {
+      "schema": { "$ref": "#/entities/CloudVaultSmsSync" },
+      "description": "Synced BaridiMob SMS automation metadata, balance history, caught taxes, and failed transaction alerts."
     },
     "/users/{userId}/encrypted_backups/{backupId}": {
       "schema": { "$ref": "#/entities/CloudEncryptedBackup" },

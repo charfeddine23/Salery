@@ -17,8 +17,11 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Co
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -158,6 +161,140 @@ object GoogleAuthHelper {
         }
     }
 
+    /**
+     * Authenticates an existing Firebase account via Email & Password.
+     * Password is passed directly to Firebase Auth and NEVER stored locally or in Firestore.
+     */
+    suspend fun signInWithEmailPassword(
+        context: Context,
+        email: String,
+        password: String,
+        isArabic: Boolean
+    ): EmailAuthResult {
+        val auth = resolveAuth(context) ?: return EmailAuthResult.Error(
+            message = if (isArabic) "تعذر تهيئة خدمة المصادقة السحابية" else "Firebase Authentication is unavailable",
+            accountNotFound = false
+        )
+        return try {
+            val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
+            val user = result.user ?: auth.currentUser
+            if (user != null) {
+                EmailAuthResult.Success(user)
+            } else {
+                EmailAuthResult.Error(
+                    message = if (isArabic) "لم يتم العثور على جلسة مستخدم صالحة" else "No authenticated user returned",
+                    accountNotFound = false
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val errorCode = (e as? FirebaseAuthException)?.errorCode.orEmpty()
+            val isMissingUser = e is FirebaseAuthInvalidUserException ||
+                errorCode == "ERROR_USER_NOT_FOUND"
+            val isInvalidCred = errorCode == "ERROR_INVALID_CREDENTIAL" ||
+                errorCode == "ERROR_WRONG_PASSWORD"
+            EmailAuthResult.Error(
+                message = mapFirebaseAuthError(e, isArabic),
+                accountNotFound = isMissingUser || isInvalidCred
+            )
+        }
+    }
+
+    /**
+     * Creates a new Firebase Auth account with Email & Password and attaches full display name.
+     * Password is handled exclusively by Firebase Auth and NEVER stored anywhere else.
+     */
+    suspend fun signUpWithEmailPassword(
+        context: Context,
+        firstName: String,
+        lastName: String,
+        email: String,
+        password: String,
+        isArabic: Boolean
+    ): EmailAuthResult {
+        val auth = resolveAuth(context) ?: return EmailAuthResult.Error(
+            message = if (isArabic) "تعذر تهيئة خدمة المصادقة السحابية" else "Firebase Authentication is unavailable",
+            accountNotFound = false
+        )
+        return try {
+            val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
+            val user = result.user ?: auth.currentUser
+                ?: return EmailAuthResult.Error(
+                    message = if (isArabic) "تعذر إنشاء الحساب السحابي" else "Failed to create account",
+                    accountNotFound = false
+                )
+            val fullName = listOf(firstName.trim(), lastName.trim())
+                .filter { it.isNotEmpty() }
+                .joinToString(" ")
+            if (fullName.isNotEmpty()) {
+                runCatching {
+                    user.updateProfile(
+                        UserProfileChangeRequest.Builder()
+                            .setDisplayName(fullName)
+                            .build()
+                    ).await()
+                }
+            }
+            EmailAuthResult.Success(user)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            EmailAuthResult.Error(
+                message = mapFirebaseAuthError(e, isArabic),
+                accountNotFound = false
+            )
+        }
+    }
+
+    private fun mapFirebaseAuthError(e: Exception, isArabic: Boolean): String {
+        val code = (e as? FirebaseAuthException)?.errorCode.orEmpty()
+        return when (code) {
+            "ERROR_USER_NOT_FOUND" -> if (isArabic) {
+                "لا يوجد حساب مسجّل بهذا البريد الإلكتروني — يمكنك إنشاء حساب جديد الآن"
+            } else {
+                "No account found for this email — create a new account now"
+            }
+            "ERROR_INVALID_CREDENTIAL", "ERROR_WRONG_PASSWORD" -> if (isArabic) {
+                "بيانات الدخول غير صحيحة أو لا يوجد حساب مسجّل بهذا البريد"
+            } else {
+                "Invalid email/password or account does not exist yet"
+            }
+            "ERROR_INVALID_EMAIL" -> if (isArabic) {
+                "صيغة البريد الإلكتروني غير صالحة"
+            } else {
+                "Invalid email address format"
+            }
+            "ERROR_EMAIL_ALREADY_IN_USE" -> if (isArabic) {
+                "هذا البريد الإلكتروني مسجّل مسبقاً — جرّب تسجيل الدخول"
+            } else {
+                "This email is already registered — try signing in"
+            }
+            "ERROR_WEAK_PASSWORD" -> if (isArabic) {
+                "كلمة السر ضعيفة — استخدم 6 أحرف على الأقل"
+            } else {
+                "Password is too weak — use at least 6 characters"
+            }
+            "ERROR_OPERATION_NOT_ALLOWED" -> if (isArabic) {
+                "يرجى تفعيل تسجيل الدخول بالبريد وكلمة السر في Firebase Console"
+            } else {
+                "Please enable Email/Password sign-in provider in Firebase Console"
+            }
+            "ERROR_TOO_MANY_REQUESTS" -> if (isArabic) {
+                "محاولات كثيرة متتالية، انتظر قليلاً ثم أعد المحاولة"
+            } else {
+                "Too many attempts. Please wait a moment and try again"
+            }
+            "ERROR_NETWORK_REQUEST_FAILED" -> if (isArabic) {
+                "لا يوجد اتصال بالإنترنت حالياً"
+            } else {
+                "Network connection unavailable"
+            }
+            else -> e.localizedMessage?.takeIf { it.isNotBlank() }
+                ?: if (isArabic) "تعذرت المصادقة السحابية" else "Authentication failed"
+        }
+    }
+
     fun signOut(
         context: Context,
         credentialManager: CredentialManager = CredentialManager.create(context),
@@ -189,4 +326,12 @@ object GoogleAuthHelper {
         is ContextWrapper -> baseContext.findActivityOrNull()
         else -> null
     }
+}
+
+sealed interface EmailAuthResult {
+    data class Success(val user: FirebaseUser) : EmailAuthResult
+    data class Error(
+        val message: String,
+        val accountNotFound: Boolean
+    ) : EmailAuthResult
 }

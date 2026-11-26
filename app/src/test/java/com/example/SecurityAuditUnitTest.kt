@@ -322,25 +322,69 @@ class SecurityAuditUnitTest {
             latestSmsBalanceRawSnippet = "Solde: 50000 DA"
         )
         val remote = com.example.cloud.CloudVaultSettings(
+            firstName = "Charfeddine",
+            lastName = "Kaddouri",
             salaryAmount = 120000.0,
             salaryPayday = 27,
             salaryEmployer = "TechDZ",
+            lastCreditedMonthYear = "2026-11",
+            biometricEnabled = true,
+            autoLockTimeoutSeconds = 60,
+            hasCompletedPermissionsOnboarding = true,
             savingsWalletBalance = 35000.0,
             savingsGoalAmount = 100000.0,
             language = "ar",
             themeMode = "LIGHT",
             localUsername = "Charfeddine"
         )
+        val remoteAssets = com.example.cloud.CloudVaultAssets(
+            goldAssetHoldingsJson = "[{\"id\":\"g1\",\"grams\":10.0}]",
+            binanceHoldingsJson = "[{\"symbol\":\"BTC\",\"amount\":0.05}]",
+            binancePricesJson = "[{\"symbol\":\"BTC\",\"priceUsd\":92000.0}]",
+            binanceLastPriceSyncMillis = 1_763_200_123_000L,
+            squareMarketSnapshotJson = "{\"usdParallel\":245.0}",
+            squareLastPriceSyncMillis = 1_763_200_456_000L,
+            squareSyncIntervalMinutes = 30
+        )
+        val remoteSmsSync = com.example.cloud.CloudVaultSmsSync(
+            baridiMobSmsSyncEnabled = true,
+            latestSmsBalanceAmount = 74500.0,
+            latestSmsBalanceUpdatedAt = 1_763_200_789_000L,
+            smsBalanceHistoryJson = "[{\"amount\":74500.0}]",
+            detectedSmsTaxesJson = "[{\"id\":\"t1\",\"amount\":10.0}]",
+            autoAddTaxesEnabled = true
+        )
 
-        val merged = com.example.viewmodel.applyCloudVaultSettingsSafely(local, remote, overwritePreferences = true)
+        val merged = com.example.viewmodel.applyCloudVaultSettingsSafely(
+            current = local,
+            cloud = remote,
+            overwritePreferences = true,
+            cloudAssets = remoteAssets,
+            cloudSmsSync = remoteSmsSync
+        )
         assertTrue(merged.hasLocalAccount)
+        assertEquals("Charfeddine", merged.firstName)
+        assertEquals("Kaddouri", merged.lastName)
         assertEquals(120000.0, merged.salaryAmount, 0.01)
         assertEquals(27, merged.salaryPayday)
         assertEquals("TechDZ", merged.salaryEmployer)
+        assertEquals("2026-11", merged.lastCreditedMonthYear)
+        assertTrue(merged.biometricEnabled)
+        assertEquals(60, merged.autoLockTimeoutSeconds)
+        assertTrue(merged.hasCompletedPermissionsOnboarding)
         assertEquals(35000.0, merged.savingsWalletBalance, 0.01)
         assertEquals("ar", merged.language)
         assertEquals("LIGHT", merged.themeMode)
         assertEquals("Charfeddine", merged.localUsername)
+        assertEquals("[{\"id\":\"g1\",\"grams\":10.0}]", merged.goldAssetHoldingsJson)
+        assertEquals("[{\"symbol\":\"BTC\",\"amount\":0.05}]", merged.binanceHoldingsJson)
+        assertEquals("[{\"symbol\":\"BTC\",\"priceUsd\":92000.0}]", merged.binancePricesJson)
+        assertEquals("{\"usdParallel\":245.0}", merged.squareMarketSnapshotJson)
+        assertEquals(30, merged.squareSyncIntervalMinutes)
+        assertEquals(74500.0, merged.latestSmsBalanceAmount, 0.01)
+        assertEquals("[{\"amount\":74500.0}]", merged.smsBalanceHistoryJson)
+        assertEquals("[{\"id\":\"t1\",\"amount\":10.0}]", merged.detectedSmsTaxesJson)
+        assertTrue(merged.autoAddTaxesEnabled)
 
         // Encrypted on-device secrets remain 100% intact
         assertEquals("6280111122223333", merged.classicCardNumber)

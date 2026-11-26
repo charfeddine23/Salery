@@ -404,6 +404,13 @@ fun MainAppScreen(
                     googleAuthState = googleAuthState,
                     onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
                     onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                    onEmailSignIn = { email, password ->
+                        viewModel.signInWithEmailAccount(context, email, password)
+                    },
+                    onEmailSignUp = { firstName, lastName, username, email, password ->
+                        viewModel.signUpWithEmailAccount(context, firstName, lastName, username, email, password)
+                    },
+                    onClearAuthError = { viewModel.clearAuthError() },
                     onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
                     onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
                     onCreateLocalAccount = { showLocalAccountSetup = true }

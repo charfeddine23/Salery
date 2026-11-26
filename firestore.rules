@@ -35,6 +35,8 @@ service cloud.firestore {
       return data.userId is string &&
              data.userId == userId &&
              data.userId == request.auth.uid &&
+             (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 80)) &&
+             (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 80)) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
              (!('email' in data) || (data.email is string && data.email.size() <= 254)) &&
              (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
@@ -88,7 +90,7 @@ service cloud.firestore {
              isValidTimestamp(data.updatedAt);
     }
 
-    function isValidVaultSettings(data, userId) {
+    function isValidVaultSettingsPrimary(data, userId) {
       return data.userId is string &&
              data.userId == userId &&
              data.userId == request.auth.uid &&
@@ -96,6 +98,10 @@ service cloud.firestore {
              data.salaryPayday is int && data.salaryPayday >= 1 && data.salaryPayday <= 31 &&
              data.salaryEmployer is string && data.salaryEmployer.size() <= 120 &&
              data.salaryAutoCredit is bool &&
+             (!('lastCreditedMonthYear' in data) || (data.lastCreditedMonthYear is string && data.lastCreditedMonthYear.size() <= 20)) &&
+             (!('biometricEnabled' in data) || data.biometricEnabled is bool) &&
+             (!('autoLockTimeoutSeconds' in data) || (data.autoLockTimeoutSeconds is int && data.autoLockTimeoutSeconds >= -1 && data.autoLockTimeoutSeconds <= 3600)) &&
+             (!('hasCompletedPermissionsOnboarding' in data) || data.hasCompletedPermissionsOnboarding is bool) &&
              data.savingsWalletBalance is number && data.savingsWalletBalance >= 0 &&
              data.savingsGoalAmount is number && data.savingsGoalAmount >= 0 &&
              data.savingsHistoryJson is string && data.savingsHistoryJson.size() <= 200000 &&
@@ -113,6 +119,8 @@ service cloud.firestore {
              data.thirdCardProvider is string && data.thirdCardProvider.size() <= 40 &&
              data.thirdCardHolderName is string && data.thirdCardHolderName.size() <= 80 &&
              data.thirdCardExpiry is string && data.thirdCardExpiry.size() <= 16 &&
+             (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 80)) &&
+             (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 80)) &&
              (!('localUsername' in data) || (data.localUsername is string && data.localUsername.size() <= 80)) &&
              (!('localWilayaCode' in data) || (data.localWilayaCode is string && data.localWilayaCode.size() <= 10)) &&
              (!('localWilayaName' in data) || (data.localWilayaName is string && data.localWilayaName.size() <= 100)) &&
@@ -123,6 +131,44 @@ service cloud.firestore {
              data.stealthMode is bool &&
              data.breathingGlowEnabled is bool &&
              data.screenshotProtectionEnabled is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidVaultAssets(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.goldAssetHoldingsJson is string && data.goldAssetHoldingsJson.size() <= 100000 &&
+             data.binanceHoldingsJson is string && data.binanceHoldingsJson.size() <= 100000 &&
+             data.binancePricesJson is string && data.binancePricesJson.size() <= 100000 &&
+             data.binanceLastPriceSyncMillis is int && data.binanceLastPriceSyncMillis >= 0 &&
+             data.squareMarketSnapshotJson is string && data.squareMarketSnapshotJson.size() <= 180000 &&
+             data.squareLastPriceSyncMillis is int && data.squareLastPriceSyncMillis >= 0 &&
+             data.squareDailyBaselineJson is string && data.squareDailyBaselineJson.size() <= 100000 &&
+             data.squarePinnedIdsJson is string && data.squarePinnedIdsJson.size() <= 5000 &&
+             data.squareSyncIntervalMinutes is int && data.squareSyncIntervalMinutes >= 0 && data.squareSyncIntervalMinutes <= 1440 &&
+             data.squareEnabledSourceIdsJson is string && data.squareEnabledSourceIdsJson.size() <= 5000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidVaultSmsSync(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.baridiMobSmsSyncEnabled is bool &&
+             data.pendingSmsSuggestionsJson is string && data.pendingSmsSuggestionsJson.size() <= 180000 &&
+             data.processedSmsKeysJson is string && data.processedSmsKeysJson.size() <= 100000 &&
+             data.smsSyncBaselineTimestampMillis is int && data.smsSyncBaselineTimestampMillis >= 0 &&
+             data.latestSmsBalanceAmount is number && data.latestSmsBalanceAmount >= -1 &&
+             data.latestSmsBalanceUpdatedAt is int && data.latestSmsBalanceUpdatedAt >= 0 &&
+             data.smsBalanceHistoryJson is string && data.smsBalanceHistoryJson.size() <= 180000 &&
+             data.detectedSmsTaxesJson is string && data.detectedSmsTaxesJson.size() <= 100000 &&
+             data.detectedFailedSmsTransactionsJson is string && data.detectedFailedSmsTransactionsJson.size() <= 100000 &&
+             data.dismissedFailedSmsIdsJson is string && data.dismissedFailedSmsIdsJson.size() <= 50000 &&
+             data.autoAddTaxesEnabled is bool &&
+             data.autoAddTaxesBaselineMillis is int && data.autoAddTaxesBaselineMillis >= 0 &&
              isValidTimestamp(data.createdAt) &&
              isValidTimestamp(data.updatedAt);
     }
@@ -146,7 +192,7 @@ service cloud.firestore {
                        isValidId(userId) &&
                        incoming().keys().hasAll(['userId', 'lastSyncedAt', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly([
-                         'userId', 'displayName', 'email', 'photoUrl',
+                         'userId', 'firstName', 'lastName', 'displayName', 'email', 'photoUrl',
                          'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                          'language', 'themeMode', 'designStyle',
                          'lastSyncedAt', 'createdAt', 'updatedAt'
@@ -159,7 +205,7 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        isValidUserProfile(incoming(), userId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
-                         'displayName', 'email', 'photoUrl',
+                         'firstName', 'lastName', 'displayName', 'email', 'photoUrl',
                          'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                          'language', 'themeMode', 'designStyle',
                          'lastSyncedAt', 'updatedAt'
@@ -234,12 +280,10 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(debtId);
       }
 
-      match /vault_settings/{settingId} {
-        allow get: if isOwner(userId) && isValidId(settingId);
-        allow list: if isOwner(userId);
+      match /vault_settings/primary {
+        allow get: if isOwner(userId);
 
         allow create: if isOwner(userId) &&
-                         isValidId(settingId) &&
                          incoming().keys().hasAll([
                            'userId', 'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
                            'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
@@ -252,35 +296,110 @@ service cloud.firestore {
                          ]) &&
                          incoming().keys().hasOnly([
                            'userId', 'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
+                           'lastCreditedMonthYear', 'biometricEnabled', 'autoLockTimeoutSeconds',
+                           'hasCompletedPermissionsOnboarding',
                            'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
                            'includeAssetsInSavingsTotal', 'goldAssetHoldingsJson', 'binanceHoldingsJson',
                            'cardHubOrderJson', 'classicCardBankStyle', 'classicCardHolderName',
                            'classicCardExpiry', 'visaCardProvider', 'visaCardHolderName', 'visaCardExpiry',
                            'thirdCardEnabled', 'thirdCardProvider', 'thirdCardHolderName', 'thirdCardExpiry',
+                           'firstName', 'lastName',
                            'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                            'language', 'themeMode', 'designStyle', 'stealthMode',
                            'breathingGlowEnabled', 'screenshotProtectionEnabled', 'createdAt', 'updatedAt'
                          ]) &&
-                         isValidVaultSettings(incoming(), userId);
+                         isValidVaultSettingsPrimary(incoming(), userId);
 
         allow update: if isOwner(userId) &&
-                         isValidId(settingId) &&
                          incoming().userId == existing().userId &&
                          incoming().createdAt == existing().createdAt &&
-                         isValidVaultSettings(incoming(), userId) &&
+                         isValidVaultSettingsPrimary(incoming(), userId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly([
                            'salaryAmount', 'salaryPayday', 'salaryEmployer', 'salaryAutoCredit',
+                           'lastCreditedMonthYear', 'biometricEnabled', 'autoLockTimeoutSeconds',
+                           'hasCompletedPermissionsOnboarding',
                            'savingsWalletBalance', 'savingsGoalAmount', 'savingsHistoryJson',
                            'includeAssetsInSavingsTotal', 'goldAssetHoldingsJson', 'binanceHoldingsJson',
                            'cardHubOrderJson', 'classicCardBankStyle', 'classicCardHolderName',
                            'classicCardExpiry', 'visaCardProvider', 'visaCardHolderName', 'visaCardExpiry',
                            'thirdCardEnabled', 'thirdCardProvider', 'thirdCardHolderName', 'thirdCardExpiry',
+                           'firstName', 'lastName',
                            'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                            'language', 'themeMode', 'designStyle', 'stealthMode',
                            'breathingGlowEnabled', 'screenshotProtectionEnabled', 'updatedAt'
                          ]);
 
-        allow delete: if isOwner(userId) && isValidId(settingId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /vault_settings/assets {
+        allow get: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'goldAssetHoldingsJson', 'binanceHoldingsJson', 'binancePricesJson',
+                           'binanceLastPriceSyncMillis', 'squareMarketSnapshotJson', 'squareLastPriceSyncMillis',
+                           'squareDailyBaselineJson', 'squarePinnedIdsJson', 'squareSyncIntervalMinutes',
+                           'squareEnabledSourceIdsJson', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'goldAssetHoldingsJson', 'binanceHoldingsJson', 'binancePricesJson',
+                           'binanceLastPriceSyncMillis', 'squareMarketSnapshotJson', 'squareLastPriceSyncMillis',
+                           'squareDailyBaselineJson', 'squarePinnedIdsJson', 'squareSyncIntervalMinutes',
+                           'squareEnabledSourceIdsJson', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidVaultAssets(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidVaultAssets(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'goldAssetHoldingsJson', 'binanceHoldingsJson', 'binancePricesJson',
+                           'binanceLastPriceSyncMillis', 'squareMarketSnapshotJson', 'squareLastPriceSyncMillis',
+                           'squareDailyBaselineJson', 'squarePinnedIdsJson', 'squareSyncIntervalMinutes',
+                           'squareEnabledSourceIdsJson', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId);
+      }
+
+      match /vault_settings/sms_sync {
+        allow get: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'baridiMobSmsSyncEnabled', 'pendingSmsSuggestionsJson',
+                           'processedSmsKeysJson', 'smsSyncBaselineTimestampMillis',
+                           'latestSmsBalanceAmount', 'latestSmsBalanceUpdatedAt', 'smsBalanceHistoryJson',
+                           'detectedSmsTaxesJson', 'detectedFailedSmsTransactionsJson',
+                           'dismissedFailedSmsIdsJson', 'autoAddTaxesEnabled', 'autoAddTaxesBaselineMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'baridiMobSmsSyncEnabled', 'pendingSmsSuggestionsJson',
+                           'processedSmsKeysJson', 'smsSyncBaselineTimestampMillis',
+                           'latestSmsBalanceAmount', 'latestSmsBalanceUpdatedAt', 'smsBalanceHistoryJson',
+                           'detectedSmsTaxesJson', 'detectedFailedSmsTransactionsJson',
+                           'dismissedFailedSmsIdsJson', 'autoAddTaxesEnabled', 'autoAddTaxesBaselineMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidVaultSmsSync(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidVaultSmsSync(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'baridiMobSmsSyncEnabled', 'pendingSmsSuggestionsJson',
+                           'processedSmsKeysJson', 'smsSyncBaselineTimestampMillis',
+                           'latestSmsBalanceAmount', 'latestSmsBalanceUpdatedAt', 'smsBalanceHistoryJson',
+                           'detectedSmsTaxesJson', 'detectedFailedSmsTransactionsJson',
+                           'dismissedFailedSmsIdsJson', 'autoAddTaxesEnabled', 'autoAddTaxesBaselineMillis',
+                           'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId);
       }
 
       match /encrypted_backups/{backupId} {

@@ -11,6 +11,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -34,6 +35,8 @@ class VaultixCloudRepository(
     )
 
     companion object {
+        private const val BATCH_LIMIT = 400
+
         fun resolveFirestore(context: Context): FirebaseFirestore {
             val dbId = runCatching {
                 context.applicationContext.getString(R.string.firestore_database_id).trim()
@@ -48,10 +51,14 @@ class VaultixCloudRepository(
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
+            ?: throw IllegalStateException("User must be signed in before accessing Firestore.")
     }
 
     private fun userDocRef(uid: String) = db.collection("users").document(uid)
+
+    private fun boundedJson(raw: String, maxLen: Int, fallback: String): String {
+        return if (raw.length <= maxLen) raw else fallback
+    }
 
     fun observeUserProfile(userId: String): Flow<CloudUserProfile?> = flow {
         val signedInUid = requireUserId()
@@ -91,8 +98,17 @@ class VaultixCloudRepository(
             val ref = userDocRef(uid)
             val existingSnap = ref.get().await()
 
+            val combinedFullName = listOf(settings.firstName.trim(), settings.lastName.trim())
+                .filter { it.isNotEmpty() }
+                .joinToString(" ")
+            val resolvedDisplayName = combinedFullName.ifBlank {
+                user.displayName?.trim().orEmpty()
+            }.take(120)
+
             val mutableFields = buildMap<String, Any> {
-                user.displayName?.trim()?.take(120)?.takeIf { it.isNotEmpty() }?.let { put("displayName", it) }
+                settings.firstName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("firstName", it) }
+                settings.lastName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("lastName", it) }
+                resolvedDisplayName.takeIf { it.isNotEmpty() }?.let { put("displayName", it) }
                 user.email?.trim()?.take(254)?.takeIf { it.isNotEmpty() }?.let { put("email", it) }
                 user.photoUrl?.toString()?.take(500)?.takeIf { it.isNotEmpty() }?.let { put("photoUrl", it) }
                 settings.localUsername.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("localUsername", it) }
@@ -125,14 +141,24 @@ class VaultixCloudRepository(
     }
 
     /**
-     * Pushes non-secret settings, portfolio holdings, transactions, and debts strictly under users/{uid}/...
-     * Never writes raw card numbers, CVCs, vaultKeysJson, ccpAccountsJson, or SMS snippets.
+     * Pushes ALL non-secret data across the entire app strictly under users/{uid}/...:
+     * - Profile (`users/{uid}`)
+     * - Core Settings, Salary, Savings, Card Styles (`vault_settings/primary`)
+     * - Gold, Binance Crypto, Square Market Assets (`vault_settings/assets`)
+     * - BaridiMob SMS Sync, Balance History, Caught Taxes, Failed Ops (`vault_settings/sms_sync`)
+     * - Income & Expenses (`transactions/{txId}`)
+     * - Debts & Installments (`debts/{debtId}`)
+     *
+     * Never writes passwords, raw card PANs/CVCs, vaultKeysJson, ccpAccountsJson, or raw SMS snippets.
      */
     suspend fun pushVaultToCloud(
         user: FirebaseUser,
         settings: UserSettings,
         transactions: List<TransactionEntity>,
-        debts: List<DebtEntity>
+        debts: List<DebtEntity>,
+        syncSettings: Boolean = true,
+        syncTransactions: Boolean = true,
+        syncDebts: Boolean = true
     ): Result<CloudSyncSummary> {
         val uid = try {
             requireUserId().also {
@@ -143,137 +169,129 @@ class VaultixCloudRepository(
             return Result.failure(e)
         }
 
-        upsertUserProfile(user, settings).onFailure { return Result.failure(it) }
-        pushNonSensitiveSettings(uid, settings).onFailure { return Result.failure(it) }
+        if (syncSettings) {
+            upsertUserProfile(user, settings).onFailure { return Result.failure(it) }
+            pushPrimarySettings(uid, settings).onFailure { return Result.failure(it) }
+            pushAssetsSettings(uid, settings).onFailure { return Result.failure(it) }
+            pushSmsSyncSettings(uid, settings).onFailure { return Result.failure(it) }
+        }
 
         val userRef = userDocRef(uid)
-        val existingTxIds = try {
-            userRef.collection("transactions").get().await().documents.mapTo(HashSet()) { it.id }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.LIST, "users/$uid/transactions")
-            return Result.failure(e)
-        }
+        if (syncTransactions) {
+            val existingTxIds = try {
+                userRef.collection("transactions").get().await().documents.mapTo(HashSet()) { it.id }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.LIST, "users/$uid/transactions")
+                return Result.failure(e)
+            }
 
-        val currentTxDocIds = HashSet<String>(transactions.size)
-        for (tx in transactions) {
-            val docId = "tx_${tx.id}"
-            currentTxDocIds.add(docId)
-            val txRef = userRef.collection("transactions").document(docId)
-            val mutableFields = mapOf<String, Any>(
-                "type" to tx.type.name,
-                "amount" to tx.amount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 },
-                "category" to tx.category.ifBlank { "other" }.take(64),
-                "title" to tx.title.ifBlank { tx.category.ifBlank { "Transaction" } }.take(160),
-                "note" to tx.note.take(500),
-                "dateMillis" to tx.dateMillis.coerceAtLeast(0L),
-                "salaryCredit" to tx.isSalaryCredit,
-                "paidFromSavings" to tx.isPaidFromSavings,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-            try {
+            val pendingOps = mutableListOf<BatchOp>()
+            val currentTxDocIds = HashSet<String>(transactions.size)
+            for (tx in transactions) {
+                val docId = "tx_${tx.id}"
+                currentTxDocIds.add(docId)
+                val txRef = userRef.collection("transactions").document(docId)
+                val mutableFields = mapOf<String, Any>(
+                    "type" to tx.type.name,
+                    "amount" to tx.amount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 },
+                    "category" to tx.category.ifBlank { "other" }.take(64),
+                    "title" to tx.title.ifBlank { tx.category.ifBlank { "Transaction" } }.take(160),
+                    "note" to tx.note.take(500),
+                    "dateMillis" to tx.dateMillis.coerceAtLeast(0L),
+                    "salaryCredit" to tx.isSalaryCredit,
+                    "paidFromSavings" to tx.isPaidFromSavings,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
                 if (docId in existingTxIds) {
-                    txRef.update(mutableFields).await()
+                    pendingOps.add(BatchOp.Update(txRef, mutableFields))
                 } else {
-                    txRef.set(
-                        mutableFields + mapOf(
-                            "userId" to uid,
-                            "createdAt" to FieldValue.serverTimestamp()
+                    pendingOps.add(
+                        BatchOp.Set(
+                            txRef,
+                            mutableFields + mapOf(
+                                "userId" to uid,
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
                         )
-                    ).await()
+                    )
                 }
+            }
+
+            for (staleTxId in existingTxIds) {
+                if (staleTxId !in currentTxDocIds) {
+                    pendingOps.add(BatchOp.Delete(userRef.collection("transactions").document(staleTxId)))
+                }
+            }
+
+            commitBatchedOps(pendingOps, "users/$uid/transactions").onFailure {
+                return Result.failure(it)
+            }
+        }
+
+        if (syncDebts) {
+            val existingDebtIds = try {
+                userRef.collection("debts").get().await().documents.mapTo(HashSet()) { it.id }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                handleFirestoreError(e, OperationType.WRITE, txRef.path)
+                handleFirestoreError(e, OperationType.LIST, "users/$uid/debts")
                 return Result.failure(e)
             }
-        }
 
-        // Remove stale transaction docs deleted locally
-        for (staleTxId in existingTxIds) {
-            if (staleTxId !in currentTxDocIds) {
-                val staleRef = userRef.collection("transactions").document(staleTxId)
-                try {
-                    staleRef.delete().await()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    handleFirestoreError(e, OperationType.DELETE, staleRef.path)
-                    return Result.failure(e)
+            val pendingOps = mutableListOf<BatchOp>()
+            val currentDebtDocIds = HashSet<String>(debts.size)
+            for (debt in debts) {
+                val docId = "debt_${debt.id}"
+                currentDebtDocIds.add(docId)
+                val debtRef = userRef.collection("debts").document(docId)
+                val mutableFields = buildMap<String, Any> {
+                    put("type", debt.type.name)
+                    put("personName", debt.personName.trim().ifBlank { "Contact" }.take(120))
+                    put("amount", debt.amount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 })
+                    put("note", debt.note.take(500))
+                    put("dueDateMillis", debt.dueDateMillis.coerceAtLeast(0L))
+                    put("autoPayOnDueDate", debt.autoPayOnDueDate)
+                    put("paid", debt.isPaid)
+                    debt.paidDateMillis?.takeIf { it >= 0L }?.let { put("paidDateMillis", it) }
+                    put("createdDateMillis", debt.createdDateMillis.coerceAtLeast(0L))
+                    put("recurringMonthlyInstallment", debt.isRecurringMonthlyInstallment)
+                    put(
+                        "monthlyInstallmentAmount",
+                        debt.monthlyInstallmentAmount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 }
+                    )
+                    put("installmentDayOfMonth", debt.installmentDayOfMonth.coerceIn(1, 31))
+                    put(
+                        "remainingAmount",
+                        debt.remainingAmount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 }
+                    )
+                    put("lastInstallmentCreditedMonth", debt.lastInstallmentCreditedMonth.take(20))
+                    put("updatedAt", FieldValue.serverTimestamp())
                 }
-            }
-        }
-
-        val existingDebtIds = try {
-            userRef.collection("debts").get().await().documents.mapTo(HashSet()) { it.id }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.LIST, "users/$uid/debts")
-            return Result.failure(e)
-        }
-
-        val currentDebtDocIds = HashSet<String>(debts.size)
-        for (debt in debts) {
-            val docId = "debt_${debt.id}"
-            currentDebtDocIds.add(docId)
-            val debtRef = userRef.collection("debts").document(docId)
-            val mutableFields = buildMap<String, Any> {
-                put("type", debt.type.name)
-                put("personName", debt.personName.trim().ifBlank { "Contact" }.take(120))
-                put("amount", debt.amount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 })
-                put("note", debt.note.take(500))
-                put("dueDateMillis", debt.dueDateMillis.coerceAtLeast(0L))
-                put("autoPayOnDueDate", debt.autoPayOnDueDate)
-                put("paid", debt.isPaid)
-                debt.paidDateMillis?.takeIf { it >= 0L }?.let { put("paidDateMillis", it) }
-                put("createdDateMillis", debt.createdDateMillis.coerceAtLeast(0L))
-                put("recurringMonthlyInstallment", debt.isRecurringMonthlyInstallment)
-                put(
-                    "monthlyInstallmentAmount",
-                    debt.monthlyInstallmentAmount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 }
-                )
-                put("installmentDayOfMonth", debt.installmentDayOfMonth.coerceIn(1, 31))
-                put(
-                    "remainingAmount",
-                    debt.remainingAmount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 }
-                )
-                put("lastInstallmentCreditedMonth", debt.lastInstallmentCreditedMonth.take(20))
-                put("updatedAt", FieldValue.serverTimestamp())
-            }
-            try {
                 if (docId in existingDebtIds) {
-                    debtRef.update(mutableFields).await()
+                    pendingOps.add(BatchOp.Update(debtRef, mutableFields))
                 } else {
-                    debtRef.set(
-                        mutableFields + mapOf(
-                            "userId" to uid,
-                            "createdAt" to FieldValue.serverTimestamp()
+                    pendingOps.add(
+                        BatchOp.Set(
+                            debtRef,
+                            mutableFields + mapOf(
+                                "userId" to uid,
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
                         )
-                    ).await()
+                    )
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                handleFirestoreError(e, OperationType.WRITE, debtRef.path)
-                return Result.failure(e)
             }
-        }
 
-        // Remove stale debt docs deleted locally
-        for (staleDebtId in existingDebtIds) {
-            if (staleDebtId !in currentDebtDocIds) {
-                val staleRef = userRef.collection("debts").document(staleDebtId)
-                try {
-                    staleRef.delete().await()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    handleFirestoreError(e, OperationType.DELETE, staleRef.path)
-                    return Result.failure(e)
+            for (staleDebtId in existingDebtIds) {
+                if (staleDebtId !in currentDebtDocIds) {
+                    pendingOps.add(BatchOp.Delete(userRef.collection("debts").document(staleDebtId)))
                 }
+            }
+
+            commitBatchedOps(pendingOps, "users/$uid/debts").onFailure {
+                return Result.failure(it)
             }
         }
 
@@ -286,7 +304,36 @@ class VaultixCloudRepository(
         )
     }
 
-    private suspend fun pushNonSensitiveSettings(
+    private sealed interface BatchOp {
+        data class Set(val ref: DocumentReference, val data: Map<String, Any>) : BatchOp
+        data class Update(val ref: DocumentReference, val data: Map<String, Any>) : BatchOp
+        data class Delete(val ref: DocumentReference) : BatchOp
+    }
+
+    private suspend fun commitBatchedOps(ops: List<BatchOp>, pathForError: String): Result<Unit> {
+        if (ops.isEmpty()) return Result.success(Unit)
+        for (chunk in ops.chunked(BATCH_LIMIT)) {
+            try {
+                val batch = db.batch()
+                for (op in chunk) {
+                    when (op) {
+                        is BatchOp.Set -> batch.set(op.ref, op.data)
+                        is BatchOp.Update -> batch.update(op.ref, op.data)
+                        is BatchOp.Delete -> batch.delete(op.ref)
+                    }
+                }
+                batch.commit().await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.WRITE, pathForError)
+                return Result.failure(e)
+            }
+        }
+        return Result.success(Unit)
+    }
+
+    private suspend fun pushPrimarySettings(
         uid: String,
         settings: UserSettings
     ): Result<Unit> {
@@ -298,13 +345,17 @@ class VaultixCloudRepository(
                 put("salaryPayday", settings.salaryPayday.coerceIn(1, 31))
                 put("salaryEmployer", settings.salaryEmployer.take(120))
                 put("salaryAutoCredit", settings.salaryAutoCredit)
+                put("lastCreditedMonthYear", settings.lastCreditedMonthYear.take(20))
+                put("biometricEnabled", settings.biometricEnabled)
+                put("autoLockTimeoutSeconds", settings.autoLockTimeoutSeconds.coerceIn(-1, 3600))
+                put("hasCompletedPermissionsOnboarding", settings.hasCompletedPermissionsOnboarding)
                 put("savingsWalletBalance", settings.savingsWalletBalance.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 })
                 put("savingsGoalAmount", settings.savingsGoalAmount.coerceAtLeast(0.0).let { if (it.isFinite()) it else 0.0 })
-                put("savingsHistoryJson", settings.savingsHistoryJson.take(200_000))
+                put("savingsHistoryJson", boundedJson(settings.savingsHistoryJson, 200_000, "[]"))
                 put("includeAssetsInSavingsTotal", settings.includeAssetsInSavingsTotal)
-                put("goldAssetHoldingsJson", settings.goldAssetHoldingsJson.take(100_000))
-                put("binanceHoldingsJson", settings.binanceHoldingsJson.take(100_000))
-                put("cardHubOrderJson", settings.cardHubOrderJson.take(2_000))
+                put("goldAssetHoldingsJson", boundedJson(settings.goldAssetHoldingsJson, 100_000, "[]"))
+                put("binanceHoldingsJson", boundedJson(settings.binanceHoldingsJson, 100_000, "[]"))
+                put("cardHubOrderJson", boundedJson(settings.cardHubOrderJson, 2_000, "[\"CLASSIC\",\"VISA\",\"THIRD\"]"))
                 put("classicCardBankStyle", settings.classicCardBankStyle.take(40))
                 put("classicCardHolderName", settings.classicCardHolderName.take(80))
                 put("classicCardExpiry", settings.classicCardExpiry.take(16))
@@ -315,6 +366,8 @@ class VaultixCloudRepository(
                 put("thirdCardProvider", settings.thirdCardProvider.take(40))
                 put("thirdCardHolderName", settings.thirdCardHolderName.take(80))
                 put("thirdCardExpiry", settings.thirdCardExpiry.take(16))
+                settings.firstName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("firstName", it) }
+                settings.lastName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("lastName", it) }
                 settings.localUsername.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("localUsername", it) }
                 settings.localWilayaCode.trim().take(10).takeIf { it.isNotEmpty() }?.let { put("localWilayaCode", it) }
                 settings.localWilayaName.trim().take(100).takeIf { it.isNotEmpty() }?.let { put("localWilayaName", it) }
@@ -347,6 +400,88 @@ class VaultixCloudRepository(
         }
     }
 
+    private suspend fun pushAssetsSettings(
+        uid: String,
+        settings: UserSettings
+    ): Result<Unit> {
+        val assetsRef = userDocRef(uid).collection("vault_settings").document("assets")
+        return try {
+            val existingSnap = assetsRef.get().await()
+            val mutableFields = mapOf<String, Any>(
+                "goldAssetHoldingsJson" to boundedJson(settings.goldAssetHoldingsJson, 100_000, "[]"),
+                "binanceHoldingsJson" to boundedJson(settings.binanceHoldingsJson, 100_000, "[]"),
+                "binancePricesJson" to boundedJson(settings.binancePricesJson, 100_000, "[]"),
+                "binanceLastPriceSyncMillis" to settings.binanceLastPriceSyncMillis.coerceAtLeast(0L),
+                "squareMarketSnapshotJson" to boundedJson(settings.squareMarketSnapshotJson, 180_000, ""),
+                "squareLastPriceSyncMillis" to settings.squareLastPriceSyncMillis.coerceAtLeast(0L),
+                "squareDailyBaselineJson" to boundedJson(settings.squareDailyBaselineJson, 100_000, ""),
+                "squarePinnedIdsJson" to boundedJson(settings.squarePinnedIdsJson, 5_000, "[]"),
+                "squareSyncIntervalMinutes" to settings.squareSyncIntervalMinutes.coerceIn(0, 1440),
+                "squareEnabledSourceIdsJson" to boundedJson(settings.squareEnabledSourceIdsJson, 5_000, ""),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (existingSnap.exists()) {
+                assetsRef.update(mutableFields).await()
+            } else {
+                assetsRef.set(
+                    mutableFields + mapOf(
+                        "userId" to uid,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, assetsRef.path)
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun pushSmsSyncSettings(
+        uid: String,
+        settings: UserSettings
+    ): Result<Unit> {
+        val smsRef = userDocRef(uid).collection("vault_settings").document("sms_sync")
+        return try {
+            val existingSnap = smsRef.get().await()
+            val mutableFields = mapOf<String, Any>(
+                "baridiMobSmsSyncEnabled" to settings.baridiMobSmsSyncEnabled,
+                "pendingSmsSuggestionsJson" to boundedJson(settings.pendingSmsSuggestionsJson, 180_000, "[]"),
+                "processedSmsKeysJson" to boundedJson(settings.processedSmsKeysJson, 100_000, "[]"),
+                "smsSyncBaselineTimestampMillis" to settings.smsSyncBaselineTimestampMillis.coerceAtLeast(0L),
+                "latestSmsBalanceAmount" to settings.latestSmsBalanceAmount.let {
+                    if (it.isFinite() && it >= -1.0) it else -1.0
+                },
+                "latestSmsBalanceUpdatedAt" to settings.latestSmsBalanceUpdatedAt.coerceAtLeast(0L),
+                "smsBalanceHistoryJson" to boundedJson(settings.smsBalanceHistoryJson, 180_000, "[]"),
+                "detectedSmsTaxesJson" to boundedJson(settings.detectedSmsTaxesJson, 100_000, "[]"),
+                "detectedFailedSmsTransactionsJson" to boundedJson(settings.detectedFailedSmsTransactionsJson, 100_000, "[]"),
+                "dismissedFailedSmsIdsJson" to boundedJson(settings.dismissedFailedSmsIdsJson, 50_000, "[]"),
+                "autoAddTaxesEnabled" to settings.autoAddTaxesEnabled,
+                "autoAddTaxesBaselineMillis" to settings.autoAddTaxesBaselineMillis.coerceAtLeast(0L),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (existingSnap.exists()) {
+                smsRef.update(mutableFields).await()
+            } else {
+                smsRef.set(
+                    mutableFields + mapOf(
+                        "userId" to uid,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, smsRef.path)
+            Result.failure(e)
+        }
+    }
+
     suspend fun pullVaultFromCloud(): Result<CloudPulledVault> {
         val uid = try {
             requireUserId()
@@ -361,6 +496,14 @@ class VaultixCloudRepository(
                 .toObject(CloudUserProfile::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             val settings = userRef.collection("vault_settings").document("primary").get().await()
                 .toObject(CloudVaultSettings::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val assets = runCatching {
+                userRef.collection("vault_settings").document("assets").get().await()
+                    .toObject(CloudVaultAssets::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            }.getOrNull()
+            val smsSync = runCatching {
+                userRef.collection("vault_settings").document("sms_sync").get().await()
+                    .toObject(CloudVaultSmsSync::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            }.getOrNull()
             val transactions = userRef.collection("transactions").get().await()
                 .toObjects(CloudTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             val debts = userRef.collection("debts").get().await()
@@ -370,6 +513,8 @@ class VaultixCloudRepository(
                 CloudPulledVault(
                     profile = profile,
                     settings = settings,
+                    assets = assets,
+                    smsSync = smsSync,
                     transactions = transactions,
                     debts = debts
                 )

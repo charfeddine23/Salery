@@ -73,7 +73,9 @@ data class UserSettings(
     val localWilayaCode: String = "",
     val localWilayaName: String = "",
     val localCommuneName: String = "",
-    val cardHubOrderJson: String = CardHubOrder.DEFAULT_JSON
+    val cardHubOrderJson: String = CardHubOrder.DEFAULT_JSON,
+    val firstName: String = "",
+    val lastName: String = ""
 )
 
 class PreferencesManager(context: Context) {
@@ -262,7 +264,9 @@ class PreferencesManager(context: Context) {
             localWilayaCode = safeString(all, "local_wilaya_code_v1", ""),
             localWilayaName = safeString(all, "local_wilaya_name_v1", ""),
             localCommuneName = safeString(all, "local_commune_name_v1", ""),
-            cardHubOrderJson = safeString(all, "card_hub_order_json_v1", CardHubOrder.DEFAULT_JSON)
+            cardHubOrderJson = safeString(all, "card_hub_order_json_v1", CardHubOrder.DEFAULT_JSON),
+            firstName = safeString(all, "local_first_name_v1", ""),
+            lastName = safeString(all, "local_last_name_v1", "")
         )
         preservedEncryptedBlobs = failedEncrypted
         return loaded
@@ -368,6 +372,8 @@ class PreferencesManager(context: Context) {
                 .putString("local_wilaya_name_v1", finalUpdated.localWilayaName)
                 .putString("local_commune_name_v1", finalUpdated.localCommuneName)
                 .putString("card_hub_order_json_v1", finalUpdated.cardHubOrderJson)
+                .putString("local_first_name_v1", finalUpdated.firstName)
+                .putString("local_last_name_v1", finalUpdated.lastName)
                 .apply()
             _settingsFlow.value = finalUpdated
         } finally {

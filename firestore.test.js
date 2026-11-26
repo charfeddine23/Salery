@@ -62,7 +62,9 @@ test("Authenticated owner: user profile create, partial update, and shadow/cross
   await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).set({
       userId: ALICE_UID,
-      displayName: "Alice",
+      firstName: "Alice",
+      lastName: "Benali",
+      displayName: "Alice Benali",
       email: "alice@example.com",
       language: "en",
       themeMode: "DARK",
@@ -90,10 +92,16 @@ test("Authenticated owner: user profile create, partial update, and shadow/cross
     })
   );
 
-  // Reject ghost field
+  // Reject ghost/password field
   await assertFails(
     aliceDb.collection("users").doc(ALICE_UID).update({
       isAdmin: true,
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).update({
+      password: "raw-password",
       updatedAt: new Date(Date.now() - 500),
     })
   );
@@ -206,16 +214,23 @@ test("Debts & vault_settings & encrypted_backups: strict schema and secret exclu
   await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("primary").set({
       userId: ALICE_UID,
+      firstName: "Alice",
+      lastName: "Benali",
+      localUsername: "alicedz",
       salaryAmount: 85000,
       salaryPayday: 25,
       salaryEmployer: "Enterprise",
       salaryAutoCredit: true,
+      lastCreditedMonthYear: "2026-11",
+      biometricEnabled: true,
+      autoLockTimeoutSeconds: 60,
+      hasCompletedPermissionsOnboarding: true,
       savingsWalletBalance: 10000,
       savingsGoalAmount: 50000,
       savingsHistoryJson: "[]",
-      includeAssetsInSavingsTotal: false,
-      goldAssetHoldingsJson: "[]",
-      binanceHoldingsJson: "[]",
+      includeAssetsInSavingsTotal: true,
+      goldAssetHoldingsJson: "[{\"id\":\"g1\",\"karat\":18,\"grams\":12.5}]",
+      binanceHoldingsJson: "[{\"id\":\"b1\",\"symbol\":\"USDT\",\"quantity\":100}]",
       cardHubOrderJson: "[\"CLASSIC\",\"VISA\"]",
       classicCardBankStyle: "EDAHABIA",
       classicCardHolderName: "ALICE",
@@ -227,7 +242,7 @@ test("Debts & vault_settings & encrypted_backups: strict schema and secret exclu
       thirdCardProvider: "BINANCE",
       thirdCardHolderName: "ALICE",
       thirdCardExpiry: "08/28",
-      language: "en",
+      language: "ar",
       themeMode: "DARK",
       designStyle: "LIQUID_GLASS",
       stealthMode: false,
@@ -238,10 +253,54 @@ test("Debts & vault_settings & encrypted_backups: strict schema and secret exclu
     })
   );
 
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("assets").set({
+      userId: ALICE_UID,
+      goldAssetHoldingsJson: "[{\"id\":\"g1\",\"karat\":18,\"grams\":12.5}]",
+      binanceHoldingsJson: "[{\"id\":\"b1\",\"symbol\":\"USDT\",\"quantity\":100}]",
+      binancePricesJson: "[]",
+      binanceLastPriceSyncMillis: 1700000000000,
+      squareMarketSnapshotJson: "",
+      squareLastPriceSyncMillis: 1700000000000,
+      squareDailyBaselineJson: "",
+      squarePinnedIdsJson: "[\"EUR\",\"USD\"]",
+      squareSyncIntervalMinutes: 60,
+      squareEnabledSourceIdsJson: "",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("sms_sync").set({
+      userId: ALICE_UID,
+      baridiMobSmsSyncEnabled: true,
+      pendingSmsSuggestionsJson: "[]",
+      processedSmsKeysJson: "[]",
+      smsSyncBaselineTimestampMillis: 0,
+      latestSmsBalanceAmount: -1,
+      latestSmsBalanceUpdatedAt: 0,
+      smsBalanceHistoryJson: "[]",
+      detectedSmsTaxesJson: "[]",
+      detectedFailedSmsTransactionsJson: "[]",
+      dismissedFailedSmsIdsJson: "[]",
+      autoAddTaxesEnabled: false,
+      autoAddTaxesBaselineMillis: 0,
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
   // Reject unapproved raw secret fields in vault_settings
   await assertFails(
     aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("primary").update({
       vaultKeysJson: "[{\"secret\":\"1234\"}]",
+      updatedAt: new Date(Date.now() - 1000),
+    })
+  );
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("sms_sync").update({
+      latestSmsBalanceRawSnippet: "Secret SMS body",
       updatedAt: new Date(Date.now() - 1000),
     })
   );
