@@ -87,11 +87,18 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.tasks.await
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToLong
 
 data class FinancialSummary(
@@ -2191,6 +2198,134 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun signOutToAuthScreen() {
         prefsManager.updateSettings {
             it.copy(hasLocalAccount = false)
+        }
+    }
+
+    fun updateProfilePhoto(photoUri: Uri) {
+        val current = settings.value
+        updateAccountProfile(
+            firstName = current.firstName,
+            lastName = current.lastName,
+            username = current.localUsername,
+            pickedPhotoUri = photoUri,
+            removeCustomPhoto = false
+        )
+    }
+
+    fun updateAccountProfile(
+        firstName: String,
+        lastName: String,
+        username: String,
+        pickedPhotoUri: Uri? = null,
+        removeCustomPhoto: Boolean = false
+    ) {
+        val cleanFirst = firstName.trim().take(80)
+        val cleanLast = lastName.trim().take(80)
+        val cleanUser = username.trim().take(80)
+        val isAr = settings.value.language == "ar"
+
+        viewModelScope.launch {
+            val appCtx = getApplication<Application>()
+            val resolvedAvatarPath = withContext(Dispatchers.IO) {
+                val targetFile = File(appCtx.filesDir, "profile_avatar.jpg")
+                when {
+                    pickedPhotoUri != null -> {
+                        saveDownscaledAvatar(appCtx, pickedPhotoUri, targetFile)
+                            ?: settings.value.profileAvatarPath
+                    }
+                    removeCustomPhoto -> {
+                        runCatching { targetFile.delete() }
+                        ""
+                    }
+                    else -> settings.value.profileAvatarPath
+                }
+            }
+
+            prefsManager.updateSettings { current ->
+                current.copy(
+                    firstName = cleanFirst,
+                    lastName = cleanLast,
+                    localUsername = cleanUser.ifBlank { current.localUsername },
+                    profileAvatarPath = resolvedAvatarPath
+                )
+            }
+
+            val fullDisplayName = listOf(cleanFirst, cleanLast)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { cleanUser }
+
+            val user = firebaseAuth?.currentUser
+            if (user != null) {
+                if (fullDisplayName.isNotBlank()) {
+                    runCatching {
+                        user.updateProfile(
+                            UserProfileChangeRequest.Builder()
+                                .setDisplayName(fullDisplayName)
+                                .build()
+                        ).await()
+                    }
+                    _googleAuthState.value = GoogleAuthUiState.SignedIn(
+                        uid = user.uid,
+                        displayName = fullDisplayName,
+                        email = user.email.orEmpty(),
+                        photoUrl = user.photoUrl?.toString()
+                    )
+                }
+                val repo = cloudRepository
+                if (repo != null) {
+                    withContext(Dispatchers.IO) {
+                        repo.upsertUserProfile(user, settings.value)
+                    }
+                }
+            }
+
+            _toastEvent.emit(
+                if (isAr) "تم تحديث الملف الشخصي ✓"
+                else "Profile updated ✓"
+            )
+        }
+    }
+
+    private fun saveDownscaledAvatar(context: Context, uri: Uri, destFile: File): String? {
+        return try {
+            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, boundsOpts)
+            }
+            var sampleSize = 1
+            val maxDim = maxOf(boundsOpts.outWidth, boundsOpts.outHeight)
+            if (maxDim > 512) {
+                while (maxDim / (sampleSize * 2) >= 256) {
+                    sampleSize *= 2
+                }
+            }
+            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val decoded = context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, decodeOpts)
+            } ?: return null
+
+            val scaled = if (decoded.width > 512 || decoded.height > 512) {
+                val ratio = minOf(512f / decoded.width, 512f / decoded.height)
+                Bitmap.createScaledBitmap(
+                    decoded,
+                    (decoded.width * ratio).toInt().coerceAtLeast(1),
+                    (decoded.height * ratio).toInt().coerceAtLeast(1),
+                    true
+                ).also {
+                    if (it !== decoded) decoded.recycle()
+                }
+            } else {
+                decoded
+            }
+
+            FileOutputStream(destFile).use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, 88, out)
+            }
+            scaled.recycle()
+            destFile.absolutePath
+        } catch (_: Throwable) {
+            null
         }
     }
 

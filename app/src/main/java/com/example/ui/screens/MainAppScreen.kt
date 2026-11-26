@@ -495,7 +495,7 @@ fun MainAppScreen(
                                                 "ccps" -> if (isArabic) "الحسابات البريدية" else "CCP's"
                                                 "square" -> if (isArabic) "السكوار" else "Square"
                                                 "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
-                                                "settings_account" -> if (isArabic) "الحساب (Account)" else "Account"
+                                                "settings_account" -> if (isArabic) "الحساب والسحابة" else "Account & Cloud"
                                                 "settings_authorisation" -> if (isArabic) "التراخيص (Authorisation)" else "Authorisation"
                                                 "settings_appearance" -> if (isArabic) "المظهر (Appearance)" else "Appearance"
                                                 "settings_security" -> if (isArabic) "الأمان (Security)" else "Security"
@@ -765,12 +765,23 @@ fun MainAppScreen(
                                     googleAuthState = googleAuthState,
                                     cloudSyncState = cloudSyncState,
                                     lastCloudSyncMillis = lastCloudSyncMillis,
+                                    recordsCount = transactions.size + debts.size,
                                     onGoogleSignIn = { viewModel.signInWithGoogle(context) },
                                     onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
                                     onCloudSyncNow = { viewModel.syncNowWithCloud(showFeedback = true) },
                                     onRestoreFromCloud = { viewModel.restoreFromCloud(showFeedback = true) },
                                     onOpenBackupRestore = { showBackupRestoreDialog = true },
-                                    onSignOutToAuthScreen = { viewModel.signOutToAuthScreen() }
+                                    onSignOutToAuthScreen = { viewModel.signOutToAuthScreen() },
+                                    onUpdateAccountProfile = { firstName, lastName, username, pickedPhotoUri, removeCustomPhoto ->
+                                        viewModel.updateAccountProfile(
+                                            firstName = firstName,
+                                            lastName = lastName,
+                                            username = username,
+                                            pickedPhotoUri = pickedPhotoUri,
+                                            removeCustomPhoto = removeCustomPhoto
+                                        )
+                                    },
+                                    onBeforeExternalFlow = { viewModel.suppressNextAutoLockForExternalFlow() }
                                 )
                                 "settings_authorisation" -> AuthorisationSettingsScreen(
                                     onOpenAccessPermissions = { currentRoute = "access_permissions" }
