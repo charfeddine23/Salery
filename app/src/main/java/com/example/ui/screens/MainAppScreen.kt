@@ -327,6 +327,8 @@ fun MainAppScreen(
                 }
                 "assets_vault" -> "insights"
                 "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
+                "theme_engine" -> "settings_appearance"
+                "access_permissions" -> "settings_authorisation"
                 else -> "cards"
             }
         }
@@ -454,52 +456,12 @@ fun MainAppScreen(
                                 },
                                 userSettings = userSettings,
                                 pendingSmsCount = pendingSmsSuggestions.size,
-                                onOpenBackupRestore = {
-                                    scope.launch { drawerState.close() }
-                                    showBackupRestoreDialog = true
-                                },
-                                onOpenAccessPermissions = {
-                                    currentRoute = "access_permissions"
-                                    scope.launch { drawerState.close() }
-                                },
-                                onOpenThemeEngine = {
-                                    currentRoute = "theme_engine"
-                                    scope.launch { drawerState.close() }
-                                },
-                                onToggleBiometric = { enabled ->
-                                    viewModel.setBiometricEnabled(enabled)
-                                },
-                                onSelectAutoLockTimeoutSeconds = { seconds ->
-                                    viewModel.setAutoLockTimeoutSeconds(seconds)
-                                },
-                                onToggleBreathingGlow = { enabled ->
-                                    viewModel.setBreathingGlowEnabled(enabled)
-                                },
-                                onToggleScreenshotProtection = { enabled ->
-                                    viewModel.setScreenshotProtectionEnabled(enabled)
-                                },
-                                onSelectThemeMode = { mode ->
-                                    viewModel.setThemeMode(mode)
-                                },
-                                onSelectLanguage = { lang ->
-                                    viewModel.setLanguage(lang)
-                                },
                                 updateUiState = updateUiState,
                                 onCheckForUpdates = {
                                     scope.launch { drawerState.close() }
                                     viewModel.checkForUpdates(manual = true)
                                 },
-                                onOpenAuthScreen = {
-                                    scope.launch { drawerState.close() }
-                                    viewModel.signOutToAuthScreen()
-                                },
-                                googleAuthState = googleAuthState,
-                                cloudSyncState = cloudSyncState,
-                                lastCloudSyncMillis = lastCloudSyncMillis,
-                                onGoogleSignIn = { viewModel.signInWithGoogle(context) },
-                                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
-                                onCloudSyncNow = { viewModel.syncNowWithCloud(showFeedback = true) },
-                                onRestoreFromCloud = { viewModel.restoreFromCloud(showFeedback = true) }
+                                googleAuthState = googleAuthState
                             )
                         }
                     }
@@ -533,6 +495,11 @@ fun MainAppScreen(
                                                 "ccps" -> if (isArabic) "الحسابات البريدية" else "CCP's"
                                                 "square" -> if (isArabic) "السكوار" else "Square"
                                                 "baridimob_sync" -> if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync"
+                                                "settings_account" -> if (isArabic) "الحساب (Account)" else "Account"
+                                                "settings_authorisation" -> if (isArabic) "التراخيص (Authorisation)" else "Authorisation"
+                                                "settings_appearance" -> if (isArabic) "المظهر (Appearance)" else "Appearance"
+                                                "settings_security" -> if (isArabic) "الأمان (Security)" else "Security"
+                                                "settings_language" -> if (isArabic) "اللغة (Language)" else "Language"
                                                 "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
                                                 "theme_engine" -> if (isArabic) "محرك الثيمات" else "Theme Engine"
                                                 "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
@@ -559,6 +526,8 @@ fun MainAppScreen(
                                                     }
                                                     "assets_vault" -> "insights"
                                                     "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
+                                                    "theme_engine" -> "settings_appearance"
+                                                    "access_permissions" -> "settings_authorisation"
                                                     else -> "cards"
                                                 }
                                             },
@@ -789,6 +758,49 @@ fun MainAppScreen(
                                     },
                                     onReplayOnboardingWizard = {
                                         forceShowPermissionsOnboarding = true
+                                    }
+                                )
+                                "settings_account" -> AccountSettingsScreen(
+                                    userSettings = userSettings,
+                                    googleAuthState = googleAuthState,
+                                    cloudSyncState = cloudSyncState,
+                                    lastCloudSyncMillis = lastCloudSyncMillis,
+                                    onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                                    onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                                    onCloudSyncNow = { viewModel.syncNowWithCloud(showFeedback = true) },
+                                    onRestoreFromCloud = { viewModel.restoreFromCloud(showFeedback = true) },
+                                    onOpenBackupRestore = { showBackupRestoreDialog = true },
+                                    onSignOutToAuthScreen = { viewModel.signOutToAuthScreen() }
+                                )
+                                "settings_authorisation" -> AuthorisationSettingsScreen(
+                                    onOpenAccessPermissions = { currentRoute = "access_permissions" }
+                                )
+                                "settings_appearance" -> AppearanceSettingsScreen(
+                                    userSettings = userSettings,
+                                    onToggleBreathingGlow = { enabled ->
+                                        viewModel.setBreathingGlowEnabled(enabled)
+                                    },
+                                    onOpenThemeEngine = { currentRoute = "theme_engine" },
+                                    onSelectThemeMode = { mode ->
+                                        viewModel.setThemeMode(mode)
+                                    }
+                                )
+                                "settings_security" -> SecuritySettingsScreen(
+                                    userSettings = userSettings,
+                                    onToggleScreenshotProtection = { enabled ->
+                                        viewModel.setScreenshotProtectionEnabled(enabled)
+                                    },
+                                    onToggleBiometric = { enabled ->
+                                        viewModel.setBiometricEnabled(enabled)
+                                    },
+                                    onSelectAutoLockTimeoutSeconds = { seconds ->
+                                        viewModel.setAutoLockTimeoutSeconds(seconds)
+                                    }
+                                )
+                                "settings_language" -> LanguageSettingsScreen(
+                                    currentLanguage = userSettings.language,
+                                    onSelectLanguage = { lang ->
+                                        viewModel.setLanguage(lang)
                                     }
                                 )
                                 "theme_engine" -> ThemeEngineScreen(

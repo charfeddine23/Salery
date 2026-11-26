@@ -3,7 +3,6 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,29 +20,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +50,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.CloudSyncUiState
 import com.example.cloud.GoogleAuthUiState
 import com.example.data.UserSettings
 import com.example.ui.i18n.APP_NAME
@@ -64,23 +60,16 @@ import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
-import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.isolateLtr
 import com.example.ui.screens.readAppPermissionsSummary
+import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.ThemeEngineCatalog
 import com.example.update.AppUpdateUiState
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun SidebarDrawer(
@@ -88,33 +77,18 @@ fun SidebarDrawer(
     onNavigate: (String) -> Unit,
     userSettings: UserSettings,
     pendingSmsCount: Int = 0,
-    onOpenBackupRestore: () -> Unit = {},
-    onOpenAccessPermissions: () -> Unit = {},
-    onOpenThemeEngine: () -> Unit = {},
-    onToggleBiometric: (Boolean) -> Unit = {},
-    onSelectAutoLockTimeoutSeconds: (Int) -> Unit = {},
-    onToggleBreathingGlow: (Boolean) -> Unit = {},
-    onToggleScreenshotProtection: (Boolean) -> Unit = {},
-    onSelectThemeMode: (String) -> Unit,
-    onSelectLanguage: (String) -> Unit,
     updateUiState: AppUpdateUiState = AppUpdateUiState.Idle,
     onCheckForUpdates: () -> Unit = {},
-    onOpenAuthScreen: () -> Unit = {},
     googleAuthState: GoogleAuthUiState = GoogleAuthUiState.SignedOut,
-    cloudSyncState: CloudSyncUiState = CloudSyncUiState.Idle,
-    lastCloudSyncMillis: Long = 0L,
-    onGoogleSignIn: () -> Unit = {},
-    onGoogleSignOut: () -> Unit = {},
-    onCloudSyncNow: () -> Unit = {},
-    onRestoreFromCloud: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val context = LocalContext.current
     val permSummary = readAppPermissionsSummary(context)
-
-    val dimens = com.example.ui.theme.LocalAdaptiveDimens.current
+    val dimens = LocalAdaptiveDimens.current
+    val isArabic = strings is ArabicStrings
+    val signedIn = googleAuthState as? GoogleAuthUiState.SignedIn
 
     Box(
         modifier = modifier
@@ -138,7 +112,7 @@ fun SidebarDrawer(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Liquid Glass Branding Header Card
+            // 1. App Branding Header Card (kept as-is)
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.glassSurface,
@@ -166,8 +140,7 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Navigation Items
-            val isArabic = strings is ArabicStrings
+            // 2. Main 4 Navigation Pages (kept as-is)
             val isInsideCard = selectedRoute in listOf(
                 "dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault", "gold_asset_editor"
             )
@@ -183,7 +156,7 @@ fun SidebarDrawer(
                 DrawerNavItem(
                     icon = Icons.Default.VpnKey,
                     title = if (isArabic) "المفاتيح" else "Keys",
-                    iconTint = com.example.ui.theme.AmberNeon,
+                    iconTint = AmberNeon,
                     isSelected = selectedRoute == "keys",
                     onClick = { onNavigate("keys") }
                 )
@@ -197,14 +170,14 @@ fun SidebarDrawer(
                 DrawerNavItem(
                     icon = Icons.Default.CurrencyExchange,
                     title = if (isArabic) "السكوار" else "Square",
-                    iconTint = com.example.ui.theme.AmberNeon,
+                    iconTint = AmberNeon,
                     isSelected = selectedRoute == "square",
                     onClick = { onNavigate("square") }
                 )
             } else {
                 DrawerNavItem(
                     icon = Icons.Default.Dashboard,
-                    title = if (strings is ArabicStrings) "لوحة التحكم" else "Dashboard",
+                    title = if (isArabic) "لوحة التحكم" else "Dashboard",
                     isSelected = selectedRoute == "dashboard_details",
                     onClick = { onNavigate("dashboard_details") }
                 )
@@ -231,7 +204,7 @@ fun SidebarDrawer(
                 )
                 DrawerNavItem(
                     icon = Icons.Default.Sms,
-                    title = if (strings is ArabicStrings) "مزامنة بريدي موب" else "BaridiMob SMS Sync",
+                    title = if (isArabic) "مزامنة بريدي موب" else "BaridiMob SMS Sync",
                     iconTint = Color(0xFF818CF8),
                     isSelected = selectedRoute == "baridimob_sync",
                     badgeCount = pendingSmsCount,
@@ -243,6 +216,7 @@ fun SidebarDrawer(
             HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.8.dp)
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 3. Reorganized Settings Category Buttons
             Text(
                 text = strings.settingsTitle,
                 color = colors.textMuted,
@@ -252,377 +226,92 @@ fun SidebarDrawer(
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Access Permissions (صلاحيات الوصول)
-            DrawerActionItem(
-                icon = Icons.Default.AdminPanelSettings,
-                title = if (isArabic) "صلاحيات الوصول" else "Access Permissions",
-                subtitle = if (permSummary.allEssentialGranted) {
-                    if (isArabic) "${permSummary.grantedCount}/${permSummary.totalCount} صلاحيات مفعّلة ✓"
-                    else "${permSummary.grantedCount}/${permSummary.totalCount} permissions active ✓"
-                } else {
-                    val missing = permSummary.totalCount - permSummary.grantedCount
-                    if (isArabic) "${permSummary.grantedCount}/${permSummary.totalCount} • يتطلب تفعيل $missing"
-                    else "${permSummary.grantedCount}/${permSummary.totalCount} • $missing needed"
-                },
-                iconTint = if (permSummary.allEssentialGranted) EmeraldNeon else com.example.ui.theme.AmberNeon,
-                modifier = Modifier.testTag("access_permissions_setting_row"),
-                onClick = onOpenAccessPermissions
-            )
-
-            // Backup & Restore
-            DrawerActionItem(
-                icon = Icons.Default.CloudDone,
-                title = strings.backupDriveTitle,
-                subtitle = if (isArabic) "حفظ واستعادة النسخ الاحتياطية" else "Google Drive & JSON backup",
-                onClick = onOpenBackupRestore
-            )
-
-            // Fingerprint Authentication (زر تفعيل وتعطيل ال fingerprint authentication)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onToggleBiometric(!userSettings.biometricEnabled) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassCard),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Fingerprint,
-                        contentDescription = null,
-                        tint = colors.primaryNeon,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = strings.biometricSettingsTitle,
-                        color = colors.textPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (userSettings.biometricEnabled) strings.biometricActive else strings.biometricDisabled,
-                        color = if (userSettings.biometricEnabled) EmeraldNeon else colors.textMuted,
-                        fontSize = 11.sp
-                    )
-                }
-                Switch(
-                    checked = userSettings.biometricEnabled,
-                    onCheckedChange = { onToggleBiometric(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.primaryNeon,
-                        checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),
-                        uncheckedThumbColor = colors.textMuted,
-                        uncheckedTrackColor = colors.glassCard
-                    )
-                )
-            }
-
-            if (userSettings.biometricEnabled) {
-                val timeoutOptions = listOf(
-                    0 to (if (isArabic) "فوري" else "Instant"),
-                    30 to (if (isArabic) "30 ث" else "30s"),
-                    60 to (if (isArabic) "1 د" else "1m"),
-                    300 to (if (isArabic) "5 د" else "5m"),
-                    -1 to (if (isArabic) "إيقاف" else "Off")
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(colors.glassCard.copy(alpha = 0.55f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = if (isArabic) "القفل التلقائي عند الخلفية" else "Auto-Lock Timeout",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        timeoutOptions.forEach { (sec, label) ->
-                            val selected = userSettings.autoLockTimeoutSeconds == sec
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (selected) colors.primaryNeon.copy(alpha = 0.22f)
-                                        else colors.glassCard
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (selected) colors.primaryNeon else colors.glassBorderSubtle,
-                                        RoundedCornerShape(10.dp)
-                                    )
-                                    .clickable { onSelectAutoLockTimeoutSeconds(sec) }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    .testTag("auto_lock_option_$sec")
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (selected) colors.primaryNeon else colors.textSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Card Breathing Glow Toggle (تأثير التوهج التنفسي للبطاقات)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onToggleBreathingGlow(!userSettings.breathingGlowEnabled) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .testTag("breathing_glow_setting_row"),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassCard),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = if (userSettings.breathingGlowEnabled) colors.primaryNeon else colors.textMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = strings.breathingGlowTitle,
-                        color = colors.textPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (userSettings.breathingGlowEnabled) strings.breathingGlowActive else strings.breathingGlowDisabled,
-                        color = if (userSettings.breathingGlowEnabled) colors.primaryNeon else colors.textMuted,
-                        fontSize = 11.sp
-                    )
-                }
-                Switch(
-                    checked = userSettings.breathingGlowEnabled,
-                    onCheckedChange = { onToggleBreathingGlow(it) },
-                    modifier = Modifier.testTag("breathing_glow_switch"),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.primaryNeon,
-                        checkedTrackColor = colors.primaryNeon.copy(alpha = 0.35f),
-                        uncheckedThumbColor = colors.textMuted,
-                        uncheckedTrackColor = colors.glassCard
-                    )
-                )
-            }
-
-            // No-Screenshot Protection Toggle (زر تفعيل وتعطيل منع التصوير)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onToggleScreenshotProtection(!userSettings.screenshotProtectionEnabled) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .testTag("screenshot_protection_setting_row"),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassCard),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = null,
-                        tint = if (userSettings.screenshotProtectionEnabled) EmeraldNeon else colors.textMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = strings.screenshotProtectionTitle,
-                        color = colors.textPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (userSettings.screenshotProtectionEnabled) {
-                            strings.screenshotProtectionActive
-                        } else {
-                            strings.screenshotProtectionDisabled
-                        },
-                        color = if (userSettings.screenshotProtectionEnabled) EmeraldNeon else colors.textMuted,
-                        fontSize = 11.sp
-                    )
-                }
-                Switch(
-                    checked = userSettings.screenshotProtectionEnabled,
-                    onCheckedChange = { onToggleScreenshotProtection(it) },
-                    modifier = Modifier.testTag("screenshot_protection_switch"),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = EmeraldNeon,
-                        checkedTrackColor = EmeraldNeon.copy(alpha = 0.35f),
-                        uncheckedThumbColor = colors.textMuted,
-                        uncheckedTrackColor = colors.glassCard
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Theme Engine Button (32 Themes: 2 classic + 30 signature themes)
             val activeThemeSpec = ThemeEngineCatalog.findById(userSettings.designStyle)
             val activeThemeName = if (isArabic) activeThemeSpec.nameAr else activeThemeSpec.nameEn
+            val modeLabel = when (userSettings.themeMode) {
+                "LIGHT" -> if (isArabic) "فاتح" else "Light"
+                "SYSTEM" -> if (isArabic) "النظام" else "System"
+                else -> if (isArabic) "داكن" else "Dark"
+            }
 
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("open_theme_engine_button"),
-                backgroundColor = colors.glassCard,
-                borderColor = colors.primaryNeon.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(18.dp),
-                onClick = onOpenThemeEngine
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        colors.primaryNeon.copy(alpha = 0.28f),
-                                        colors.secondaryNeon.copy(alpha = 0.24f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = if (isArabic) "محرك الثيمات" else "Theme Engine",
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isArabic) "محرك الثيمات" else "Theme Engine",
-                            color = colors.textPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isArabic) {
-                                "$activeThemeName • ${ThemeEngineCatalog.allThemes.size} ثيماً"
-                            } else {
-                                "$activeThemeName • ${ThemeEngineCatalog.allThemes.size} themes"
-                            },
-                            color = colors.primaryNeon,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(colors.primaryNeon)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(colors.secondaryNeon)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = colors.textMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Button 1: Account
+                DrawerCategoryButton(
+                    icon = Icons.Default.ManageAccounts,
+                    title = if (isArabic) "الحساب (Account)" else "Account",
+                    subtitle = signedIn?.email?.takeIf { it.isNotBlank() }
+                        ?: if (isArabic) "المزامنة السحابية، الخروج، Google Drive" else "Cloud Sync, Sign Out, Google Drive Backups",
+                    iconTint = if (signedIn != null) EmeraldNeon else colors.primaryNeon,
+                    isSelected = selectedRoute == "settings_account",
+                    testTag = "settings_category_account",
+                    onClick = { onNavigate("settings_account") }
+                )
+
+                // Button 2: Authorisation
+                DrawerCategoryButton(
+                    icon = Icons.Default.AdminPanelSettings,
+                    title = if (isArabic) "التراخيص (Authorisation)" else "Authorisation",
+                    subtitle = if (permSummary.allEssentialGranted) {
+                        if (isArabic) "Access Permissions • ${permSummary.grantedCount}/${permSummary.totalCount} ✓"
+                        else "Access Permissions • ${permSummary.grantedCount}/${permSummary.totalCount} ✓"
+                    } else {
+                        val missing = permSummary.totalCount - permSummary.grantedCount
+                        if (isArabic) "Access Permissions • يتطلب $missing"
+                        else "Access Permissions • $missing needed"
+                    },
+                    iconTint = if (permSummary.allEssentialGranted) EmeraldNeon else AmberNeon,
+                    isSelected = selectedRoute == "settings_authorisation" || selectedRoute == "access_permissions",
+                    testTag = "settings_category_authorisation",
+                    onClick = { onNavigate("settings_authorisation") }
+                )
+
+                // Button 3: Appearance
+                DrawerCategoryButton(
+                    icon = Icons.Default.Palette,
+                    title = if (isArabic) "المظهر (Appearance)" else "Appearance",
+                    subtitle = "$activeThemeName • $modeLabel",
+                    iconTint = colors.secondaryNeon,
+                    isSelected = selectedRoute == "settings_appearance" || selectedRoute == "theme_engine",
+                    testTag = "settings_category_appearance",
+                    onClick = { onNavigate("settings_appearance") }
+                )
+
+                // Button 4: Security
+                val activeSecCount = listOf(
+                    userSettings.screenshotProtectionEnabled,
+                    userSettings.biometricEnabled
+                ).count { it }
+                DrawerCategoryButton(
+                    icon = Icons.Default.Shield,
+                    title = if (isArabic) "الأمان (Security)" else "Security",
+                    subtitle = if (isArabic) {
+                        "منع التصوير، البصمة • $activeSecCount/2 مفعّل"
+                    } else {
+                        "No-Screenshot, Fingerprint • $activeSecCount/2 active"
+                    },
+                    iconTint = if (activeSecCount > 0) EmeraldNeon else colors.primaryNeon,
+                    isSelected = selectedRoute == "settings_security",
+                    testTag = "settings_category_security",
+                    onClick = { onNavigate("settings_security") }
+                )
+
+                // Button 5: Language
+                DrawerCategoryButton(
+                    icon = Icons.Default.Translate,
+                    title = if (isArabic) "اللغة (Language)" else "Language",
+                    subtitle = if (isArabic) "العربية" else "English",
+                    iconTint = CyanNeon,
+                    isSelected = selectedRoute == "settings_language",
+                    testTag = "settings_category_language",
+                    onClick = { onNavigate("settings_language") }
+                )
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Theme Mode & Language Switchers Card
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = colors.glassCard,
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = strings.themeMode,
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LiquidThemeSegmentedControl(
-                        currentThemeMode = userSettings.themeMode,
-                        onSelectThemeMode = onSelectThemeMode
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(color = colors.glassBorderSubtle, thickness = 0.6.dp)
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = strings.appLanguage,
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LiquidLanguageSegmentedControl(
-                        currentLanguage = userSettings.language,
-                        onSelectLanguage = onSelectLanguage
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // In-App Update Check Action Card
+            // 4. Check for Updates (kept as-is below settings buttons)
             val hasPendingUpdate = updateUiState is AppUpdateUiState.Available ||
                 updateUiState is AppUpdateUiState.Downloading ||
                 updateUiState is AppUpdateUiState.ReadyToInstall
@@ -690,94 +379,9 @@ fun SidebarDrawer(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Google Sign-In & Cloud Firestore Sync Card
-            SidebarCloudSyncCard(
-                isArabic = isArabic,
-                googleAuthState = googleAuthState,
-                cloudSyncState = cloudSyncState,
-                lastCloudSyncMillis = lastCloudSyncMillis,
-                onGoogleSignIn = onGoogleSignIn,
-                onGoogleSignOut = onGoogleSignOut,
-                onCloudSyncNow = onCloudSyncNow,
-                onRestoreFromCloud = onRestoreFromCloud
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Local Account / Return to Login Screen Action Card
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("open_auth_screen_drawer_button"),
-                backgroundColor = colors.glassCard,
-                borderColor = colors.glassBorderSubtle,
-                shape = RoundedCornerShape(18.dp),
-                onClick = onOpenAuthScreen
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(EmeraldNeon.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = null,
-                            tint = EmeraldNeon,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    val hasProfileName = userSettings.localUsername.isNotBlank()
-                    val locationSummary = listOf(userSettings.localCommuneName, userSettings.localWilayaName)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" • ")
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (hasProfileName) {
-                                userSettings.localUsername
-                            } else if (isArabic) {
-                                "واجهة تسجيل الدخول"
-                            } else {
-                                "Sign-in Screen"
-                            },
-                            color = colors.textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (locationSummary.isNotBlank()) {
-                                locationSummary
-                            } else if (isArabic) {
-                                "الحساب المحلي نشط • تبديل"
-                            } else {
-                                "Local account active • Switch"
-                            },
-                            color = colors.textMuted,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Dynamic Developer Footer & App Info Card
+            // 5. Dynamic Developer Footer & App Info Card (kept as-is at bottom)
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -842,6 +446,77 @@ fun SidebarDrawer(
 }
 
 @Composable
+private fun DrawerCategoryButton(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    iconTint: Color,
+    isSelected: Boolean,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    val colors = LiquidGlassTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isSelected) colors.primaryNeon.copy(alpha = 0.16f)
+                else colors.glassCard
+            )
+            .border(
+                width = if (isSelected) 1.2.dp else 0.9.dp,
+                color = if (isSelected) colors.primaryNeon.copy(alpha = 0.55f) else colors.glassBorderSubtle,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(iconTint.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (isSelected) colors.primaryNeon else colors.textPrimary,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                color = colors.textMuted,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = if (isSelected) colors.primaryNeon else colors.textMuted,
+            modifier = Modifier.size(19.dp)
+        )
+    }
+}
+
+@Composable
 private fun DrawerNavItem(
     icon: ImageVector,
     title: String,
@@ -890,343 +565,6 @@ private fun DrawerNavItem(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DrawerActionItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    iconTint: Color = LiquidGlassTheme.colors.primaryNeon,
-    modifier: Modifier = Modifier
-) {
-    val colors = LiquidGlassTheme.colors
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.glassCard),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = colors.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = subtitle,
-                color = colors.textMuted,
-                fontSize = 11.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun SidebarCloudSyncCard(
-    isArabic: Boolean,
-    googleAuthState: GoogleAuthUiState,
-    cloudSyncState: CloudSyncUiState,
-    lastCloudSyncMillis: Long,
-    onGoogleSignIn: () -> Unit,
-    onGoogleSignOut: () -> Unit,
-    onCloudSyncNow: () -> Unit,
-    onRestoreFromCloud: () -> Unit
-) {
-    val colors = LiquidGlassTheme.colors
-    val signedIn = googleAuthState as? GoogleAuthUiState.SignedIn
-    val isAuthLoading = googleAuthState is GoogleAuthUiState.Loading
-    val authError = (googleAuthState as? GoogleAuthUiState.Error)?.message
-    val isSyncing = cloudSyncState is CloudSyncUiState.Syncing
-
-    val accentColor = when {
-        signedIn != null && cloudSyncState is CloudSyncUiState.Error -> RoseNeon
-        signedIn != null -> EmeraldNeon
-        authError != null -> RoseNeon
-        else -> colors.primaryNeon
-    }
-
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("cloud_sync_drawer_card"),
-        backgroundColor = colors.glassCard,
-        borderColor = accentColor.copy(alpha = 0.45f),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(accentColor.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isAuthLoading || isSyncing) {
-                        CircularProgressIndicator(
-                            color = accentColor,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = when {
-                                signedIn != null -> Icons.Default.CloudSync
-                                authError != null -> Icons.Default.CloudOff
-                                else -> Icons.Default.CloudQueue
-                            },
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (signedIn != null) {
-                            signedIn.displayName
-                        } else if (isArabic) {
-                            "المزامنة السحابية (Google)"
-                        } else {
-                            "Google Cloud Sync"
-                        },
-                        color = colors.textPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    val subtitle = when {
-                        isAuthLoading -> if (isArabic) "جاري تسجيل الدخول بـ Google..." else "Signing in with Google..."
-                        signedIn != null -> signedIn.email.ifBlank {
-                            if (isArabic) "متصل بـ Firebase" else "Connected to Firebase"
-                        }
-                        authError != null -> authError
-                        else -> if (isArabic) {
-                            "سجّل الدخول لمزامنة بياناتك عبر Firestore"
-                        } else {
-                            "Sign in to sync transactions & debts"
-                        }
-                    }
-                    Text(
-                        text = subtitle,
-                        color = if (authError != null && signedIn == null) RoseNeon else colors.textMuted,
-                        fontSize = 11.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            if (signedIn != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-
-                val statusText = when (cloudSyncState) {
-                    is CloudSyncUiState.Syncing -> if (isArabic) "جاري المزامنة مع Firestore..." else "Syncing with Firestore..."
-                    is CloudSyncUiState.Success -> if (isArabic) {
-                        "متزامن • ${cloudSyncState.transactionCount} معاملة • ${cloudSyncState.debtCount} ديون"
-                    } else {
-                        "Synced • ${cloudSyncState.transactionCount} tx • ${cloudSyncState.debtCount} debts"
-                    }
-                    is CloudSyncUiState.Error -> cloudSyncState.message
-                    is CloudSyncUiState.Idle -> if (lastCloudSyncMillis > 0L) {
-                        val dateLabel = isolateLtr(formatDate(lastCloudSyncMillis, isArabic))
-                        if (isArabic) "آخر مزامنة: $dateLabel" else "Last sync: $dateLabel"
-                    } else {
-                        if (isArabic) "المخزن المحلي النشط جاهز للمزامنة" else "Offline-first vault ready to sync"
-                    }
-                }
-                val statusColor = when (cloudSyncState) {
-                    is CloudSyncUiState.Error -> RoseNeon
-                    is CloudSyncUiState.Success -> EmeraldNeon
-                    is CloudSyncUiState.Syncing -> colors.primaryNeon
-                    is CloudSyncUiState.Idle -> colors.textSecondary
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassSurface.copy(alpha = 0.65f))
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (cloudSyncState is CloudSyncUiState.Error) Icons.Default.ErrorOutline else Icons.Default.CloudDone,
-                        contentDescription = null,
-                        tint = statusColor,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = statusText,
-                        color = statusColor,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.primaryNeon.copy(alpha = 0.18f))
-                            .border(1.dp, colors.primaryNeon.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                            .clickable(enabled = !isSyncing, onClick = onCloudSyncNow)
-                            .padding(vertical = 10.dp, horizontal = 8.dp)
-                            .testTag("drawer_cloud_sync_now_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CloudUpload,
-                                contentDescription = null,
-                                tint = colors.primaryNeon,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isArabic) "مزامنة" else "Sync",
-                                color = colors.primaryNeon,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(EmeraldNeon.copy(alpha = 0.14f))
-                            .border(1.dp, EmeraldNeon.copy(alpha = 0.40f), RoundedCornerShape(10.dp))
-                            .clickable(enabled = !isSyncing, onClick = onRestoreFromCloud)
-                            .padding(vertical = 10.dp, horizontal = 8.dp)
-                            .testTag("drawer_cloud_restore_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = null,
-                                tint = EmeraldNeon,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isArabic) "استعادة" else "Restore",
-                                color = EmeraldNeon,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(RoseNeon.copy(alpha = 0.10f))
-                        .border(1.dp, RoseNeon.copy(alpha = 0.30f), RoundedCornerShape(10.dp))
-                        .clickable(enabled = !isSyncing, onClick = onGoogleSignOut)
-                        .padding(vertical = 9.dp, horizontal = 10.dp)
-                        .testTag("drawer_google_signout_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = null,
-                            tint = RoseNeon,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isArabic) "تسجيل الخروج من Google" else "Sign out of Google",
-                            color = RoseNeon,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            } else {
-                Spacer(modifier = Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(colors.primaryNeon.copy(alpha = 0.18f))
-                        .border(1.dp, colors.primaryNeon.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
-                        .clickable(enabled = !isAuthLoading, onClick = onGoogleSignIn)
-                        .padding(vertical = 10.dp, horizontal = 12.dp)
-                        .testTag("drawer_google_signin_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CloudUpload,
-                            contentDescription = null,
-                            tint = colors.primaryNeon,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(7.dp))
-                        Text(
-                            text = if (isAuthLoading) {
-                                if (isArabic) "جاري الاتصال..." else "Connecting..."
-                            } else if (isArabic) {
-                                "تسجيل الدخول عبر Google"
-                            } else {
-                                "Sign in with Google"
-                            },
-                            color = colors.primaryNeon,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
