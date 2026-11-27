@@ -27,6 +27,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -419,43 +420,41 @@ fun MainAppScreen(
                 }
             )
         } else if (!userSettings.hasLocalAccount) {
-            var showLocalAccountSetup by remember(userSettings.hasLocalAccount) { mutableStateOf(false) }
-            if (!showLocalAccountSetup) {
-                AuthWelcomeScreen(
-                    isArabic = activeStrings is ArabicStrings,
-                    googleAuthState = googleAuthState,
-                    onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
-                    onGoogleSignIn = { viewModel.signInWithGoogle(context) },
-                    onEmailSignIn = { email, password ->
-                        viewModel.signInWithEmailAccount(context, email, password)
-                    },
-                    onEmailSignUp = { firstName, lastName, username, email, password ->
-                        viewModel.signUpWithEmailAccount(context, firstName, lastName, username, email, password)
-                    },
-                    onClearAuthError = { viewModel.clearAuthError() },
-                    onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
-                    onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
-                    onCreateLocalAccount = { showLocalAccountSetup = true }
-                )
-            } else {
-                LocalAccountSetupScreen(
-                    isArabic = activeStrings is ArabicStrings,
-                    initialUsername = userSettings.localUsername,
-                    initialWilayaCode = userSettings.localWilayaCode,
-                    initialCommuneName = userSettings.localCommuneName,
-                    onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
-                    onBack = { showLocalAccountSetup = false },
-                    onCreateAccount = { username, wilayaCode, wilayaName, communeName ->
-                        showLocalAccountSetup = false
-                        viewModel.activateLocalAccount(
-                            username = username,
-                            wilayaCode = wilayaCode,
-                            wilayaName = wilayaName,
-                            communeName = communeName
-                        )
-                    }
-                )
+            val isAuthDarkTheme = when (userSettings.themeMode) {
+                "DARK" -> true
+                "LIGHT" -> false
+                else -> isSystemInDarkTheme()
             }
+            AuthWelcomeScreen(
+                isArabic = activeStrings is ArabicStrings,
+                isDarkTheme = isAuthDarkTheme,
+                googleAuthState = googleAuthState,
+                onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
+                onToggleTheme = {
+                    viewModel.setThemeMode(if (isAuthDarkTheme) "LIGHT" else "DARK")
+                },
+                onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                onEmailSignIn = { email, password ->
+                    viewModel.signInWithEmailAccount(context, email, password)
+                },
+                onEmailSignUp = { firstName, lastName, username, email, password ->
+                    viewModel.signUpWithEmailAccount(context, firstName, lastName, username, email, password)
+                },
+                onSendPasswordReset = { email, onResult ->
+                    viewModel.sendPasswordResetEmail(context, email, onResult)
+                },
+                onClearAuthError = { viewModel.clearAuthError() },
+                onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
+                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                onCreateGuestAccount = { guestUsername ->
+                    viewModel.activateLocalAccount(
+                        username = guestUsername,
+                        wilayaCode = "",
+                        wilayaName = "",
+                        communeName = ""
+                    )
+                }
+            )
         } else {
             // Respect the active language's layout direction for the entire interface and drawer
             CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {

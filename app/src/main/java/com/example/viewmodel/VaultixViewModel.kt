@@ -2676,6 +2676,41 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun sendPasswordResetEmail(
+        context: Context,
+        email: String,
+        onResult: (success: Boolean, message: String) -> Unit
+    ) {
+        val isAr = settings.value.language == "ar"
+        val cleanEmail = email.trim()
+        if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
+            onResult(
+                false,
+                if (isAr) "يرجى إدخال بريد إلكتروني صالح" else "Please enter a valid email address"
+            )
+            return
+        }
+        viewModelScope.launch {
+            val result = GoogleAuthHelper.sendPasswordResetEmail(context, cleanEmail, isAr)
+            result.onSuccess {
+                val msg = if (isAr) {
+                    "تم إرسال رابط إعادة تعيين كلمة السر إلى $cleanEmail"
+                } else {
+                    "Password reset link sent to $cleanEmail"
+                }
+                _toastEvent.emit(msg)
+                onResult(true, msg)
+            }.onFailure { err ->
+                val msg = err.message ?: if (isAr) {
+                    "تعذر إرسال رابط إعادة التعيين"
+                } else {
+                    "Unable to send password reset email"
+                }
+                onResult(false, msg)
+            }
+        }
+    }
+
     private fun activateRegisteredCloudProfile(
         user: FirebaseUser,
         firstName: String,

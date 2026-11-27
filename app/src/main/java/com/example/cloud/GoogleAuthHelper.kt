@@ -258,6 +258,26 @@ object GoogleAuthHelper {
         }
     }
 
+    suspend fun sendPasswordResetEmail(
+        context: Context,
+        email: String,
+        isArabic: Boolean
+    ): Result<Unit> {
+        val auth = resolveAuth(context) ?: return Result.failure(
+            IllegalStateException(
+                if (isArabic) "تعذر تهيئة خدمة المصادقة السحابية" else "Firebase Authentication is unavailable"
+            )
+        )
+        return try {
+            auth.sendPasswordResetEmail(email.trim()).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(IllegalStateException(mapFirebaseAuthError(e, isArabic)))
+        }
+    }
+
     private fun mapFirebaseAuthError(e: Exception, isArabic: Boolean): String {
         val code = (e as? FirebaseAuthException)?.errorCode.orEmpty()
         return when (code) {
