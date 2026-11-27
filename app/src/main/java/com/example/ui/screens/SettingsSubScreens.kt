@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,8 +32,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
@@ -100,9 +103,13 @@ import com.example.ui.components.GlassButton
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidLanguageSegmentedControl
 import com.example.ui.components.LiquidThemeSegmentedControl
+import com.example.ui.components.VaultixLogoContainer
 import com.example.ui.components.edgeFadeVerticalContentPadding
+import com.example.ui.i18n.APP_NAME
+import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.isolateLtr
 import com.example.ui.theme.AmberNeon
@@ -2088,3 +2095,132 @@ private fun LanguageOptionRow(
         }
     }
 }
+
+@Composable
+fun DeveloperSettingsScreen(
+    modifier: Modifier = Modifier
+) {
+    val strings = AppStrings.current
+    val isArabic = strings is ArabicStrings
+    val colors = LiquidGlassTheme.colors
+    val dimens = LocalAdaptiveDimens.current
+    val context = LocalContext.current
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = dimens.screenPaddingH),
+        contentPadding = edgeFadeVerticalContentPadding(
+            extraTop = 8.dp,
+            extraBottom = 24.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item(key = "developer_info_card") {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("developer_settings_card"),
+                backgroundColor = colors.glassCard,
+                borderColor = EmeraldNeon.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    VaultixLogoContainer(
+                        size = 72.dp,
+                        cornerRadius = 22.dp,
+                        padding = 6.dp
+                    )
+
+                    Text(
+                        text = APP_NAME,
+                        color = colors.textPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+
+                    Text(
+                        text = isolateLtr("Developed by: $DEVELOPER_NAME"),
+                        color = colors.textPrimary,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "${isolateLtr("v$APP_VERSION")} • ${strings.updatedLabel}: ${strings.buildDate}",
+                        color = colors.textMuted,
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.14f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                            .clickable {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://wa.me/charfeddineka")
+                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                            .testTag("developer_whatsapp_link_button"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(EmeraldNeon.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Chat,
+                                contentDescription = null,
+                                tint = EmeraldNeon,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = isolateLtr("Let’s chat on WhatsApp!"),
+                                color = EmeraldNeon,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = isolateLtr("https://wa.me/charfeddineka"),
+                                color = colors.textSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = if (isArabic) "فتح الرابط" else "Open link",
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

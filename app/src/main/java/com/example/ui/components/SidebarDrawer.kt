@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,9 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
@@ -61,14 +65,12 @@ import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.isolateLtr
-import com.example.ui.screens.readAppPermissionsSummary
 import com.example.ui.theme.AmberNeon
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.RoseNeon
-import com.example.ui.theme.ThemeEngineCatalog
 import com.example.update.AppUpdateUiState
 
 @Composable
@@ -85,7 +87,6 @@ fun SidebarDrawer(
     val strings = AppStrings.current
     val colors = LiquidGlassTheme.colors
     val context = LocalContext.current
-    val permSummary = readAppPermissionsSummary(context)
     val dimens = LocalAdaptiveDimens.current
     val isArabic = strings is ArabicStrings
     val signedIn = googleAuthState as? GoogleAuthUiState.SignedIn
@@ -228,21 +229,11 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val activeThemeSpec = ThemeEngineCatalog.findById(userSettings.designStyle)
-            val activeThemeName = if (isArabic) activeThemeSpec.nameAr else activeThemeSpec.nameEn
-            val modeLabel = when (userSettings.themeMode) {
-                "LIGHT" -> if (isArabic) "فاتح" else "Light"
-                "SYSTEM" -> if (isArabic) "النظام" else "System"
-                else -> if (isArabic) "داكن" else "Dark"
-            }
-
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Button 1: Account
                 DrawerCategoryButton(
                     icon = Icons.Default.ManageAccounts,
                     title = if (isArabic) "الحساب (Account)" else "Account",
-                    subtitle = signedIn?.email?.takeIf { it.isNotBlank() }
-                        ?: if (isArabic) "المزامنة السحابية، الخروج، Google Drive" else "Cloud Sync, Sign Out, Google Drive Backups",
                     iconTint = if (signedIn != null) EmeraldNeon else colors.primaryNeon,
                     isSelected = selectedRoute == "settings_account",
                     testTag = "settings_category_account",
@@ -253,15 +244,7 @@ fun SidebarDrawer(
                 DrawerCategoryButton(
                     icon = Icons.Default.AdminPanelSettings,
                     title = if (isArabic) "التراخيص (Authorisation)" else "Authorisation",
-                    subtitle = if (permSummary.allEssentialGranted) {
-                        if (isArabic) "Access Permissions • ${permSummary.grantedCount}/${permSummary.totalCount} ✓"
-                        else "Access Permissions • ${permSummary.grantedCount}/${permSummary.totalCount} ✓"
-                    } else {
-                        val missing = permSummary.totalCount - permSummary.grantedCount
-                        if (isArabic) "Access Permissions • يتطلب $missing"
-                        else "Access Permissions • $missing needed"
-                    },
-                    iconTint = if (permSummary.allEssentialGranted) EmeraldNeon else AmberNeon,
+                    iconTint = AmberNeon,
                     isSelected = selectedRoute == "settings_authorisation" || selectedRoute == "access_permissions",
                     testTag = "settings_category_authorisation",
                     onClick = { onNavigate("settings_authorisation") }
@@ -271,7 +254,6 @@ fun SidebarDrawer(
                 DrawerCategoryButton(
                     icon = Icons.Default.Palette,
                     title = if (isArabic) "المظهر (Appearance)" else "Appearance",
-                    subtitle = "$activeThemeName • $modeLabel",
                     iconTint = colors.secondaryNeon,
                     isSelected = selectedRoute == "settings_appearance" || selectedRoute == "theme_engine",
                     testTag = "settings_category_appearance",
@@ -279,19 +261,10 @@ fun SidebarDrawer(
                 )
 
                 // Button 4: Security
-                val activeSecCount = listOf(
-                    userSettings.screenshotProtectionEnabled,
-                    userSettings.biometricEnabled
-                ).count { it }
                 DrawerCategoryButton(
                     icon = Icons.Default.Shield,
                     title = if (isArabic) "الأمان (Security)" else "Security",
-                    subtitle = if (isArabic) {
-                        "منع التصوير، البصمة • $activeSecCount/2 مفعّل"
-                    } else {
-                        "No-Screenshot, Fingerprint • $activeSecCount/2 active"
-                    },
-                    iconTint = if (activeSecCount > 0) EmeraldNeon else colors.primaryNeon,
+                    iconTint = EmeraldNeon,
                     isSelected = selectedRoute == "settings_security",
                     testTag = "settings_category_security",
                     onClick = { onNavigate("settings_security") }
@@ -301,7 +274,6 @@ fun SidebarDrawer(
                 DrawerCategoryButton(
                     icon = Icons.Default.Translate,
                     title = if (isArabic) "اللغة (Language)" else "Language",
-                    subtitle = if (isArabic) "العربية" else "English",
                     iconTint = CyanNeon,
                     isSelected = selectedRoute == "settings_language",
                     testTag = "settings_category_language",
@@ -381,63 +353,133 @@ fun SidebarDrawer(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 5. Dynamic Developer Footer & App Info Card (kept as-is at bottom)
+            // 5. Dynamic Developer Footer & App Info Card
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 12.dp)
+                    .testTag("drawer_developer_card"),
                 backgroundColor = colors.glassSurface,
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(18.dp),
+                onClick = { onNavigate("settings_developer") }
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    VaultixLogoContainer(
-                        size = 42.dp,
-                        cornerRadius = 13.dp,
-                        padding = 4.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = EmeraldNeon,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        VaultixLogoContainer(
+                            size = 42.dp,
+                            cornerRadius = 13.dp,
+                            padding = 4.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = EmeraldNeon,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = isolateLtr("Developed by: $DEVELOPER_NAME"),
+                                    color = colors.textPrimary,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = isolateLtr("v$APP_VERSION"),
+                                    color = colors.primaryNeon,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "•",
+                                    color = colors.textMuted,
+                                    fontSize = 11.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${strings.updatedLabel}: ${strings.buildDate}",
+                                    color = colors.textMuted,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(EmeraldNeon.copy(alpha = 0.13f))
+                            .border(1.dp, EmeraldNeon.copy(alpha = 0.42f), RoundedCornerShape(12.dp))
+                            .clickable {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://wa.me/charfeddineka")
+                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                            .testTag("drawer_developer_whatsapp_link"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = null,
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = DEVELOPER_NAME,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
+                                text = isolateLtr("Let’s chat on WhatsApp!"),
+                                color = EmeraldNeon,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = isolateLtr("https://wa.me/charfeddineka"),
+                                color = colors.textSecondary,
+                                fontSize = 10.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = isolateLtr("v$APP_VERSION"),
-                                color = colors.primaryNeon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "•",
-                                color = colors.textMuted,
-                                fontSize = 11.sp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "${strings.updatedLabel}: ${strings.buildDate}",
-                                color = colors.textMuted,
-                                fontSize = 10.sp
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            tint = EmeraldNeon,
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }
@@ -449,7 +491,6 @@ fun SidebarDrawer(
 private fun DrawerCategoryButton(
     icon: ImageVector,
     title: String,
-    subtitle: String,
     iconTint: Color,
     isSelected: Boolean,
     testTag: String,
@@ -471,7 +512,7 @@ private fun DrawerCategoryButton(
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -490,23 +531,15 @@ private fun DrawerCategoryButton(
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = if (isSelected) colors.primaryNeon else colors.textPrimary,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitle,
-                color = colors.textMuted,
-                fontSize = 10.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = title,
+            color = if (isSelected) colors.primaryNeon else colors.textPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,

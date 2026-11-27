@@ -546,46 +546,50 @@ fun CardsHubScreen(
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    CompositionLocalProvider(
+                        LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(EmeraldNeon)
-                        )
-                        Text(
-                            text = if (userSettings.thirdCardEnabled) {
-                                if (isArabic) "3 بطاقات نشطة" else "3 Cards Active"
-                            } else {
-                                strings.activeCardsCount
-                            },
-                            color = if (isReorderMode) CyanNeon else colors.textPrimary,
-                            fontSize = typo.caption,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(13.dp)
-                                .background(
-                                    if (isReorderMode) CyanNeon.copy(alpha = 0.45f)
-                                    else colors.glassBorderSubtle
-                                )
-                        )
-                        Icon(
-                            imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.SwapVert,
-                            contentDescription = if (isArabic) {
-                                if (isReorderMode) "حفظ ترتيب البطاقات" else "ترتيب البطاقات"
-                            } else {
-                                if (isReorderMode) "Done reordering" else "Reorder cards"
-                            },
-                            tint = if (isReorderMode) CyanNeon else colors.textPrimary,
-                            modifier = Modifier.size(17.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.SwapVert,
+                                contentDescription = if (isArabic) {
+                                    if (isReorderMode) "حفظ ترتيب البطاقات" else "ترتيب البطاقات"
+                                } else {
+                                    if (isReorderMode) "Done reordering" else "Reorder cards"
+                                },
+                                tint = if (isReorderMode) CyanNeon else colors.textPrimary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(13.dp)
+                                    .background(
+                                        if (isReorderMode) CyanNeon.copy(alpha = 0.45f)
+                                        else colors.glassBorderSubtle
+                                    )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldNeon)
+                            )
+                            Text(
+                                text = if (userSettings.thirdCardEnabled) {
+                                    if (isArabic) "3 بطاقات" else "3 Cards"
+                                } else {
+                                    if (isArabic) "بطاقتان" else "2 Cards"
+                                },
+                                color = if (isReorderMode) CyanNeon else colors.textPrimary,
+                                fontSize = typo.caption,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

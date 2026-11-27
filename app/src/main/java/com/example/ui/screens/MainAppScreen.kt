@@ -311,27 +311,47 @@ fun MainAppScreen(
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
+    var routeBeforeSettings by remember { mutableStateOf("cards") }
     var editingGoldHoldingForRoute by remember { mutableStateOf<com.example.market.GoldAssetHolding?>(null) }
     val hubRoutes = listOf("cards", "keys", "ccps", "square")
     val isOnHubTabs = currentRoute in hubRoutes
     val cardInnerRoutes = listOf("dashboard_details", "income", "expenses", "debts", "baridimob_sync", "insights", "assets_vault", "gold_asset_editor")
     val isInsideCard = currentRoute in cardInnerRoutes
+    val settingsCategoryRoutes = setOf(
+        "settings_account",
+        "settings_authorisation",
+        "settings_appearance",
+        "settings_security",
+        "settings_language",
+        "settings_developer"
+    )
 
-    // Intercept system back gestures: gold_asset_editor -> assets_vault -> insights -> dashboard_details -> cards
+    val navigateBack: () -> Unit = {
+        when (currentRoute) {
+            "gold_asset_editor" -> {
+                editingGoldHoldingForRoute = null
+                currentRoute = "assets_vault"
+            }
+            "assets_vault" -> currentRoute = "insights"
+            "income", "expenses", "debts", "baridimob_sync", "insights" -> currentRoute = "dashboard_details"
+            "theme_engine" -> currentRoute = "settings_appearance"
+            "access_permissions" -> currentRoute = "settings_authorisation"
+            in settingsCategoryRoutes -> {
+                currentRoute = routeBeforeSettings
+                scope.launch { drawerState.open() }
+            }
+            else -> currentRoute = "cards"
+        }
+    }
+
+    // Intercept system back gestures: sub-screens step up cleanly; settings_* reopens the Settings drawer
     if (currentRoute != "cards") {
         BackHandler {
-            currentRoute = when (currentRoute) {
-                "gold_asset_editor" -> {
-                    editingGoldHoldingForRoute = null
-                    "assets_vault"
-                }
-                "assets_vault" -> "insights"
-                "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
-                "theme_engine" -> "settings_appearance"
-                "access_permissions" -> "settings_authorisation"
-                else -> "cards"
-            }
+            navigateBack()
         }
+    }
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
     }
 
     // Dialog States
@@ -451,6 +471,13 @@ fun MainAppScreen(
                             SidebarDrawer(
                                 selectedRoute = currentRoute,
                                 onNavigate = { route ->
+                                    if (route in settingsCategoryRoutes &&
+                                        currentRoute !in settingsCategoryRoutes &&
+                                        currentRoute != "theme_engine" &&
+                                        currentRoute != "access_permissions"
+                                    ) {
+                                        routeBeforeSettings = currentRoute
+                                    }
                                     currentRoute = route
                                     scope.launch { drawerState.close() }
                                 },
@@ -500,6 +527,7 @@ fun MainAppScreen(
                                                 "settings_appearance" -> if (isArabic) "المظهر (Appearance)" else "Appearance"
                                                 "settings_security" -> if (isArabic) "الأمان (Security)" else "Security"
                                                 "settings_language" -> if (isArabic) "اللغة (Language)" else "Language"
+                                                "settings_developer" -> if (isArabic) "المطور" else "Developer"
                                                 "access_permissions" -> if (isArabic) "صلاحيات الوصول" else "Access Permissions"
                                                 "theme_engine" -> if (isArabic) "محرك الثيمات" else "Theme Engine"
                                                 "dashboard_details" -> if (isArabic) "لوحة التحكم" else "Dashboard"
@@ -518,19 +546,7 @@ fun MainAppScreen(
                                                 else -> APP_NAME
                                             },
                                             canGoBack = isSubScreen,
-                                            onBackClick = {
-                                                currentRoute = when (currentRoute) {
-                                                    "gold_asset_editor" -> {
-                                                        editingGoldHoldingForRoute = null
-                                                        "assets_vault"
-                                                    }
-                                                    "assets_vault" -> "insights"
-                                                    "income", "expenses", "debts", "baridimob_sync", "insights" -> "dashboard_details"
-                                                    "theme_engine" -> "settings_appearance"
-                                                    "access_permissions" -> "settings_authorisation"
-                                                    else -> "cards"
-                                                }
-                                            },
+                                            onBackClick = { navigateBack() },
                                             onMenuClick = {
                                                 scope.launch {
                                                     if (drawerState.isClosed) drawerState.open() else drawerState.close()
@@ -814,6 +830,7 @@ fun MainAppScreen(
                                         viewModel.setLanguage(lang)
                                     }
                                 )
+                                "settings_developer" -> DeveloperSettingsScreen()
                                 "theme_engine" -> ThemeEngineScreen(
                                     currentDesignStyle = userSettings.designStyle,
                                     currentThemeMode = userSettings.themeMode,
