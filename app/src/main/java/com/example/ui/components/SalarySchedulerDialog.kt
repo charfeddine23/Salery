@@ -80,6 +80,8 @@ fun SalarySchedulerDialog(
     var employerText by remember { mutableStateOf(currentEmployer) }
     var autoCredit by remember { mutableStateOf(currentAutoCredit) }
 
+    val isScreenshotProtected = LocalScreenshotProtection.current
+
     fun openCalendarPaydayPicker() {
         val now = Calendar.getInstance()
         val datePicker = DatePickerDialog(
@@ -91,10 +93,10 @@ fun SalarySchedulerDialog(
             now.get(Calendar.MONTH),
             payday.coerceIn(1, 28)
         )
+        datePicker.applyScreenshotProtection(isScreenshotProtected)
         datePicker.show()
     }
 
-    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(

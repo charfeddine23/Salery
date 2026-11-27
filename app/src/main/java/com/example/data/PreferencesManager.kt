@@ -83,7 +83,13 @@ class PreferencesManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
 
-    private val _settingsFlow = MutableStateFlow(loadSettings())
+    @Volatile
+    private var preservedEncryptedBlobs: Map<String, String> = emptyMap()
+
+    @Volatile
+    private var secretsWarmed: Boolean = false
+
+    private val _settingsFlow = MutableStateFlow(loadSettings(decryptSecrets = false))
     val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
     @Volatile
@@ -91,12 +97,24 @@ class PreferencesManager(context: Context) {
 
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         if (!isSelfUpdating) {
-            _settingsFlow.value = loadSettings()
+            _settingsFlow.value = loadSettings(decryptSecrets = secretsWarmed)
         }
     }
 
     init {
         prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
+    }
+
+    /**
+     * Decrypts Android Keystore-protected secrets off the Main Thread after Frame 1 completes.
+     */
+    @Synchronized
+    fun warmDecryptedSecrets() {
+        if (secretsWarmed) return
+        secretsWarmed = true
+        if (preservedEncryptedBlobs.isNotEmpty()) {
+            _settingsFlow.value = loadSettings(decryptSecrets = true)
+        }
     }
 
     private fun safeDouble(all: Map<String, *>, key: String, default: Double): Double {
@@ -107,7 +125,7 @@ class PreferencesManager(context: Context) {
                 is String -> raw.toDoubleOrNull() ?: default
                 else -> default
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             default
         }
     }
@@ -120,7 +138,7 @@ class PreferencesManager(context: Context) {
                 is String -> raw.toIntOrNull() ?: default
                 else -> default
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             default
         }
     }
@@ -133,7 +151,7 @@ class PreferencesManager(context: Context) {
                 is String -> raw.toLongOrNull() ?: default
                 else -> default
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             default
         }
     }
@@ -145,7 +163,7 @@ class PreferencesManager(context: Context) {
                 is String -> raw.toBooleanStrictOrNull() ?: default
                 else -> default
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             default
         }
     }
@@ -157,22 +175,24 @@ class PreferencesManager(context: Context) {
                 null -> default
                 else -> raw.toString()
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             default
         }
     }
-
-    @Volatile
-    private var preservedEncryptedBlobs: Map<String, String> = emptyMap()
 
     private fun safeDecryptedString(
         all: Map<String, *>,
         key: String,
         default: String,
-        preserved: MutableMap<String, String>
+        preserved: MutableMap<String, String>,
+        decryptSecrets: Boolean
     ): String {
         val raw = safeString(all, key, default)
         if (raw == default && raw.isEmpty()) return default
+        if (!decryptSecrets && raw.startsWith("v1_gcm$")) {
+            preserved[key] = raw
+            return default
+        }
         val decrypted = VaultCryptoManager.decryptSensitiveOrNull(raw)
         if (decrypted == null) {
             preserved[key] = raw
@@ -194,7 +214,7 @@ class PreferencesManager(context: Context) {
         return VaultCryptoManager.encryptSensitive(value)
     }
 
-    private fun loadSettings(): UserSettings {
+    private fun loadSettings(decryptSecrets: Boolean = true): UserSettings {
         val all = prefs.all
         val vaultFallback = safeDouble(all, "vault_locked_amount", 0.0)
         val savedSavings = safeDouble(all, "savings_wallet_balance", vaultFallback)
@@ -219,24 +239,24 @@ class PreferencesManager(context: Context) {
             goldAssetHoldingsJson = safeString(all, "gold_asset_holdings_json", "[]"),
             classicCardBankStyle = safeString(all, "classic_card_bank_style", "EDAHABIA"),
             classicCardHolderName = safeString(all, "classic_card_holder", "CARDHOLDER"),
-            classicCardNumber = safeDecryptedString(all, "classic_card_number", "", failedEncrypted),
+            classicCardNumber = safeDecryptedString(all, "classic_card_number", "", failedEncrypted, decryptSecrets),
             classicCardExpiry = safeString(all, "classic_card_expiry", "11/29"),
-            classicCardCvc = safeDecryptedString(all, "classic_card_cvc", "", failedEncrypted),
+            classicCardCvc = safeDecryptedString(all, "classic_card_cvc", "", failedEncrypted, decryptSecrets),
             breathingGlowEnabled = safeBoolean(all, "breathing_glow_enabled", true),
             screenshotProtectionEnabled = safeBoolean(all, "screenshot_protection_enabled", false),
-            vaultKeysJson = safeDecryptedString(all, "vault_keys_json", "[]", failedEncrypted),
-            ccpAccountsJson = safeDecryptedString(all, "ccp_accounts_json", "[]", failedEncrypted),
+            vaultKeysJson = safeDecryptedString(all, "vault_keys_json", "[]", failedEncrypted, decryptSecrets),
+            ccpAccountsJson = safeDecryptedString(all, "ccp_accounts_json", "[]", failedEncrypted, decryptSecrets),
             visaCardProvider = safeString(all, "visa_card_provider", "DEFAULT"),
             visaCardHolderName = safeString(all, "visa_card_holder", "CARDHOLDER"),
-            visaCardNumber = safeDecryptedString(all, "visa_card_number", "", failedEncrypted),
+            visaCardNumber = safeDecryptedString(all, "visa_card_number", "", failedEncrypted, decryptSecrets),
             visaCardExpiry = safeString(all, "visa_card_expiry", "08/28"),
-            visaCardCvc = safeDecryptedString(all, "visa_card_cvc", "", failedEncrypted),
+            visaCardCvc = safeDecryptedString(all, "visa_card_cvc", "", failedEncrypted, decryptSecrets),
             thirdCardEnabled = safeBoolean(all, "third_card_enabled", false),
             thirdCardProvider = safeString(all, "third_card_provider", "BINANCE"),
             thirdCardHolderName = safeString(all, "third_card_holder", "CARDHOLDER"),
-            thirdCardNumber = safeDecryptedString(all, "third_card_number", "", failedEncrypted),
+            thirdCardNumber = safeDecryptedString(all, "third_card_number", "", failedEncrypted, decryptSecrets),
             thirdCardExpiry = safeString(all, "third_card_expiry", "08/28"),
-            thirdCardCvc = safeDecryptedString(all, "third_card_cvc", "", failedEncrypted),
+            thirdCardCvc = safeDecryptedString(all, "third_card_cvc", "", failedEncrypted, decryptSecrets),
             binanceHoldingsJson = safeString(all, "binance_holdings_json", "[]"),
             binancePricesJson = safeString(all, "binance_prices_json", "[]"),
             binanceLastPriceSyncMillis = safeLong(all, "binance_last_price_sync_millis", 0L),
@@ -276,7 +296,8 @@ class PreferencesManager(context: Context) {
 
     @Synchronized
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
-        val currentLatest = loadSettings()
+        secretsWarmed = true
+        val currentLatest = loadSettings(decryptSecrets = true)
         val preserved = preservedEncryptedBlobs
         val finalUpdated = transform(currentLatest)
         isSelfUpdating = true

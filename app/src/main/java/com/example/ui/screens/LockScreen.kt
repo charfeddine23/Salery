@@ -68,6 +68,7 @@ import com.example.ui.theme.RoseNeon
 @Composable
 fun LockScreen(
     onBiometricUnlock: () -> Unit = {},
+    onFallbackDisableLock: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -88,15 +89,32 @@ fun LockScreen(
     }
 
     val canUseBiometrics = activity != null && BiometricAuthManager.isBiometricAvailable(activity)
+    val canUseAnyDeviceAuth = activity != null && BiometricAuthManager.canAuthenticateWithDeviceFallback(activity)
 
     var isVerifying by remember { mutableStateOf(false) }
     var statusText by remember {
-        mutableStateOf(if (isArabic) "المس مستشعر البصمة للمتابعة" else "Touch fingerprint sensor to continue")
+        mutableStateOf(
+            when {
+                canUseBiometrics -> if (isArabic) "المس مستشعر البصمة للمتابعة" else "Touch fingerprint sensor to continue"
+                canUseAnyDeviceAuth -> if (isArabic) "استخدم رمز أو نقش الجهاز للمتابعة" else "Use device PIN, pattern, or password to unlock"
+                else -> if (isArabic) "لم تعد البصمة أو قفل الشاشة مفعّلاً على هذا الجهاز" else "Biometrics and device screen lock are unavailable on this device"
+            }
+        )
     }
     var isError by remember { mutableStateOf(false) }
 
     fun launchBiometricPrompt() {
         if (activity == null) return
+        if (!canUseAnyDeviceAuth) {
+            isVerifying = false
+            isError = true
+            statusText = if (isArabic) {
+                "لا يوجد قفل بصمة أو رمز جهاز نشط — يمكنك المتابعة وتعطيل القفل"
+            } else {
+                "No device biometric or screen lock found — continue to disable app lock"
+            }
+            return
+        }
         isVerifying = true
         isError = false
         BiometricAuthManager.authenticate(
@@ -104,6 +122,7 @@ fun LockScreen(
             title = strings.biometricPromptTitle,
             subtitle = strings.biometricPromptSubtitle,
             negativeButtonText = strings.cancel,
+            allowDeviceCredential = true,
             onSuccess = {
                 isVerifying = false
                 isError = false
@@ -123,8 +142,8 @@ fun LockScreen(
         )
     }
 
-    LaunchedEffect(canUseBiometrics) {
-        if (canUseBiometrics) {
+    LaunchedEffect(canUseAnyDeviceAuth) {
+        if (canUseAnyDeviceAuth) {
             launchBiometricPrompt()
         }
     }
@@ -227,7 +246,7 @@ fun LockScreen(
 
                 Spacer(modifier = Modifier.height(dimens.spacingXl))
 
-                // Primary Unlock Button
+                // Primary Unlock Button (falls back safely if device security was disabled)
                 GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -235,7 +254,9 @@ fun LockScreen(
                         .testTag("biometric_unlock_button"),
                     shape = RoundedCornerShape(dimens.cornerRadiusLg),
                     backgroundColor = colors.primaryNeon.copy(alpha = 0.22f),
-                    onClick = { launchBiometricPrompt() }
+                    onClick = {
+                        if (canUseAnyDeviceAuth) launchBiometricPrompt() else onFallbackDisableLock()
+                    }
                 ) {
                     Row(
                         modifier = Modifier
@@ -252,7 +273,13 @@ fun LockScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = strings.biometricUnlockAction,
+                            text = if (canUseAnyDeviceAuth) {
+                                strings.biometricUnlockAction
+                            } else if (isArabic) {
+                                "فتح القفل وتعطيل الحماية"
+                            } else {
+                                "Unlock & Disable Lock"
+                            },
                             color = colors.textPrimary,
                             fontSize = typo.bodyLg,
                             fontWeight = FontWeight.Bold,

@@ -35,21 +35,38 @@ object VaultCryptoManager {
     @Volatile
     private var cachedAesKey: SecretKey? = null
 
+    @Volatile
+    var lastCryptoWarning: String? = null
+        private set
+
     fun encryptSensitive(plaintext: String): String {
         if (plaintext.isEmpty()) return ""
         if (plaintext.startsWith(ENC_PREFIX)) return plaintext
         val secretKey = getOrCreateAesKey() ?: return plaintext
         return try {
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val iv = cipher.iv
-            val ciphertext = cipher.doFinal(plaintext.toByteArray(StandardCharsets.UTF_8))
-            val ivB64 = Base64.encodeToString(iv, Base64.NO_WRAP)
-            val ctB64 = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
-            "$ENC_PREFIX$ivB64$$ctB64"
-        } catch (_: Throwable) {
-            plaintext
+            encryptWithKey(plaintext, secretKey)
+        } catch (firstError: Exception) {
+            // Retry once with refreshed Keystore key in case cached key was invalidated
+            cachedAesKey = null
+            try {
+                val refreshedKey = getOrCreateAesKey() ?: return plaintext
+                encryptWithKey(plaintext, refreshedKey)
+            } catch (retryError: Exception) {
+                recordCryptoWarning("Encryption failed, keeping plaintext fallback", retryError)
+                plaintext
+            }
         }
+    }
+
+    private fun encryptWithKey(plaintext: String, secretKey: SecretKey): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        val iv = cipher.iv
+        val ciphertext = cipher.doFinal(plaintext.toByteArray(StandardCharsets.UTF_8))
+        val ivB64 = Base64.encodeToString(iv, Base64.NO_WRAP)
+        val ctB64 = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+        lastCryptoWarning = null
+        return "$ENC_PREFIX$ivB64$$ctB64"
     }
 
     fun decryptSensitive(stored: String): String = decryptSensitiveOrNull(stored).orEmpty()
@@ -62,15 +79,26 @@ object VaultCryptoManager {
         if (parts.size != 2) return null
         val secretKey = getOrCreateAesKey() ?: return null
         return try {
-            val iv = Base64.decode(parts[0], Base64.DEFAULT)
-            if (iv.size != GCM_IV_BYTES) return null
-            val ct = Base64.decode(parts[1], Base64.DEFAULT)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
-            String(cipher.doFinal(ct), StandardCharsets.UTF_8)
-        } catch (_: Throwable) {
-            null
+            decryptWithKey(parts[0], parts[1], secretKey)
+        } catch (_: Exception) {
+            cachedAesKey = null
+            try {
+                val refreshedKey = getOrCreateAesKey() ?: return null
+                decryptWithKey(parts[0], parts[1], refreshedKey)
+            } catch (e: Exception) {
+                recordCryptoWarning("Decryption failed", e)
+                null
+            }
         }
+    }
+
+    private fun decryptWithKey(ivB64: String, ctB64: String, secretKey: SecretKey): String? {
+        val iv = Base64.decode(ivB64, Base64.DEFAULT)
+        if (iv.size != GCM_IV_BYTES) return null
+        val ct = Base64.decode(ctB64, Base64.DEFAULT)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
+        return String(cipher.doFinal(ct), StandardCharsets.UTF_8)
     }
 
     private fun getOrCreateAesKey(): SecretKey? {
@@ -94,10 +122,16 @@ object VaultCryptoManager {
                 .build()
             keyGen.init(spec)
             keyGen.generateKey().also { cachedAesKey = it }
-        } catch (_: Throwable) {
+        } catch (e: Exception) {
             // Headless JVM unit test environments without AndroidKeyStore safely return null
+            recordCryptoWarning("AndroidKeyStore unavailable", e)
             null
         }
+    }
+
+    private fun recordCryptoWarning(message: String, error: Exception) {
+        lastCryptoWarning = "$message: ${error.javaClass.simpleName}"
+        runCatching { android.util.Log.w("VaultCryptoManager", message, error) }
     }
 
     fun isSaltedPatternHash(storedHash: String): Boolean = storedHash.startsWith(HASH_PREFIX)
@@ -145,7 +179,7 @@ object VaultCryptoManager {
         if (!trimmed.startsWith("{")) return false
         return try {
             org.json.JSONObject(trimmed).optString("vaultixBackupFormat") == BACKUP_FORMAT_ID
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -197,7 +231,7 @@ object VaultCryptoManager {
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
             cipher.updateAAD(BACKUP_AAD.toByteArray(StandardCharsets.UTF_8))
             String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             null
         }
     }

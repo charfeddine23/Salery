@@ -11,6 +11,8 @@ import java.util.Locale
 // App Name, Version, and Developer Name MUST NEVER be translated or changed into Arabic script!
 const val APP_NAME = "Vaultix"
 const val DEVELOPER_NAME = "Charfeddine Ka"
+const val DEVELOPER_CONTACT_TITLE = "Let’s chat on WhatsApp!"
+const val DEVELOPER_CONTACT_URL = "https://wa.me/charfeddineka"
 val APP_VERSION: String get() = com.example.BuildConfig.APP_VERSION_NAME
 
 interface StringsBundle {

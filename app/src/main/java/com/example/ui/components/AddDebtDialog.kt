@@ -170,6 +170,7 @@ fun AddDebtDialog(
             now.get(Calendar.MONTH),
             installmentDay.coerceIn(1, 28)
         )
+        datePicker.applyScreenshotProtection(isScreenshotProtected)
         datePicker.show()
     }
 
@@ -192,6 +193,7 @@ fun AddDebtDialog(
             cal.get(Calendar.DAY_OF_MONTH)
         )
         datePicker.datePicker.minDate = System.currentTimeMillis()
+        datePicker.applyScreenshotProtection(isScreenshotProtected)
         datePicker.show()
     }
 

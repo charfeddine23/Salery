@@ -156,11 +156,137 @@ fun MainAppScreen(
     viewModel: VaultixViewModel
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-
     val userSettings by viewModel.settings.collectAsState()
     val isAppLocked by viewModel.isAppLocked.collectAsState()
+    val googleAuthState by viewModel.googleAuthState.collectAsState()
+    val authTransitionState by viewModel.authTransitionState.collectAsState()
+
+    val isArabic = userSettings.language == "ar"
+    val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
+    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val isScreenshotProtected = userSettings.screenshotProtectionEnabled
+
+    // Enforce FLAG_SECURE & Android Recents preview blocking across the entire app when enabled
+    DisposableEffect(context, lifecycleOwner, isScreenshotProtected) {
+        val activity = context.findHostActivity()
+        var lastAppliedRecentsDisabled: Boolean? = null
+        val applySecureWindowState: () -> Unit = {
+            activity?.let { act ->
+                val win = act.window
+                if (win != null) {
+                    val hasSecure = (win.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+                    if (isScreenshotProtected && !hasSecure) {
+                        win.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else if (!isScreenshotProtected && hasSecure) {
+                        win.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    lastAppliedRecentsDisabled != isScreenshotProtected &&
+                    (isScreenshotProtected || lastAppliedRecentsDisabled != null)
+                ) {
+                    try {
+                        act.setRecentsScreenshotEnabled(!isScreenshotProtected)
+                        lastAppliedRecentsDisabled = isScreenshotProtected
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        applySecureWindowState()
+        val windowObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                applySecureWindowState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(windowObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(windowObserver)
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalStrings provides activeStrings,
+        LocalLayoutDirection provides layoutDirection,
+        LocalStealthMode provides userSettings.stealthMode,
+        LocalBreathingGlowEnabled provides userSettings.breathingGlowEnabled,
+        LocalScreenshotProtection provides isScreenshotProtected
+    ) {
+        if (isAppLocked) {
+            LockScreen(
+                onBiometricUnlock = {
+                    viewModel.unlockAppByBiometrics()
+                },
+                onFallbackDisableLock = {
+                    viewModel.disableBiometricsAndUnlock()
+                }
+            )
+        } else if (authTransitionState is AuthTransitionState.Active) {
+            AuthTransitionLuxuryScreen(
+                state = authTransitionState as AuthTransitionState.Active,
+                isArabic = activeStrings is ArabicStrings
+            )
+        } else if (!userSettings.hasLocalAccount) {
+            LaunchedEffect(Unit) {
+                viewModel.attemptSilentGoogleSignIn(context)
+            }
+            val isAuthDarkTheme = when (userSettings.themeMode) {
+                "DARK" -> true
+                "LIGHT" -> false
+                else -> isSystemInDarkTheme()
+            }
+            AuthWelcomeScreen(
+                isArabic = activeStrings is ArabicStrings,
+                isDarkTheme = isAuthDarkTheme,
+                googleAuthState = googleAuthState,
+                onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
+                onToggleTheme = {
+                    viewModel.setThemeMode(if (isAuthDarkTheme) "LIGHT" else "DARK")
+                },
+                onGoogleSignIn = { viewModel.signInWithGoogle(context) },
+                onEmailSignIn = { email, password ->
+                    viewModel.signInWithEmailAccount(context, email, password)
+                },
+                onEmailSignUp = { firstName, lastName, username, email, password ->
+                    viewModel.signUpWithEmailAccount(context, firstName, lastName, username, email, password)
+                },
+                onSendPasswordReset = { email, onResult ->
+                    viewModel.sendPasswordResetEmail(context, email, onResult)
+                },
+                onClearAuthError = { viewModel.clearAuthError() },
+                onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
+                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                onCreateGuestAccount = { guestUsername ->
+                    viewModel.activateLocalAccount(username = guestUsername)
+                }
+            )
+        } else {
+            AuthenticatedVaultContent(
+                viewModel = viewModel,
+                userSettings = userSettings,
+                googleAuthState = googleAuthState,
+                isArabic = isArabic,
+                layoutDirection = layoutDirection
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuthenticatedVaultContent(
+    viewModel: VaultixViewModel,
+    userSettings: com.example.data.UserSettings,
+    googleAuthState: com.example.cloud.GoogleAuthUiState,
+    isArabic: Boolean,
+    layoutDirection: LayoutDirection
+) {
+    val activeStrings = AppStrings.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val transactions by viewModel.allTransactions.collectAsState()
     val debts by viewModel.allDebts.collectAsState()
     val summary by viewModel.financialSummary.collectAsState()
@@ -186,39 +312,24 @@ fun MainAppScreen(
     val goldHoldings by viewModel.goldHoldings.collectAsState()
     val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
     val squareMarketError by viewModel.squareMarketError.collectAsState()
-    val googleAuthState by viewModel.googleAuthState.collectAsState()
-    val authTransitionState by viewModel.authTransitionState.collectAsState()
     val cloudSyncState by viewModel.cloudSyncState.collectAsState()
     val lastCloudSyncMillis by viewModel.lastCloudSyncMillis.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
         com.example.crypto.BinanceCryptoCatalog.calculatePortfolioTotalUsd(binanceHoldings, binancePrices)
     }
 
-    LaunchedEffect(Unit) {
-        if (!userSettings.hasLocalAccount) {
-            viewModel.attemptSilentGoogleSignIn(context)
-        }
-    }
-
-    var canInstallPackages by remember {
-        mutableStateOf(false)
-    }
+    var canInstallPackages by remember { mutableStateOf(false) }
     var pendingActionAfterInstallPerm by remember { mutableStateOf<String?>(null) }
     var forceShowPermissionsOnboarding by remember { mutableStateOf(false) }
     var allowOnboardingWindow by remember { mutableStateOf(false) }
-    LaunchedEffect(userSettings.hasLocalAccount) {
-        if (userSettings.hasLocalAccount) {
-            kotlinx.coroutines.delay(450L)
-            canInstallPackages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                AppUpdateManager.canRequestPackageInstalls(context)
-            }
-            allowOnboardingWindow = true
-        } else {
-            allowOnboardingWindow = false
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(450L)
+        canInstallPackages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            AppUpdateManager.canRequestPackageInstalls(context)
         }
+        allowOnboardingWindow = true
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context, userSettings.baridiMobSmsSyncEnabled) {
         var isInitialResume = true
         val observer = LifecycleEventObserver { _, event ->
@@ -293,7 +404,7 @@ fun MainAppScreen(
             installPermissionLauncher.launch(
                 AppUpdateManager.buildManageUnknownAppSourcesIntent(context)
             )
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             pendingActionAfterInstallPerm = null
             if (pendingAction == "download" || pendingAction == "install") {
                 viewModel.reportInstallPermissionUnavailable()
@@ -301,16 +412,15 @@ fun MainAppScreen(
         }
     }
 
-    // Shake to Hide / Stealth Mode Sensor Listener
-    RememberShakeDetector(enabled = !isAppLocked) {
+    // Shake to Hide / Stealth Mode Sensor Listener (deferred slightly off Frame 1)
+    var shakeDetectorReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(350L)
+        shakeDetectorReady = true
+    }
+    RememberShakeDetector(enabled = shakeDetectorReady) {
         viewModel.toggleStealthMode()
     }
-
-    // Determine current localized strings bundle
-    val isArabic = userSettings.language == "ar"
-    val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
-    // Mirror layout cleanly to RTL in Arabic mode and LTR in English mode
-    val layoutDirection = if (isArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     // Active route (hubRoutes = 4-page bottom banner outside cards; cardInnerRoutes = inside Classic Blue card)
     var currentRoute by remember { mutableStateOf("cards") }
@@ -368,116 +478,21 @@ fun MainAppScreen(
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
     var showScreenshotShieldDialog by remember { mutableStateOf(false) }
 
-    // Enforce FLAG_SECURE & Android Recents preview blocking across the entire app when enabled
-    val isScreenshotProtected = userSettings.screenshotProtectionEnabled
-    DisposableEffect(context, lifecycleOwner, isScreenshotProtected) {
-        val activity = context.findHostActivity()
-        var lastAppliedRecentsDisabled: Boolean? = null
-        val applySecureWindowState: () -> Unit = {
-            activity?.let { act ->
-                val win = act.window
-                if (win != null) {
-                    val hasSecure = (win.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
-                    if (isScreenshotProtected && !hasSecure) {
-                        win.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    } else if (!isScreenshotProtected && hasSecure) {
-                        win.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    }
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    lastAppliedRecentsDisabled != isScreenshotProtected &&
-                    (isScreenshotProtected || lastAppliedRecentsDisabled != null)
+    // Respect the active language's layout direction for the entire interface and drawer
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    drawerContainerColor = Color.Transparent,
+                    modifier = Modifier
+                        .fillMaxWidth(0.84f)
+                        .widthIn(min = 272.dp, max = 336.dp)
                 ) {
-                    try {
-                        act.setRecentsScreenshotEnabled(!isScreenshotProtected)
-                        lastAppliedRecentsDisabled = isScreenshotProtected
-                    } catch (_: Throwable) {
-                    }
-                }
-            }
-        }
-        applySecureWindowState()
-        val windowObserver = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
-                applySecureWindowState()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(windowObserver)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(windowObserver)
-        }
-    }
-
-    CompositionLocalProvider(
-        LocalStrings provides activeStrings,
-        LocalLayoutDirection provides layoutDirection,
-        LocalStealthMode provides userSettings.stealthMode,
-        LocalBreathingGlowEnabled provides userSettings.breathingGlowEnabled,
-        LocalScreenshotProtection provides isScreenshotProtected
-    ) {
-        if (isAppLocked) {
-            LockScreen(
-                onBiometricUnlock = {
-                    viewModel.unlockAppByBiometrics()
-                }
-            )
-        } else if (authTransitionState is AuthTransitionState.Active) {
-            AuthTransitionLuxuryScreen(
-                state = authTransitionState as AuthTransitionState.Active,
-                isArabic = activeStrings is ArabicStrings
-            )
-        } else if (!userSettings.hasLocalAccount) {
-            val isAuthDarkTheme = when (userSettings.themeMode) {
-                "DARK" -> true
-                "LIGHT" -> false
-                else -> isSystemInDarkTheme()
-            }
-            AuthWelcomeScreen(
-                isArabic = activeStrings is ArabicStrings,
-                isDarkTheme = isAuthDarkTheme,
-                googleAuthState = googleAuthState,
-                onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
-                onToggleTheme = {
-                    viewModel.setThemeMode(if (isAuthDarkTheme) "LIGHT" else "DARK")
-                },
-                onGoogleSignIn = { viewModel.signInWithGoogle(context) },
-                onEmailSignIn = { email, password ->
-                    viewModel.signInWithEmailAccount(context, email, password)
-                },
-                onEmailSignUp = { firstName, lastName, username, email, password ->
-                    viewModel.signUpWithEmailAccount(context, firstName, lastName, username, email, password)
-                },
-                onSendPasswordReset = { email, onResult ->
-                    viewModel.sendPasswordResetEmail(context, email, onResult)
-                },
-                onClearAuthError = { viewModel.clearAuthError() },
-                onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
-                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
-                onCreateGuestAccount = { guestUsername ->
-                    viewModel.activateLocalAccount(
-                        username = guestUsername,
-                        wilayaCode = "",
-                        wilayaName = "",
-                        communeName = ""
-                    )
-                }
-            )
-        } else {
-            // Respect the active language's layout direction for the entire interface and drawer
-            CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-                ModalNavigationDrawer(
-                    drawerState = drawerState,
-                    drawerContent = {
-                        ModalDrawerSheet(
-                            drawerContainerColor = Color.Transparent,
-                            modifier = Modifier
-                                .fillMaxWidth(0.84f)
-                                .widthIn(min = 272.dp, max = 336.dp)
-                        ) {
-                            SidebarDrawer(
-                                selectedRoute = currentRoute,
-                                onNavigate = { route ->
-                                    if (route in settingsCategoryRoutes &&
+                    SidebarDrawer(
+                        selectedRoute = currentRoute,
+                        onNavigate = { route ->
+                            if (route in settingsCategoryRoutes &&
                                         currentRoute !in settingsCategoryRoutes &&
                                         currentRoute != "theme_engine" &&
                                         currentRoute != "access_permissions"
@@ -1165,7 +1180,6 @@ fun MainAppScreen(
             }
 
             if (allowOnboardingWindow &&
-                !isAppLocked &&
                 !updateDialogVisible &&
                 (!userSettings.hasCompletedPermissionsOnboarding || forceShowPermissionsOnboarding)
             ) {
@@ -1183,9 +1197,7 @@ fun MainAppScreen(
                     }
                 )
             }
-        }
     }
-}
 }
 
 @Composable

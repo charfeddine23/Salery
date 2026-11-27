@@ -574,9 +574,12 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             _isAppLocked.value = true
         }
 
-        // Safely initialize Firebase Auth & attach listener after Frame 1 settles to keep startup SurfaceSyncGroup fast
+        // Safely warm Keystore secrets & initialize Firebase Auth off Main Thread after Frame 1 settles
         viewModelScope.launch {
             kotlinx.coroutines.yield()
+            withContext(Dispatchers.IO) {
+                runCatching { prefsManager.warmDecryptedSecrets() }
+            }
             val auth = withContext(Dispatchers.IO) {
                 runCatching { firebaseAuth }.getOrNull()
             }
@@ -594,11 +597,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             delay(350L)
             try {
                 DebtReminderScheduler.createNotificationChannel(getApplication())
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
             }
             try {
                 AppUpdateManager.cleanupObsoleteUpdates(getApplication())
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
             }
             try {
                 cleanExistingMockDataIfPresent()
@@ -606,7 +609,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 checkAndExecuteAutoPayDebts()
                 val currentDebts = dao.getAllDebtsList()
                 DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
-            } catch (_: Throwable) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
             if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
                 val cfg = settings.value
@@ -1397,6 +1402,12 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun unlockAppByBiometrics() {
         backgroundedAtMillis = 0L
+        _isAppLocked.value = false
+    }
+
+    fun disableBiometricsAndUnlock() {
+        backgroundedAtMillis = 0L
+        prefsManager.updateSettings { it.copy(biometricEnabled = false) }
         _isAppLocked.value = false
     }
 
@@ -2203,17 +2214,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun activateLocalAccount(
-        username: String = "",
-        wilayaCode: String = "",
-        wilayaName: String = "",
-        communeName: String = ""
-    ) {
+    fun activateLocalAccount(username: String = "") {
         val wasAlreadyActive = settings.value.hasLocalAccount
         val cleanUsername = username.trim()
-        val cleanWilayaCode = wilayaCode.trim()
-        val cleanWilayaName = wilayaName.trim()
-        val cleanCommuneName = communeName.trim()
         if (!wasAlreadyActive) {
             triggerAuthSuccessTransition(
                 kind = AuthTransitionKind.SIGN_UP,
@@ -2233,9 +2236,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             it.copy(
                 hasLocalAccount = true,
                 localUsername = cleanUsername.ifEmpty { it.localUsername },
-                localWilayaCode = cleanWilayaCode.ifEmpty { it.localWilayaCode },
-                localWilayaName = cleanWilayaName.ifEmpty { it.localWilayaName },
-                localCommuneName = cleanCommuneName.ifEmpty { it.localCommuneName },
                 classicCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultClassic) cleanUsername.uppercase() else it.classicCardHolderName,
                 visaCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultVisa) cleanUsername.uppercase() else it.visaCardHolderName,
                 thirdCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultThird) cleanUsername.uppercase() else it.thirdCardHolderName
@@ -2248,17 +2248,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         prefsManager.updateSettings {
             it.copy(hasLocalAccount = false)
         }
-    }
-
-    fun updateProfilePhoto(photoUri: Uri) {
-        val current = settings.value
-        updateAccountProfile(
-            firstName = current.firstName,
-            lastName = current.lastName,
-            username = current.localUsername,
-            pickedPhotoUri = photoUri,
-            removeCustomPhoto = false
-        )
     }
 
     fun updateAccountProfile(
@@ -2373,7 +2362,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             }
             scaled.recycle()
             destFile.absolutePath
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -2414,7 +2403,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
                 // Handled gracefully offline or after sign-out; offline Room storage remains primary source of truth.
             }
         }
@@ -2561,28 +2550,34 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun attemptSilentGoogleSignIn(context: Context) {
         if (silentGoogleSignInAttempted) return
         silentGoogleSignInAttempted = true
-        val auth = firebaseAuth ?: return
-        if (auth.currentUser != null) {
-            updateGoogleAuthFromFirebaseUser(auth.currentUser)
-            return
-        }
-        val explicitSignedOut = cloudPrefs.getBoolean("google_explicit_signed_out", false)
-        if (explicitSignedOut) return
-
-        GoogleAuthHelper.attemptAutoSignIn(
-            context = context,
-            scope = viewModelScope,
-            onAuthSuccess = { user ->
-                updateGoogleAuthFromFirebaseUser(user)
-                activateGoogleConnectedAccount(user)
-                viewModelScope.launch {
-                    syncAfterGoogleSignIn(user, showFeedback = false)
-                }
-            },
-            onUnauthenticated = {
-                // Stay SignedOut silently until user taps Sign In
+        viewModelScope.launch {
+            delay(500L)
+            val explicitSignedOut = withContext(Dispatchers.IO) {
+                cloudPrefs.getBoolean("google_explicit_signed_out", false)
             }
-        )
+            if (explicitSignedOut) return@launch
+            val auth = withContext(Dispatchers.IO) {
+                runCatching { firebaseAuth }.getOrNull()
+            } ?: return@launch
+            if (auth.currentUser != null) {
+                updateGoogleAuthFromFirebaseUser(auth.currentUser)
+                return@launch
+            }
+            GoogleAuthHelper.attemptAutoSignIn(
+                context = context,
+                scope = viewModelScope,
+                onAuthSuccess = { user ->
+                    updateGoogleAuthFromFirebaseUser(user)
+                    activateGoogleConnectedAccount(user)
+                    viewModelScope.launch {
+                        syncAfterGoogleSignIn(user, showFeedback = false)
+                    }
+                },
+                onUnauthenticated = {
+                    // Stay SignedOut silently until user taps Sign In
+                }
+            )
+        }
     }
 
     fun signInWithGoogle(context: Context) {

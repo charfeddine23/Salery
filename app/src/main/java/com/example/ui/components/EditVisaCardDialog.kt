@@ -74,6 +74,7 @@ import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -136,10 +137,11 @@ fun EditVisaCardDialog(
     val isCvcValid = cvcDigits.isEmpty() || cvcDigits.length in 3..4
     val canSave = isNameValid && isCardNumberValid && isExpiryValid && isCvcValid
 
+    val effectiveSecureScreenshots = secureScreenshots || LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
-            securePolicy = if (secureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+            securePolicy = if (effectiveSecureScreenshots) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
         )
     ) {
         CompositionLocalProvider(

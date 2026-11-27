@@ -28,7 +28,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -113,11 +112,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.example.R
 import com.example.cloud.GoogleAuthUiState
 import com.example.ui.components.GlassBackground
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.breathingGlow
 
 private val VaultixScriptFont = FontFamily(
@@ -393,24 +395,21 @@ fun AuthWelcomeScreen(
     GlassBackground(
         modifier = modifier.fillMaxSize()
     ) {
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            val viewportHeight = maxHeight
-
             // Centered scrollable host so every auth card sits in the exact middle of the screen
             Column(
                 modifier = Modifier
+                    .align(Alignment.Center)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .heightIn(min = viewportHeight)
                     .padding(horizontal = 20.dp, vertical = 68.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Floating Glass Card + Morphing Behind-Card Background Blob Wrapper
                 Box(
@@ -1535,8 +1534,14 @@ private fun ForgotPasswordDialog(
     var isSending by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
+    val isScreenshotProtected = LocalScreenshotProtection.current
 
-    Dialog(onDismissRequest = { if (!isSending) onDismiss() }) {
+    Dialog(
+        onDismissRequest = { if (!isSending) onDismiss() },
+        properties = DialogProperties(
+            securePolicy = if (isScreenshotProtected) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = palette.dialogSurface,

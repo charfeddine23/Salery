@@ -160,7 +160,7 @@ object AppUpdateManager {
                     }
                 }
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         }
     }
 
@@ -169,8 +169,10 @@ object AppUpdateManager {
             val updatesDir = getUpdatesDirectory(context)
             val safeFileName = sanitizeApkFileName(release)
             val candidate = File(updatesDir, safeFileName)
-            if (isValidUpdateApk(context, candidate, release.apkSizeBytes)) candidate else null
-        } catch (_: Throwable) {
+            if (isValidUpdateApk(context, candidate, release.apkSizeBytes) &&
+                matchesOptionalReleaseSha256(candidate, release.releaseNotes)
+            ) candidate else null
+        } catch (_: Exception) {
             null
         }
     }
@@ -253,7 +255,7 @@ object AppUpdateManager {
         // Clear any legacy cache updates folder to avoid stale/corrupted cache files
         try {
             File(context.cacheDir, "updates").deleteRecursively()
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         }
 
         val updatesDir = getUpdatesDirectory(context)
@@ -334,8 +336,10 @@ object AppUpdateManager {
                 val renamed = tempFile.renameTo(targetFile)
                 val finalFile = if (renamed) targetFile else tempFile
 
-                // Verify the downloaded file is a valid APK archive for this app
-                if (!isValidUpdateApk(context, finalFile, 0L)) {
+                // Verify the downloaded file size, APK archive integrity, signer, and optional SHA-256
+                if (!isValidUpdateApk(context, finalFile, release.apkSizeBytes) ||
+                    !matchesOptionalReleaseSha256(finalFile, release.releaseNotes)
+                ) {
                     finalFile.delete()
                     emit(DownloadState.Failed("Downloaded package is corrupted or invalid"))
                     return@flow
@@ -346,10 +350,10 @@ object AppUpdateManager {
         } catch (e: CancellationException) {
             tempFile.delete()
             throw e
-        } catch (t: Throwable) {
+        } catch (e: Exception) {
             tempFile.delete()
             targetFile.delete()
-            emit(DownloadState.Failed(t.message ?: "Download failed"))
+            emit(DownloadState.Failed(e.message ?: "Download failed"))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -383,8 +387,33 @@ object AppUpdateManager {
                     header[2] == 0x03.toByte() &&
                     header[3] == 0x04.toByte()
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun matchesOptionalReleaseSha256(apkFile: File, releaseNotes: String): Boolean {
+        val match = Regex("sha256[:\\s]+([a-fA-F0-9]{64})", RegexOption.IGNORE_CASE)
+            .find(releaseNotes) ?: return true
+        val expectedHex = match.groupValues[1].lowercase(Locale.US)
+        val actualHex = computeFileSha256(apkFile) ?: return false
+        return actualHex == expectedHex
+    }
+
+    private fun computeFileSha256(file: File): String? {
+        return try {
+            val md = MessageDigest.getInstance("SHA-256")
+            FileInputStream(file).use { fis ->
+                val buf = ByteArray(16 * 1024)
+                while (true) {
+                    val read = fis.read(buf)
+                    if (read == -1) break
+                    md.update(buf, 0, read)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -400,7 +429,7 @@ object AppUpdateManager {
                 @Suppress("DEPRECATION")
                 pm.getPackageArchiveInfo(apkFile.absolutePath, 0)
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -438,7 +467,7 @@ object AppUpdateManager {
 
             val archiveHashes = readPackageSignerDigests(archiveInfo)
             archiveHashes.isNotEmpty() && archiveHashes.any { it in installedHashes }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -471,7 +500,7 @@ object AppUpdateManager {
                 pm.getPackageInfo(context.packageName, 0)
             }
             PackageInfoCompat.getLongVersionCode(info)
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             0L
         }
     }
@@ -483,7 +512,7 @@ object AppUpdateManager {
             } else {
                 true
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             true
         }
     }
@@ -557,7 +586,7 @@ object AppUpdateManager {
                             uri,
                             Intent.FLAG_GRANT_READ_URI_PERMISSION
                         )
-                    } catch (_: Throwable) {
+                    } catch (_: Exception) {
                     }
                 }
             }
@@ -584,7 +613,7 @@ object AppUpdateManager {
             } else {
                 false
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             false
         }
     }

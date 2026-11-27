@@ -71,7 +71,7 @@ object ClipboardSecurityHelper {
                     cb.setPrimaryClip(ClipData.newPlainText("", ""))
                 }
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         } finally {
             if (lastCopiedSha256 == expectedDigest) {
                 lastCopiedSha256 = null

@@ -113,6 +113,8 @@ fun AddMoreDebtDialog(
         DebtColors.receivable(isDark)
     }
 
+    val isScreenshotProtected = LocalScreenshotProtection.current
+
     fun openCalendarPicker() {
         val cal = Calendar.getInstance().apply { timeInMillis = dueDateMillis }
         val datePicker = DatePickerDialog(
@@ -133,10 +135,10 @@ fun AddMoreDebtDialog(
             cal.get(Calendar.DAY_OF_MONTH)
         )
         datePicker.datePicker.minDate = System.currentTimeMillis()
+        datePicker.applyScreenshotProtection(isScreenshotProtected)
         datePicker.show()
     }
 
-    val isScreenshotProtected = LocalScreenshotProtection.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(

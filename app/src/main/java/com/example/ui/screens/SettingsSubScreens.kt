@@ -109,6 +109,8 @@ import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
 import com.example.ui.i18n.AppStrings
 import com.example.ui.i18n.ArabicStrings
+import com.example.ui.i18n.DEVELOPER_CONTACT_TITLE
+import com.example.ui.i18n.DEVELOPER_CONTACT_URL
 import com.example.ui.i18n.DEVELOPER_NAME
 import com.example.ui.i18n.formatDate
 import com.example.ui.i18n.isolateLtr
@@ -2172,7 +2174,7 @@ fun DeveloperSettingsScreen(
                                     context.startActivity(
                                         Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse("https://wa.me/charfeddineka")
+                                            Uri.parse(DEVELOPER_CONTACT_URL)
                                         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     )
                                 }
@@ -2198,13 +2200,13 @@ fun DeveloperSettingsScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = isolateLtr("Let’s chat on WhatsApp!"),
+                                text = isolateLtr(DEVELOPER_CONTACT_TITLE),
                                 color = EmeraldNeon,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = isolateLtr("https://wa.me/charfeddineka"),
+                                text = isolateLtr(DEVELOPER_CONTACT_URL),
                                 color = colors.textSecondary,
                                 fontSize = 12.sp,
                                 maxLines = 1,

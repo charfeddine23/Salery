@@ -588,3 +588,19 @@ private fun ShieldHeroMedallion(
         }
     }
 }
+
+fun android.app.Dialog.applyScreenshotProtection(enabled: Boolean) {
+    val applyToWindow = {
+        window?.let { win ->
+            if (enabled) {
+                win.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                win.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
+    applyToWindow()
+    setOnShowListener {
+        applyToWindow()
+    }
+}

@@ -1,6 +1,7 @@
 package com.example.security
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -15,10 +16,15 @@ enum class BiometricStatus {
 
 object BiometricAuthManager {
 
+    private const val BIOMETRIC_ONLY_AUTHENTICATORS =
+        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
+
+    private const val BIOMETRIC_OR_CREDENTIAL_AUTHENTICATORS =
+        BIOMETRIC_ONLY_AUTHENTICATORS or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
     fun getBiometricStatus(context: Context): BiometricStatus {
         val manager = BiometricManager.from(context)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
-        return when (manager.canAuthenticate(authenticators)) {
+        return when (manager.canAuthenticate(BIOMETRIC_ONLY_AUTHENTICATORS)) {
             BiometricManager.BIOMETRIC_SUCCESS -> BiometricStatus.AVAILABLE
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricStatus.NOT_ENROLLED
             BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
@@ -31,16 +37,40 @@ object BiometricAuthManager {
         return getBiometricStatus(context) == BiometricStatus.AVAILABLE
     }
 
+    fun canAuthenticateWithDeviceFallback(context: Context): Boolean {
+        val manager = BiometricManager.from(context)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            manager.canAuthenticate(BIOMETRIC_OR_CREDENTIAL_AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
+        } else {
+            isBiometricAvailable(context) || hasLegacyDeviceCredential(context)
+        }
+    }
+
+    private fun hasLegacyDeviceCredential(context: Context): Boolean {
+        return try {
+            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            km?.isDeviceSecure == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun authenticate(
         activity: FragmentActivity,
         title: String,
         subtitle: String,
         negativeButtonText: String,
+        allowDeviceCredential: Boolean = false,
         onSuccess: () -> Unit,
         onError: (String) -> Unit = {},
         onFailed: () -> Unit = {}
     ) {
-        if (!isBiometricAvailable(activity)) {
+        val canAuth = if (allowDeviceCredential) {
+            canAuthenticateWithDeviceFallback(activity)
+        } else {
+            isBiometricAvailable(activity)
+        }
+        if (!canAuth) {
             onError("Biometrics not available")
             return
         }
@@ -68,13 +98,27 @@ object BiometricAuthManager {
             }
         )
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        val promptBuilder = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setNegativeButtonText(negativeButtonText)
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK)
-            .build()
 
-        prompt.authenticate(promptInfo)
+        if (allowDeviceCredential) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                promptBuilder.setAllowedAuthenticators(BIOMETRIC_OR_CREDENTIAL_AUTHENTICATORS)
+            } else {
+                @Suppress("DEPRECATION")
+                promptBuilder.setDeviceCredentialAllowed(true)
+            }
+        } else {
+            promptBuilder
+                .setNegativeButtonText(negativeButtonText)
+                .setAllowedAuthenticators(BIOMETRIC_ONLY_AUTHENTICATORS)
+        }
+
+        try {
+            prompt.authenticate(promptBuilder.build())
+        } catch (e: Exception) {
+            onError(e.localizedMessage ?: "Biometric prompt unavailable")
+        }
     }
 }

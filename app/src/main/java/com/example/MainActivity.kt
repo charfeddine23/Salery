@@ -9,12 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -56,14 +53,15 @@ class MainActivity : FragmentActivity() {
                 val activeGlassColors = LiquidGlassTheme.colors
                 val useLightSystemBarIcons = activeGlassColors.bgStart.luminance() >= 0.5f
                 val view = LocalView.current
-                var lastAppliedLightIcons by remember { mutableStateOf<Boolean?>(null) }
 
-                if (!view.isInEditMode && lastAppliedLightIcons != useLightSystemBarIcons) {
-                    SideEffect {
-                        lastAppliedLightIcons = useLightSystemBarIcons
-                        WindowCompat.getInsetsController(window, view).apply {
-                            isAppearanceLightStatusBars = useLightSystemBarIcons
-                            isAppearanceLightNavigationBars = useLightSystemBarIcons
+                if (!view.isInEditMode) {
+                    LaunchedEffect(useLightSystemBarIcons) {
+                        val controller = WindowCompat.getInsetsController(window, view)
+                        if (controller.isAppearanceLightStatusBars != useLightSystemBarIcons) {
+                            controller.isAppearanceLightStatusBars = useLightSystemBarIcons
+                        }
+                        if (controller.isAppearanceLightNavigationBars != useLightSystemBarIcons) {
+                            controller.isAppearanceLightNavigationBars = useLightSystemBarIcons
                         }
                     }
                 }
