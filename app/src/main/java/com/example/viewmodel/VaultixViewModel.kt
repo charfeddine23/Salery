@@ -149,6 +149,20 @@ internal fun computeSavingsBalanceAfterTransactionDelete(
     }
 }
 
+enum class AuthTransitionKind {
+    SIGN_IN,
+    SIGN_UP
+}
+
+sealed interface AuthTransitionState {
+    data object None : AuthTransitionState
+    data class Active(
+        val kind: AuthTransitionKind,
+        val displayName: String,
+        val isCompleted: Boolean = false
+    ) : AuthTransitionState
+}
+
 internal fun buildTransactionDedupeKey(
     typeName: String,
     amount: Double,
@@ -471,6 +485,39 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val _googleAuthState = MutableStateFlow<GoogleAuthUiState>(GoogleAuthUiState.SignedOut)
     val googleAuthState: StateFlow<GoogleAuthUiState> = _googleAuthState.asStateFlow()
 
+    private val _authTransitionState = MutableStateFlow<AuthTransitionState>(AuthTransitionState.None)
+    val authTransitionState: StateFlow<AuthTransitionState> = _authTransitionState.asStateFlow()
+    private var authTransitionJob: Job? = null
+
+    private fun triggerAuthSuccessTransition(
+        kind: AuthTransitionKind,
+        displayName: String
+    ) {
+        authTransitionJob?.cancel()
+        val cleanName = displayName.trim()
+        _authTransitionState.value = AuthTransitionState.Active(
+            kind = kind,
+            displayName = cleanName,
+            isCompleted = false
+        )
+        authTransitionJob = viewModelScope.launch {
+            delay(2000L)
+            _authTransitionState.value = AuthTransitionState.Active(
+                kind = kind,
+                displayName = cleanName,
+                isCompleted = true
+            )
+            delay(1350L)
+            _authTransitionState.value = AuthTransitionState.None
+        }
+    }
+
+    private fun clearAuthTransition() {
+        authTransitionJob?.cancel()
+        authTransitionJob = null
+        _authTransitionState.value = AuthTransitionState.None
+    }
+
     private val _cloudSyncState = MutableStateFlow<CloudSyncUiState>(CloudSyncUiState.Idle)
     val cloudSyncState: StateFlow<CloudSyncUiState> = _cloudSyncState.asStateFlow()
 
@@ -527,11 +574,17 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             _isAppLocked.value = true
         }
 
-        // Safely attach Firebase Auth listener (gracefully skipped in Robolectric if uninitialized)
-        runCatching {
-            firebaseAuth?.let { auth ->
-                updateGoogleAuthFromFirebaseUser(auth.currentUser)
-                auth.addAuthStateListener(firebaseAuthStateListener)
+        // Safely initialize Firebase Auth & attach listener after Frame 1 settles to keep startup SurfaceSyncGroup fast
+        viewModelScope.launch {
+            kotlinx.coroutines.yield()
+            val auth = withContext(Dispatchers.IO) {
+                runCatching { firebaseAuth }.getOrNull()
+            }
+            if (auth != null) {
+                runCatching {
+                    updateGoogleAuthFromFirebaseUser(auth.currentUser)
+                    auth.addAuthStateListener(firebaseAuthStateListener)
+                }
             }
         }
 
@@ -2156,11 +2209,17 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         wilayaName: String = "",
         communeName: String = ""
     ) {
-        val isAr = settings.value.language == "ar"
+        val wasAlreadyActive = settings.value.hasLocalAccount
         val cleanUsername = username.trim()
         val cleanWilayaCode = wilayaCode.trim()
         val cleanWilayaName = wilayaName.trim()
         val cleanCommuneName = communeName.trim()
+        if (!wasAlreadyActive) {
+            triggerAuthSuccessTransition(
+                kind = AuthTransitionKind.SIGN_UP,
+                displayName = cleanUsername
+            )
+        }
         prefsManager.updateSettings {
             val isDefaultClassic = it.classicCardHolderName.isBlank() ||
                 it.classicCardHolderName.equals("CARDHOLDER", ignoreCase = true) ||
@@ -2182,20 +2241,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 thirdCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultThird) cleanUsername.uppercase() else it.thirdCardHolderName
             )
         }
-        viewModelScope.launch {
-            _toastEvent.emit(
-                if (isAr) {
-                    if (cleanUsername.isNotEmpty()) "مرحباً $cleanUsername • تم إنشاء الحساب المحلي ✓"
-                    else "تم تفعيل الحساب المحلي بنجاح ✓"
-                } else {
-                    if (cleanUsername.isNotEmpty()) "Welcome $cleanUsername • Local account created ✓"
-                    else "Local account activated ✓"
-                }
-            )
-        }
     }
 
     fun signOutToAuthScreen() {
+        clearAuthTransition()
         prefsManager.updateSettings {
             it.copy(hasLocalAccount = false)
         }
@@ -2356,9 +2405,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun startCloudProfileListener(uid: String) {
-        val repo = cloudRepository ?: return
         cloudProfileObserverJob?.cancel()
         cloudProfileObserverJob = viewModelScope.launch(Dispatchers.IO) {
+            val repo = cloudRepository ?: return@launch
             try {
                 repo.observeUserProfile(uid).collect { profile ->
                     _cloudUserProfile.value = profile
@@ -2374,9 +2423,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     @OptIn(FlowPreview::class)
     private fun startCloudAutoSyncObserver(uid: String) {
-        val repo = cloudRepository ?: return
         cloudAutoSyncJob?.cancel()
         cloudAutoSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            val repo = cloudRepository ?: return@launch
             combine(
                 settings,
                 allTransactions,
@@ -2548,10 +2597,18 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             scope = viewModelScope,
             isArabic = isAr,
             onAuthSuccess = { user ->
+                val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: user.email?.substringBefore('@')?.trim().orEmpty()
+                if (!settings.value.hasLocalAccount) {
+                    triggerAuthSuccessTransition(
+                        kind = AuthTransitionKind.SIGN_IN,
+                        displayName = resolvedName
+                    )
+                }
                 updateGoogleAuthFromFirebaseUser(user)
                 activateGoogleConnectedAccount(user)
                 viewModelScope.launch {
-                    syncAfterGoogleSignIn(user, showFeedback = true)
+                    syncAfterGoogleSignIn(user, showFeedback = false)
                 }
             },
             onAuthCancelled = {
@@ -2602,9 +2659,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             when (val res = GoogleAuthHelper.signInWithEmailPassword(context, cleanEmail, password, isAr)) {
                 is EmailAuthResult.Success -> {
+                    val resolvedName = res.user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: res.user.email?.substringBefore('@')?.trim().orEmpty()
+                    triggerAuthSuccessTransition(
+                        kind = AuthTransitionKind.SIGN_IN,
+                        displayName = resolvedName
+                    )
                     updateGoogleAuthFromFirebaseUser(res.user)
                     activateGoogleConnectedAccount(res.user)
-                    syncAfterGoogleSignIn(res.user, showFeedback = true)
+                    syncAfterGoogleSignIn(res.user, showFeedback = false)
                 }
                 is EmailAuthResult.Error -> {
                     _googleAuthState.value = GoogleAuthUiState.Error(
@@ -2660,6 +2723,14 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 )
             ) {
                 is EmailAuthResult.Success -> {
+                    val fullName = listOf(cleanFirst, cleanLast)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
+                        .ifBlank { cleanUser }
+                    triggerAuthSuccessTransition(
+                        kind = AuthTransitionKind.SIGN_UP,
+                        displayName = fullName
+                    )
                     activateRegisteredCloudProfile(
                         user = res.user,
                         firstName = cleanFirst,
@@ -2667,7 +2738,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         username = cleanUser
                     )
                     updateGoogleAuthFromFirebaseUser(res.user)
-                    syncAfterGoogleSignIn(res.user, showFeedback = true)
+                    syncAfterGoogleSignIn(res.user, showFeedback = false)
                 }
                 is EmailAuthResult.Error -> {
                     _googleAuthState.value = GoogleAuthUiState.Error(res.message)
@@ -2740,9 +2811,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun continueWithSignedInGoogleAccount() {
         val user = firebaseAuth?.currentUser ?: return
+        val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+            ?: user.email?.substringBefore('@')?.trim().orEmpty()
+        triggerAuthSuccessTransition(
+            kind = AuthTransitionKind.SIGN_IN,
+            displayName = resolvedName
+        )
         activateGoogleConnectedAccount(user)
         viewModelScope.launch {
-            syncAfterGoogleSignIn(user, showFeedback = true)
+            syncAfterGoogleSignIn(user, showFeedback = false)
         }
     }
 

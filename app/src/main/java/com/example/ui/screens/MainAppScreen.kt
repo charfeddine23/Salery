@@ -134,6 +134,7 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
+import com.example.viewmodel.AuthTransitionState
 import com.example.viewmodel.VaultixViewModel
 import kotlinx.coroutines.launch
 
@@ -186,6 +187,7 @@ fun MainAppScreen(
     val isRefreshingSquareMarket by viewModel.isRefreshingSquareMarket.collectAsState()
     val squareMarketError by viewModel.squareMarketError.collectAsState()
     val googleAuthState by viewModel.googleAuthState.collectAsState()
+    val authTransitionState by viewModel.authTransitionState.collectAsState()
     val cloudSyncState by viewModel.cloudSyncState.collectAsState()
     val lastCloudSyncMillis by viewModel.lastCloudSyncMillis.collectAsState()
     val binancePortfolioTotalUsd = remember(binanceHoldings, binancePrices) {
@@ -418,6 +420,11 @@ fun MainAppScreen(
                 onBiometricUnlock = {
                     viewModel.unlockAppByBiometrics()
                 }
+            )
+        } else if (authTransitionState is AuthTransitionState.Active) {
+            AuthTransitionLuxuryScreen(
+                state = authTransitionState as AuthTransitionState.Active,
+                isArabic = activeStrings is ArabicStrings
             )
         } else if (!userSettings.hasLocalAccount) {
             val isAuthDarkTheme = when (userSettings.themeMode) {

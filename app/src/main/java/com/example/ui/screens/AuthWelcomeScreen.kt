@@ -28,6 +28,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -392,128 +393,27 @@ fun AuthWelcomeScreen(
     GlassBackground(
         modifier = modifier.fillMaxSize()
     ) {
-
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top bar: Back (when in sub-page) + Theme toggle on start; Language pill on end
-            Row(
+            val viewportHeight = maxHeight
+
+            // Centered scrollable host so every auth card sits in the exact middle of the screen
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 480.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = viewportHeight)
+                    .padding(horizontal = 20.dp, vertical = 68.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AnimatedVisibility(
-                        visible = pageMode != AuthPageMode.WELCOME,
-                        enter = fadeIn(tween(240)) + scaleIn(initialScale = 0.8f, animationSpec = tween(240)),
-                        exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.8f, animationSpec = tween(180))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(
-                                    elevation = if (isDarkTheme) 8.dp else 4.dp,
-                                    shape = CircleShape,
-                                    ambientColor = Color.Black.copy(alpha = 0.3f),
-                                    spotColor = Color.Black.copy(alpha = 0.3f)
-                                )
-                                .clip(CircleShape)
-                                .background(palette.topControlBg)
-                                .border(1.dp, palette.topControlBorder, CircleShape)
-                                .clickable { navigateTo(AuthPageMode.WELCOME) }
-                                .testTag("auth_back_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (isArabic) "رجوع" else "Back",
-                                tint = palette.textPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .shadow(
-                                elevation = if (isDarkTheme) 10.dp else 4.dp,
-                                shape = CircleShape,
-                                ambientColor = palette.accentCyan.copy(alpha = 0.25f),
-                                spotColor = palette.accentCyan.copy(alpha = 0.25f)
-                            )
-                            .clip(CircleShape)
-                            .background(palette.topControlBg)
-                            .border(1.dp, palette.topControlBorder, CircleShape)
-                            .clickable(onClick = onToggleTheme)
-                            .testTag("auth_theme_toggle"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Rounded.WbSunny else Icons.Rounded.DarkMode,
-                            contentDescription = if (isDarkTheme) {
-                                if (isArabic) "التبديل إلى الوضع الفاتح" else "Switch to Light Mode"
-                            } else {
-                                if (isArabic) "التبديل إلى الوضع الداكن" else "Switch to Dark Mode"
-                            },
-                            tint = palette.accentCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                // Single Language pill matching screenshot: "🌐 عربي" / "🌐 EN"
-                Row(
-                    modifier = Modifier
-                        .heightIn(min = 44.dp)
-                        .minimumInteractiveComponentSize()
-                        .shadow(
-                            elevation = if (isDarkTheme) 10.dp else 4.dp,
-                            shape = CircleShape,
-                            ambientColor = palette.accentCyan.copy(alpha = 0.22f),
-                            spotColor = palette.accentCyan.copy(alpha = 0.22f)
-                        )
-                        .clip(CircleShape)
-                        .background(palette.topControlBg)
-                        .border(1.dp, palette.topControlBorder, CircleShape)
-                        .clickable { onToggleLanguage(if (isArabic) "en" else "ar") }
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .testTag("auth_lang_toggle"),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Language,
-                        contentDescription = null,
-                        tint = palette.accentCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isArabic) "EN" else "عربي",
-                        color = palette.textPrimary,
-                        fontFamily = VaultixRoundedFont,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // Floating Glass Card + Morphing Behind-Card Background Blob Wrapper
-            Box(
+                // Floating Glass Card + Morphing Behind-Card Background Blob Wrapper
+                Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 440.dp)
@@ -865,8 +765,116 @@ fun AuthWelcomeScreen(
                     }
                 }
             }
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Pinned Top Bar: Back (when in sub-page) + Theme toggle on start; Language pill on end
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .widthIn(max = 480.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnimatedVisibility(
+                        visible = pageMode != AuthPageMode.WELCOME,
+                        enter = fadeIn(tween(240)) + scaleIn(initialScale = 0.8f, animationSpec = tween(240)),
+                        exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.8f, animationSpec = tween(180))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .shadow(
+                                    elevation = if (palette.isDark) 8.dp else 4.dp,
+                                    shape = CircleShape,
+                                    ambientColor = Color.Black.copy(alpha = 0.3f),
+                                    spotColor = Color.Black.copy(alpha = 0.3f)
+                                )
+                                .clip(CircleShape)
+                                .background(palette.topControlBg)
+                                .border(1.dp, palette.topControlBorder, CircleShape)
+                                .clickable { navigateTo(AuthPageMode.WELCOME) }
+                                .testTag("auth_back_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = if (isArabic) "رجوع" else "Back",
+                                tint = palette.textPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .shadow(
+                                elevation = if (palette.isDark) 10.dp else 4.dp,
+                                shape = CircleShape,
+                                ambientColor = palette.accentCyan.copy(alpha = 0.25f),
+                                spotColor = palette.accentCyan.copy(alpha = 0.25f)
+                            )
+                            .clip(CircleShape)
+                            .background(palette.topControlBg)
+                            .border(1.dp, palette.topControlBorder, CircleShape)
+                            .clickable(onClick = onToggleTheme)
+                            .testTag("auth_theme_toggle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Rounded.WbSunny else Icons.Rounded.DarkMode,
+                            contentDescription = if (isDarkTheme) {
+                                if (isArabic) "التبديل إلى الوضع الفاتح" else "Switch to Light Mode"
+                            } else {
+                                if (isArabic) "التبديل إلى الوضع الداكن" else "Switch to Dark Mode"
+                            },
+                            tint = palette.accentCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Single Language pill: "🌐 عربي" / "🌐 EN"
+                Row(
+                    modifier = Modifier
+                        .heightIn(min = 44.dp)
+                        .minimumInteractiveComponentSize()
+                        .shadow(
+                            elevation = if (palette.isDark) 10.dp else 4.dp,
+                            shape = CircleShape,
+                            ambientColor = palette.accentCyan.copy(alpha = 0.22f),
+                            spotColor = palette.accentCyan.copy(alpha = 0.22f)
+                        )
+                        .clip(CircleShape)
+                        .background(palette.topControlBg)
+                        .border(1.dp, palette.topControlBorder, CircleShape)
+                        .clickable { onToggleLanguage(if (isArabic) "en" else "ar") }
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .testTag("auth_lang_toggle"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Language,
+                        contentDescription = null,
+                        tint = palette.accentCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isArabic) "EN" else "عربي",
+                        color = palette.textPrimary,
+                        fontFamily = VaultixRoundedFont,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         if (showForgotPasswordDialog) {
