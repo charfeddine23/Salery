@@ -2,11 +2,13 @@ package com.example.cloud
 
 import android.content.Context
 import com.example.R
+import com.example.data.ArchivedAlgPosteSmsEntity
 import com.example.data.DebtEntity
 import com.example.data.TransactionEntity
 import com.example.data.UserSettings
 import com.example.security.VaultCryptoManager
 import com.example.ui.i18n.APP_VERSION
+import org.json.JSONObject
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -106,15 +108,15 @@ class VaultixCloudRepository(
             }.take(120)
 
             val mutableFields = buildMap<String, Any> {
-                settings.firstName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("firstName", it) }
-                settings.lastName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("lastName", it) }
-                resolvedDisplayName.takeIf { it.isNotEmpty() }?.let { put("displayName", it) }
+                put("firstName", settings.firstName.trim().take(80))
+                put("lastName", settings.lastName.trim().take(80))
+                put("displayName", resolvedDisplayName)
                 user.email?.trim()?.take(254)?.takeIf { it.isNotEmpty() }?.let { put("email", it) }
                 user.photoUrl?.toString()?.take(500)?.takeIf { it.isNotEmpty() }?.let { put("photoUrl", it) }
-                settings.localUsername.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("localUsername", it) }
-                settings.localWilayaCode.trim().take(10).takeIf { it.isNotEmpty() }?.let { put("localWilayaCode", it) }
-                settings.localWilayaName.trim().take(100).takeIf { it.isNotEmpty() }?.let { put("localWilayaName", it) }
-                settings.localCommuneName.trim().take(100).takeIf { it.isNotEmpty() }?.let { put("localCommuneName", it) }
+                put("localUsername", settings.localUsername.trim().take(80))
+                put("localWilayaCode", settings.localWilayaCode.trim().take(10))
+                put("localWilayaName", settings.localWilayaName.trim().take(100))
+                put("localCommuneName", settings.localCommuneName.trim().take(100))
                 put("language", if (settings.language == "ar") "ar" else "en")
                 put("themeMode", settings.themeMode.takeIf { it in setOf("DARK", "LIGHT", "SYSTEM") } ?: "DARK")
                 put("designStyle", settings.designStyle.take(64).ifBlank { "LIQUID_GLASS" })
@@ -156,9 +158,13 @@ class VaultixCloudRepository(
         settings: UserSettings,
         transactions: List<TransactionEntity>,
         debts: List<DebtEntity>,
+        archivedSms: List<ArchivedAlgPosteSmsEntity> = emptyList(),
+        avatarBase64: String = "",
         syncSettings: Boolean = true,
         syncTransactions: Boolean = true,
-        syncDebts: Boolean = true
+        syncDebts: Boolean = true,
+        syncSecrets: Boolean = syncSettings,
+        syncArchivedSms: Boolean = false
     ): Result<CloudSyncSummary> {
         val uid = try {
             requireUserId().also {
@@ -174,6 +180,9 @@ class VaultixCloudRepository(
             pushPrimarySettings(uid, settings).onFailure { return Result.failure(it) }
             pushAssetsSettings(uid, settings).onFailure { return Result.failure(it) }
             pushSmsSyncSettings(uid, settings).onFailure { return Result.failure(it) }
+        }
+        if (syncSecrets) {
+            pushSecretsSettings(uid, settings, avatarBase64).onFailure { return Result.failure(it) }
         }
 
         val userRef = userDocRef(uid)
@@ -295,6 +304,12 @@ class VaultixCloudRepository(
             }
         }
 
+        if (syncArchivedSms) {
+            pushArchivedSms(uid, archivedSms).onFailure {
+                return Result.failure(it)
+            }
+        }
+
         return Result.success(
             CloudSyncSummary(
                 syncedAtMillis = System.currentTimeMillis(),
@@ -366,18 +381,19 @@ class VaultixCloudRepository(
                 put("thirdCardProvider", settings.thirdCardProvider.take(40))
                 put("thirdCardHolderName", settings.thirdCardHolderName.take(80))
                 put("thirdCardExpiry", settings.thirdCardExpiry.take(16))
-                settings.firstName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("firstName", it) }
-                settings.lastName.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("lastName", it) }
-                settings.localUsername.trim().take(80).takeIf { it.isNotEmpty() }?.let { put("localUsername", it) }
-                settings.localWilayaCode.trim().take(10).takeIf { it.isNotEmpty() }?.let { put("localWilayaCode", it) }
-                settings.localWilayaName.trim().take(100).takeIf { it.isNotEmpty() }?.let { put("localWilayaName", it) }
-                settings.localCommuneName.trim().take(100).takeIf { it.isNotEmpty() }?.let { put("localCommuneName", it) }
+                put("firstName", settings.firstName.trim().take(80))
+                put("lastName", settings.lastName.trim().take(80))
+                put("localUsername", settings.localUsername.trim().take(80))
+                put("localWilayaCode", settings.localWilayaCode.trim().take(10))
+                put("localWilayaName", settings.localWilayaName.trim().take(100))
+                put("localCommuneName", settings.localCommuneName.trim().take(100))
                 put("language", if (settings.language == "ar") "ar" else "en")
                 put("themeMode", settings.themeMode.takeIf { it in setOf("DARK", "LIGHT", "SYSTEM") } ?: "DARK")
                 put("designStyle", settings.designStyle.take(64).ifBlank { "LIQUID_GLASS" })
                 put("stealthMode", settings.stealthMode)
                 put("breathingGlowEnabled", settings.breathingGlowEnabled)
                 put("screenshotProtectionEnabled", settings.screenshotProtectionEnabled)
+                put("lastBackupTimestamp", settings.lastBackupTimestamp.coerceAtLeast(0L))
                 put("updatedAt", FieldValue.serverTimestamp())
             }
 
@@ -482,6 +498,149 @@ class VaultixCloudRepository(
         }
     }
 
+    private suspend fun pushSecretsSettings(
+        uid: String,
+        settings: UserSettings,
+        avatarBase64: String = ""
+    ): Result<Unit> {
+        val secretsRef = userDocRef(uid).collection("vault_settings").document("secrets")
+        return try {
+            val safeAvatar = if (avatarBase64.length <= 320_000) avatarBase64 else ""
+            val plainSecretsJson = JSONObject().apply {
+                put("classicCardNumber", settings.classicCardNumber)
+                put("classicCardCvc", settings.classicCardCvc)
+                put("visaCardNumber", settings.visaCardNumber)
+                put("visaCardCvc", settings.visaCardCvc)
+                put("thirdCardNumber", settings.thirdCardNumber)
+                put("thirdCardCvc", settings.thirdCardCvc)
+                put("vaultKeysJson", boundedJson(settings.vaultKeysJson, 180_000, "[]"))
+                put("ccpAccountsJson", boundedJson(settings.ccpAccountsJson, 180_000, "[]"))
+                put("latestSmsBalanceRawSnippet", settings.latestSmsBalanceRawSnippet.take(1_000))
+                put("avatarBase64", safeAvatar)
+            }.toString()
+            val envelope = VaultCryptoManager.encryptCloudVaultSecrets(plainSecretsJson, uid)
+            require(envelope.length <= 750_000) {
+                "Encrypted cloud secrets envelope exceeds Firestore safety limit."
+            }
+            val existingSnap = secretsRef.get().await()
+            val mutableFields = mapOf<String, Any>(
+                "format" to "VAULTIX_CLOUD_SECRETS_V1",
+                "envelopeJson" to envelope,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (existingSnap.exists()) {
+                secretsRef.update(mutableFields).await()
+            } else {
+                secretsRef.set(
+                    mutableFields + mapOf(
+                        "userId" to uid,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, secretsRef.path)
+            Result.failure(e)
+        }
+    }
+
+    private fun archivedSmsDocId(rawId: String): String =
+        "sms_" + VaultCryptoManager.sha256Hex(rawId).take(32)
+
+    private suspend fun pushArchivedSms(
+        uid: String,
+        archivedSms: List<ArchivedAlgPosteSmsEntity>
+    ): Result<Unit> {
+        val userRef = userDocRef(uid)
+        val existingDocIds = try {
+            userRef.collection("archived_sms").get().await().documents.mapTo(HashSet()) { it.id }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.LIST, "users/$uid/archived_sms")
+            return Result.failure(e)
+        }
+
+        val pendingOps = mutableListOf<BatchOp>()
+        val currentDocIds = HashSet<String>(archivedSms.size)
+        for (sms in archivedSms) {
+            val docId = archivedSmsDocId(sms.id)
+            currentDocIds.add(docId)
+            val docRef = userRef.collection("archived_sms").document(docId)
+            val encryptedBody = VaultCryptoManager.encryptCloudText(sms.rawBody.take(4_000), uid)
+            val mutableFields = buildMap<String, Any> {
+                put("smsId", sms.id.take(256))
+                put("sender", sms.sender.take(120))
+                put("encryptedRawBody", encryptedBody.take(12_000))
+                put("receivedAtMillis", sms.receivedAtMillis.coerceAtLeast(0L))
+                put("capturedAtMillis", sms.capturedAtMillis.coerceAtLeast(0L))
+                put("captureSource", sms.captureSource.ifBlank { "INBOX" }.take(32))
+                sms.extractedBalance?.takeIf { it.isFinite() && it >= 0.0 }?.let {
+                    put("extractedBalance", it)
+                }
+                sms.extractedTxAmount?.takeIf { it.isFinite() && it >= 0.0 }?.let {
+                    put("extractedTxAmount", it)
+                }
+                sms.extractedIsExpense?.let {
+                    put("extractedExpense", it)
+                }
+                put("hasExplicitFeeKeyword", sms.hasExplicitFeeKeyword)
+                put("matchedRule", sms.matchedRule.ifBlank { "UNRECOGNIZED" }.take(64))
+                put("studyStatus", sms.studyStatus.ifBlank { "NEEDS_STUDY" }.take(32))
+                put("updatedAt", FieldValue.serverTimestamp())
+            }
+            if (docId in existingDocIds) {
+                pendingOps.add(BatchOp.Update(docRef, mutableFields))
+            } else {
+                pendingOps.add(
+                    BatchOp.Set(
+                        docRef,
+                        mutableFields + mapOf(
+                            "userId" to uid,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                )
+            }
+        }
+
+        for (staleId in existingDocIds) {
+            if (staleId !in currentDocIds) {
+                pendingOps.add(BatchOp.Delete(userRef.collection("archived_sms").document(staleId)))
+            }
+        }
+
+        return commitBatchedOps(pendingOps, "users/$uid/archived_sms")
+    }
+
+    private fun decryptSecretsEnvelope(
+        envelopeDoc: CloudVaultSecrets?,
+        uid: String
+    ): DecryptedCloudVaultSecrets? {
+        val rawEnvelope = envelopeDoc?.envelopeJson?.takeIf {
+            it.isNotBlank() && VaultCryptoManager.isCloudSecretsEnvelope(it)
+        } ?: return null
+        val plain = VaultCryptoManager.decryptCloudVaultSecrets(rawEnvelope, uid) ?: return null
+        return runCatching {
+            val json = JSONObject(plain)
+            DecryptedCloudVaultSecrets(
+                classicCardNumber = json.optString("classicCardNumber", ""),
+                classicCardCvc = json.optString("classicCardCvc", ""),
+                visaCardNumber = json.optString("visaCardNumber", ""),
+                visaCardCvc = json.optString("visaCardCvc", ""),
+                thirdCardNumber = json.optString("thirdCardNumber", ""),
+                thirdCardCvc = json.optString("thirdCardCvc", ""),
+                vaultKeysJson = json.optString("vaultKeysJson", "[]").ifBlank { "[]" },
+                ccpAccountsJson = json.optString("ccpAccountsJson", "[]").ifBlank { "[]" },
+                latestSmsBalanceRawSnippet = json.optString("latestSmsBalanceRawSnippet", ""),
+                avatarBase64 = json.optString("avatarBase64", "")
+            )
+        }.getOrNull()
+    }
+
     suspend fun pullVaultFromCloud(): Result<CloudPulledVault> {
         val uid = try {
             requireUserId()
@@ -504,10 +663,38 @@ class VaultixCloudRepository(
                 userRef.collection("vault_settings").document("sms_sync").get().await()
                     .toObject(CloudVaultSmsSync::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             }.getOrNull()
+            val secretsDoc = runCatching {
+                userRef.collection("vault_settings").document("secrets").get().await()
+                    .toObject(CloudVaultSecrets::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            }.getOrNull()
+            val decryptedSecrets = decryptSecretsEnvelope(secretsDoc, uid)
             val transactions = userRef.collection("transactions").get().await()
                 .toObjects(CloudTransaction::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             val debts = userRef.collection("debts").get().await()
                 .toObjects(CloudDebt::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val archivedSmsDocs = runCatching {
+                userRef.collection("archived_sms").get().await()
+                    .toObjects(CloudArchivedSms::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            }.getOrDefault(emptyList())
+            val archivedSms = archivedSmsDocs.mapNotNull { doc ->
+                val rawBody = VaultCryptoManager.decryptCloudText(doc.encryptedRawBody, uid) ?: return@mapNotNull null
+                val cleanId = doc.smsId.ifBlank { doc.id }
+                if (cleanId.isBlank()) return@mapNotNull null
+                ArchivedAlgPosteSmsEntity(
+                    id = cleanId,
+                    sender = doc.sender,
+                    rawBody = rawBody,
+                    receivedAtMillis = doc.receivedAtMillis.coerceAtLeast(0L),
+                    capturedAtMillis = doc.capturedAtMillis.coerceAtLeast(0L),
+                    captureSource = doc.captureSource.ifBlank { "INBOX" },
+                    extractedBalance = doc.extractedBalance,
+                    extractedTxAmount = doc.extractedTxAmount,
+                    extractedIsExpense = doc.extractedExpense,
+                    hasExplicitFeeKeyword = doc.hasExplicitFeeKeyword,
+                    matchedRule = doc.matchedRule.ifBlank { "UNRECOGNIZED" },
+                    studyStatus = doc.studyStatus.ifBlank { "NEEDS_STUDY" }
+                )
+            }
 
             Result.success(
                 CloudPulledVault(
@@ -515,8 +702,10 @@ class VaultixCloudRepository(
                     settings = settings,
                     assets = assets,
                     smsSync = smsSync,
+                    secrets = decryptedSecrets,
                     transactions = transactions,
-                    debts = debts
+                    debts = debts,
+                    archivedSms = archivedSms
                 )
             )
         } catch (e: CancellationException) {

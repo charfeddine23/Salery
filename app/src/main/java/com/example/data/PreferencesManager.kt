@@ -79,9 +79,146 @@ data class UserSettings(
     val profileAvatarPath: String = ""
 )
 
+enum class PrefsPersistenceMode {
+    GUEST_LOCAL,
+    CLOUD_MEMORY,
+    SIGNED_OUT
+}
+
+object SessionMetaStore {
+    private const val META_PREFS_NAME = "vaultix_session_meta"
+    private const val AUTH_UI_PREFS_NAME = "vaultix_auth_ui_prefs"
+    private const val LEGACY_SHARED_PREFS_NAME = "salerypelse_prefs"
+
+    const val REALM_NONE = "NONE"
+    const val REALM_GUEST = "GUEST"
+    const val REALM_CLOUD = "CLOUD"
+
+    private fun metaPrefs(context: Context): SharedPreferences =
+        context.applicationContext.getSharedPreferences(META_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun authUiPrefs(context: Context): SharedPreferences =
+        context.applicationContext.getSharedPreferences(AUTH_UI_PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun getSessionRealm(context: Context): String =
+        metaPrefs(context).getString("session_realm", "").orEmpty()
+
+    fun setSessionRealm(context: Context, realm: String, cloudUid: String = "") {
+        metaPrefs(context).edit()
+            .putString("session_realm", realm)
+            .putString("cloud_uid", if (realm == REALM_CLOUD) cloudUid else "")
+            .apply()
+    }
+
+    fun getLastCloudUid(context: Context): String =
+        metaPrefs(context).getString("cloud_uid", "").orEmpty()
+
+    fun isGuestSessionActive(context: Context): Boolean =
+        getSessionRealm(context) == REALM_GUEST
+
+    fun isExplicitGoogleSignedOut(context: Context): Boolean =
+        metaPrefs(context).getBoolean("google_explicit_signed_out", false)
+
+    fun setExplicitGoogleSignedOut(context: Context, value: Boolean) {
+        metaPrefs(context).edit().putBoolean("google_explicit_signed_out", value).apply()
+    }
+
+    fun getLastCloudSyncMillis(context: Context): Long =
+        metaPrefs(context).getLong("last_cloud_sync_millis", 0L)
+
+    fun setLastCloudSyncMillis(context: Context, millis: Long) {
+        metaPrefs(context).edit().putLong("last_cloud_sync_millis", millis).apply()
+    }
+
+    fun getQuickAccountActive(context: Context): Boolean =
+        metaPrefs(context).getBoolean("saved_quick_account_active", false)
+
+    fun getQuickAccountName(context: Context): String =
+        metaPrefs(context).getString("saved_quick_account_name", "").orEmpty()
+
+    fun getQuickAccountEmail(context: Context): String =
+        metaPrefs(context).getString("saved_quick_account_email", "").orEmpty()
+
+    fun getQuickAccountIsCloud(context: Context): Boolean =
+        metaPrefs(context).getBoolean("saved_quick_account_is_cloud", false)
+
+    fun getQuickAccountUid(context: Context): String =
+        metaPrefs(context).getString("saved_quick_account_uid", "").orEmpty()
+
+    fun saveQuickAccount(
+        context: Context,
+        displayName: String,
+        email: String = "",
+        isCloudLinked: Boolean = false,
+        uid: String = ""
+    ) {
+        metaPrefs(context).edit()
+            .putBoolean("saved_quick_account_active", true)
+            .putString("saved_quick_account_name", displayName)
+            .putString("saved_quick_account_email", email)
+            .putBoolean("saved_quick_account_is_cloud", isCloudLinked)
+            .putString("saved_quick_account_uid", uid)
+            .apply()
+    }
+
+    fun clearQuickAccount(context: Context) {
+        metaPrefs(context).edit()
+            .putBoolean("saved_quick_account_active", false)
+            .remove("saved_quick_account_name")
+            .remove("saved_quick_account_email")
+            .remove("saved_quick_account_is_cloud")
+            .remove("saved_quick_account_uid")
+            .apply()
+    }
+
+    fun readAuthUiLanguage(context: Context): String =
+        authUiPrefs(context).getString("auth_ui_language", "en") ?: "en"
+
+    fun readAuthUiThemeMode(context: Context): String =
+        authUiPrefs(context).getString("auth_ui_theme_mode", "DARK") ?: "DARK"
+
+    fun writeAuthUiPreferences(context: Context, language: String? = null, themeMode: String? = null) {
+        authUiPrefs(context).edit().apply {
+            if (language != null) putString("auth_ui_language", language)
+            if (themeMode != null) putString("auth_ui_theme_mode", themeMode)
+        }.apply()
+    }
+
+    fun resetAuthUiPreferences(context: Context) {
+        authUiPrefs(context).edit().clear().apply()
+    }
+
+    fun purgeLegacySharedStorageOnce(context: Context) {
+        val meta = metaPrefs(context)
+        if (meta.getBoolean("legacy_shared_storage_purged_v1", false)) return
+        val appCtx = context.applicationContext
+        val legacyPrefs = appCtx.getSharedPreferences(LEGACY_SHARED_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!meta.contains("google_explicit_signed_out") && legacyPrefs.contains("google_explicit_signed_out")) {
+            meta.edit()
+                .putBoolean(
+                    "google_explicit_signed_out",
+                    legacyPrefs.getBoolean("google_explicit_signed_out", false)
+                )
+                .apply()
+        }
+        legacyPrefs.edit().clear().apply()
+        AppDatabase.deleteLegacySharedDatabaseIfPresent(appCtx)
+        runCatching { java.io.File(appCtx.filesDir, "profile_avatar.jpg").delete() }
+        meta.edit().putBoolean("legacy_shared_storage_purged_v1", true).apply()
+    }
+}
+
 class PreferencesManager(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
+    private val appContext: Context = context.applicationContext
+    private val guestPrefs: SharedPreferences =
+        appContext.getSharedPreferences(GUEST_PREFS_NAME, Context.MODE_PRIVATE)
+
+    @Volatile
+    private var persistenceMode: PrefsPersistenceMode = when (SessionMetaStore.getSessionRealm(appContext)) {
+        SessionMetaStore.REALM_CLOUD -> PrefsPersistenceMode.CLOUD_MEMORY
+        SessionMetaStore.REALM_NONE -> PrefsPersistenceMode.SIGNED_OUT
+        else -> PrefsPersistenceMode.GUEST_LOCAL
+    }
 
     @Volatile
     private var preservedEncryptedBlobs: Map<String, String> = emptyMap()
@@ -89,30 +226,82 @@ class PreferencesManager(context: Context) {
     @Volatile
     private var secretsWarmed: Boolean = false
 
-    private val _settingsFlow = MutableStateFlow(loadSettings(decryptSecrets = false))
+    private val _settingsFlow = MutableStateFlow(
+        when (persistenceMode) {
+            PrefsPersistenceMode.GUEST_LOCAL -> loadSettings(decryptSecrets = false)
+            PrefsPersistenceMode.CLOUD_MEMORY -> UserSettings(
+                hasLocalAccount = true,
+                language = SessionMetaStore.readAuthUiLanguage(appContext),
+                themeMode = SessionMetaStore.readAuthUiThemeMode(appContext)
+            )
+            PrefsPersistenceMode.SIGNED_OUT -> buildCleanSignedOutSettings()
+        }
+    )
     val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
     @Volatile
     private var isSelfUpdating = false
 
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        if (!isSelfUpdating) {
+        if (!isSelfUpdating && persistenceMode == PrefsPersistenceMode.GUEST_LOCAL) {
             _settingsFlow.value = loadSettings(decryptSecrets = secretsWarmed)
         }
     }
 
     init {
-        prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
+        guestPrefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
+    }
+
+    fun getPersistenceMode(): PrefsPersistenceMode = persistenceMode
+
+    private fun buildCleanSignedOutSettings(): UserSettings {
+        return UserSettings(
+            hasLocalAccount = false,
+            language = SessionMetaStore.readAuthUiLanguage(appContext),
+            themeMode = SessionMetaStore.readAuthUiThemeMode(appContext)
+        )
+    }
+
+    @Synchronized
+    fun switchToGuestMode(activateAccount: Boolean? = null) {
+        persistenceMode = PrefsPersistenceMode.GUEST_LOCAL
+        secretsWarmed = true
+        val loaded = loadSettings(decryptSecrets = true)
+        if (activateAccount != null && loaded.hasLocalAccount != activateAccount) {
+            writeGuestSettings(loaded.copy(hasLocalAccount = activateAccount))
+        } else {
+            _settingsFlow.value = loaded
+        }
+    }
+
+    @Synchronized
+    fun switchToCloudMemoryMode(initialSettings: UserSettings) {
+        persistenceMode = PrefsPersistenceMode.CLOUD_MEMORY
+        secretsWarmed = true
+        preservedEncryptedBlobs = emptyMap()
+        _settingsFlow.value = initialSettings
+    }
+
+    @Synchronized
+    fun switchToSignedOutMode(resetAuthUiPreferences: Boolean = true) {
+        persistenceMode = PrefsPersistenceMode.SIGNED_OUT
+        secretsWarmed = true
+        preservedEncryptedBlobs = emptyMap()
+        if (resetAuthUiPreferences) {
+            SessionMetaStore.resetAuthUiPreferences(appContext)
+        }
+        _settingsFlow.value = buildCleanSignedOutSettings()
     }
 
     /**
-     * Decrypts Android Keystore-protected secrets off the Main Thread after Frame 1 completes.
+     * Decrypts Android Keystore-protected secrets off the Main Thread after Frame 1 completes
+     * (only applicable for Guest local storage; Cloud sessions hold secrets strictly in RAM).
      */
     @Synchronized
     fun warmDecryptedSecrets() {
         if (secretsWarmed) return
         secretsWarmed = true
-        if (preservedEncryptedBlobs.isNotEmpty()) {
+        if (persistenceMode == PrefsPersistenceMode.GUEST_LOCAL && preservedEncryptedBlobs.isNotEmpty()) {
             _settingsFlow.value = loadSettings(decryptSecrets = true)
         }
     }
@@ -215,7 +404,7 @@ class PreferencesManager(context: Context) {
     }
 
     private fun loadSettings(decryptSecrets: Boolean = true): UserSettings {
-        val all = prefs.all
+        val all = guestPrefs.all
         val vaultFallback = safeDouble(all, "vault_locked_amount", 0.0)
         val savedSavings = safeDouble(all, "savings_wallet_balance", vaultFallback)
         val failedEncrypted = HashMap<String, String>()
@@ -296,13 +485,38 @@ class PreferencesManager(context: Context) {
 
     @Synchronized
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
-        secretsWarmed = true
-        val currentLatest = loadSettings(decryptSecrets = true)
+        when (persistenceMode) {
+            PrefsPersistenceMode.GUEST_LOCAL -> {
+                secretsWarmed = true
+                val currentLatest = loadSettings(decryptSecrets = true)
+                val finalUpdated = transform(currentLatest)
+                writeGuestSettings(finalUpdated)
+            }
+            PrefsPersistenceMode.CLOUD_MEMORY -> {
+                // Strictly in-memory: Cloud accounts never persist user settings to local SharedPreferences.
+                val finalUpdated = transform(_settingsFlow.value)
+                _settingsFlow.value = finalUpdated
+            }
+            PrefsPersistenceMode.SIGNED_OUT -> {
+                val prev = _settingsFlow.value
+                val finalUpdated = transform(prev)
+                if (finalUpdated.language != prev.language || finalUpdated.themeMode != prev.themeMode) {
+                    SessionMetaStore.writeAuthUiPreferences(
+                        context = appContext,
+                        language = finalUpdated.language,
+                        themeMode = finalUpdated.themeMode
+                    )
+                }
+                _settingsFlow.value = finalUpdated
+            }
+        }
+    }
+
+    private fun writeGuestSettings(finalUpdated: UserSettings) {
         val preserved = preservedEncryptedBlobs
-        val finalUpdated = transform(currentLatest)
         isSelfUpdating = true
         try {
-            prefs.edit()
+            guestPrefs.edit()
                 .putString("salary_amount", finalUpdated.salaryAmount.toString())
                 .putInt("salary_payday", finalUpdated.salaryPayday)
                 .putString("salary_employer", finalUpdated.salaryEmployer)
@@ -406,14 +620,18 @@ class PreferencesManager(context: Context) {
     }
 
     companion object {
-        private const val PREFS_NAME = "salerypelse_prefs"
+        private const val GUEST_PREFS_NAME = "vaultix_guest_prefs"
 
         fun readLanguageFast(context: Context): String {
             return runCatching {
-                context.applicationContext
-                    .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .getString("app_language", "en")
-                    ?: "en"
+                val appCtx = context.applicationContext
+                if (SessionMetaStore.isGuestSessionActive(appCtx) || SessionMetaStore.getSessionRealm(appCtx).isBlank()) {
+                    appCtx.getSharedPreferences(GUEST_PREFS_NAME, Context.MODE_PRIVATE)
+                        .getString("app_language", null)
+                        ?: SessionMetaStore.readAuthUiLanguage(appCtx)
+                } else {
+                    SessionMetaStore.readAuthUiLanguage(appCtx)
+                }
             }.getOrDefault("en")
         }
     }

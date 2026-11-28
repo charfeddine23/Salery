@@ -2,6 +2,7 @@ package com.example.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -16,6 +17,7 @@ import com.example.data.PreferencesManager
 import com.example.data.SavingsHistoryCodec
 import com.example.data.SavingsMovementEntry
 import com.example.data.SavingsMovementType
+import com.example.data.SessionMetaStore
 import com.example.data.TransactionEntity
 import com.example.data.TransactionType
 import com.example.data.UserSettings
@@ -33,13 +35,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import java.util.Locale
 import com.example.notification.DebtReminderScheduler
@@ -78,6 +85,7 @@ import com.example.cloud.CloudUserProfile
 import com.example.cloud.CloudVaultAssets
 import com.example.cloud.CloudVaultSettings
 import com.example.cloud.CloudVaultSmsSync
+import com.example.cloud.DecryptedCloudVaultSecrets
 import com.example.cloud.EmailAuthResult
 import com.example.cloud.GoogleAuthHelper
 import com.example.cloud.GoogleAuthUiState
@@ -163,6 +171,12 @@ sealed interface AuthTransitionState {
     ) : AuthTransitionState
 }
 
+enum class StorageRealm {
+    GUEST,
+    CLOUD_MEMORY,
+    SIGNED_OUT
+}
+
 data class SavedAuthAccount(
     val displayName: String,
     val email: String = "",
@@ -196,17 +210,17 @@ internal fun applyCloudVaultSettingsSafely(
     cloud: CloudVaultSettings,
     overwritePreferences: Boolean = true,
     cloudAssets: CloudVaultAssets? = null,
-    cloudSmsSync: CloudVaultSmsSync? = null
+    cloudSmsSync: CloudVaultSmsSync? = null,
+    cloudSecrets: DecryptedCloudVaultSecrets? = null
 ): UserSettings {
     if (!overwritePreferences) return current
-    val resolvedFirstName = cloud.firstName?.trim()?.takeIf { it.isNotEmpty() } ?: current.firstName
-    val resolvedLastName = cloud.lastName?.trim()?.takeIf { it.isNotEmpty() } ?: current.lastName
-    val resolvedUsername = cloud.localUsername?.trim()?.takeIf { it.isNotEmpty() } ?: current.localUsername
-    val resolvedWilayaCode = cloud.localWilayaCode?.trim()?.takeIf { it.isNotEmpty() } ?: current.localWilayaCode
-    val resolvedWilayaName = cloud.localWilayaName?.trim()?.takeIf { it.isNotEmpty() } ?: current.localWilayaName
-    val resolvedCommuneName = cloud.localCommuneName?.trim()?.takeIf { it.isNotEmpty() } ?: current.localCommuneName
+    val resolvedFirstName = cloud.firstName?.trim() ?: current.firstName
+    val resolvedLastName = cloud.lastName?.trim() ?: current.lastName
+    val resolvedUsername = cloud.localUsername?.trim() ?: current.localUsername
+    val resolvedWilayaCode = cloud.localWilayaCode?.trim() ?: current.localWilayaCode
+    val resolvedWilayaName = cloud.localWilayaName?.trim() ?: current.localWilayaName
+    val resolvedCommuneName = cloud.localCommuneName?.trim() ?: current.localCommuneName
 
-    // Never overwrite encrypted secrets: card numbers, CVCs, vaultKeysJson, ccpAccountsJson, or SMS raw snippets.
     return current.copy(
         hasLocalAccount = true,
         firstName = resolvedFirstName,
@@ -286,21 +300,59 @@ internal fun applyCloudVaultSettingsSafely(
         designStyle = cloud.designStyle.ifBlank { current.designStyle },
         stealthMode = cloud.stealthMode,
         breathingGlowEnabled = cloud.breathingGlowEnabled,
-        screenshotProtectionEnabled = cloud.screenshotProtectionEnabled
+        screenshotProtectionEnabled = cloud.screenshotProtectionEnabled,
+        lastBackupTimestamp = if (cloud.lastBackupTimestamp > 0L) cloud.lastBackupTimestamp else current.lastBackupTimestamp,
+        classicCardNumber = cloudSecrets?.classicCardNumber ?: current.classicCardNumber,
+        classicCardCvc = cloudSecrets?.classicCardCvc ?: current.classicCardCvc,
+        visaCardNumber = cloudSecrets?.visaCardNumber ?: current.visaCardNumber,
+        visaCardCvc = cloudSecrets?.visaCardCvc ?: current.visaCardCvc,
+        thirdCardNumber = cloudSecrets?.thirdCardNumber ?: current.thirdCardNumber,
+        thirdCardCvc = cloudSecrets?.thirdCardCvc ?: current.thirdCardCvc,
+        vaultKeysJson = cloudSecrets?.vaultKeysJson ?: current.vaultKeysJson,
+        ccpAccountsJson = cloudSecrets?.ccpAccountsJson ?: current.ccpAccountsJson,
+        latestSmsBalanceRawSnippet = cloudSecrets?.latestSmsBalanceRawSnippet ?: current.latestSmsBalanceRawSnippet
     )
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class VaultixViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = AppDatabase.getDatabase(application)
-    private val dao = database.appDao()
+    private val guestDatabase = AppDatabase.getDatabase(application)
+    private val cloudSessionDatabase = AppDatabase.getCloudSessionDatabase(application)
     private val prefsManager = PreferencesManager(application)
+
+    private val _storageRealm = MutableStateFlow(
+        when (SessionMetaStore.getSessionRealm(application)) {
+            SessionMetaStore.REALM_CLOUD -> StorageRealm.CLOUD_MEMORY
+            SessionMetaStore.REALM_NONE -> StorageRealm.SIGNED_OUT
+            else -> StorageRealm.GUEST
+        }
+    )
+
+    private fun activeDatabase(): AppDatabase =
+        if (_storageRealm.value == StorageRealm.GUEST) guestDatabase else cloudSessionDatabase
+
+    private fun activeDao() = activeDatabase().appDao()
 
     val settings: StateFlow<UserSettings> = prefsManager.settingsFlow
 
-    val allTransactions: StateFlow<List<TransactionEntity>> = dao.getAllTransactions()
+    val allTransactions: StateFlow<List<TransactionEntity>> = _storageRealm
+        .flatMapLatest { realm ->
+            when (realm) {
+                StorageRealm.GUEST -> guestDatabase.appDao().getAllTransactions()
+                StorageRealm.CLOUD_MEMORY -> cloudSessionDatabase.appDao().getAllTransactions()
+                StorageRealm.SIGNED_OUT -> flowOf(emptyList())
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allDebts: StateFlow<List<DebtEntity>> = dao.getAllDebts()
+    val allDebts: StateFlow<List<DebtEntity>> = _storageRealm
+        .flatMapLatest { realm ->
+            when (realm) {
+                StorageRealm.GUEST -> guestDatabase.appDao().getAllDebts()
+                StorageRealm.CLOUD_MEMORY -> cloudSessionDatabase.appDao().getAllDebts()
+                StorageRealm.SIGNED_OUT -> flowOf(emptyList())
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Live financial calculations: Balance = Total Income - Total Expenses - Savings Wallet
@@ -427,7 +479,14 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Permanent non-deletable archive of every ALG Poste SMS (survives phone SMS deletion)
-    val archivedAlgPosteSms: StateFlow<List<ArchivedAlgPosteSmsEntity>> = dao.getAllArchivedAlgPosteSms()
+    val archivedAlgPosteSms: StateFlow<List<ArchivedAlgPosteSmsEntity>> = _storageRealm
+        .flatMapLatest { realm ->
+            when (realm) {
+                StorageRealm.GUEST -> guestDatabase.appDao().getAllArchivedAlgPosteSms()
+                StorageRealm.CLOUD_MEMORY -> cloudSessionDatabase.appDao().getAllArchivedAlgPosteSms()
+                StorageRealm.SIGNED_OUT -> flowOf(emptyList())
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Live algorithm study metrics computed from the permanent archive & caught taxes
@@ -484,22 +543,24 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
-    // Firebase Auth (Google Sign-In) & Cloud Firestore Sync State
-    private val cloudPrefs by lazy {
-        getApplication<Application>().getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
-    }
-
+    // Firebase Auth & Cloud-Only vs Guest-Only Session Metadata
     private val _googleAuthState = MutableStateFlow<GoogleAuthUiState>(GoogleAuthUiState.SignedOut)
     val googleAuthState: StateFlow<GoogleAuthUiState> = _googleAuthState.asStateFlow()
 
     private val _savedQuickAccountActive = MutableStateFlow(
-        cloudPrefs.getBoolean("saved_quick_account_active", false)
+        SessionMetaStore.getQuickAccountActive(application)
     )
     private val _savedQuickAccountName = MutableStateFlow(
-        cloudPrefs.getString("saved_quick_account_name", "").orEmpty()
+        SessionMetaStore.getQuickAccountName(application)
     )
     private val _savedQuickAccountEmail = MutableStateFlow(
-        cloudPrefs.getString("saved_quick_account_email", "").orEmpty()
+        SessionMetaStore.getQuickAccountEmail(application)
+    )
+    private val _savedQuickAccountIsCloud = MutableStateFlow(
+        SessionMetaStore.getQuickAccountIsCloud(application)
+    )
+    private val _savedQuickAccountUid = MutableStateFlow(
+        SessionMetaStore.getQuickAccountUid(application)
     )
 
     val savedAuthAccount: StateFlow<SavedAuthAccount?> = combine(
@@ -507,8 +568,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         settings,
         _savedQuickAccountActive,
         _savedQuickAccountName,
-        _savedQuickAccountEmail
-    ) { googleState, userSettings, quickActive, quickName, quickEmail ->
+        _savedQuickAccountEmail,
+        _savedQuickAccountIsCloud
+    ) { values ->
+        val googleState = values[0] as GoogleAuthUiState
+        val userSettings = values[1] as UserSettings
+        val quickActive = values[2] as Boolean
+        val quickName = values[3] as String
+        val quickEmail = values[4] as String
+        val quickIsCloud = values[5] as Boolean
         when (googleState) {
             is GoogleAuthUiState.SignedIn -> {
                 val fullLocalName = listOf(userSettings.firstName, userSettings.lastName)
@@ -539,7 +607,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                             displayName = resolvedName,
                             email = quickEmail,
                             photoUrl = null,
-                            isCloudLinked = false
+                            isCloudLinked = quickIsCloud
                         )
                     }
                 }
@@ -547,30 +615,37 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private fun persistSavedQuickAccount(displayName: String, email: String = "") {
+    private fun persistSavedQuickAccount(
+        displayName: String,
+        email: String = "",
+        isCloudLinked: Boolean = false,
+        uid: String = ""
+    ) {
         val cleanName = displayName.trim()
         val cleanEmail = email.trim()
         if (cleanName.isBlank() && cleanEmail.isBlank()) return
         val resolvedName = cleanName.ifBlank { cleanEmail.substringBefore('@') }
         _savedQuickAccountName.value = resolvedName
         _savedQuickAccountEmail.value = cleanEmail
+        _savedQuickAccountIsCloud.value = isCloudLinked
+        _savedQuickAccountUid.value = uid
         _savedQuickAccountActive.value = true
-        cloudPrefs.edit()
-            .putBoolean("saved_quick_account_active", true)
-            .putString("saved_quick_account_name", resolvedName)
-            .putString("saved_quick_account_email", cleanEmail)
-            .apply()
+        SessionMetaStore.saveQuickAccount(
+            context = getApplication(),
+            displayName = resolvedName,
+            email = cleanEmail,
+            isCloudLinked = isCloudLinked,
+            uid = uid
+        )
     }
 
     private fun clearSavedQuickAccount() {
         _savedQuickAccountActive.value = false
         _savedQuickAccountName.value = ""
         _savedQuickAccountEmail.value = ""
-        cloudPrefs.edit()
-            .putBoolean("saved_quick_account_active", false)
-            .remove("saved_quick_account_name")
-            .remove("saved_quick_account_email")
-            .apply()
+        _savedQuickAccountIsCloud.value = false
+        _savedQuickAccountUid.value = ""
+        SessionMetaStore.clearQuickAccount(getApplication())
     }
 
     private val _authTransitionState = MutableStateFlow<AuthTransitionState>(AuthTransitionState.None)
@@ -609,8 +684,13 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val _cloudSyncState = MutableStateFlow<CloudSyncUiState>(CloudSyncUiState.Idle)
     val cloudSyncState: StateFlow<CloudSyncUiState> = _cloudSyncState.asStateFlow()
 
+    private val _isRestoringCloudSession = MutableStateFlow(
+        SessionMetaStore.getSessionRealm(application) == SessionMetaStore.REALM_CLOUD
+    )
+    val isRestoringCloudSession: StateFlow<Boolean> = _isRestoringCloudSession.asStateFlow()
+
     private val _lastCloudSyncMillis = MutableStateFlow(
-        cloudPrefs.getLong("last_cloud_sync_millis", 0L)
+        SessionMetaStore.getLastCloudSyncMillis(application)
     )
     val lastCloudSyncMillis: StateFlow<Long> = _lastCloudSyncMillis.asStateFlow()
 
@@ -631,6 +711,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private var lastSyncedTxHash: Int = 0
     @Volatile
     private var lastSyncedDebtHash: Int = 0
+    @Volatile
+    private var lastSyncedArchivedSmsHash: Int = 0
+    @Volatile
+    private var lastSyncedAvatarBase64: String = ""
 
     private val firebaseAuth: FirebaseAuth? by lazy {
         runCatching {
@@ -657,20 +741,49 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        // Initialize lock state based on biometric preference
-        if (settings.value.biometricEnabled) {
+        val initialRealm = _storageRealm.value
+        if (initialRealm == StorageRealm.GUEST && settings.value.biometricEnabled) {
             _isAppLocked.value = true
         }
 
-        // Safely warm Keystore secrets & initialize Firebase Auth off Main Thread after Frame 1 settles
+        // Safely clean legacy shared storage, warm Guest secrets, or restore Cloud-only RAM session off Main Thread
         viewModelScope.launch {
             kotlinx.coroutines.yield()
+            val appCtx = getApplication<Application>()
             withContext(Dispatchers.IO) {
-                runCatching { prefsManager.warmDecryptedSecrets() }
+                runCatching { SessionMetaStore.purgeLegacySharedStorageOnce(appCtx) }
+                if (initialRealm == StorageRealm.GUEST) {
+                    runCatching { prefsManager.warmDecryptedSecrets() }
+                }
             }
             val auth = withContext(Dispatchers.IO) {
                 runCatching { firebaseAuth }.getOrNull()
             }
+            if (initialRealm == StorageRealm.CLOUD_MEMORY) {
+                val user = auth?.currentUser
+                if (user != null) {
+                    updateGoogleAuthFromFirebaseUser(user)
+                    withTimeoutOrNull(12_000L) {
+                        restoreCloudSessionOnLaunch(user)
+                    }
+                    _isRestoringCloudSession.value = false
+                    if (settings.value.biometricEnabled) {
+                        _isAppLocked.value = true
+                    }
+                    viewModelScope.launch(Dispatchers.IO) {
+                        runActiveRealmMaintenanceAndSmsScan()
+                    }
+                } else {
+                    clearCloudSessionInMemoryStorage(appCtx)
+                    SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
+                    _storageRealm.value = StorageRealm.SIGNED_OUT
+                    prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
+                    _isRestoringCloudSession.value = false
+                }
+            } else {
+                _isRestoringCloudSession.value = false
+            }
+
             if (auth != null) {
                 runCatching {
                     updateGoogleAuthFromFirebaseUser(auth.currentUser)
@@ -691,22 +804,13 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 AppUpdateManager.cleanupObsoleteUpdates(getApplication())
             } catch (_: Exception) {
             }
-            try {
-                cleanExistingMockDataIfPresent()
-                checkAndApplySalaryScheduler()
-                checkAndExecuteAutoPayDebts()
-                val currentDebts = dao.getAllDebtsList()
-                DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-            }
-            if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-                val cfg = settings.value
-                if (cfg.baridiMobSmsSyncEnabled) {
-                    scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
-                } else {
-                    refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
+            if (_storageRealm.value == StorageRealm.GUEST) {
+                try {
+                    cleanExistingMockDataIfPresent()
+                    runActiveRealmMaintenanceAndSmsScan()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
                 }
             }
             delay(900L)
@@ -718,29 +822,53 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             delay(800L)
             while (isActive) {
-                val cfg = settings.value
-                val hasGoldHoldings = GoldAssetCodec.parseHoldings(cfg.goldAssetHoldingsJson).isNotEmpty()
-                val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
-                    (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
-                    BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty() ||
-                    hasGoldHoldings ||
-                    cfg.includeAssetsInSavingsTotal
-                if (usesBinance) {
-                    refreshCryptoMarketPrices(force = false, showFeedback = false)
-                }
-                if (hasGoldHoldings || cfg.includeAssetsInSavingsTotal) {
-                    refreshSquareMarketData(force = false, showFeedback = false)
+                if (_storageRealm.value != StorageRealm.SIGNED_OUT) {
+                    val cfg = settings.value
+                    val hasGoldHoldings = GoldAssetCodec.parseHoldings(cfg.goldAssetHoldingsJson).isNotEmpty()
+                    val usesBinance = cfg.visaCardProvider.equals("BINANCE", ignoreCase = true) ||
+                        (cfg.thirdCardEnabled && cfg.thirdCardProvider.equals("BINANCE", ignoreCase = true)) ||
+                        BinanceCryptoCodec.parseHoldings(cfg.binanceHoldingsJson).isNotEmpty() ||
+                        hasGoldHoldings ||
+                        cfg.includeAssetsInSavingsTotal
+                    if (usesBinance) {
+                        refreshCryptoMarketPrices(force = false, showFeedback = false)
+                    }
+                    if (hasGoldHoldings || cfg.includeAssetsInSavingsTotal) {
+                        refreshSquareMarketData(force = false, showFeedback = false)
+                    }
                 }
                 delay(CRYPTO_PRICE_REFRESH_INTERVAL_MILLIS)
             }
         }
     }
 
+    private suspend fun runActiveRealmMaintenanceAndSmsScan() {
+        if (_storageRealm.value == StorageRealm.SIGNED_OUT) return
+        try {
+            checkAndApplySalaryScheduler()
+            checkAndExecuteAutoPayDebts()
+            val currentDebts = activeDao().getAllDebtsList()
+            DebtReminderScheduler.rescheduleAllReminders(getApplication(), currentDebts)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+        if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
+            val cfg = settings.value
+            if (cfg.baridiMobSmsSyncEnabled) {
+                scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
+            } else {
+                refreshCurrentBalanceOnlyFromInbox(getApplication(), showFeedback = false)
+            }
+        }
+    }
+
     private suspend fun cleanExistingMockDataIfPresent() {
-        val prefs = getApplication<Application>().getSharedPreferences("salerypelse_prefs", Context.MODE_PRIVATE)
+        val prefs = getApplication<Application>().getSharedPreferences("vaultix_guest_prefs", Context.MODE_PRIVATE)
         val cleaned = prefs.getBoolean("mock_data_cleaned_permanent_v2", false)
         if (!cleaned) {
-            val allTrans = dao.getAllTransactionsList()
+            val guestDao = guestDatabase.appDao()
+            val allTrans = guestDao.getAllTransactionsList()
             val mockTitles = setOf(
                 "Monthly Salary Deposit",
                 "Supermarket & Groceries",
@@ -749,15 +877,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             )
             for (t in allTrans) {
                 if (t.title in mockTitles) {
-                    dao.deleteTransaction(t)
+                    guestDao.deleteTransaction(t)
                 }
             }
 
-            val allDebts = dao.getAllDebtsList()
+            val allDebts = guestDao.getAllDebtsList()
             val mockPersons = setOf("Mohamed Lamine", "Karim Benali")
             for (d in allDebts) {
                 if (d.personName in mockPersons && (d.note.contains("spare parts") || d.note.contains("Laptop sale"))) {
-                    dao.deleteDebt(d)
+                    guestDao.deleteDebt(d)
                 }
             }
             prefs.edit().putBoolean("mock_data_cleaned_permanent_v2", true).apply()
@@ -782,7 +910,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         if (force || (currentDay >= userConfig.salaryPayday && userConfig.lastCreditedMonthYear != monthYearKey)) {
             val isAr = userConfig.language == "ar"
             val formattedSalary = formatDzdAmount(userConfig.salaryAmount, if (isAr) "د.ج" else "DZD")
-            dao.insertTransaction(
+            activeDao().insertTransaction(
                 TransactionEntity(
                     type = TransactionType.INCOME,
                     amount = userConfig.salaryAmount,
@@ -820,7 +948,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
         val monthYearKey = "$currentYear-$currentMonth"
 
-        val autoDebts = dao.getPendingAutoPayDebts()
+        val autoDebts = activeDao().getPendingAutoPayDebts()
         val isAr = settings.value.language == "ar"
 
         for (debt in autoDebts) {
@@ -834,7 +962,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     val newRemaining = (debt.remainingAmount - payNow).coerceAtLeast(0.0)
                     val isFullySettled = newRemaining <= 0.001
 
-                    dao.updateDebt(
+                    activeDao().updateDebt(
                         debt.copy(
                             remainingAmount = newRemaining,
                             lastInstallmentCreditedMonth = monthYearKey,
@@ -844,7 +972,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
 
                     if (debt.type == DebtType.OWED_BY_ME) {
-                        dao.insertTransaction(
+                        activeDao().insertTransaction(
                             TransactionEntity(
                                 type = TransactionType.EXPENSE,
                                 amount = payNow,
@@ -856,7 +984,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                             )
                         )
                     } else {
-                        dao.insertTransaction(
+                        activeDao().insertTransaction(
                             TransactionEntity(
                                 type = TransactionType.INCOME,
                                 amount = payNow,
@@ -877,7 +1005,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 // One-time full debt settlement on due date
                 if (debt.dueDateMillis <= now) {
                     val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
-                    dao.updateDebt(
+                    activeDao().updateDebt(
                         debt.copy(
                             remainingAmount = 0.0,
                             isPaid = true,
@@ -885,7 +1013,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         )
                     )
                     if (debt.type == DebtType.OWED_BY_ME) {
-                        dao.insertTransaction(
+                        activeDao().insertTransaction(
                             TransactionEntity(
                                 type = TransactionType.EXPENSE,
                                 amount = payAmount,
@@ -897,7 +1025,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                             )
                         )
                     } else {
-                        dao.insertTransaction(
+                        activeDao().insertTransaction(
                             TransactionEntity(
                                 type = TransactionType.INCOME,
                                 amount = payAmount,
@@ -918,7 +1046,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun addTransaction(type: TransactionType, amount: Double, category: String, title: String, note: String, dateMillis: Long) {
         if (!amount.isFinite() || amount <= 0.0) return
         viewModelScope.launch {
-            dao.insertTransaction(
+            activeDao().insertTransaction(
                 TransactionEntity(
                     type = type,
                     amount = amount,
@@ -933,7 +1061,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
-            dao.deleteTransaction(transaction)
+            activeDao().deleteTransaction(transaction)
             if (
                 transaction.type == TransactionType.EXPENSE &&
                 transaction.isPaidFromSavings &&
@@ -1002,7 +1130,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 isPaid = isSettled,
                 paidDateMillis = if (isSettled) now else null
             )
-            val newId = dao.insertDebt(newEntity)
+            val newId = activeDao().insertDebt(newEntity)
             if (!isSettled) {
                 DebtReminderScheduler.scheduleDebtReminder(getApplication(), newEntity.copy(id = newId))
             }
@@ -1018,7 +1146,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             val isAr = settings.value.language == "ar"
             val now = System.currentTimeMillis()
             val payAmount = if (debt.remainingAmount > 0) debt.remainingAmount else debt.amount
-            dao.updateDebt(
+            activeDao().updateDebt(
                 debt.copy(
                     remainingAmount = 0.0,
                     isPaid = true,
@@ -1028,7 +1156,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             // Record wallet impact
             if (debt.type == DebtType.OWED_BY_ME) {
-                dao.insertTransaction(
+                activeDao().insertTransaction(
                     TransactionEntity(
                         type = TransactionType.EXPENSE,
                         amount = payAmount,
@@ -1039,7 +1167,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 )
             } else {
-                dao.insertTransaction(
+                activeDao().insertTransaction(
                     TransactionEntity(
                         type = TransactionType.INCOME,
                         amount = payAmount,
@@ -1060,7 +1188,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun updateDebt(debt: DebtEntity) {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
-            dao.updateDebt(debt)
+            activeDao().updateDebt(debt)
             if (debt.isPaid || debt.remainingAmount <= 0.001) {
                 DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             } else {
@@ -1098,7 +1226,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 dueDateMillis = nextDue,
                 note = mergedNote
             )
-            dao.updateDebt(updatedDebt)
+            activeDao().updateDebt(updatedDebt)
             DebtReminderScheduler.scheduleDebtReminder(getApplication(), updatedDebt)
             _toastEvent.emit(
                 if (isAr) {
@@ -1124,7 +1252,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 isPaid = isFullySettled,
                 paidDateMillis = if (isFullySettled) now else debt.paidDateMillis
             )
-            dao.updateDebt(updatedDebt)
+            activeDao().updateDebt(updatedDebt)
             if (isFullySettled) {
                 DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             } else {
@@ -1133,7 +1261,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
             if (recordTransaction) {
                 if (debt.type == DebtType.OWED_BY_ME) {
-                    dao.insertTransaction(
+                    activeDao().insertTransaction(
                         TransactionEntity(
                             type = TransactionType.EXPENSE,
                             amount = actualPay,
@@ -1150,7 +1278,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         )
                     )
                 } else {
-                    dao.insertTransaction(
+                    activeDao().insertTransaction(
                         TransactionEntity(
                             type = TransactionType.INCOME,
                             amount = actualPay,
@@ -1186,7 +1314,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun deleteDebt(debt: DebtEntity) {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
-            dao.deleteDebt(debt)
+            activeDao().deleteDebt(debt)
             DebtReminderScheduler.cancelDebtReminder(getApplication(), debt.id)
             _toastEvent.emit(
                 if (isAr) "تم حذف سجل الدين" else "Debt record removed"
@@ -1197,7 +1325,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     fun clearSettledDebts() {
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
-            val count = dao.clearSettledDebts()
+            val count = activeDao().clearSettledDebts()
             _toastEvent.emit(
                 if (isAr) "تم حذف $count ديون مسددة" else "$count settled debts deleted"
             )
@@ -1881,7 +2009,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 if (note.isNotBlank()) "Paid from Savings Wallet • $note" else "Paid directly from Savings Wallet"
             }
 
-            dao.insertTransaction(
+            activeDao().insertTransaction(
                 TransactionEntity(
                     type = TransactionType.EXPENSE,
                     amount = amount,
@@ -1915,9 +2043,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     // Backup & Restore (Supports both sanitized JSON and AES-256-GCM passphrase-encrypted backups)
     suspend fun exportBackupJson(passphrase: String = ""): String {
-        val trans = dao.getAllTransactionsList()
-        val debts = dao.getAllDebtsList()
-        val archivedSms = dao.getAllArchivedAlgPosteSmsList()
+        val trans = activeDao().getAllTransactionsList()
+        val debts = activeDao().getAllDebtsList()
+        val archivedSms = activeDao().getAllArchivedAlgPosteSmsList()
         val userConfig = settings.value
         val usePassphraseEncryption = passphrase.isNotBlank()
 
@@ -1994,15 +2122,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val payload = BackupPayload.fromJsonString(plainJson)
             ?: return BackupRestoreOutcome.INVALID_FORMAT
 
-        database.withTransaction {
-            dao.clearAllTransactions()
-            dao.clearAllDebts()
+        activeDatabase().withTransaction {
+            activeDao().clearAllTransactions()
+            activeDao().clearAllDebts()
 
-            dao.insertTransactions(payload.transactions)
-            dao.insertDebts(payload.debts)
+            activeDao().insertTransactions(payload.transactions)
+            activeDao().insertDebts(payload.debts)
             if (payload.archivedAlgPosteSms.isNotEmpty()) {
                 // Merge into permanent archive without deleting existing permanent SMS records
-                dao.insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
+                activeDao().insertArchivedSmsIfMissing(payload.archivedAlgPosteSms)
             }
         }
 
@@ -2302,9 +2430,111 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private data class CloudVaultSnapshotForSync(
+        val settings: UserSettings,
+        val transactions: List<TransactionEntity>,
+        val debts: List<DebtEntity>,
+        val archivedSms: List<ArchivedAlgPosteSmsEntity>
+    )
+
+    private suspend fun clearCloudSessionInMemoryStorage(appCtx: Context = getApplication()) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                cloudSessionDatabase.withTransaction {
+                    cloudSessionDatabase.appDao().clearAllTransactions()
+                    cloudSessionDatabase.appDao().clearAllDebts()
+                    cloudSessionDatabase.appDao().clearAllArchivedAlgPosteSms()
+                }
+            }
+            runCatching {
+                appCtx.filesDir.listFiles()?.forEach { file ->
+                    if (file.name.startsWith("session_avatar_") && file.name.endsWith(".jpg")) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+        lastSyncedSettingsHash = 0
+        lastSyncedTxHash = 0
+        lastSyncedDebtHash = 0
+        lastSyncedArchivedSmsHash = 0
+        lastSyncedAvatarBase64 = ""
+    }
+
+    private fun encodeAvatarFileToBase64(avatarPath: String): String {
+        if (avatarPath.isBlank()) return ""
+        return runCatching {
+            val file = File(avatarPath)
+            if (!file.exists() || !file.isFile) return ""
+            val rawBytes = file.readBytes()
+            if (rawBytes.isEmpty()) return ""
+            val finalBytes = if (rawBytes.size <= 220_000) {
+                rawBytes
+            } else {
+                val bmp = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return ""
+                val out = java.io.ByteArrayOutputStream()
+                bmp.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                bmp.recycle()
+                out.toByteArray()
+            }
+            if (finalBytes.size > 230_000) return ""
+            Base64.encodeToString(finalBytes, Base64.NO_WRAP)
+        }.getOrDefault("")
+    }
+
+    private fun restoreAvatarFromBase64(context: Context, uid: String, avatarBase64: String): String {
+        if (avatarBase64.isBlank() || uid.isBlank()) return ""
+        return runCatching {
+            val decoded = Base64.decode(avatarBase64, Base64.DEFAULT)
+            if (decoded.isEmpty()) return ""
+            val targetFile = File(context.applicationContext.filesDir, "session_avatar_${uid}.jpg")
+            FileOutputStream(targetFile).use { it.write(decoded) }
+            targetFile.absolutePath
+        }.getOrDefault("")
+    }
+
+    private suspend fun prepareCleanCloudSessionForUser(user: FirebaseUser) {
+        val appCtx = getApplication<Application>()
+        stopCloudProfileListener()
+        clearCloudSessionInMemoryStorage(appCtx)
+        val uiLang = SessionMetaStore.readAuthUiLanguage(appCtx)
+        val uiTheme = SessionMetaStore.readAuthUiThemeMode(appCtx)
+        val cleanCloudSettings = UserSettings(
+            hasLocalAccount = true,
+            language = uiLang,
+            themeMode = uiTheme
+        )
+        SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_CLOUD, user.uid)
+        SessionMetaStore.resetAuthUiPreferences(appCtx)
+        _storageRealm.value = StorageRealm.CLOUD_MEMORY
+        prefsManager.switchToCloudMemoryMode(cleanCloudSettings)
+        _cloudUserProfile.value = null
+        _cloudSyncState.value = CloudSyncUiState.Idle
+        _lastCloudSyncMillis.value = 0L
+        SessionMetaStore.setLastCloudSyncMillis(appCtx, 0L)
+    }
+
     fun activateLocalAccount(username: String = "") {
-        val wasAlreadyActive = settings.value.hasLocalAccount
         val cleanUsername = username.trim()
+        val appCtx = getApplication<Application>()
+
+        stopCloudProfileListener()
+        _cloudUserProfile.value = null
+        _cloudSyncState.value = CloudSyncUiState.Idle
+        if (runCatching { firebaseAuth?.currentUser != null }.getOrDefault(false)) {
+            runCatching { firebaseAuth?.signOut() }
+        }
+        _googleAuthState.value = GoogleAuthUiState.SignedOut
+
+        viewModelScope.launch {
+            clearCloudSessionInMemoryStorage(appCtx)
+        }
+
+        SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_GUEST)
+        _storageRealm.value = StorageRealm.GUEST
+        prefsManager.switchToGuestMode(activateAccount = null)
+
+        val wasAlreadyActive = settings.value.hasLocalAccount
         if (!wasAlreadyActive) {
             triggerAuthSuccessTransition(
                 kind = AuthTransitionKind.SIGN_UP,
@@ -2313,7 +2543,12 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
         val savedName = cleanUsername.ifEmpty { settings.value.localUsername }
         if (savedName.isNotBlank()) {
-            persistSavedQuickAccount(displayName = savedName)
+            persistSavedQuickAccount(
+                displayName = savedName,
+                email = "",
+                isCloudLinked = false,
+                uid = ""
+            )
         }
         prefsManager.updateSettings {
             val isDefaultClassic = it.classicCardHolderName.isBlank() ||
@@ -2333,14 +2568,21 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 thirdCardHolderName = if (cleanUsername.isNotEmpty() && isDefaultThird) cleanUsername.uppercase() else it.thirdCardHolderName
             )
         }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            cleanExistingMockDataIfPresent()
+            runActiveRealmMaintenanceAndSmsScan()
+        }
     }
 
     fun signOutToAuthScreen() {
         clearAuthTransition()
+        val appCtx = getApplication<Application>()
         val currentSettings = settings.value
+        val wasCloudRealm = _storageRealm.value == StorageRealm.CLOUD_MEMORY
         val activeUser = runCatching { firebaseAuth?.currentUser }.getOrNull()
-        if (activeUser != null) {
-            updateGoogleAuthFromFirebaseUser(activeUser)
+
+        if (wasCloudRealm && activeUser != null) {
             val resolvedName = listOf(currentSettings.firstName, currentSettings.lastName)
                 .filter { it.isNotBlank() }
                 .joinToString(" ")
@@ -2349,7 +2591,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 .ifBlank { activeUser.email?.substringBefore('@').orEmpty() }
             persistSavedQuickAccount(
                 displayName = resolvedName,
-                email = activeUser.email.orEmpty()
+                email = activeUser.email.orEmpty(),
+                isCloudLinked = true,
+                uid = activeUser.uid
             )
         } else {
             val localDisplayName = listOf(currentSettings.firstName, currentSettings.lastName)
@@ -2359,12 +2603,54 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             if (localDisplayName.isNotBlank()) {
                 persistSavedQuickAccount(
                     displayName = localDisplayName,
-                    email = _savedQuickAccountEmail.value
+                    email = "",
+                    isCloudLinked = false,
+                    uid = ""
                 )
             }
         }
-        prefsManager.updateSettings {
-            it.copy(hasLocalAccount = false)
+
+        val repo = cloudRepository
+        val shouldFlushCloud = wasCloudRealm &&
+            activeUser != null &&
+            repo != null &&
+            initialCloudHandshakeDoneForUid == activeUser.uid
+
+        stopCloudProfileListener()
+        _cloudUserProfile.value = null
+        _cloudSyncState.value = CloudSyncUiState.Idle
+        _isAppLocked.value = false
+        _isRestoringCloudSession.value = false
+
+        SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
+        _storageRealm.value = StorageRealm.SIGNED_OUT
+        prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
+
+        viewModelScope.launch {
+            withContext(NonCancellable + Dispatchers.IO) {
+                if (shouldFlushCloud && activeUser != null && repo != null) {
+                    val txList = runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
+                    val debtList = runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
+                    val smsList = runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                    val avatarB64 = encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
+                    runCatching {
+                        repo.pushVaultToCloud(
+                            user = activeUser,
+                            settings = currentSettings,
+                            transactions = txList,
+                            debts = debtList,
+                            archivedSms = smsList,
+                            avatarBase64 = avatarB64,
+                            syncSettings = true,
+                            syncTransactions = true,
+                            syncDebts = true,
+                            syncSecrets = true,
+                            syncArchivedSms = true
+                        )
+                    }
+                }
+                clearCloudSessionInMemoryStorage(appCtx)
+            }
         }
     }
 
@@ -2379,11 +2665,18 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val cleanLast = lastName.trim().take(80)
         val cleanUser = username.trim().take(80)
         val isAr = settings.value.language == "ar"
+        val currentRealm = _storageRealm.value
+        val activeUser = firebaseAuth?.currentUser
 
         viewModelScope.launch {
             val appCtx = getApplication<Application>()
             val resolvedAvatarPath = withContext(Dispatchers.IO) {
-                val targetFile = File(appCtx.filesDir, "profile_avatar.jpg")
+                val avatarFileName = if (currentRealm == StorageRealm.CLOUD_MEMORY && activeUser != null) {
+                    "session_avatar_${activeUser.uid}.jpg"
+                } else {
+                    "guest_profile_avatar.jpg"
+                }
+                val targetFile = File(appCtx.filesDir, avatarFileName)
                 when {
                     pickedPhotoUri != null -> {
                         saveDownscaledAvatar(appCtx, pickedPhotoUri, targetFile)
@@ -2411,33 +2704,49 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 .joinToString(" ")
                 .ifBlank { cleanUser }
 
-            val user = firebaseAuth?.currentUser
+            val isCloud = currentRealm == StorageRealm.CLOUD_MEMORY && activeUser != null
             if (fullDisplayName.isNotBlank()) {
                 persistSavedQuickAccount(
                     displayName = fullDisplayName,
-                    email = user?.email.orEmpty().ifBlank { _savedQuickAccountEmail.value }
+                    email = activeUser?.email.orEmpty(),
+                    isCloudLinked = isCloud,
+                    uid = if (isCloud) activeUser?.uid.orEmpty() else ""
                 )
             }
-            if (user != null) {
+            if (isCloud && activeUser != null) {
                 if (fullDisplayName.isNotBlank()) {
                     runCatching {
-                        user.updateProfile(
+                        activeUser.updateProfile(
                             UserProfileChangeRequest.Builder()
                                 .setDisplayName(fullDisplayName)
                                 .build()
                         ).await()
                     }
                     _googleAuthState.value = GoogleAuthUiState.SignedIn(
-                        uid = user.uid,
+                        uid = activeUser.uid,
                         displayName = fullDisplayName,
-                        email = user.email.orEmpty(),
-                        photoUrl = user.photoUrl?.toString()
+                        email = activeUser.email.orEmpty(),
+                        photoUrl = activeUser.photoUrl?.toString()
                     )
                 }
                 val repo = cloudRepository
                 if (repo != null) {
+                    val latestSettings = settings.value
+                    val avatarB64 = withContext(Dispatchers.IO) { encodeAvatarFileToBase64(resolvedAvatarPath) }
                     withContext(Dispatchers.IO) {
-                        repo.upsertUserProfile(user, settings.value)
+                        repo.pushVaultToCloud(
+                            user = activeUser,
+                            settings = latestSettings,
+                            transactions = emptyList(),
+                            debts = emptyList(),
+                            avatarBase64 = avatarB64,
+                            syncSettings = true,
+                            syncTransactions = false,
+                            syncDebts = false,
+                            syncSecrets = true,
+                            syncArchivedSms = false
+                        )
+                        lastSyncedAvatarBase64 = avatarB64
                     }
                 }
             }
@@ -2491,7 +2800,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ==================== Google Sign-In & Cloud Firestore Sync ====================
+    // ==================== Google Sign-In & Cloud Firestore Sync (Cloud-Only Realm) ====================
 
     private fun updateGoogleAuthFromFirebaseUser(user: FirebaseUser?) {
         if (user != null) {
@@ -2504,7 +2813,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 email = user.email.orEmpty(),
                 photoUrl = user.photoUrl?.toString()
             )
-            startCloudProfileListener(user.uid)
+            if (_storageRealm.value == StorageRealm.CLOUD_MEMORY && settings.value.hasLocalAccount) {
+                startCloudProfileListener(user.uid)
+            } else {
+                stopCloudProfileListener()
+            }
         } else {
             stopCloudProfileListener()
             _cloudUserProfile.value = null
@@ -2518,6 +2831,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun startCloudProfileListener(uid: String) {
+        if (_storageRealm.value != StorageRealm.CLOUD_MEMORY) return
         cloudProfileObserverJob?.cancel()
         cloudProfileObserverJob = viewModelScope.launch(Dispatchers.IO) {
             val repo = cloudRepository ?: return@launch
@@ -2528,7 +2842,6 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // Handled gracefully offline or after sign-out; offline Room storage remains primary source of truth.
             }
         }
         startCloudAutoSyncObserver(uid)
@@ -2536,32 +2849,41 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     @OptIn(FlowPreview::class)
     private fun startCloudAutoSyncObserver(uid: String) {
+        if (_storageRealm.value != StorageRealm.CLOUD_MEMORY) return
         cloudAutoSyncJob?.cancel()
         cloudAutoSyncJob = viewModelScope.launch(Dispatchers.IO) {
             val repo = cloudRepository ?: return@launch
             combine(
                 settings,
                 allTransactions,
-                allDebts
-            ) { currentSettings, currentTxs, currentDebts ->
-                Triple(currentSettings, currentTxs, currentDebts)
+                allDebts,
+                archivedAlgPosteSms
+            ) { currentSettings, currentTxs, currentDebts, currentArchived ->
+                CloudVaultSnapshotForSync(currentSettings, currentTxs, currentDebts, currentArchived)
             }
                 .debounce(1200L)
-                .collect { (latestSettings, txList, debtList) ->
+                .collect { (latestSettings, txList, debtList, archivedList) ->
+                    if (_storageRealm.value != StorageRealm.CLOUD_MEMORY) return@collect
                     val currentUser = firebaseAuth?.currentUser ?: return@collect
                     if (currentUser.uid != uid) return@collect
                     if (!latestSettings.hasLocalAccount) return@collect
                     if (isApplyingCloudPull) return@collect
                     if (initialCloudHandshakeDoneForUid != uid) return@collect
 
+                    val avatarB64 = encodeAvatarFileToBase64(latestSettings.profileAvatarPath)
                     val sHash = computeCloudSyncedSettingsFingerprint(latestSettings)
                     val tHash = txList.hashCode()
                     val dHash = debtList.hashCode()
+                    val aHash = archivedList.hashCode()
 
                     val settingsChanged = sHash != lastSyncedSettingsHash
+                    val avatarChanged = avatarB64 != lastSyncedAvatarBase64
                     val txChanged = tHash != lastSyncedTxHash
                     val debtChanged = dHash != lastSyncedDebtHash
-                    if (!settingsChanged && !txChanged && !debtChanged) return@collect
+                    val archivedChanged = aHash != lastSyncedArchivedSmsHash
+                    if (!settingsChanged && !avatarChanged && !txChanged && !debtChanged && !archivedChanged) {
+                        return@collect
+                    }
 
                     _cloudSyncState.value = CloudSyncUiState.Syncing
                     val result = repo.pushVaultToCloud(
@@ -2569,14 +2891,20 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         settings = latestSettings,
                         transactions = txList,
                         debts = debtList,
+                        archivedSms = archivedList,
+                        avatarBase64 = avatarB64,
                         syncSettings = settingsChanged,
                         syncTransactions = txChanged,
-                        syncDebts = debtChanged
+                        syncDebts = debtChanged,
+                        syncSecrets = settingsChanged || avatarChanged,
+                        syncArchivedSms = archivedChanged
                     )
                     result.onSuccess { summary ->
                         lastSyncedSettingsHash = sHash
                         lastSyncedTxHash = tHash
                         lastSyncedDebtHash = dHash
+                        lastSyncedArchivedSmsHash = aHash
+                        lastSyncedAvatarBase64 = avatarB64
                         recordLastCloudSyncMillis(summary.syncedAtMillis)
                         _cloudSyncState.value = CloudSyncUiState.Success(
                             syncedAtMillis = summary.syncedAtMillis,
@@ -2602,6 +2930,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         h = 31 * h + s.language.hashCode()
         h = 31 * h + s.themeMode.hashCode()
         h = 31 * h + s.designStyle.hashCode()
+        h = 31 * h + s.lastBackupTimestamp.hashCode()
         h = 31 * h + s.stealthMode.hashCode()
         h = 31 * h + s.savingsWalletBalance.hashCode()
         h = 31 * h + s.savingsGoalAmount.hashCode()
@@ -2610,16 +2939,24 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         h = 31 * h + s.goldAssetHoldingsJson.hashCode()
         h = 31 * h + s.classicCardBankStyle.hashCode()
         h = 31 * h + s.classicCardHolderName.hashCode()
+        h = 31 * h + s.classicCardNumber.hashCode()
         h = 31 * h + s.classicCardExpiry.hashCode()
+        h = 31 * h + s.classicCardCvc.hashCode()
         h = 31 * h + s.breathingGlowEnabled.hashCode()
         h = 31 * h + s.screenshotProtectionEnabled.hashCode()
+        h = 31 * h + s.vaultKeysJson.hashCode()
+        h = 31 * h + s.ccpAccountsJson.hashCode()
         h = 31 * h + s.visaCardProvider.hashCode()
         h = 31 * h + s.visaCardHolderName.hashCode()
+        h = 31 * h + s.visaCardNumber.hashCode()
         h = 31 * h + s.visaCardExpiry.hashCode()
+        h = 31 * h + s.visaCardCvc.hashCode()
         h = 31 * h + s.thirdCardEnabled.hashCode()
         h = 31 * h + s.thirdCardProvider.hashCode()
         h = 31 * h + s.thirdCardHolderName.hashCode()
+        h = 31 * h + s.thirdCardNumber.hashCode()
         h = 31 * h + s.thirdCardExpiry.hashCode()
+        h = 31 * h + s.thirdCardCvc.hashCode()
         h = 31 * h + s.binanceHoldingsJson.hashCode()
         h = 31 * h + s.binancePricesJson.hashCode()
         h = 31 * h + s.binanceLastPriceSyncMillis.hashCode()
@@ -2635,6 +2972,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         h = 31 * h + s.smsSyncBaselineTimestampMillis.hashCode()
         h = 31 * h + s.latestSmsBalanceAmount.hashCode()
         h = 31 * h + s.latestSmsBalanceUpdatedAt.hashCode()
+        h = 31 * h + s.latestSmsBalanceRawSnippet.hashCode()
         h = 31 * h + s.smsBalanceHistoryJson.hashCode()
         h = 31 * h + s.detectedSmsTaxesJson.hashCode()
         h = 31 * h + s.detectedFailedSmsTransactionsJson.hashCode()
@@ -2649,6 +2987,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         h = 31 * h + s.localWilayaName.hashCode()
         h = 31 * h + s.localCommuneName.hashCode()
         h = 31 * h + s.cardHubOrderJson.hashCode()
+        h = 31 * h + s.profileAvatarPath.hashCode()
         return h
     }
 
@@ -2673,6 +3012,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun attemptSilentGoogleSignIn(context: Context) {
         viewModelScope.launch {
+            val appCtx = getApplication<Application>()
             val auth = withContext(Dispatchers.IO) {
                 runCatching { firebaseAuth }.getOrNull()
             }
@@ -2683,7 +3023,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     ?: currentUser.email?.substringBefore('@')?.trim().orEmpty()
                 persistSavedQuickAccount(
                     displayName = resolvedName,
-                    email = currentUser.email.orEmpty()
+                    email = currentUser.email.orEmpty(),
+                    isCloudLinked = true,
+                    uid = currentUser.uid
                 )
                 return@launch
             }
@@ -2691,17 +3033,23 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             silentGoogleSignInAttempted = true
             delay(500L)
             val explicitSignedOut = withContext(Dispatchers.IO) {
-                cloudPrefs.getBoolean("google_explicit_signed_out", false)
+                SessionMetaStore.isExplicitGoogleSignedOut(appCtx)
             }
             if (explicitSignedOut || auth == null) return@launch
             GoogleAuthHelper.attemptAutoSignIn(
                 context = context,
                 scope = viewModelScope,
                 onAuthSuccess = { user ->
-                    updateGoogleAuthFromFirebaseUser(user)
-                    activateGoogleConnectedAccount(user)
                     viewModelScope.launch {
-                        syncAfterGoogleSignIn(user, showFeedback = false)
+                        _isRestoringCloudSession.value = true
+                        prepareCleanCloudSessionForUser(user)
+                        activateGoogleConnectedAccount(user)
+                        updateGoogleAuthFromFirebaseUser(user)
+                        syncAfterCloudSignIn(user, showFeedback = false)
+                        _isRestoringCloudSession.value = false
+                        withContext(Dispatchers.IO) {
+                            runActiveRealmMaintenanceAndSmsScan()
+                        }
                     }
                 },
                 onUnauthenticated = {
@@ -2715,7 +3063,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         if (_googleAuthState.value is GoogleAuthUiState.Loading) return
         val isAr = settings.value.language == "ar"
         suppressNextAutoLockForExternalFlow()
-        cloudPrefs.edit().putBoolean("google_explicit_signed_out", false).apply()
+        SessionMetaStore.setExplicitGoogleSignedOut(getApplication(), false)
         _googleAuthState.value = GoogleAuthUiState.Loading
 
         GoogleAuthHelper.onGoogleSignInClicked(
@@ -2731,10 +3079,16 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         displayName = resolvedName
                     )
                 }
-                updateGoogleAuthFromFirebaseUser(user)
-                activateGoogleConnectedAccount(user)
                 viewModelScope.launch {
-                    syncAfterGoogleSignIn(user, showFeedback = false)
+                    _isRestoringCloudSession.value = true
+                    prepareCleanCloudSessionForUser(user)
+                    activateGoogleConnectedAccount(user)
+                    updateGoogleAuthFromFirebaseUser(user)
+                    syncAfterCloudSignIn(user, showFeedback = false)
+                    _isRestoringCloudSession.value = false
+                    withContext(Dispatchers.IO) {
+                        runActiveRealmMaintenanceAndSmsScan()
+                    }
                 }
             },
             onAuthCancelled = {
@@ -2779,7 +3133,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        cloudPrefs.edit().putBoolean("google_explicit_signed_out", false).apply()
+        SessionMetaStore.setExplicitGoogleSignedOut(getApplication(), false)
         _googleAuthState.value = GoogleAuthUiState.Loading
 
         viewModelScope.launch {
@@ -2791,9 +3145,15 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         kind = AuthTransitionKind.SIGN_IN,
                         displayName = resolvedName
                     )
-                    updateGoogleAuthFromFirebaseUser(res.user)
+                    _isRestoringCloudSession.value = true
+                    prepareCleanCloudSessionForUser(res.user)
                     activateGoogleConnectedAccount(res.user)
-                    syncAfterGoogleSignIn(res.user, showFeedback = false)
+                    updateGoogleAuthFromFirebaseUser(res.user)
+                    syncAfterCloudSignIn(res.user, showFeedback = false)
+                    _isRestoringCloudSession.value = false
+                    withContext(Dispatchers.IO) {
+                        runActiveRealmMaintenanceAndSmsScan()
+                    }
                 }
                 is EmailAuthResult.Error -> {
                     _googleAuthState.value = GoogleAuthUiState.Error(
@@ -2834,7 +3194,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        cloudPrefs.edit().putBoolean("google_explicit_signed_out", false).apply()
+        SessionMetaStore.setExplicitGoogleSignedOut(getApplication(), false)
         _googleAuthState.value = GoogleAuthUiState.Loading
 
         viewModelScope.launch {
@@ -2857,6 +3217,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         kind = AuthTransitionKind.SIGN_UP,
                         displayName = fullName
                     )
+                    _isRestoringCloudSession.value = true
+                    prepareCleanCloudSessionForUser(res.user)
                     activateRegisteredCloudProfile(
                         user = res.user,
                         firstName = cleanFirst,
@@ -2864,7 +3226,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                         username = cleanUser
                     )
                     updateGoogleAuthFromFirebaseUser(res.user)
-                    syncAfterGoogleSignIn(res.user, showFeedback = false)
+                    syncAfterCloudSignIn(res.user, showFeedback = false)
+                    _isRestoringCloudSession.value = false
+                    withContext(Dispatchers.IO) {
+                        runActiveRealmMaintenanceAndSmsScan()
+                    }
                 }
                 is EmailAuthResult.Error -> {
                     _googleAuthState.value = GoogleAuthUiState.Error(res.message)
@@ -2918,7 +3284,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val resolvedHolder = (fullName.ifBlank { username }).uppercase()
         persistSavedQuickAccount(
             displayName = fullName.ifBlank { username },
-            email = user.email.orEmpty()
+            email = user.email.orEmpty(),
+            isCloudLinked = true,
+            uid = user.uid
         )
         prefsManager.updateSettings { current ->
             val isDefaultClassic = current.classicCardHolderName.isBlank() ||
@@ -2948,20 +3316,31 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 kind = AuthTransitionKind.SIGN_IN,
                 displayName = resolvedName
             )
-            activateGoogleConnectedAccount(user)
             viewModelScope.launch {
-                syncAfterGoogleSignIn(user, showFeedback = false)
+                _isRestoringCloudSession.value = true
+                prepareCleanCloudSessionForUser(user)
+                activateGoogleConnectedAccount(user)
+                updateGoogleAuthFromFirebaseUser(user)
+                syncAfterCloudSignIn(user, showFeedback = false)
+                _isRestoringCloudSession.value = false
+                withContext(Dispatchers.IO) {
+                    runActiveRealmMaintenanceAndSmsScan()
+                }
             }
             return
         }
 
         val saved = savedAuthAccount.value ?: return
-        triggerAuthSuccessTransition(
-            kind = AuthTransitionKind.SIGN_IN,
-            displayName = saved.displayName
-        )
-        prefsManager.updateSettings { current ->
-            current.copy(hasLocalAccount = true)
+        if (!saved.isCloudLinked) {
+            activateLocalAccount(saved.displayName)
+        } else {
+            val isAr = settings.value.language == "ar"
+            viewModelScope.launch {
+                _toastEvent.emit(
+                    if (isAr) "يرجى تسجيل الدخول مجدداً لاستعادة حسابك السحابي"
+                    else "Please sign in again to restore your Cloud account"
+                )
+            }
         }
     }
 
@@ -2973,7 +3352,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             ?: user.email?.substringBefore('@')?.trim().orEmpty()
         persistSavedQuickAccount(
             displayName = googleName,
-            email = user.email.orEmpty()
+            email = user.email.orEmpty(),
+            isCloudLinked = true,
+            uid = user.uid
         )
         prefsManager.updateSettings { current ->
             val resolvedFirst = current.firstName.ifBlank { googleFirst }
@@ -3001,45 +3382,137 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         context: Context,
         clearQuickResume: Boolean = false
     ) {
+        val appCtx = getApplication<Application>()
         val isAr = settings.value.language == "ar"
-        if (clearQuickResume) {
+        val wasCloudRealm = _storageRealm.value == StorageRealm.CLOUD_MEMORY
+        val activeUser = runCatching { firebaseAuth?.currentUser }.getOrNull()
+        val currentSettings = settings.value
+        val shouldFlushCloud = wasCloudRealm &&
+            activeUser != null &&
+            cloudRepository != null &&
+            initialCloudHandshakeDoneForUid == activeUser.uid
+
+        if (clearQuickResume || wasCloudRealm) {
             clearSavedQuickAccount()
         }
-        val hadCloudUser = runCatching { firebaseAuth?.currentUser != null }.getOrDefault(false)
-        if (!hadCloudUser) {
+
+        if (activeUser == null) {
             _googleAuthState.value = GoogleAuthUiState.SignedOut
+            if (wasCloudRealm) {
+                stopCloudProfileListener()
+                _cloudUserProfile.value = null
+                _cloudSyncState.value = CloudSyncUiState.Idle
+                _isAppLocked.value = false
+                _isRestoringCloudSession.value = false
+                SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
+                _storageRealm.value = StorageRealm.SIGNED_OUT
+                prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
+                viewModelScope.launch { clearCloudSessionInMemoryStorage(appCtx) }
+            }
             if (clearQuickResume) {
                 viewModelScope.launch {
                     _toastEvent.emit(
-                        if (isAr) "تمت إزالة الحساب من شاشة الدخول • بياناتك المحلية محفوظة"
-                        else "Account removed from quick login • Local vault stays safe"
+                        if (isAr) "تمت إزالة الحساب من شاشة الدخول"
+                        else "Account removed from quick login"
                     )
                 }
             }
             return
         }
-        cloudPrefs.edit().putBoolean("google_explicit_signed_out", true).apply()
-        GoogleAuthHelper.signOut(
-            context = context,
-            scope = viewModelScope,
-            beforeFirebaseSignOut = {
-                stopCloudProfileListener()
-                _cloudUserProfile.value = null
-                _cloudSyncState.value = CloudSyncUiState.Idle
-            },
-            onSignOutComplete = {
-                _googleAuthState.value = GoogleAuthUiState.SignedOut
-                viewModelScope.launch {
-                    _toastEvent.emit(
-                        if (isAr) "تم تسجيل الخروج من الحساب السحابي • بياناتك المحلية لا تزال محفوظة"
-                        else "Signed out • Your offline encrypted vault stays safe"
-                    )
+
+        SessionMetaStore.setExplicitGoogleSignedOut(appCtx, true)
+        viewModelScope.launch {
+            if (shouldFlushCloud) {
+                val repo = cloudRepository
+                withContext(NonCancellable + Dispatchers.IO) {
+                    val txList = runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
+                    val debtList = runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
+                    val smsList = runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                    val avatarB64 = encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
+                    runCatching {
+                        repo?.pushVaultToCloud(
+                            user = activeUser,
+                            settings = currentSettings,
+                            transactions = txList,
+                            debts = debtList,
+                            archivedSms = smsList,
+                            avatarBase64 = avatarB64,
+                            syncSettings = true,
+                            syncTransactions = true,
+                            syncDebts = true,
+                            syncSecrets = true,
+                            syncArchivedSms = true
+                        )
+                    }
                 }
             }
-        )
+
+            GoogleAuthHelper.signOut(
+                context = context,
+                scope = viewModelScope,
+                beforeFirebaseSignOut = {
+                    stopCloudProfileListener()
+                    _cloudUserProfile.value = null
+                    _cloudSyncState.value = CloudSyncUiState.Idle
+                    _isAppLocked.value = false
+                    _isRestoringCloudSession.value = false
+                    SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
+                    _storageRealm.value = StorageRealm.SIGNED_OUT
+                    prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
+                    viewModelScope.launch {
+                        clearCloudSessionInMemoryStorage(appCtx)
+                    }
+                },
+                onSignOutComplete = {
+                    _googleAuthState.value = GoogleAuthUiState.SignedOut
+                    viewModelScope.launch {
+                        _toastEvent.emit(
+                            if (isAr) "تم تسجيل الخروج بالكامل ومحو الجلسة من الجهاز • بياناتك محفوظة في السحابة فقط"
+                            else "Signed out & cleared session from device • Data stays safely in Cloud only"
+                        )
+                    }
+                }
+            )
+        }
     }
 
-    private suspend fun syncAfterGoogleSignIn(
+    private suspend fun restoreCloudSessionOnLaunch(user: FirebaseUser) {
+        val repo = cloudRepository ?: return
+        val isAr = settings.value.language == "ar"
+        _cloudSyncState.value = CloudSyncUiState.Syncing
+
+        val pullResult = withContext(Dispatchers.IO) {
+            repo.pullVaultFromCloud()
+        }
+        pullResult.onSuccess { pulled ->
+            if (pulled.hasExistingCloudData()) {
+                replaceActiveRealmWithCloudPull(user.uid, pulled, forceApplySettings = true)
+            } else {
+                activateGoogleConnectedAccount(user)
+            }
+            initialCloudHandshakeDoneForUid = user.uid
+            val now = System.currentTimeMillis()
+            recordLastCloudSyncMillis(now)
+            val txCount = withContext(Dispatchers.IO) { activeDao().getAllTransactionsList().size }
+            val debtCount = withContext(Dispatchers.IO) { activeDao().getAllDebtsList().size }
+            _cloudSyncState.value = CloudSyncUiState.Success(
+                syncedAtMillis = now,
+                transactionCount = txCount,
+                debtCount = debtCount
+            )
+            startCloudProfileListener(user.uid)
+        }.onFailure { err ->
+            val msg = friendlyCloudErrorMessage(err, isAr)
+            _cloudSyncState.value = CloudSyncUiState.Error(msg)
+            startCloudProfileListener(user.uid)
+            _toastEvent.emit(
+                if (isAr) "تعذّر جلب البيانات السحابية — تحقّق من الاتصال: $msg"
+                else "Unable to fetch Cloud data — check connection: $msg"
+            )
+        }
+    }
+
+    private suspend fun syncAfterCloudSignIn(
         user: FirebaseUser,
         showFeedback: Boolean
     ) {
@@ -3047,25 +3520,89 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val isAr = settings.value.language == "ar"
         _cloudSyncState.value = CloudSyncUiState.Syncing
 
-        // 1. Pull any existing cloud data under users/{uid}/... first and safely merge into offline Room DB
         val pullResult = withContext(Dispatchers.IO) {
             repo.pullVaultFromCloud()
         }
-        pullResult.getOrNull()?.let { pulled ->
-            mergePulledCloudIntoLocal(pulled)
+        pullResult.onFailure { err ->
+            val msg = friendlyCloudErrorMessage(err, isAr)
+            _cloudSyncState.value = CloudSyncUiState.Error(msg)
+            if (showFeedback) {
+                _toastEvent.emit(
+                    if (isAr) "تعذّر الاتصال بالسحابة لجلب بيانات الحساب: $msg"
+                    else "Failed to fetch Cloud account data: $msg"
+                )
+            }
+            return
         }
 
-        // 2. Push unified local vault back up to users/{uid}/...
-        val (txList, debtList, latestSettings) = withContext(Dispatchers.IO) {
-            Triple(dao.getAllTransactionsList(), dao.getAllDebtsList(), settings.value)
+        val pulled = pullResult.getOrNull() ?: return
+        if (pulled.hasExistingCloudData()) {
+            val (restoredTxCount, restoredDebtCount) = replaceActiveRealmWithCloudPull(
+                uid = user.uid,
+                pulled = pulled,
+                forceApplySettings = true
+            )
+            val resolvedDisplayName = listOf(settings.value.firstName, settings.value.lastName)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { settings.value.localUsername }
+                .ifBlank { user.displayName?.trim().orEmpty() }
+            if (resolvedDisplayName.isNotBlank()) {
+                persistSavedQuickAccount(
+                    displayName = resolvedDisplayName,
+                    email = user.email.orEmpty(),
+                    isCloudLinked = true,
+                    uid = user.uid
+                )
+            }
+            initialCloudHandshakeDoneForUid = user.uid
+            val now = System.currentTimeMillis()
+            recordLastCloudSyncMillis(now)
+            _cloudSyncState.value = CloudSyncUiState.Success(
+                syncedAtMillis = now,
+                transactionCount = restoredTxCount,
+                debtCount = restoredDebtCount
+            )
+            if (showFeedback) {
+                _toastEvent.emit(
+                    if (isAr) "تمت استعادة الحساب السحابي بالكامل ($restoredTxCount معاملة) ✓"
+                    else "Cloud account restored ($restoredTxCount transactions) ✓"
+                )
+            }
+            return
         }
+
+        // Brand-new Cloud account with no remote vault yet -> push initial clean Cloud state
+        val (latestSettings, txList, debtList, smsList) = withContext(Dispatchers.IO) {
+            CloudVaultSnapshotForSync(
+                settings = settings.value,
+                transactions = activeDao().getAllTransactionsList(),
+                debts = activeDao().getAllDebtsList(),
+                archivedSms = activeDao().getAllArchivedAlgPosteSmsList()
+            )
+        }
+        val avatarB64 = withContext(Dispatchers.IO) { encodeAvatarFileToBase64(latestSettings.profileAvatarPath) }
         val pushResult = withContext(Dispatchers.IO) {
-            repo.pushVaultToCloud(user, latestSettings, txList, debtList)
+            repo.pushVaultToCloud(
+                user = user,
+                settings = latestSettings,
+                transactions = txList,
+                debts = debtList,
+                archivedSms = smsList,
+                avatarBase64 = avatarB64,
+                syncSettings = true,
+                syncTransactions = true,
+                syncDebts = true,
+                syncSecrets = true,
+                syncArchivedSms = smsList.isNotEmpty()
+            )
         }
         pushResult.onSuccess { summary ->
             lastSyncedSettingsHash = computeCloudSyncedSettingsFingerprint(latestSettings)
             lastSyncedTxHash = txList.hashCode()
             lastSyncedDebtHash = debtList.hashCode()
+            lastSyncedArchivedSmsHash = smsList.hashCode()
+            lastSyncedAvatarBase64 = avatarB64
             initialCloudHandshakeDoneForUid = user.uid
             recordLastCloudSyncMillis(summary.syncedAtMillis)
             _cloudSyncState.value = CloudSyncUiState.Success(
@@ -3075,18 +3612,17 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             )
             if (showFeedback) {
                 _toastEvent.emit(
-                    if (isAr) "تم تسجيل الدخول والمزامنة السحابية الكاملة (${summary.transactionCount} معاملة) ✓"
-                    else "Signed in & synced everything to cloud (${summary.transactionCount} transactions) ✓"
+                    if (isAr) "تم إنشاء ومزامنة الحساب السحابي الجديد ✓"
+                    else "New Cloud account initialized & synced ✓"
                 )
             }
         }.onFailure { err ->
-            initialCloudHandshakeDoneForUid = user.uid
             val msg = friendlyCloudErrorMessage(err, isAr)
             _cloudSyncState.value = CloudSyncUiState.Error(msg)
             if (showFeedback) {
                 _toastEvent.emit(
-                    if (isAr) "تم تسجيل الدخول محلياً، وتعذرت المزامنة: $msg"
-                    else "Signed in, but cloud sync failed: $msg"
+                    if (isAr) "تعذرت المزامنة السحابية: $msg"
+                    else "Cloud sync failed: $msg"
                 )
             }
         }
@@ -3096,8 +3632,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val user = firebaseAuth?.currentUser
         val repo = cloudRepository
         val isAr = settings.value.language == "ar"
-        if (user == null || repo == null) {
-            val msg = if (isAr) "سجّل الدخول بحساب Google أولاً للمزامنة" else "Sign in with Google first to sync"
+        if (user == null || repo == null || _storageRealm.value != StorageRealm.CLOUD_MEMORY) {
+            val msg = if (isAr) "سجّل الدخول بحساب سحابي أولاً للمزامنة" else "Sign in with a Cloud account first to sync"
             _cloudSyncState.value = CloudSyncUiState.Error(msg)
             if (showFeedback) {
                 viewModelScope.launch { _toastEvent.emit(msg) }
@@ -3107,14 +3643,41 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         if (_cloudSyncState.value is CloudSyncUiState.Syncing) return
 
         viewModelScope.launch {
-            _cloudSyncState.value = CloudSyncUiState.Syncing
-            val (txList, debtList, latestSettings) = withContext(Dispatchers.IO) {
-                Triple(dao.getAllTransactionsList(), dao.getAllDebtsList(), settings.value)
+            if (initialCloudHandshakeDoneForUid != user.uid) {
+                syncAfterCloudSignIn(user, showFeedback = showFeedback)
+                return@launch
             }
+            _cloudSyncState.value = CloudSyncUiState.Syncing
+            val (latestSettings, txList, debtList, smsList) = withContext(Dispatchers.IO) {
+                CloudVaultSnapshotForSync(
+                    settings = settings.value,
+                    transactions = activeDao().getAllTransactionsList(),
+                    debts = activeDao().getAllDebtsList(),
+                    archivedSms = activeDao().getAllArchivedAlgPosteSmsList()
+                )
+            }
+            val avatarB64 = withContext(Dispatchers.IO) { encodeAvatarFileToBase64(latestSettings.profileAvatarPath) }
             val result = withContext(Dispatchers.IO) {
-                repo.pushVaultToCloud(user, latestSettings, txList, debtList)
+                repo.pushVaultToCloud(
+                    user = user,
+                    settings = latestSettings,
+                    transactions = txList,
+                    debts = debtList,
+                    archivedSms = smsList,
+                    avatarBase64 = avatarB64,
+                    syncSettings = true,
+                    syncTransactions = true,
+                    syncDebts = true,
+                    syncSecrets = true,
+                    syncArchivedSms = true
+                )
             }
             result.onSuccess { summary ->
+                lastSyncedSettingsHash = computeCloudSyncedSettingsFingerprint(latestSettings)
+                lastSyncedTxHash = txList.hashCode()
+                lastSyncedDebtHash = debtList.hashCode()
+                lastSyncedArchivedSmsHash = smsList.hashCode()
+                lastSyncedAvatarBase64 = avatarB64
                 recordLastCloudSyncMillis(summary.syncedAtMillis)
                 _cloudSyncState.value = CloudSyncUiState.Success(
                     syncedAtMillis = summary.syncedAtMillis,
@@ -3123,8 +3686,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 )
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "تمت المزامنة السحابية (${summary.transactionCount} معاملة • ${summary.debtCount} ديون) ☁️"
-                        else "Cloud sync complete (${summary.transactionCount} tx • ${summary.debtCount} debts) ☁️"
+                        if (isAr) "تمت المزامنة السحابية الكاملة (${summary.transactionCount} معاملة • ${summary.debtCount} ديون) ☁️"
+                        else "Full Cloud sync complete (${summary.transactionCount} tx • ${summary.debtCount} debts) ☁️"
                     )
                 }
             }.onFailure { err ->
@@ -3144,8 +3707,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val user = firebaseAuth?.currentUser
         val repo = cloudRepository
         val isAr = settings.value.language == "ar"
-        if (user == null || repo == null) {
-            val msg = if (isAr) "سجّل الدخول بحساب Google أولاً للاستعادة" else "Sign in with Google first to restore"
+        if (user == null || repo == null || _storageRealm.value != StorageRealm.CLOUD_MEMORY) {
+            val msg = if (isAr) "سجّل الدخول بحساب سحابي أولاً للاستعادة" else "Sign in with a Cloud account first to restore"
             _cloudSyncState.value = CloudSyncUiState.Error(msg)
             if (showFeedback) {
                 viewModelScope.launch { _toastEvent.emit(msg) }
@@ -3160,14 +3723,14 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 repo.pullVaultFromCloud()
             }
             pullResult.onSuccess { pulled ->
-                val (addedTx, addedDebts) = mergePulledCloudIntoLocal(
+                val (totalTx, totalDebts) = replaceActiveRealmWithCloudPull(
+                    uid = user.uid,
                     pulled = pulled,
-                    forceApplyNonSensitiveSettings = true
+                    forceApplySettings = true
                 )
+                initialCloudHandshakeDoneForUid = user.uid
                 val now = System.currentTimeMillis()
                 recordLastCloudSyncMillis(now)
-                val totalTx = withContext(Dispatchers.IO) { dao.getAllTransactionsList().size }
-                val totalDebts = withContext(Dispatchers.IO) { dao.getAllDebtsList().size }
                 _cloudSyncState.value = CloudSyncUiState.Success(
                     syncedAtMillis = now,
                     transactionCount = totalTx,
@@ -3175,8 +3738,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 )
                 if (showFeedback) {
                     _toastEvent.emit(
-                        if (isAr) "تمت الاستعادة من السحابة (+$addedTx معاملة • +$addedDebts ديون) ✓"
-                        else "Restored from Cloud (+$addedTx tx • +$addedDebts debts) ✓"
+                        if (isAr) "تمت الاستعادة من السحابة ($totalTx معاملة • $totalDebts ديون) ✓"
+                        else "Restored from Cloud ($totalTx tx • $totalDebts debts) ✓"
                     )
                 }
             }.onFailure { err ->
@@ -3233,134 +3796,137 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private suspend fun mergePulledCloudIntoLocal(
+    private suspend fun replaceActiveRealmWithCloudPull(
+        uid: String,
         pulled: CloudPulledVault,
-        forceApplyNonSensitiveSettings: Boolean = false
+        forceApplySettings: Boolean = true
     ): Pair<Int, Int> {
-        var addedTx = 0
-        var addedDebts = 0
-        var hadExistingLocalRecords = false
+        var restoredTxCount = 0
+        var restoredDebtCount = 0
         isApplyingCloudPull = true
         try {
-            database.withTransaction {
-                val existingTx = dao.getAllTransactionsList()
-                val existingDebts = dao.getAllDebtsList()
-                hadExistingLocalRecords = existingTx.isNotEmpty() || existingDebts.isNotEmpty()
+            val appCtx = getApplication<Application>()
+            val db = activeDatabase()
+            val daoRef = activeDao()
 
-                val seenTxKeys = existingTx.mapTo(HashSet()) {
-                    buildTransactionDedupeKey(it.type.name, it.amount, it.category, it.title, it.dateMillis)
-                }
-                val missingTx = mutableListOf<TransactionEntity>()
-                for (cloudTx in pulled.transactions) {
-                    val txType = runCatching { TransactionType.valueOf(cloudTx.type) }.getOrNull() ?: continue
-                    if (!cloudTx.amount.isFinite() || cloudTx.amount < 0.0) continue
-                    val key = buildTransactionDedupeKey(
-                        txType.name,
-                        cloudTx.amount,
-                        cloudTx.category,
-                        cloudTx.title,
-                        cloudTx.dateMillis
+            val seenTxIds = HashSet<Long>()
+            val txEntities = mutableListOf<TransactionEntity>()
+            for (cloudTx in pulled.transactions) {
+                val txType = runCatching { TransactionType.valueOf(cloudTx.type) }.getOrNull() ?: continue
+                if (!cloudTx.amount.isFinite() || cloudTx.amount < 0.0) continue
+                val parsedId = cloudTx.id.removePrefix("tx_").toLongOrNull()?.takeIf { it > 0L && seenTxIds.add(it) } ?: 0L
+                txEntities.add(
+                    TransactionEntity(
+                        id = parsedId,
+                        type = txType,
+                        amount = cloudTx.amount,
+                        category = cloudTx.category.ifBlank { "other" },
+                        title = cloudTx.title.ifBlank { cloudTx.category.ifBlank { "Transaction" } },
+                        note = cloudTx.note,
+                        dateMillis = cloudTx.dateMillis.coerceAtLeast(0L),
+                        isSalaryCredit = cloudTx.salaryCredit,
+                        isPaidFromSavings = cloudTx.paidFromSavings
                     )
-                    if (seenTxKeys.add(key)) {
-                        missingTx.add(
-                            TransactionEntity(
-                                type = txType,
-                                amount = cloudTx.amount,
-                                category = cloudTx.category.ifBlank { "other" },
-                                title = cloudTx.title.ifBlank { cloudTx.category.ifBlank { "Transaction" } },
-                                note = cloudTx.note,
-                                dateMillis = cloudTx.dateMillis.coerceAtLeast(0L),
-                                isSalaryCredit = cloudTx.salaryCredit,
-                                isPaidFromSavings = cloudTx.paidFromSavings
-                            )
-                        )
-                    }
-                }
-                if (missingTx.isNotEmpty()) {
-                    dao.insertTransactions(missingTx)
-                    addedTx = missingTx.size
-                }
-
-                val seenDebtKeys = existingDebts.mapTo(HashSet()) {
-                    buildDebtDedupeKey(it.type.name, it.personName, it.amount, it.createdDateMillis)
-                }
-                val missingDebts = mutableListOf<DebtEntity>()
-                for (cloudDebt in pulled.debts) {
-                    val debtType = runCatching { DebtType.valueOf(cloudDebt.type) }.getOrNull() ?: continue
-                    if (!cloudDebt.amount.isFinite() || cloudDebt.amount < 0.0) continue
-                    val key = buildDebtDedupeKey(
-                        debtType.name,
-                        cloudDebt.personName,
-                        cloudDebt.amount,
-                        cloudDebt.createdDateMillis
-                    )
-                    if (seenDebtKeys.add(key)) {
-                        missingDebts.add(
-                            DebtEntity(
-                                type = debtType,
-                                personName = cloudDebt.personName.trim().ifBlank { "Contact" },
-                                amount = cloudDebt.amount,
-                                note = cloudDebt.note,
-                                dueDateMillis = cloudDebt.dueDateMillis.coerceAtLeast(0L),
-                                autoPayOnDueDate = cloudDebt.autoPayOnDueDate,
-                                isPaid = cloudDebt.paid,
-                                paidDateMillis = cloudDebt.paidDateMillis,
-                                createdDateMillis = cloudDebt.createdDateMillis.coerceAtLeast(0L),
-                                isRecurringMonthlyInstallment = cloudDebt.recurringMonthlyInstallment,
-                                monthlyInstallmentAmount = cloudDebt.monthlyInstallmentAmount.coerceAtLeast(0.0),
-                                installmentDayOfMonth = cloudDebt.installmentDayOfMonth.coerceIn(1, 31),
-                                remainingAmount = cloudDebt.remainingAmount.coerceAtLeast(0.0),
-                                lastInstallmentCreditedMonth = cloudDebt.lastInstallmentCreditedMonth
-                            )
-                        )
-                    }
-                }
-                if (missingDebts.isNotEmpty()) {
-                    dao.insertDebts(missingDebts)
-                    addedDebts = missingDebts.size
-                }
+                )
             }
 
-            pulled.settings?.let { cloudSettings ->
-                val shouldOverwrite = forceApplyNonSensitiveSettings || !hadExistingLocalRecords
-                prefsManager.updateSettings { current ->
-                    applyCloudVaultSettingsSafely(
-                        current = current,
-                        cloud = cloudSettings,
-                        overwritePreferences = shouldOverwrite,
-                        cloudAssets = pulled.assets,
-                        cloudSmsSync = pulled.smsSync
+            val seenDebtIds = HashSet<Long>()
+            val debtEntities = mutableListOf<DebtEntity>()
+            for (cloudDebt in pulled.debts) {
+                val debtType = runCatching { DebtType.valueOf(cloudDebt.type) }.getOrNull() ?: continue
+                if (!cloudDebt.amount.isFinite() || cloudDebt.amount < 0.0) continue
+                val parsedId = cloudDebt.id.removePrefix("debt_").toLongOrNull()?.takeIf { it > 0L && seenDebtIds.add(it) } ?: 0L
+                debtEntities.add(
+                    DebtEntity(
+                        id = parsedId,
+                        type = debtType,
+                        personName = cloudDebt.personName.trim().ifBlank { "Contact" },
+                        amount = cloudDebt.amount,
+                        note = cloudDebt.note,
+                        dueDateMillis = cloudDebt.dueDateMillis.coerceAtLeast(0L),
+                        autoPayOnDueDate = cloudDebt.autoPayOnDueDate,
+                        isPaid = cloudDebt.paid,
+                        paidDateMillis = cloudDebt.paidDateMillis,
+                        createdDateMillis = cloudDebt.createdDateMillis.coerceAtLeast(0L),
+                        isRecurringMonthlyInstallment = cloudDebt.recurringMonthlyInstallment,
+                        monthlyInstallmentAmount = cloudDebt.monthlyInstallmentAmount.coerceAtLeast(0.0),
+                        installmentDayOfMonth = cloudDebt.installmentDayOfMonth.coerceIn(1, 31),
+                        remainingAmount = cloudDebt.remainingAmount.coerceAtLeast(0.0),
+                        lastInstallmentCreditedMonth = cloudDebt.lastInstallmentCreditedMonth
                     )
-                }
+                )
             }
-            pulled.profile?.let { profile ->
-                val pFirst = profile.firstName?.trim().orEmpty()
-                val pLast = profile.lastName?.trim().orEmpty()
-                val pUser = profile.localUsername?.trim().orEmpty()
-                if (pFirst.isNotEmpty() || pLast.isNotEmpty() || pUser.isNotEmpty()) {
-                    prefsManager.updateSettings { current ->
-                        current.copy(
-                            firstName = current.firstName.ifBlank { pFirst },
-                            lastName = current.lastName.ifBlank { pLast },
-                            localUsername = current.localUsername.ifBlank { pUser }
-                        )
+
+            withContext(Dispatchers.IO) {
+                db.withTransaction {
+                    daoRef.clearAllTransactions()
+                    daoRef.clearAllDebts()
+                    daoRef.clearAllArchivedAlgPosteSms()
+                    if (txEntities.isNotEmpty()) {
+                        daoRef.insertTransactions(txEntities)
+                    }
+                    if (debtEntities.isNotEmpty()) {
+                        daoRef.insertDebts(debtEntities)
+                    }
+                    if (pulled.archivedSms.isNotEmpty()) {
+                        daoRef.insertArchivedSmsIfMissing(pulled.archivedSms)
                     }
                 }
             }
-            val latestTx = withContext(Dispatchers.IO) { dao.getAllTransactionsList() }
-            val latestDebts = withContext(Dispatchers.IO) { dao.getAllDebtsList() }
+
+            val restoredAvatarPath = withContext(Dispatchers.IO) {
+                val b64 = pulled.secrets?.avatarBase64.orEmpty()
+                if (b64.isNotBlank()) {
+                    restoreAvatarFromBase64(appCtx, uid, b64)
+                } else {
+                    ""
+                }
+            }
+
+            val effectiveCloudSettings = pulled.settings ?: CloudVaultSettings()
+            prefsManager.updateSettings { current ->
+                val merged = applyCloudVaultSettingsSafely(
+                    current = current,
+                    cloud = effectiveCloudSettings,
+                    overwritePreferences = forceApplySettings,
+                    cloudAssets = pulled.assets,
+                    cloudSmsSync = pulled.smsSync,
+                    cloudSecrets = pulled.secrets
+                )
+                val pFirst = pulled.profile?.firstName?.trim().orEmpty()
+                val pLast = pulled.profile?.lastName?.trim().orEmpty()
+                val pUser = pulled.profile?.localUsername?.trim().orEmpty()
+                merged.copy(
+                    firstName = merged.firstName.ifBlank { pFirst },
+                    lastName = merged.lastName.ifBlank { pLast },
+                    localUsername = merged.localUsername.ifBlank { pUser },
+                    profileAvatarPath = restoredAvatarPath
+                )
+            }
+
+            val (latestTx, latestDebts, latestSms) = withContext(Dispatchers.IO) {
+                Triple(
+                    daoRef.getAllTransactionsList(),
+                    daoRef.getAllDebtsList(),
+                    daoRef.getAllArchivedAlgPosteSmsList()
+                )
+            }
+            restoredTxCount = latestTx.size
+            restoredDebtCount = latestDebts.size
             lastSyncedSettingsHash = computeCloudSyncedSettingsFingerprint(settings.value)
             lastSyncedTxHash = latestTx.hashCode()
             lastSyncedDebtHash = latestDebts.hashCode()
+            lastSyncedArchivedSmsHash = latestSms.hashCode()
+            lastSyncedAvatarBase64 = pulled.secrets?.avatarBase64.orEmpty()
         } finally {
             isApplyingCloudPull = false
         }
-        return addedTx to addedDebts
+        return restoredTxCount to restoredDebtCount
     }
 
     private fun recordLastCloudSyncMillis(timestamp: Long) {
         _lastCloudSyncMillis.value = timestamp
-        cloudPrefs.edit().putLong("last_cloud_sync_millis", timestamp).apply()
+        SessionMetaStore.setLastCloudSyncMillis(getApplication(), timestamp)
     }
 
     private fun friendlyCloudErrorMessage(err: Throwable, isAr: Boolean): String {
@@ -3453,11 +4019,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 if (toArchive.isNotEmpty()) {
-                    dao.insertArchivedSmsIfMissing(toArchive)
+                    activeDao().insertArchivedSmsIfMissing(toArchive)
                 }
                 val liveSnaps = AlgPosteSmsInboxScanner.scanAllBalanceSnapshots(context)
                 val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
-                    dao.getAllArchivedAlgPosteSmsList()
+                    activeDao().getAllArchivedAlgPosteSmsList()
                 )
                 liveSnaps to permanentSnaps
             }
@@ -3537,7 +4103,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
-                    dao = dao,
+                    dao = activeDao(),
                     prefsManager = prefsManager,
                     isArabic = isAr
                 )
@@ -3569,10 +4135,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val isAr = settings.value.language == "ar"
             val reanalyzed = withContext(Dispatchers.IO) {
-                val existing = dao.getAllArchivedAlgPosteSmsList()
+                val existing = activeDao().getAllArchivedAlgPosteSmsList()
                 val updated = existing.map { AlgPosteSmsAnalyzer.reanalyzeArchivedEntity(it) }
                 if (updated.isNotEmpty()) {
-                    dao.updateArchivedSmsAnalysis(updated)
+                    activeDao().updateArchivedSmsAnalysis(updated)
                 }
                 updated
             }
@@ -3628,7 +4194,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
-                    dao = dao,
+                    dao = activeDao(),
                     prefsManager = prefsManager,
                     isArabic = isAr
                 )
@@ -3674,10 +4240,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 if (toArchive.isNotEmpty()) {
-                    dao.insertArchivedSmsIfMissing(toArchive)
+                    activeDao().insertArchivedSmsIfMissing(toArchive)
                 }
                 val permanentSnaps = AlgPosteSmsAnalyzer.reconstructSnapshotsFromArchive(
-                    dao.getAllArchivedAlgPosteSmsList()
+                    activeDao().getAllArchivedAlgPosteSmsList()
                 )
                 res to permanentSnaps
             }
@@ -3754,7 +4320,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 autoLoggedTaxCount = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
-                    dao = dao,
+                    dao = activeDao(),
                     prefsManager = prefsManager,
                     isArabic = isAr
                 ).addedCount
@@ -3842,7 +4408,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     allowAnySenderForManualTest = true
                 )
                 if (archivedEntity != null) {
-                    dao.insertArchivedSmsIfMissing(listOf(archivedEntity))
+                    activeDao().insertArchivedSmsIfMissing(listOf(archivedEntity))
                 }
                 p to s
             }
@@ -3917,7 +4483,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 val autoResult = TaxExpenseAutoLogger.logFutureTaxesIfEnabled(
-                    dao = dao,
+                    dao = activeDao(),
                     prefsManager = prefsManager,
                     isArabic = isAr
                 )
@@ -4002,7 +4568,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             val taxes = AlgPosteSmsCodec.parseTaxAnomalies(currentSettings.detectedSmsTaxesJson)
             val target = taxes.firstOrNull { it.id == anomalyId } ?: return@launch
             if (target.isRecordedAsExpense) return@launch
-            val existingTransactions = withContext(Dispatchers.IO) { dao.getAllTransactionsList() }
+            val existingTransactions = withContext(Dispatchers.IO) { activeDao().getAllTransactionsList() }
             if (isTaxAnomalyAlreadyLoggedInTransactions(target, existingTransactions)) {
                 prefsManager.updateSettings { current ->
                     val updated = AlgPosteSmsCodec.parseTaxAnomalies(current.detectedSmsTaxesJson).map { item ->
@@ -4020,7 +4586,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 "${explanation.take((240 - refTag.length - 1).coerceAtLeast(0))} $refTag"
             }
-            dao.insertTransaction(
+            activeDao().insertTransaction(
                 TransactionEntity(
                     type = TransactionType.EXPENSE,
                     amount = target.taxAmount,
@@ -4119,10 +4685,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             )
             val target = failedList.firstOrNull { it.id == failedId } ?: return@launch
             val deletedCount = withContext(Dispatchers.IO) {
-                val allTx = dao.getAllTransactionsList()
+                val allTx = activeDao().getAllTransactionsList()
                 val matches = findMatchingConflictingTransactions(target, allTx)
                 for (tx in matches) {
-                    dao.deleteTransaction(tx)
+                    activeDao().deleteTransaction(tx)
                 }
                 prefsManager.updateSettings { current ->
                     val updated = AlgPosteSmsCodec.parseFailedTransactions(current.detectedFailedSmsTransactionsJson)
@@ -4207,7 +4773,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 "${target.sender}: ${target.rawBody}".take(240)
             }
-            dao.insertTransaction(
+            activeDao().insertTransaction(
                 TransactionEntity(
                     type = finalType,
                     amount = target.amount,

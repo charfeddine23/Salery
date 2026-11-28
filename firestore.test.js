@@ -248,6 +248,7 @@ test("Debts & vault_settings & encrypted_backups: strict schema and secret exclu
       stealthMode: false,
       breathingGlowEnabled: true,
       screenshotProtectionEnabled: false,
+      lastBackupTimestamp: 1700000123000,
       createdAt: created,
       updatedAt: created,
     })
@@ -316,4 +317,120 @@ test("Debts & vault_settings & encrypted_backups: strict schema and secret exclu
       updatedAt: created,
     })
   );
+});
+
+test("vault_settings/secrets & archived_sms: encrypted owner-only storage and cross-user isolation", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const created = new Date(Date.now() - 5000);
+
+  // Secrets: valid create, update, get
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").set({
+      userId: ALICE_UID,
+      format: "VAULTIX_CLOUD_SECRETS_V1",
+      envelopeJson: "{\"vaultixCloudSecretsFormat\":\"VAULTIX_CLOUD_SECRETS_V1\",\"saltB64\":\"abc\",\"ivB64\":\"def\",\"ciphertextB64\":\"ghi\"}",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").update({
+      envelopeJson: "{\"vaultixCloudSecretsFormat\":\"VAULTIX_CLOUD_SECRETS_V1\",\"saltB64\":\"abc2\",\"ivB64\":\"def2\",\"ciphertextB64\":\"ghi2\"}",
+      updatedAt: new Date(Date.now() - 1000),
+    })
+  );
+
+  // Reject unapproved format or extra plaintext card field in secrets
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").update({
+      format: "PLAINTEXT",
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").update({
+      classicCardNumber: "6280123456789012",
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+
+  // Cross-user and unauthenticated denials for secrets
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").get());
+  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("vault_settings").doc("secrets").get());
+
+  // Archived SMS: create, list, update (optional fields omitted or provided)
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("archived_sms").doc("sms_abc123").set({
+      userId: ALICE_UID,
+      smsId: "algposte|1700000000|hash1",
+      sender: "ALGPoste",
+      encryptedRawBody: "v1_cloud$salt$iv$cipher",
+      receivedAtMillis: 1700000000000,
+      capturedAtMillis: 1700000005000,
+      captureSource: "INBOX",
+      extractedBalance: 74500.5,
+      extractedTxAmount: 2500.0,
+      extractedExpense: true,
+      hasExplicitFeeKeyword: false,
+      matchedRule: "BALANCE_OPERATION",
+      studyStatus: "FULL_MATCH",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("archived_sms").doc("sms_no_opt").set({
+      userId: ALICE_UID,
+      smsId: "algposte|1700000001|hash2",
+      sender: "ALGPoste",
+      encryptedRawBody: "v1_cloud$salt$iv$cipher2",
+      receivedAtMillis: 1700000001000,
+      capturedAtMillis: 1700000006000,
+      captureSource: "RECEIVER",
+      hasExplicitFeeKeyword: false,
+      matchedRule: "UNRECOGNIZED",
+      studyStatus: "NEEDS_STUDY",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("archived_sms").get()
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("archived_sms").doc("sms_no_opt").update({
+      extractedBalance: 10000.0,
+      studyStatus: "BALANCE_ONLY",
+      updatedAt: new Date(Date.now() - 1000),
+    })
+  );
+
+  // Reject @DocumentId "id" injection and negative values
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("archived_sms").doc("sms_bad").set({
+      id: "sms_bad",
+      userId: ALICE_UID,
+      smsId: "x",
+      sender: "ALGPoste",
+      encryptedRawBody: "v1_cloud$a$b$c",
+      receivedAtMillis: 1000,
+      capturedAtMillis: 2000,
+      captureSource: "INBOX",
+      hasExplicitFeeKeyword: false,
+      matchedRule: "UNRECOGNIZED",
+      studyStatus: "NEEDS_STUDY",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Cross-user and unauthenticated denials for archived_sms
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("archived_sms").get());
+  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("archived_sms").get());
 });

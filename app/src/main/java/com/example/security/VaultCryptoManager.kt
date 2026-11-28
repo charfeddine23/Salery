@@ -256,6 +256,112 @@ object VaultCryptoManager {
         return javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
     }
 
+    fun isCloudSecretsEnvelope(rawText: String): Boolean {
+        val trimmed = rawText.trim()
+        if (!trimmed.startsWith("{")) return false
+        return try {
+            org.json.JSONObject(trimmed).optString("vaultixCloudSecretsFormat") == CLOUD_SECRETS_FORMAT_ID
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun encryptCloudVaultSecrets(plaintextJson: String, uid: String): String {
+        val cleanUid = uid.trim()
+        require(cleanUid.isNotEmpty()) { "UID must not be blank" }
+        val salt = ByteArray(BACKUP_SALT_BYTES)
+        val iv = ByteArray(GCM_IV_BYTES)
+        secureRandom.nextBytes(salt)
+        secureRandom.nextBytes(iv)
+
+        val key = deriveCloudUidKey(cleanUid, salt)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+        cipher.updateAAD("$CLOUD_SECRETS_AAD_PREFIX:$cleanUid".toByteArray(StandardCharsets.UTF_8))
+        val ciphertext = cipher.doFinal(plaintextJson.toByteArray(StandardCharsets.UTF_8))
+
+        return org.json.JSONObject().apply {
+            put("vaultixCloudSecretsFormat", CLOUD_SECRETS_FORMAT_ID)
+            put("saltB64", Base64.encodeToString(salt, Base64.NO_WRAP))
+            put("ivB64", Base64.encodeToString(iv, Base64.NO_WRAP))
+            put("ciphertextB64", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+        }.toString()
+    }
+
+    fun decryptCloudVaultSecrets(envelopeJson: String, uid: String): String? {
+        val cleanUid = uid.trim()
+        if (cleanUid.isEmpty()) return null
+        val trimmed = envelopeJson.trim()
+        if (trimmed.isEmpty() || trimmed.length > MAX_ENCRYPTED_ENVELOPE_CHARS) return null
+        return try {
+            val root = org.json.JSONObject(trimmed)
+            if (root.optString("vaultixCloudSecretsFormat") != CLOUD_SECRETS_FORMAT_ID) return null
+            val salt = Base64.decode(root.getString("saltB64"), Base64.DEFAULT)
+            val iv = Base64.decode(root.getString("ivB64"), Base64.DEFAULT)
+            val ciphertext = Base64.decode(root.getString("ciphertextB64"), Base64.DEFAULT)
+            if (salt.size != BACKUP_SALT_BYTES || iv.size != GCM_IV_BYTES || ciphertext.isEmpty()) {
+                return null
+            }
+            val key = deriveCloudUidKey(cleanUid, salt)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+            cipher.updateAAD("$CLOUD_SECRETS_AAD_PREFIX:$cleanUid".toByteArray(StandardCharsets.UTF_8))
+            String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun encryptCloudText(plaintext: String, uid: String): String {
+        if (plaintext.isEmpty()) return ""
+        val cleanUid = uid.trim()
+        require(cleanUid.isNotEmpty()) { "UID must not be blank" }
+        val salt = ByteArray(BACKUP_SALT_BYTES)
+        val iv = ByteArray(GCM_IV_BYTES)
+        secureRandom.nextBytes(salt)
+        secureRandom.nextBytes(iv)
+        val key = deriveCloudUidKey(cleanUid, salt)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+        cipher.updateAAD("$CLOUD_TEXT_AAD_PREFIX:$cleanUid".toByteArray(StandardCharsets.UTF_8))
+        val ciphertext = cipher.doFinal(plaintext.toByteArray(StandardCharsets.UTF_8))
+        return CLOUD_TEXT_PREFIX +
+            Base64.encodeToString(salt, Base64.NO_WRAP) + "$" +
+            Base64.encodeToString(iv, Base64.NO_WRAP) + "$" +
+            Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+    }
+
+    fun decryptCloudText(encoded: String, uid: String): String? {
+        if (encoded.isEmpty()) return ""
+        val cleanUid = uid.trim()
+        if (cleanUid.isEmpty()) return null
+        if (!encoded.startsWith(CLOUD_TEXT_PREFIX)) return encoded
+        val parts = encoded.removePrefix(CLOUD_TEXT_PREFIX).split('$')
+        if (parts.size != 3) return null
+        return try {
+            val salt = Base64.decode(parts[0], Base64.DEFAULT)
+            val iv = Base64.decode(parts[1], Base64.DEFAULT)
+            val ciphertext = Base64.decode(parts[2], Base64.DEFAULT)
+            if (salt.size != BACKUP_SALT_BYTES || iv.size != GCM_IV_BYTES || ciphertext.isEmpty()) return null
+            val key = deriveCloudUidKey(cleanUid, salt)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+            cipher.updateAAD("$CLOUD_TEXT_AAD_PREFIX:$cleanUid".toByteArray(StandardCharsets.UTF_8))
+            String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun deriveCloudUidKey(uid: String, salt: ByteArray): javax.crypto.spec.SecretKeySpec {
+        val hmac = javax.crypto.Mac.getInstance("HmacSHA256")
+        hmac.init(javax.crypto.spec.SecretKeySpec(salt, "HmacSHA256"))
+        val prk = hmac.doFinal(("$CLOUD_KEY_CONTEXT:$uid").toByteArray(StandardCharsets.UTF_8))
+        hmac.init(javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256"))
+        val okm = hmac.doFinal(byteArrayOf(0x01))
+        return javax.crypto.spec.SecretKeySpec(okm, "AES")
+    }
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private fun String.fromHexOrNull(): ByteArray? {
@@ -276,4 +382,10 @@ object VaultCryptoManager {
     private const val BACKUP_KEY_BITS = 256
     private const val BACKUP_AAD = "VaultixBackupV1"
     private const val MAX_ENCRYPTED_ENVELOPE_CHARS = 14 * 1024 * 1024
+
+    private const val CLOUD_SECRETS_FORMAT_ID = "VAULTIX_CLOUD_SECRETS_V1"
+    private const val CLOUD_SECRETS_AAD_PREFIX = "VaultixCloudSecretsV1"
+    private const val CLOUD_TEXT_PREFIX = "v1_cloud$"
+    private const val CLOUD_TEXT_AAD_PREFIX = "VaultixCloudTextV1"
+    private const val CLOUD_KEY_CONTEXT = "VaultixCloudEnvelopeDomainV1"
 }

@@ -430,4 +430,128 @@ class SecurityAuditUnitTest {
         )
         assertEquals(debtKeyA, debtKeyB)
     }
+
+    @Test
+    fun cloudVaultSecretsAndText_roundTripPerUid_andRejectWrongUidOrTampering() {
+        val uidA = "user_alpha_123"
+        val uidB = "user_beta_999"
+        val plainSecrets = """{"classicCardNumber":"6280123456789012","vaultKeysJson":"[{\"id\":\"vk1\"}]"}"""
+
+        val secretsEnvelope = VaultCryptoManager.encryptCloudVaultSecrets(plainSecrets, uidA)
+        assertTrue(VaultCryptoManager.isCloudSecretsEnvelope(secretsEnvelope))
+        assertFalse(secretsEnvelope.contains("6280123456789012"))
+        assertEquals(plainSecrets, VaultCryptoManager.decryptCloudVaultSecrets(secretsEnvelope, uidA))
+        assertNull(VaultCryptoManager.decryptCloudVaultSecrets(secretsEnvelope, uidB))
+        assertNull(VaultCryptoManager.decryptCloudVaultSecrets(secretsEnvelope.replace("a", "b"), uidA))
+
+        val smsBody = "Votre compte CCP a ete debite de 4500.00 DA. Nouveau solde: 51200.00 DA"
+        val encryptedSms = VaultCryptoManager.encryptCloudText(smsBody, uidA)
+        assertFalse(encryptedSms.contains("51200.00"))
+        assertEquals(smsBody, VaultCryptoManager.decryptCloudText(encryptedSms, uidA))
+        assertNull(VaultCryptoManager.decryptCloudText(encryptedSms, uidB))
+    }
+
+    @Test
+    fun applyCloudVaultSettingsSafely_restoresDecryptedSecretsAndOverridesAllPreferences() {
+        val previous = com.example.data.UserSettings(
+            firstName = "Old",
+            language = "ar",
+            themeMode = "LIGHT",
+            designStyle = "NEUMORPHISM",
+            classicCardNumber = "6280000000000000",
+            vaultKeysJson = "[{\"id\":\"old_key\"}]"
+        )
+        val cloud = com.example.cloud.CloudVaultSettings(
+            firstName = "Amine",
+            lastName = "Belaid",
+            language = "en",
+            themeMode = "DARK",
+            designStyle = "LIQUID_GLASS",
+            lastBackupTimestamp = 1_764_000_000_000L
+        )
+        val secrets = com.example.cloud.DecryptedCloudVaultSecrets(
+            classicCardNumber = "6280111122223333",
+            classicCardCvc = "901",
+            visaCardNumber = "4152111122223333",
+            visaCardCvc = "402",
+            thirdCardNumber = "5316111122223333",
+            thirdCardCvc = "703",
+            vaultKeysJson = "[{\"id\":\"cloud_k1\",\"secret\":\"s1\"}]",
+            ccpAccountsJson = "[{\"id\":\"ccp_1\",\"rip\":\"00799999000111222333\"}]",
+            latestSmsBalanceRawSnippet = "Solde: 82500.00 DA"
+        )
+
+        val restored = com.example.viewmodel.applyCloudVaultSettingsSafely(
+            current = previous,
+            cloud = cloud,
+            overwritePreferences = true,
+            cloudSecrets = secrets
+        )
+        assertEquals("Amine", restored.firstName)
+        assertEquals("en", restored.language)
+        assertEquals("DARK", restored.themeMode)
+        assertEquals("LIQUID_GLASS", restored.designStyle)
+        assertEquals(1_764_000_000_000L, restored.lastBackupTimestamp)
+        assertEquals("6280111122223333", restored.classicCardNumber)
+        assertEquals("901", restored.classicCardCvc)
+        assertEquals("4152111122223333", restored.visaCardNumber)
+        assertEquals("703", restored.thirdCardCvc)
+        assertEquals("[{\"id\":\"cloud_k1\",\"secret\":\"s1\"}]", restored.vaultKeysJson)
+        assertEquals("[{\"id\":\"ccp_1\",\"rip\":\"00799999000111222333\"}]", restored.ccpAccountsJson)
+        assertEquals("Solde: 82500.00 DA", restored.latestSmsBalanceRawSnippet)
+    }
+
+    @Test
+    fun preferencesManager_isolatesCloudMemoryFromGuestPrefsAndWipesOnSignOut() {
+        val appContext = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        com.example.data.SessionMetaStore.setSessionRealm(appContext, com.example.data.SessionMetaStore.REALM_GUEST)
+        val prefs = com.example.data.PreferencesManager(appContext)
+        prefs.switchToGuestMode(activateAccount = true)
+        prefs.updateSettings {
+            it.copy(
+                localUsername = "GuestUser",
+                language = "en",
+                themeMode = "DARK",
+                salaryAmount = 42000.0
+            )
+        }
+
+        // Switch into Cloud RAM mode with completely different settings & theme
+        com.example.data.SessionMetaStore.setSessionRealm(appContext, com.example.data.SessionMetaStore.REALM_CLOUD, "cloud_uid_1")
+        prefs.switchToCloudMemoryMode(
+            com.example.data.UserSettings(
+                hasLocalAccount = true,
+                localUsername = "CloudUserA",
+                language = "ar",
+                themeMode = "LIGHT",
+                salaryAmount = 195000.0,
+                classicCardNumber = "6280999988887777"
+            )
+        )
+        prefs.updateSettings { it.copy(savingsWalletBalance = 75000.0) }
+        assertEquals("CloudUserA", prefs.settingsFlow.value.localUsername)
+        assertEquals(75000.0, prefs.settingsFlow.value.savingsWalletBalance, 0.01)
+
+        // Verify Guest SharedPreferences on disk remained completely untouched by Cloud writes
+        val guestDisk = appContext.getSharedPreferences("vaultix_guest_prefs", android.content.Context.MODE_PRIVATE)
+        assertEquals("GuestUser", guestDisk.getString("local_username_v1", ""))
+        assertEquals("en", guestDisk.getString("app_language", ""))
+        assertFalse(guestDisk.all.values.any { it.toString().contains("CloudUserA") })
+        assertFalse(guestDisk.all.values.any { it.toString().contains("6280999988887777") })
+
+        // Sign out wipes in-memory Cloud state cleanly back to clean defaults
+        com.example.data.SessionMetaStore.setSessionRealm(appContext, com.example.data.SessionMetaStore.REALM_NONE)
+        prefs.switchToSignedOutMode(resetAuthUiPreferences = true)
+        assertFalse(prefs.settingsFlow.value.hasLocalAccount)
+        assertEquals("", prefs.settingsFlow.value.localUsername)
+        assertEquals("", prefs.settingsFlow.value.classicCardNumber)
+        assertEquals(0.0, prefs.settingsFlow.value.savingsWalletBalance, 0.01)
+        assertEquals("en", prefs.settingsFlow.value.language)
+        assertEquals("DARK", prefs.settingsFlow.value.themeMode)
+
+        // Guest data on disk stays intact for Guest mode
+        prefs.switchToGuestMode()
+        assertEquals("GuestUser", prefs.settingsFlow.value.localUsername)
+        assertEquals(42000.0, prefs.settingsFlow.value.salaryAmount, 0.01)
+    }
 }

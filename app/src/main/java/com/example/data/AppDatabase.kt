@@ -128,21 +128,53 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appDao(): AppDao
 
     companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
+        private const val GUEST_DB_NAME = "vaultix_guest_database"
+        private const val LEGACY_SHARED_DB_NAME = "salerypelse_database"
 
+        @Volatile
+        private var GUEST_INSTANCE: AppDatabase? = null
+
+        @Volatile
+        private var CLOUD_SESSION_INSTANCE: AppDatabase? = null
+
+        /**
+         * Persistent on-device Room database reserved strictly for Guest Mode.
+         */
         fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
+            return GUEST_INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "salerypelse_database"
+                    GUEST_DB_NAME
                 )
                     .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration(false)
                     .build()
-                INSTANCE = instance
+                GUEST_INSTANCE = instance
                 instance
+            }
+        }
+
+        /**
+         * Ephemeral in-RAM Room database used exclusively for Cloud-synced sessions so zero
+         * cloud account records are persisted locally on disk.
+         */
+        fun getCloudSessionDatabase(context: Context): AppDatabase {
+            return CLOUD_SESSION_INSTANCE ?: synchronized(this) {
+                val instance = Room.inMemoryDatabaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java
+                )
+                    .fallbackToDestructiveMigration(false)
+                    .build()
+                CLOUD_SESSION_INSTANCE = instance
+                instance
+            }
+        }
+
+        fun deleteLegacySharedDatabaseIfPresent(context: Context) {
+            runCatching {
+                context.applicationContext.deleteDatabase(LEGACY_SHARED_DB_NAME)
             }
         }
     }

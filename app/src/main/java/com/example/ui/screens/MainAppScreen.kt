@@ -163,6 +163,7 @@ fun MainAppScreen(
     val googleAuthState by viewModel.googleAuthState.collectAsState()
     val savedAuthAccount by viewModel.savedAuthAccount.collectAsState()
     val authTransitionState by viewModel.authTransitionState.collectAsState()
+    val isRestoringCloudSession by viewModel.isRestoringCloudSession.collectAsState()
 
     val isArabic = userSettings.language == "ar"
     val activeStrings = if (isArabic) ArabicStrings else EnglishStrings
@@ -265,6 +266,8 @@ fun MainAppScreen(
                     viewModel.activateLocalAccount(username = guestUsername)
                 }
             )
+        } else if (isRestoringCloudSession) {
+            CloudSessionRestoringScreen(isArabic = isArabic)
         } else {
             AuthenticatedVaultContent(
                 viewModel = viewModel,
@@ -273,6 +276,64 @@ fun MainAppScreen(
                 isArabic = isArabic,
                 layoutDirection = layoutDirection
             )
+        }
+    }
+}
+
+@Composable
+private fun CloudSessionRestoringScreen(
+    isArabic: Boolean
+) {
+    val colors = LiquidGlassTheme.colors
+    GlassBackground(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("cloud_session_restoring_screen")
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            GlassCard(
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                backgroundColor = colors.glassCard,
+                borderColor = colors.primaryNeon.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    VaultixLogoContainer(size = 64.dp)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = colors.primaryNeon,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(38.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = if (isArabic) "جاري مزامنة خزنتك السحابية..." else "Restoring your Cloud Vault...",
+                        color = colors.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isArabic) "تخزين سحابي فقط • بدون حفظ محلي على الجهاز" else "Cloud-only storage • Zero local device storage",
+                        color = colors.textMuted,
+                        fontSize = 12.5.sp
+                    )
+                }
+            }
         }
     }
 }
@@ -808,7 +869,7 @@ private fun AuthenticatedVaultContent(
                                     lastCloudSyncMillis = lastCloudSyncMillis,
                                     recordsCount = transactions.size + debts.size,
                                     onGoogleSignIn = { viewModel.signInWithGoogle(context) },
-                                    onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                                    onGoogleSignOut = { viewModel.signOutGoogleAccount(context, clearQuickResume = true) },
                                     onCloudSyncNow = { viewModel.syncNowWithCloud(showFeedback = true) },
                                     onRestoreFromCloud = { viewModel.restoreFromCloud(showFeedback = true) },
                                     onOpenBackupRestore = { showBackupRestoreDialog = true },

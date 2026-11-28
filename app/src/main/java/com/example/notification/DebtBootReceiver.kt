@@ -34,9 +34,12 @@ class DebtBootReceiver : BroadcastReceiver() {
                     if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
                         AppUpdateManager.cleanupObsoleteUpdates(context)
                     }
-                    val db = AppDatabase.getDatabase(context)
-                    val allDebts = db.appDao().getAllDebtsList()
-                    DebtReminderScheduler.rescheduleAllReminders(context, allDebts)
+                    val realm = com.example.data.SessionMetaStore.getSessionRealm(context)
+                    if (realm == com.example.data.SessionMetaStore.REALM_GUEST || realm.isBlank()) {
+                        val db = AppDatabase.getDatabase(context)
+                        val allDebts = db.appDao().getAllDebtsList()
+                        DebtReminderScheduler.rescheduleAllReminders(context, allDebts)
+                    }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Error handling boot/package-replace broadcast", t)
                 } finally {

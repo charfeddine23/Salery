@@ -675,9 +675,9 @@ private fun AccountCloudSyncCard(
                         isSyncing -> if (isArabic) "جاري المزامنة السحابية..." else "Cloud Syncing..."
                         signedIn != null && cloudSyncState is CloudSyncUiState.Error ->
                             if (isArabic) "تعذرت المزامنة السحابية" else "Cloud Sync Attention"
-                        signedIn != null -> if (isArabic) "المزامنة السحابية نشطة" else "Cloud Sync Active"
+                        signedIn != null -> if (isArabic) "الحفظ السحابي فقط نشط" else "Cloud-Only Storage Active"
                         authError != null -> if (isArabic) "خطأ في المصادقة" else "Authentication Error"
-                        else -> if (isArabic) "المزامنة السحابية متوقفة" else "Cloud Sync Paused"
+                        else -> if (isArabic) "وضع الضيف — حفظ محلي فقط" else "Guest Mode — Local Storage Only"
                     }
                     Text(
                         text = title,
@@ -696,7 +696,7 @@ private fun AccountCloudSyncCard(
                                 is CloudSyncUiState.Success -> (cloudSyncState.transactionCount + cloudSyncState.debtCount).coerceAtLeast(recordsCount)
                                 else -> recordsCount
                             }
-                            val countPart = if (isArabic) "$totalRecords سجل" else "$totalRecords records"
+                            val countPart = if (isArabic) "$totalRecords سجل • بدون حفظ محلي" else "$totalRecords records • No local cache"
                             if (timeLabel != null) {
                                 "$countPart • ${isolateLtr(timeLabel)}"
                             } else {
@@ -705,9 +705,9 @@ private fun AccountCloudSyncCard(
                         }
                         authError != null -> authError
                         else -> if (isArabic) {
-                            "اربط حساب Google لمزامنة كل بياناتك تلقائياً"
+                            "بياناتك محفوظة على الجهاز فقط. سجّل الدخول للحفظ السحابي."
                         } else {
-                            "Sign in with Google to sync your vault automatically"
+                            "Data stays on this device only. Sign in for Cloud-only storage."
                         }
                     }
                     Text(
@@ -815,7 +815,7 @@ private fun AccountCloudSyncCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isArabic) "ربط Google" else "Sign In",
+                                text = if (isArabic) "دخول سحابي" else "Cloud Sign In",
                                 color = EmeraldNeon,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1330,7 +1330,7 @@ private fun SignOutAccountDialog(
                         )
 
                         GlassButton(
-                            text = if (isArabic) "فصل الحساب السحابي فقط" else "Sign Out of Cloud Only",
+                            text = if (isArabic) "تسجيل الخروج وإزالة الحساب" else "Full Sign Out (Remove Account)",
                             icon = Icons.AutoMirrored.Filled.Logout,
                             containerColor = AmberNeon.copy(alpha = 0.14f),
                             contentColor = AmberNeon,

@@ -115,6 +115,7 @@ data class CloudVaultSettings(
     val stealthMode: Boolean = false,
     val breathingGlowEnabled: Boolean = true,
     val screenshotProtectionEnabled: Boolean = false,
+    val lastBackupTimestamp: Long = 0L,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -167,6 +168,59 @@ data class CloudVaultSmsSync(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+/**
+ * UID-scoped AES-256-GCM encrypted envelope storing sensitive account secrets (cards, keys, CCPs,
+ * SMS balance raw snippet, custom profile photo bytes) at users/{uid}/vault_settings/secrets.
+ */
+@Keep
+@IgnoreExtraProperties
+data class CloudVaultSecrets(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val format: String = "VAULTIX_CLOUD_SECRETS_V1",
+    val envelopeJson: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+data class DecryptedCloudVaultSecrets(
+    val classicCardNumber: String = "",
+    val classicCardCvc: String = "",
+    val visaCardNumber: String = "",
+    val visaCardCvc: String = "",
+    val thirdCardNumber: String = "",
+    val thirdCardCvc: String = "",
+    val vaultKeysJson: String = "[]",
+    val ccpAccountsJson: String = "[]",
+    val latestSmsBalanceRawSnippet: String = "",
+    val avatarBase64: String = ""
+)
+
+/**
+ * Cloud-synced archived ALG Poste SMS record stored under users/{uid}/archived_sms/{smsDocId}.
+ * Raw SMS body is encrypted per-UID via VaultCryptoManager.encryptCloudText.
+ */
+@Keep
+@IgnoreExtraProperties
+data class CloudArchivedSms(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val smsId: String = "",
+    val sender: String = "",
+    val encryptedRawBody: String = "",
+    val receivedAtMillis: Long = 0L,
+    val capturedAtMillis: Long = 0L,
+    val captureSource: String = "INBOX",
+    val extractedBalance: Double? = null,
+    val extractedTxAmount: Double? = null,
+    val extractedExpense: Boolean? = null,
+    val hasExplicitFeeKeyword: Boolean = false,
+    val matchedRule: String = "UNRECOGNIZED",
+    val studyStatus: String = "NEEDS_STUDY",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
 @Keep
 @IgnoreExtraProperties
 data class CloudEncryptedBackup(
@@ -190,9 +244,20 @@ data class CloudPulledVault(
     val settings: CloudVaultSettings?,
     val assets: CloudVaultAssets? = null,
     val smsSync: CloudVaultSmsSync? = null,
+    val secrets: DecryptedCloudVaultSecrets? = null,
     val transactions: List<CloudTransaction>,
-    val debts: List<CloudDebt>
-)
+    val debts: List<CloudDebt>,
+    val archivedSms: List<com.example.data.ArchivedAlgPosteSmsEntity> = emptyList()
+) {
+    fun hasExistingCloudData(): Boolean =
+        settings != null ||
+            assets != null ||
+            smsSync != null ||
+            secrets != null ||
+            transactions.isNotEmpty() ||
+            debts.isNotEmpty() ||
+            archivedSms.isNotEmpty()
+}
 
 sealed interface GoogleAuthUiState {
     data object SignedOut : GoogleAuthUiState

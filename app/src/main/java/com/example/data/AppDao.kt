@@ -73,4 +73,7 @@ interface AppDao {
 
     @Update
     suspend fun updateArchivedSmsAnalysis(items: List<ArchivedAlgPosteSmsEntity>)
+
+    @Query("DELETE FROM archived_alg_post_sms")
+    suspend fun clearAllArchivedAlgPosteSms()
 }

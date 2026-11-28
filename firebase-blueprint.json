@@ -128,6 +128,7 @@
         "stealthMode": { "type": "boolean" },
         "breathingGlowEnabled": { "type": "boolean" },
         "screenshotProtectionEnabled": { "type": "boolean" },
+        "lastBackupTimestamp": { "type": "integer" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -251,6 +252,55 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "format", "envelopeJson", "appVersion", "createdAt", "updatedAt"]
+    },
+    "CloudVaultSecrets": {
+      "title": "CloudVaultSecrets",
+      "description": "UID-scoped AES-256-GCM encrypted envelope storing sensitive card numbers/CVCs, vault keys, CCP accounts, SMS snippet, and profile avatar bytes at vault_settings/secrets.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "format": { "type": "string", "enum": ["VAULTIX_CLOUD_SECRETS_V1"] },
+        "envelopeJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "format", "envelopeJson", "createdAt", "updatedAt"]
+    },
+    "CloudArchivedSms": {
+      "title": "CloudArchivedSms",
+      "description": "Cloud-archived ALG Poste SMS entry with UID-encrypted message body under users/{userId}/archived_sms/{smsDocId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "smsId": { "type": "string" },
+        "sender": { "type": "string" },
+        "encryptedRawBody": { "type": "string" },
+        "receivedAtMillis": { "type": "integer" },
+        "capturedAtMillis": { "type": "integer" },
+        "captureSource": { "type": "string" },
+        "extractedBalance": { "type": "number" },
+        "extractedTxAmount": { "type": "number" },
+        "extractedExpense": { "type": "boolean" },
+        "hasExplicitFeeKeyword": { "type": "boolean" },
+        "matchedRule": { "type": "string" },
+        "studyStatus": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "smsId",
+        "sender",
+        "encryptedRawBody",
+        "receivedAtMillis",
+        "capturedAtMillis",
+        "captureSource",
+        "hasExplicitFeeKeyword",
+        "matchedRule",
+        "studyStatus",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -277,6 +327,14 @@
     "/users/{userId}/vault_settings/sms_sync": {
       "schema": { "$ref": "#/entities/CloudVaultSmsSync" },
       "description": "Synced BaridiMob SMS automation metadata, balance history, caught taxes, and failed transaction alerts."
+    },
+    "/users/{userId}/vault_settings/secrets": {
+      "schema": { "$ref": "#/entities/CloudVaultSecrets" },
+      "description": "Encrypted sensitive Vaultix credentials (cards, keys, CCPs, avatar bytes)."
+    },
+    "/users/{userId}/archived_sms/{smsDocId}": {
+      "schema": { "$ref": "#/entities/CloudArchivedSms" },
+      "description": "Encrypted archived ALG Poste / BaridiMob SMS records."
     },
     "/users/{userId}/encrypted_backups/{backupId}": {
       "schema": { "$ref": "#/entities/CloudEncryptedBackup" },

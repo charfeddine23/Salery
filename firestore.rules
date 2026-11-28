@@ -131,6 +131,7 @@ service cloud.firestore {
              data.stealthMode is bool &&
              data.breathingGlowEnabled is bool &&
              data.screenshotProtectionEnabled is bool &&
+             (!('lastBackupTimestamp' in data) || (data.lastBackupTimestamp is int && data.lastBackupTimestamp >= 0)) &&
              isValidTimestamp(data.createdAt) &&
              isValidTimestamp(data.updatedAt);
     }
@@ -169,6 +170,36 @@ service cloud.firestore {
              data.dismissedFailedSmsIdsJson is string && data.dismissedFailedSmsIdsJson.size() <= 50000 &&
              data.autoAddTaxesEnabled is bool &&
              data.autoAddTaxesBaselineMillis is int && data.autoAddTaxesBaselineMillis >= 0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidVaultSecrets(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.format == 'VAULTIX_CLOUD_SECRETS_V1' &&
+             data.envelopeJson is string && data.envelopeJson.size() >= 1 && data.envelopeJson.size() <= 750000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidArchivedSms(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.smsId is string && data.smsId.size() >= 1 && data.smsId.size() <= 256 &&
+             data.sender is string && data.sender.size() <= 120 &&
+             data.encryptedRawBody is string && data.encryptedRawBody.size() <= 12000 &&
+             data.receivedAtMillis is int && data.receivedAtMillis >= 0 &&
+             data.capturedAtMillis is int && data.capturedAtMillis >= 0 &&
+             data.captureSource is string && data.captureSource.size() >= 1 && data.captureSource.size() <= 32 &&
+             (!('extractedBalance' in data) || (data.extractedBalance is number && data.extractedBalance >= 0)) &&
+             (!('extractedTxAmount' in data) || (data.extractedTxAmount is number && data.extractedTxAmount >= 0)) &&
+             (!('extractedExpense' in data) || data.extractedExpense is bool) &&
+             data.hasExplicitFeeKeyword is bool &&
+             data.matchedRule is string && data.matchedRule.size() >= 1 && data.matchedRule.size() <= 64 &&
+             data.studyStatus is string && data.studyStatus.size() >= 1 && data.studyStatus.size() <= 32 &&
              isValidTimestamp(data.createdAt) &&
              isValidTimestamp(data.updatedAt);
     }
@@ -306,7 +337,8 @@ service cloud.firestore {
                            'firstName', 'lastName',
                            'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                            'language', 'themeMode', 'designStyle', 'stealthMode',
-                           'breathingGlowEnabled', 'screenshotProtectionEnabled', 'createdAt', 'updatedAt'
+                           'breathingGlowEnabled', 'screenshotProtectionEnabled',
+                           'lastBackupTimestamp', 'createdAt', 'updatedAt'
                          ]) &&
                          isValidVaultSettingsPrimary(incoming(), userId);
 
@@ -326,7 +358,8 @@ service cloud.firestore {
                            'firstName', 'lastName',
                            'localUsername', 'localWilayaCode', 'localWilayaName', 'localCommuneName',
                            'language', 'themeMode', 'designStyle', 'stealthMode',
-                           'breathingGlowEnabled', 'screenshotProtectionEnabled', 'updatedAt'
+                           'breathingGlowEnabled', 'screenshotProtectionEnabled',
+                           'lastBackupTimestamp', 'updatedAt'
                          ]);
 
         allow delete: if isOwner(userId);
@@ -400,6 +433,66 @@ service cloud.firestore {
                          ]);
 
         allow delete: if isOwner(userId);
+      }
+
+      match /vault_settings/secrets {
+        allow get: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'format', 'envelopeJson', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'format', 'envelopeJson', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidVaultSecrets(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidVaultSecrets(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'format', 'envelopeJson', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId);
+      }
+
+      match /archived_sms/{smsDocId} {
+        allow get: if isOwner(userId) && isValidId(smsDocId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(smsDocId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'smsId', 'sender', 'encryptedRawBody',
+                           'receivedAtMillis', 'capturedAtMillis', 'captureSource',
+                           'hasExplicitFeeKeyword', 'matchedRule', 'studyStatus',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'smsId', 'sender', 'encryptedRawBody',
+                           'receivedAtMillis', 'capturedAtMillis', 'captureSource',
+                           'extractedBalance', 'extractedTxAmount', 'extractedExpense',
+                           'hasExplicitFeeKeyword', 'matchedRule', 'studyStatus',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidArchivedSms(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(smsDocId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidArchivedSms(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'smsId', 'sender', 'encryptedRawBody',
+                           'receivedAtMillis', 'capturedAtMillis', 'captureSource',
+                           'extractedBalance', 'extractedTxAmount', 'extractedExpense',
+                           'hasExplicitFeeKeyword', 'matchedRule', 'studyStatus',
+                           'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(smsDocId);
       }
 
       match /encrypted_backups/{backupId} {

@@ -32,6 +32,12 @@ class DebtReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent == null) return
 
+        val realm = com.example.data.SessionMetaStore.getSessionRealm(context)
+        if (realm == com.example.data.SessionMetaStore.REALM_NONE) {
+            Log.d(TAG, "User is signed out; suppressing debt reminder notification.")
+            return
+        }
+
         val isArabic = com.example.data.PreferencesManager.readLanguageFast(context) == "ar"
         val debtId = intent.getLongExtra(EXTRA_DEBT_ID, -1L)
         val personName = intent.getStringExtra(EXTRA_PERSON_NAME)
@@ -56,11 +62,11 @@ class DebtReminderReceiver : BroadcastReceiver() {
             }
         }
 
-        // Keep BroadcastReceiver alive safely during async DB verification
+        // Keep BroadcastReceiver alive safely during async DB verification (Guest realm only)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (debtId > 0) {
+                if (debtId > 0 && (realm == com.example.data.SessionMetaStore.REALM_GUEST || realm.isBlank())) {
                     val db = AppDatabase.getDatabase(context)
                     val debt = db.appDao().getDebtById(debtId)
                     if (debt != null && (debt.isPaid || debt.remainingAmount <= 0.001)) {

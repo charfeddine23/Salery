@@ -46,6 +46,10 @@ class AlgPosteSmsReceiver : BroadcastReceiver() {
         }
 
         val appContext = context.applicationContext
+        val realm = com.example.data.SessionMetaStore.getSessionRealm(appContext)
+        if (realm == com.example.data.SessionMetaStore.REALM_NONE || realm == com.example.data.SessionMetaStore.REALM_CLOUD) {
+            return
+        }
         val prefsManager = PreferencesManager(appContext)
         val currentSettings = prefsManager.settingsFlow.value
         val baselineMillis = currentSettings.smsSyncBaselineTimestampMillis
