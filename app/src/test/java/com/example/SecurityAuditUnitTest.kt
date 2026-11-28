@@ -554,4 +554,101 @@ class SecurityAuditUnitTest {
         assertEquals("GuestUser", prefs.settingsFlow.value.localUsername)
         assertEquals(42000.0, prefs.settingsFlow.value.salaryAmount, 0.01)
     }
+
+    @Test
+    fun resolveStartupRealm_defaultsToNoneOnFreshInstallAndGuestOnlyWhenGuestAccountExists() {
+        val appContext = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val metaPrefs = appContext.getSharedPreferences("vaultix_session_meta", android.content.Context.MODE_PRIVATE)
+        val guestPrefs = appContext.getSharedPreferences("vaultix_guest_prefs", android.content.Context.MODE_PRIVATE)
+        metaPrefs.edit().clear().commit()
+        guestPrefs.edit().clear().commit()
+
+        assertEquals(
+            com.example.data.SessionMetaStore.REALM_NONE,
+            com.example.data.SessionMetaStore.resolveStartupRealm(appContext)
+        )
+
+        guestPrefs.edit().putBoolean("has_local_account_v1", true).commit()
+        assertEquals(
+            com.example.data.SessionMetaStore.REALM_GUEST,
+            com.example.data.SessionMetaStore.resolveStartupRealm(appContext)
+        )
+
+        com.example.data.SessionMetaStore.setSessionRealm(appContext, com.example.data.SessionMetaStore.REALM_CLOUD, "uid_a")
+        assertEquals(
+            com.example.data.SessionMetaStore.REALM_CLOUD,
+            com.example.data.SessionMetaStore.resolveStartupRealm(appContext)
+        )
+    }
+
+    @Test
+    fun cloudSessionSignOut_immediatelyWipesCloudRamRecordsAndPreservesGuest() {
+        kotlinx.coroutines.runBlocking {
+            val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+            val metaPrefs = app.getSharedPreferences("vaultix_session_meta", android.content.Context.MODE_PRIVATE)
+            val guestPrefs = app.getSharedPreferences("vaultix_guest_prefs", android.content.Context.MODE_PRIVATE)
+            metaPrefs.edit().clear().commit()
+            guestPrefs.edit().clear().commit()
+
+            val cloudDb = com.example.data.AppDatabase.getCloudSessionDatabase(app)
+            val guestDb = com.example.data.AppDatabase.getDatabase(app)
+            cloudDb.appDao().clearAllTransactions()
+            guestDb.appDao().clearAllTransactions()
+
+            // Seed Guest transaction that MUST survive Cloud sign-outs
+            guestDb.appDao().insertTransaction(
+                TransactionEntity(
+                    type = TransactionType.INCOME,
+                    amount = 5000.0,
+                    category = "salary",
+                    title = "Guest Tx",
+                    note = "",
+                    dateMillis = 1_763_200_000_000L
+                )
+            )
+            // Seed Cloud RAM transaction representing Account A
+            cloudDb.appDao().insertTransaction(
+                TransactionEntity(
+                    type = TransactionType.EXPENSE,
+                    amount = 12345.0,
+                    category = "shopping",
+                    title = "Account A Secret Purchase",
+                    note = "",
+                    dateMillis = 1_763_200_000_000L
+                )
+            )
+
+            com.example.data.SessionMetaStore.setSessionRealm(
+                app,
+                com.example.data.SessionMetaStore.REALM_NONE
+            )
+            val vm = com.example.viewmodel.VaultixViewModel(app)
+            // Wait briefly for ViewModel init coroutine
+            kotlinx.coroutines.delay(150L)
+
+            // Sign out to auth screen & sign out completely
+            vm.signOutToAuthScreen()
+            kotlinx.coroutines.delay(150L)
+            assertEquals(0, vm.allTransactions.value.size)
+            assertEquals(0, cloudDb.appDao().getAllTransactionsList().size)
+            assertFalse(vm.settings.value.hasLocalAccount)
+
+            // Re-seed Cloud RAM and verify signOutGoogleAccount also wipes Cloud RAM immediately
+            cloudDb.appDao().insertTransaction(
+                TransactionEntity(
+                    type = TransactionType.EXPENSE,
+                    amount = 9999.0,
+                    category = "food",
+                    title = "Account A Second Purchase",
+                    note = "",
+                    dateMillis = 1_763_200_000_000L
+                )
+            )
+            vm.signOutGoogleAccount(app, clearQuickResume = true)
+            kotlinx.coroutines.delay(150L)
+            assertEquals(0, vm.allTransactions.value.size)
+            assertEquals(0, cloudDb.appDao().getAllTransactionsList().size)
+            assertEquals(1, guestDb.appDao().getAllTransactionsList().size)
+        }
+    }
 }

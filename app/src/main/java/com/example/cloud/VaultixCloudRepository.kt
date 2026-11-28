@@ -18,6 +18,8 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.MemoryCacheSettings
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -38,16 +40,28 @@ class VaultixCloudRepository(
 
     companion object {
         private const val BATCH_LIMIT = 400
+        private val configuredFirestoreKeys = HashSet<String>()
 
         fun resolveFirestore(context: Context): FirebaseFirestore {
             val dbId = runCatching {
                 context.applicationContext.getString(R.string.firestore_database_id).trim()
             }.getOrDefault("(default)")
-            return if (dbId.isBlank() || dbId == "(default)") {
+            val cacheKey = dbId.ifBlank { "(default)" }
+            val instance = if (dbId.isBlank() || dbId == "(default)") {
                 FirebaseFirestore.getInstance()
             } else {
                 FirebaseFirestore.getInstance(dbId)
             }
+            synchronized(configuredFirestoreKeys) {
+                if (configuredFirestoreKeys.add(cacheKey)) {
+                    runCatching {
+                        instance.firestoreSettings = FirebaseFirestoreSettings.Builder()
+                            .setLocalCacheSettings(MemoryCacheSettings.newBuilder().build())
+                            .build()
+                    }
+                }
+            }
+            return instance
         }
     }
 

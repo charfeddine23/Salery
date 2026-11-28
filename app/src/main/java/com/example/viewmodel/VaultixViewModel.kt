@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -45,6 +46,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
@@ -321,10 +324,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val prefsManager = PreferencesManager(application)
 
     private val _storageRealm = MutableStateFlow(
-        when (SessionMetaStore.getSessionRealm(application)) {
+        when (SessionMetaStore.resolveStartupRealm(application)) {
             SessionMetaStore.REALM_CLOUD -> StorageRealm.CLOUD_MEMORY
-            SessionMetaStore.REALM_NONE -> StorageRealm.SIGNED_OUT
-            else -> StorageRealm.GUEST
+            SessionMetaStore.REALM_GUEST -> StorageRealm.GUEST
+            else -> StorageRealm.SIGNED_OUT
         }
     )
 
@@ -343,7 +346,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 StorageRealm.SIGNED_OUT -> flowOf(emptyList())
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val allDebts: StateFlow<List<DebtEntity>> = _storageRealm
         .flatMapLatest { realm ->
@@ -353,7 +357,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 StorageRealm.SIGNED_OUT -> flowOf(emptyList())
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Live financial calculations: Balance = Total Income - Total Expenses - Savings Wallet
     val financialSummary: StateFlow<FinancialSummary> = combine(
@@ -409,7 +414,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             pendingDebtsOwedToMe = owedToMe
         )
     }.flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummary())
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, FinancialSummary())
 
     // App lock state
     private val _isAppLocked = MutableStateFlow(false)
@@ -487,7 +493,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 StorageRealm.SIGNED_OUT -> flowOf(emptyList())
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Live algorithm study metrics computed from the permanent archive & caught taxes
     val archiveStudyReport: StateFlow<ArchivedSmsStudyReport> = combine(
@@ -613,7 +620,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private fun persistSavedQuickAccount(
         displayName: String,
@@ -685,7 +692,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     val cloudSyncState: StateFlow<CloudSyncUiState> = _cloudSyncState.asStateFlow()
 
     private val _isRestoringCloudSession = MutableStateFlow(
-        SessionMetaStore.getSessionRealm(application) == SessionMetaStore.REALM_CLOUD
+        _storageRealm.value == StorageRealm.CLOUD_MEMORY
     )
     val isRestoringCloudSession: StateFlow<Boolean> = _isRestoringCloudSession.asStateFlow()
 
@@ -697,6 +704,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     private val _cloudUserProfile = MutableStateFlow<CloudUserProfile?>(null)
     val cloudUserProfile: StateFlow<CloudUserProfile?> = _cloudUserProfile.asStateFlow()
 
+    private val cloudSessionMutex = Mutex()
+    @Volatile
+    private var activeCloudTransitionJob: Job? = null
     private var cloudProfileObserverJob: Job? = null
     private var cloudAutoSyncJob: Job? = null
     @Volatile
@@ -853,8 +863,8 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             throw e
         } catch (_: Exception) {
         }
-        if (AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
-            val cfg = settings.value
+        val cfg = settings.value
+        if (cfg.hasCompletedPermissionsOnboarding && AlgPosteSmsInboxScanner.hasSmsPermissions(getApplication())) {
             if (cfg.baridiMobSmsSyncEnabled) {
                 scanAlgPosteSmsInbox(getApplication(), showFeedback = false)
             } else {
@@ -898,6 +908,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
      * If not already credited this month, credits wallet balance automatically.
      */
     suspend fun checkAndApplySalaryScheduler(force: Boolean = false) {
+        if (_storageRealm.value == StorageRealm.SIGNED_OUT) return
         val userConfig = settings.value
         if (!userConfig.salaryAutoCredit && !force) return
 
@@ -2493,25 +2504,36 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }.getOrDefault("")
     }
 
+    private fun resetSessionUiEphemeralState() {
+        _expandedKeyIds.value = emptySet()
+        _revealedKeyIds.value = emptySet()
+        _expandedCcpIds.value = emptySet()
+        _hiddenCcpIds.value = emptySet()
+    }
+
     private suspend fun prepareCleanCloudSessionForUser(user: FirebaseUser) {
         val appCtx = getApplication<Application>()
-        stopCloudProfileListener()
-        clearCloudSessionInMemoryStorage(appCtx)
-        val uiLang = SessionMetaStore.readAuthUiLanguage(appCtx)
-        val uiTheme = SessionMetaStore.readAuthUiThemeMode(appCtx)
-        val cleanCloudSettings = UserSettings(
-            hasLocalAccount = true,
-            language = uiLang,
-            themeMode = uiTheme
-        )
-        SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_CLOUD, user.uid)
-        SessionMetaStore.resetAuthUiPreferences(appCtx)
-        _storageRealm.value = StorageRealm.CLOUD_MEMORY
-        prefsManager.switchToCloudMemoryMode(cleanCloudSettings)
-        _cloudUserProfile.value = null
-        _cloudSyncState.value = CloudSyncUiState.Idle
-        _lastCloudSyncMillis.value = 0L
-        SessionMetaStore.setLastCloudSyncMillis(appCtx, 0L)
+        cloudSessionMutex.withLock {
+            stopCloudProfileListener()
+            resetSessionUiEphemeralState()
+            clearCloudSessionInMemoryStorage(appCtx)
+            val uiLang = SessionMetaStore.readAuthUiLanguage(appCtx)
+            val uiTheme = SessionMetaStore.readAuthUiThemeMode(appCtx)
+            val cleanCloudSettings = UserSettings(
+                hasLocalAccount = true,
+                salaryAutoCredit = false,
+                language = uiLang,
+                themeMode = uiTheme
+            )
+            SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_CLOUD, user.uid)
+            SessionMetaStore.resetAuthUiPreferences(appCtx)
+            _storageRealm.value = StorageRealm.CLOUD_MEMORY
+            prefsManager.switchToCloudMemoryMode(cleanCloudSettings)
+            _cloudUserProfile.value = null
+            _cloudSyncState.value = CloudSyncUiState.Idle
+            _lastCloudSyncMillis.value = 0L
+            SessionMetaStore.setLastCloudSyncMillis(appCtx, 0L)
+        }
     }
 
     fun activateLocalAccount(username: String = "") {
@@ -2519,6 +2541,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val appCtx = getApplication<Application>()
 
         stopCloudProfileListener()
+        resetSessionUiEphemeralState()
         _cloudUserProfile.value = null
         _cloudSyncState.value = CloudSyncUiState.Idle
         if (runCatching { firebaseAuth?.currentUser != null }.getOrDefault(false)) {
@@ -2527,7 +2550,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         _googleAuthState.value = GoogleAuthUiState.SignedOut
 
         viewModelScope.launch {
-            clearCloudSessionInMemoryStorage(appCtx)
+            withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
+            cloudSessionMutex.withLock {
+                clearCloudSessionInMemoryStorage(appCtx)
+            }
         }
 
         SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_GUEST)
@@ -2617,39 +2643,61 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             initialCloudHandshakeDoneForUid == activeUser.uid
 
         stopCloudProfileListener()
+        resetSessionUiEphemeralState()
         _cloudUserProfile.value = null
         _cloudSyncState.value = CloudSyncUiState.Idle
         _isAppLocked.value = false
         _isRestoringCloudSession.value = false
-
+        _lastCloudSyncMillis.value = 0L
+        SessionMetaStore.setLastCloudSyncMillis(appCtx, 0L)
         SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
         _storageRealm.value = StorageRealm.SIGNED_OUT
         prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
 
-        viewModelScope.launch {
+        activeCloudTransitionJob = viewModelScope.launch {
             withContext(NonCancellable + Dispatchers.IO) {
-                if (shouldFlushCloud && activeUser != null && repo != null) {
-                    val txList = runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
-                    val debtList = runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
-                    val smsList = runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
-                    val avatarB64 = encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
-                    runCatching {
-                        repo.pushVaultToCloud(
-                            user = activeUser,
-                            settings = currentSettings,
-                            transactions = txList,
-                            debts = debtList,
-                            archivedSms = smsList,
-                            avatarBase64 = avatarB64,
-                            syncSettings = true,
-                            syncTransactions = true,
-                            syncDebts = true,
-                            syncSecrets = true,
-                            syncArchivedSms = true
-                        )
+                cloudSessionMutex.withLock {
+                    val txList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val debtList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val smsList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val avatarB64 = if (shouldFlushCloud) {
+                        encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
+                    } else ""
+
+                    // Immediately clear RAM records & session avatars before any network I/O
+                    clearCloudSessionInMemoryStorage(appCtx)
+
+                    if (shouldFlushCloud && activeUser != null && repo != null) {
+                        val stillSameUser = runCatching {
+                            firebaseAuth?.currentUser?.uid == activeUser.uid
+                        }.getOrDefault(false)
+                        if (stillSameUser) {
+                            withTimeoutOrNull(3_500L) {
+                                runCatching {
+                                    repo.pushVaultToCloud(
+                                        user = activeUser,
+                                        settings = currentSettings,
+                                        transactions = txList,
+                                        debts = debtList,
+                                        archivedSms = smsList,
+                                        avatarBase64 = avatarB64,
+                                        syncSettings = true,
+                                        syncTransactions = true,
+                                        syncDebts = true,
+                                        syncSecrets = true,
+                                        syncArchivedSms = true
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-                clearCloudSessionInMemoryStorage(appCtx)
             }
         }
     }
@@ -3042,6 +3090,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 onAuthSuccess = { user ->
                     viewModelScope.launch {
                         _isRestoringCloudSession.value = true
+                        withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
                         prepareCleanCloudSessionForUser(user)
                         activateGoogleConnectedAccount(user)
                         updateGoogleAuthFromFirebaseUser(user)
@@ -3081,6 +3130,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 }
                 viewModelScope.launch {
                     _isRestoringCloudSession.value = true
+                    withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
                     prepareCleanCloudSessionForUser(user)
                     activateGoogleConnectedAccount(user)
                     updateGoogleAuthFromFirebaseUser(user)
@@ -3137,6 +3187,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         _googleAuthState.value = GoogleAuthUiState.Loading
 
         viewModelScope.launch {
+            withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
             when (val res = GoogleAuthHelper.signInWithEmailPassword(context, cleanEmail, password, isAr)) {
                 is EmailAuthResult.Success -> {
                     val resolvedName = res.user.displayName?.trim()?.takeIf { it.isNotEmpty() }
@@ -3198,6 +3249,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         _googleAuthState.value = GoogleAuthUiState.Loading
 
         viewModelScope.launch {
+            withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
             when (
                 val res = GoogleAuthHelper.signUpWithEmailPassword(
                     context = context,
@@ -3308,23 +3360,30 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun continueWithSignedInGoogleAccount() {
-        val user = firebaseAuth?.currentUser
-        if (user != null) {
-            val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
-                ?: user.email?.substringBefore('@')?.trim().orEmpty()
+        val currentUserSnapshot = firebaseAuth?.currentUser
+        if (currentUserSnapshot != null) {
+            val resolvedName = currentUserSnapshot.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: currentUserSnapshot.email?.substringBefore('@')?.trim().orEmpty()
             triggerAuthSuccessTransition(
                 kind = AuthTransitionKind.SIGN_IN,
                 displayName = resolvedName
             )
             viewModelScope.launch {
                 _isRestoringCloudSession.value = true
-                prepareCleanCloudSessionForUser(user)
-                activateGoogleConnectedAccount(user)
-                updateGoogleAuthFromFirebaseUser(user)
-                syncAfterCloudSignIn(user, showFeedback = false)
-                _isRestoringCloudSession.value = false
-                withContext(Dispatchers.IO) {
-                    runActiveRealmMaintenanceAndSmsScan()
+                withTimeoutOrNull(4_000L) { activeCloudTransitionJob?.join() }
+                val activeUser = firebaseAuth?.currentUser
+                if (activeUser != null) {
+                    prepareCleanCloudSessionForUser(activeUser)
+                    activateGoogleConnectedAccount(activeUser)
+                    updateGoogleAuthFromFirebaseUser(activeUser)
+                    syncAfterCloudSignIn(activeUser, showFeedback = false)
+                    _isRestoringCloudSession.value = false
+                    withContext(Dispatchers.IO) {
+                        runActiveRealmMaintenanceAndSmsScan()
+                    }
+                } else {
+                    _isRestoringCloudSession.value = false
+                    clearAuthTransition()
                 }
             }
             return
@@ -3382,6 +3441,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         context: Context,
         clearQuickResume: Boolean = false
     ) {
+        clearAuthTransition()
         val appCtx = getApplication<Application>()
         val isAr = settings.value.language == "ar"
         val wasCloudRealm = _storageRealm.value == StorageRealm.CLOUD_MEMORY
@@ -3396,18 +3456,27 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             clearSavedQuickAccount()
         }
 
+        // Immediately stop all listeners & wipe active session UI state before any network call
+        stopCloudProfileListener()
+        resetSessionUiEphemeralState()
+        _cloudUserProfile.value = null
+        _cloudSyncState.value = CloudSyncUiState.Idle
+        _isAppLocked.value = false
+        _isRestoringCloudSession.value = false
+        _lastCloudSyncMillis.value = 0L
+        SessionMetaStore.setLastCloudSyncMillis(appCtx, 0L)
+        SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
+        _storageRealm.value = StorageRealm.SIGNED_OUT
+        prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
+
         if (activeUser == null) {
             _googleAuthState.value = GoogleAuthUiState.SignedOut
-            if (wasCloudRealm) {
-                stopCloudProfileListener()
-                _cloudUserProfile.value = null
-                _cloudSyncState.value = CloudSyncUiState.Idle
-                _isAppLocked.value = false
-                _isRestoringCloudSession.value = false
-                SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
-                _storageRealm.value = StorageRealm.SIGNED_OUT
-                prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
-                viewModelScope.launch { clearCloudSessionInMemoryStorage(appCtx) }
+            activeCloudTransitionJob = viewModelScope.launch {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    cloudSessionMutex.withLock {
+                        clearCloudSessionInMemoryStorage(appCtx)
+                    }
+                }
             }
             if (clearQuickResume) {
                 viewModelScope.launch {
@@ -3421,58 +3490,68 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
 
         SessionMetaStore.setExplicitGoogleSignedOut(appCtx, true)
-        viewModelScope.launch {
-            if (shouldFlushCloud) {
-                val repo = cloudRepository
-                withContext(NonCancellable + Dispatchers.IO) {
-                    val txList = runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
-                    val debtList = runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
-                    val smsList = runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
-                    val avatarB64 = encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
-                    runCatching {
-                        repo?.pushVaultToCloud(
-                            user = activeUser,
-                            settings = currentSettings,
-                            transactions = txList,
-                            debts = debtList,
-                            archivedSms = smsList,
-                            avatarBase64 = avatarB64,
-                            syncSettings = true,
-                            syncTransactions = true,
-                            syncDebts = true,
-                            syncSecrets = true,
-                            syncArchivedSms = true
-                        )
+        activeCloudTransitionJob = viewModelScope.launch {
+            withContext(NonCancellable + Dispatchers.IO) {
+                cloudSessionMutex.withLock {
+                    val txList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllTransactionsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val debtList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllDebtsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val smsList = if (shouldFlushCloud) {
+                        runCatching { cloudSessionDatabase.appDao().getAllArchivedAlgPosteSmsList() }.getOrDefault(emptyList())
+                    } else emptyList()
+                    val avatarB64 = if (shouldFlushCloud) {
+                        encodeAvatarFileToBase64(currentSettings.profileAvatarPath)
+                    } else ""
+
+                    // Immediately clear RAM records & session avatars before any network I/O
+                    clearCloudSessionInMemoryStorage(appCtx)
+
+                    if (shouldFlushCloud) {
+                        val repo = cloudRepository
+                        val stillSameUser = runCatching {
+                            firebaseAuth?.currentUser?.uid == activeUser.uid
+                        }.getOrDefault(false)
+                        if (repo != null && stillSameUser) {
+                            withTimeoutOrNull(3_500L) {
+                                runCatching {
+                                    repo.pushVaultToCloud(
+                                        user = activeUser,
+                                        settings = currentSettings,
+                                        transactions = txList,
+                                        debts = debtList,
+                                        archivedSms = smsList,
+                                        avatarBase64 = avatarB64,
+                                        syncSettings = true,
+                                        syncTransactions = true,
+                                        syncDebts = true,
+                                        syncSecrets = true,
+                                        syncArchivedSms = true
+                                    )
+                                }
+                            }
+                        }
                     }
+
+                    GoogleAuthHelper.signOutSuspend(
+                        context = context,
+                        beforeFirebaseSignOut = {
+                            clearCloudSessionInMemoryStorage(appCtx)
+                        },
+                        onSignOutComplete = {
+                            _googleAuthState.value = GoogleAuthUiState.SignedOut
+                            viewModelScope.launch {
+                                _toastEvent.emit(
+                                    if (isAr) "تم تسجيل الخروج بالكامل ومحو الجلسة من الجهاز • بياناتك محفوظة في السحابة فقط"
+                                    else "Signed out & cleared session from device • Data stays safely in Cloud only"
+                                )
+                            }
+                        }
+                    )
                 }
             }
-
-            GoogleAuthHelper.signOut(
-                context = context,
-                scope = viewModelScope,
-                beforeFirebaseSignOut = {
-                    stopCloudProfileListener()
-                    _cloudUserProfile.value = null
-                    _cloudSyncState.value = CloudSyncUiState.Idle
-                    _isAppLocked.value = false
-                    _isRestoringCloudSession.value = false
-                    SessionMetaStore.setSessionRealm(appCtx, SessionMetaStore.REALM_NONE)
-                    _storageRealm.value = StorageRealm.SIGNED_OUT
-                    prefsManager.switchToSignedOutMode(resetAuthUiPreferences = true)
-                    viewModelScope.launch {
-                        clearCloudSessionInMemoryStorage(appCtx)
-                    }
-                },
-                onSignOutComplete = {
-                    _googleAuthState.value = GoogleAuthUiState.SignedOut
-                    viewModelScope.launch {
-                        _toastEvent.emit(
-                            if (isAr) "تم تسجيل الخروج بالكامل ومحو الجلسة من الجهاز • بياناتك محفوظة في السحابة فقط"
-                            else "Signed out & cleared session from device • Data stays safely in Cloud only"
-                        )
-                    }
-                }
-            )
         }
     }
 
@@ -3572,15 +3651,12 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Brand-new Cloud account with no remote vault yet -> push initial clean Cloud state
-        val (latestSettings, txList, debtList, smsList) = withContext(Dispatchers.IO) {
-            CloudVaultSnapshotForSync(
-                settings = settings.value,
-                transactions = activeDao().getAllTransactionsList(),
-                debts = activeDao().getAllDebtsList(),
-                archivedSms = activeDao().getAllArchivedAlgPosteSmsList()
-            )
-        }
+        // Brand-new Cloud account with no remote vault yet -> push initial clean Cloud state ONLY
+        val latestSettings = settings.value
+        val txList = emptyList<TransactionEntity>()
+        val debtList = emptyList<DebtEntity>()
+        val smsList = emptyList<ArchivedAlgPosteSmsEntity>()
+        clearCloudSessionInMemoryStorage(getApplication())
         val avatarB64 = withContext(Dispatchers.IO) { encodeAvatarFileToBase64(latestSettings.profileAvatarPath) }
         val pushResult = withContext(Dispatchers.IO) {
             repo.pushVaultToCloud(
@@ -3591,10 +3667,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 archivedSms = smsList,
                 avatarBase64 = avatarB64,
                 syncSettings = true,
-                syncTransactions = true,
-                syncDebts = true,
+                syncTransactions = false,
+                syncDebts = false,
                 syncSecrets = true,
-                syncArchivedSms = smsList.isNotEmpty()
+                syncArchivedSms = false
             )
         }
         pushResult.onSuccess { summary ->
@@ -3883,7 +3959,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
-            val effectiveCloudSettings = pulled.settings ?: CloudVaultSettings()
+            val effectiveCloudSettings = pulled.settings ?: CloudVaultSettings(
+                salaryAutoCredit = false,
+                hasCompletedPermissionsOnboarding = false
+            )
             prefsManager.updateSettings { current ->
                 val merged = applyCloudVaultSettingsSafely(
                     current = current,
@@ -4212,6 +4291,9 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun scanAlgPosteSmsInbox(context: Context = getApplication(), showFeedback: Boolean = true) {
         viewModelScope.launch {
+            val realmAtStart = _storageRealm.value
+            val uidAtStart = runCatching { firebaseAuth?.currentUser?.uid }.getOrNull()
+            if (realmAtStart == StorageRealm.SIGNED_OUT) return@launch
             val isAr = settings.value.language == "ar"
             if (!AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
                 if (showFeedback) {
@@ -4230,6 +4312,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                     minTimestampMillis = baselineMillis,
                     applyMinTimestampToSnapshots = false
                 )
+                if (_storageRealm.value != realmAtStart ||
+                    (realmAtStart == StorageRealm.CLOUD_MEMORY && firebaseAuth?.currentUser?.uid != uidAtStart)
+                ) {
+                    return@withContext res to emptyList()
+                }
                 val toArchive = res.rawMessages.mapNotNull { raw ->
                     AlgPosteSmsAnalyzer.toArchivedEntity(
                         sender = raw.sender,
@@ -4247,6 +4334,11 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 )
                 res to permanentSnaps
             }
+            if (_storageRealm.value != realmAtStart ||
+                (realmAtStart == StorageRealm.CLOUD_MEMORY && firebaseAuth?.currentUser?.uid != uidAtStart)
+            ) {
+                return@launch
+            }
 
             var addedCount = 0
             var newTaxCount = 0
@@ -4255,6 +4347,7 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
             var autoLoggedTaxCount = 0
             withContext(Dispatchers.IO) {
                 prefsManager.updateSettings { current ->
+                    if (_storageRealm.value != realmAtStart) return@updateSettings current
                     val processed = AlgPosteSmsCodec.parseProcessedKeys(current.processedSmsKeysJson)
                     val existing = AlgPosteSmsCodec.parseSuggestions(current.pendingSmsSuggestionsJson)
 

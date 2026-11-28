@@ -426,7 +426,7 @@ private fun AuthenticatedVaultContent(
                     isInitialResume = false
                     return@LifecycleEventObserver
                 }
-                if (AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
+                if (userSettings.hasCompletedPermissionsOnboarding && AlgPosteSmsInboxScanner.hasSmsPermissions(context)) {
                     if (userSettings.baridiMobSmsSyncEnabled) {
                         viewModel.scanAlgPosteSmsInbox(context, showFeedback = false)
                     } else {

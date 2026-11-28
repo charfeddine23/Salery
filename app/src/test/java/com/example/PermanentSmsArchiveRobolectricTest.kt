@@ -116,6 +116,7 @@ class PermanentSmsArchiveRobolectricTest {
         assertEquals("الرصيد", ArabicStrings.totalBalance)
 
         val app = ApplicationProvider.getApplicationContext<Application>()
+        com.example.data.SessionMetaStore.setSessionRealm(app, com.example.data.SessionMetaStore.REALM_GUEST)
         val externalPrefs = PreferencesManager(app)
         externalPrefs.updateSettings {
             it.copy(
@@ -199,6 +200,7 @@ class PermanentSmsArchiveRobolectricTest {
     @Test
     fun algPosteManualSms_preservesNegativeBalanceInSettingsAndHistory() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<Application>()
+        com.example.data.SessionMetaStore.setSessionRealm(app, com.example.data.SessionMetaStore.REALM_GUEST)
         val prefs = PreferencesManager(app)
         prefs.updateSettings {
             it.copy(
@@ -225,6 +227,7 @@ class PermanentSmsArchiveRobolectricTest {
     @Test
     fun savingsWallet_transfersGoalsAndHistory_persistAndClampAccurately() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<Application>()
+        com.example.data.SessionMetaStore.setSessionRealm(app, com.example.data.SessionMetaStore.REALM_GUEST)
         val prefs = PreferencesManager(app)
         prefs.updateSettings {
             it.copy(
@@ -265,6 +268,7 @@ class PermanentSmsArchiveRobolectricTest {
     @Test
     fun autoAddTaxes_toggleOnLogsOnlyFutureTaxesAndSkipsPreviousTaxes() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<Application>()
+        com.example.data.SessionMetaStore.setSessionRealm(app, com.example.data.SessionMetaStore.REALM_GUEST)
         val prefs = PreferencesManager(app)
         val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java)
             .allowMainThreadQueries()

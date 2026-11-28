@@ -326,6 +326,31 @@ object GoogleAuthHelper {
         }
     }
 
+    suspend fun signOutSuspend(
+        context: Context,
+        credentialManager: CredentialManager = CredentialManager.create(context),
+        beforeFirebaseSignOut: suspend () -> Unit = {},
+        onSignOutComplete: () -> Unit = {}
+    ) {
+        withContext(NonCancellable) {
+            try {
+                beforeFirebaseSignOut()
+            } catch (e: Exception) {
+                Log.w(TAG, "Pre-sign-out cleanup warning: ${e.message}")
+            }
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+                    credentialManager.clearCredentialState(ClearCredentialStateRequest())
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear credential state: ${e.message}")
+            } finally {
+                resolveAuth(context)?.signOut()
+                onSignOutComplete()
+            }
+        }
+    }
+
     fun signOut(
         context: Context,
         credentialManager: CredentialManager = CredentialManager.create(context),
@@ -334,21 +359,12 @@ object GoogleAuthHelper {
         onSignOutComplete: () -> Unit = {}
     ) {
         scope.launch {
-            withContext(NonCancellable) {
-                try {
-                    beforeFirebaseSignOut()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Pre-sign-out cleanup warning: ${e.message}")
-                }
-                try {
-                    credentialManager.clearCredentialState(ClearCredentialStateRequest())
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to clear credential state: ${e.message}")
-                } finally {
-                    resolveAuth(context)?.signOut()
-                    onSignOutComplete()
-                }
-            }
+            signOutSuspend(
+                context = context,
+                credentialManager = credentialManager,
+                beforeFirebaseSignOut = beforeFirebaseSignOut,
+                onSignOutComplete = onSignOutComplete
+            )
         }
     }
 

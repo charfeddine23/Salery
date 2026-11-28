@@ -206,6 +206,22 @@ object SessionMetaStore {
         runCatching { java.io.File(appCtx.filesDir, "profile_avatar.jpg").delete() }
         meta.edit().putBoolean("legacy_shared_storage_purged_v1", true).apply()
     }
+
+    fun resolveStartupRealm(context: Context): String {
+        val appCtx = context.applicationContext
+        purgeLegacySharedStorageOnce(appCtx)
+        return when (getSessionRealm(appCtx)) {
+            REALM_CLOUD -> REALM_CLOUD
+            REALM_NONE -> REALM_NONE
+            REALM_GUEST -> REALM_GUEST
+            else -> {
+                val guestHasAccount = appCtx
+                    .getSharedPreferences("vaultix_guest_prefs", Context.MODE_PRIVATE)
+                    .getBoolean("has_local_account_v1", false)
+                if (guestHasAccount) REALM_GUEST else REALM_NONE
+            }
+        }
+    }
 }
 
 class PreferencesManager(context: Context) {
@@ -214,10 +230,10 @@ class PreferencesManager(context: Context) {
         appContext.getSharedPreferences(GUEST_PREFS_NAME, Context.MODE_PRIVATE)
 
     @Volatile
-    private var persistenceMode: PrefsPersistenceMode = when (SessionMetaStore.getSessionRealm(appContext)) {
+    private var persistenceMode: PrefsPersistenceMode = when (SessionMetaStore.resolveStartupRealm(appContext)) {
         SessionMetaStore.REALM_CLOUD -> PrefsPersistenceMode.CLOUD_MEMORY
-        SessionMetaStore.REALM_NONE -> PrefsPersistenceMode.SIGNED_OUT
-        else -> PrefsPersistenceMode.GUEST_LOCAL
+        SessionMetaStore.REALM_GUEST -> PrefsPersistenceMode.GUEST_LOCAL
+        else -> PrefsPersistenceMode.SIGNED_OUT
     }
 
     @Volatile
@@ -625,7 +641,7 @@ class PreferencesManager(context: Context) {
         fun readLanguageFast(context: Context): String {
             return runCatching {
                 val appCtx = context.applicationContext
-                if (SessionMetaStore.isGuestSessionActive(appCtx) || SessionMetaStore.getSessionRealm(appCtx).isBlank()) {
+                if (SessionMetaStore.resolveStartupRealm(appCtx) == SessionMetaStore.REALM_GUEST) {
                     appCtx.getSharedPreferences(GUEST_PREFS_NAME, Context.MODE_PRIVATE)
                         .getString("app_language", null)
                         ?: SessionMetaStore.readAuthUiLanguage(appCtx)
