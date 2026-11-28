@@ -28,6 +28,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -120,7 +121,10 @@ import com.example.ui.components.GlassBackground
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalScreenshotProtection
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import com.example.ui.theme.breathingGlow
+import com.example.viewmodel.SavedAuthAccount
 
 private val VaultixScriptFont = FontFamily(
     Font(R.font.pacifico, FontWeight.Normal)
@@ -156,6 +160,7 @@ private data class AuthVisualPalette(
     val textMuted: Color,
     val accentCyan: Color,
     val accentCyanDeep: Color,
+    val brandOrange: Color,
     val onAccentText: Color,
     val googleBg: Color,
     val googleBorder: Color,
@@ -189,6 +194,7 @@ private fun rememberAnimatedAuthPalette(): AuthVisualPalette {
             textMuted = appColors.textMuted,
             accentCyan = appColors.primaryNeon,
             accentCyanDeep = appColors.secondaryNeon,
+            brandOrange = if (appColors.isDark) VaultixBrandOrange else VaultixBrandOrangeLight,
             onAccentText = onAccent,
             googleBg = appColors.glassSurface,
             googleBorder = appColors.glassBorder,
@@ -217,6 +223,7 @@ private fun rememberAnimatedAuthPalette(): AuthVisualPalette {
         textMuted = animateColorAsState(target.textMuted, colorSpec, label = "textMuted").value,
         accentCyan = animateColorAsState(target.accentCyan, colorSpec, label = "accentCyan").value,
         accentCyanDeep = animateColorAsState(target.accentCyanDeep, colorSpec, label = "accentCyanDeep").value,
+        brandOrange = animateColorAsState(target.brandOrange, colorSpec, label = "brandOrange").value,
         onAccentText = animateColorAsState(target.onAccentText, colorSpec, label = "onAccentText").value,
         googleBg = animateColorAsState(target.googleBg, colorSpec, label = "googleBg").value,
         googleBorder = animateColorAsState(target.googleBorder, colorSpec, label = "googleBorder").value,
@@ -234,6 +241,7 @@ fun AuthWelcomeScreen(
     isArabic: Boolean,
     isDarkTheme: Boolean = true,
     googleAuthState: GoogleAuthUiState = GoogleAuthUiState.SignedOut,
+    savedAccount: SavedAuthAccount? = null,
     onToggleLanguage: (String) -> Unit,
     onToggleTheme: () -> Unit = {},
     onGoogleSignIn: () -> Unit = {},
@@ -250,6 +258,16 @@ fun AuthWelcomeScreen(
     val palette = rememberAnimatedAuthPalette()
     val isLoading = googleAuthState is GoogleAuthUiState.Loading
     val signedInState = googleAuthState as? GoogleAuthUiState.SignedIn
+    val resolvedSavedAccount = remember(signedInState, savedAccount) {
+        signedInState?.let {
+            SavedAuthAccount(
+                displayName = it.displayName,
+                email = it.email,
+                photoUrl = it.photoUrl,
+                isCloudLinked = true
+            )
+        } ?: savedAccount
+    }
     val errorState = googleAuthState as? GoogleAuthUiState.Error
 
     var pageMode by rememberSaveable { mutableStateOf(AuthPageMode.WELCOME) }
@@ -395,76 +413,101 @@ fun AuthWelcomeScreen(
     GlassBackground(
         modifier = modifier.fillMaxSize()
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding()
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Centered scrollable host so every auth card sits in the exact middle of the screen
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 68.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Floating Glass Card + Morphing Behind-Card Background Blob Wrapper
-                Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 440.dp)
-                    .padding(horizontal = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Behind-card morphing visual effect layer (matches positions in Screenshots 2, 3, 4)
-                Canvas(
-                    modifier = Modifier
-                        .matchParentSize()
-                ) {
-                    val w = size.width
-                    val h = size.height
-                    val driftX = (driftPhase - 0.5f) * 14f
-                    val driftY = (0.5f - driftPhase) * 12f
-                    val cx = w * blobCenterXFraction + driftX
-                    val cy = h * blobCenterYFraction + driftY
-                    val rx = w * blobWidthFraction
-                    val ry = h * blobHeightFraction
+            val screenMinHeight = maxHeight
 
-                    // Soft wide halo around card
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                blobColorTop.copy(alpha = if (isDarkTheme) 0.22f else 0.16f),
-                                Color.Transparent
-                            ),
-                            center = Offset(cx, cy),
-                            radius = maxOf(rx, ry) * 1.45f
-                        ),
-                        radius = maxOf(rx, ry) * 1.45f,
-                        center = Offset(cx, cy)
+            // Full-bleed unclipped atmospheric glow layer (completely removes top/bottom color seams)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val maxDim = maxOf(w, h)
+                val driftX = (driftPhase - 0.5f) * w * 0.03f
+                val driftY = (0.5f - driftPhase) * h * 0.025f
+
+                // Smooth seamless top gradient extending cleanly behind status bar & top action bar
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0.0f to blobColorTop.copy(alpha = if (palette.isDark) 0.11f else 0.08f),
+                        0.24f to blobColorBottom.copy(alpha = if (palette.isDark) 0.055f else 0.045f),
+                        0.56f to Color.Transparent,
+                        1.0f to Color.Transparent
                     )
+                )
 
-                    // Solid smooth morphing gradient blob peeking behind the card
-                    if (behindBlobAlpha > 0.02f) {
-                        rotate(degrees = blobRotation, pivot = Offset(cx, cy)) {
-                            drawOval(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        blobColorTop.copy(alpha = behindBlobAlpha),
-                                        blobColorBottom.copy(alpha = behindBlobAlpha)
-                                    ),
-                                    start = Offset(cx - rx * 0.5f, cy - ry * 0.5f),
-                                    end = Offset(cx + rx * 0.5f, cy + ry * 0.5f)
-                                ),
-                                topLeft = Offset(cx - rx * 0.5f, cy - ry * 0.5f),
-                                size = Size(rx, ry)
-                            )
+                // Wide unclipped soft radial aurora tracking the active auth page
+                val auraCx = w * (0.18f + blobCenterXFraction * 0.64f) + driftX
+                val auraCy = h * (0.24f + blobCenterYFraction * 0.48f) + driftY
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        0.0f to blobColorTop.copy(alpha = if (palette.isDark) 0.22f else 0.14f),
+                        0.36f to blobColorBottom.copy(alpha = if (palette.isDark) 0.11f else 0.075f),
+                        0.68f to palette.brandOrange.copy(alpha = if (palette.isDark) 0.04f else 0.025f),
+                        1.0f to Color.Transparent,
+                        center = Offset(auraCx, auraCy),
+                        radius = maxDim * 0.78f
+                    ),
+                    radius = maxDim * 0.78f,
+                    center = Offset(auraCx, auraCy)
+                )
+            }
+
+            // Full-screen scrollable host so behind-card Canvas glow is never clipped below the top bar
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = screenMinHeight)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(horizontal = 20.dp, vertical = 72.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Floating Glass Card + Smooth Feathered Behind-Card Glow Wrapper
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 440.dp)
+                            .padding(horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(
+                            modifier = Modifier.matchParentSize()
+                        ) {
+                            val w = size.width
+                            val h = size.height
+                            val driftX = (driftPhase - 0.5f) * 14f
+                            val driftY = (0.5f - driftPhase) * 12f
+                            val cx = w * blobCenterXFraction + driftX
+                            val cy = h * blobCenterYFraction + driftY
+                            val rx = w * blobWidthFraction
+                            val ry = h * blobHeightFraction
+
+                            // Soft feathered radial-gradient morphing aura behind card (no hard cut edges)
+                            if (behindBlobAlpha > 0.02f) {
+                                val effectiveAlpha = (behindBlobAlpha * 0.48f).coerceAtMost(0.45f)
+                                rotate(degrees = blobRotation, pivot = Offset(cx, cy)) {
+                                    drawOval(
+                                        brush = Brush.radialGradient(
+                                            0.0f to blobColorTop.copy(alpha = effectiveAlpha),
+                                            0.52f to blobColorBottom.copy(alpha = effectiveAlpha * 0.48f),
+                                            1.0f to Color.Transparent,
+                                            center = Offset(cx, cy),
+                                            radius = maxOf(rx, ry) * 0.62f
+                                        ),
+                                        topLeft = Offset(cx - rx * 0.5f, cy - ry * 0.5f),
+                                        size = Size(rx, ry)
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
 
                 // Main Rounded Glass Card matching internal GlassCard surface, specular border, and breathingGlow
                 val cardShape = RoundedCornerShape(28.dp)
@@ -560,7 +603,7 @@ fun AuthWelcomeScreen(
                                         isArabic = isArabic,
                                         palette = palette,
                                         isLoading = isLoading,
-                                        signedInState = signedInState,
+                                        savedAccount = resolvedSavedAccount,
                                         errorMessage = errorState?.message,
                                         onRegisterClick = { navigateTo(AuthPageMode.REGISTER) },
                                         onHaveAccountClick = { navigateTo(AuthPageMode.LOGIN) },
@@ -763,6 +806,7 @@ fun AuthWelcomeScreen(
                         }
                     }
                 }
+                }
             }
             }
 
@@ -770,6 +814,7 @@ fun AuthWelcomeScreen(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .fillMaxWidth()
                     .widthIn(max = 480.dp)
                     .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -893,7 +938,7 @@ private fun WelcomeCardContent(
     isArabic: Boolean,
     palette: AuthVisualPalette,
     isLoading: Boolean,
-    signedInState: GoogleAuthUiState.SignedIn?,
+    savedAccount: SavedAuthAccount?,
     errorMessage: String?,
     onRegisterClick: () -> Unit,
     onHaveAccountClick: () -> Unit,
@@ -934,18 +979,18 @@ private fun WelcomeCardContent(
             )
             Text(
                 text = "$APP_NAME !",
-                color = palette.accentCyan,
+                color = palette.brandOrange,
                 fontFamily = VaultixScriptFont,
                 fontSize = 31.sp
             )
         }
 
-        if (signedInState != null) {
+        if (savedAccount != null) {
             Spacer(modifier = Modifier.height(20.dp))
             SignedInQuickBanner(
                 isArabic = isArabic,
                 palette = palette,
-                signedInState = signedInState,
+                savedAccount = savedAccount,
                 onContinue = onContinueSignedInGoogle,
                 onSignOut = onGoogleSignOut
             )
@@ -1030,7 +1075,7 @@ private fun GuestModeCardContent(
     ) {
         Text(
             text = APP_NAME,
-            color = palette.accentCyan,
+            color = palette.brandOrange,
             fontFamily = VaultixScriptFont,
             fontSize = 31.sp,
             textAlign = TextAlign.Center,
@@ -1191,6 +1236,17 @@ private fun RegisterCardContent(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 28.dp)
     ) {
+        Text(
+            text = APP_NAME,
+            color = palette.brandOrange,
+            fontFamily = VaultixScriptFont,
+            fontSize = 31.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = if (isArabic) "إنشاء حساب" else "Register",
             color = palette.textPrimary,
@@ -1369,7 +1425,7 @@ private fun LoginCardContent(
     ) {
         Text(
             text = APP_NAME,
-            color = palette.accentCyan,
+            color = palette.brandOrange,
             fontFamily = VaultixScriptFont,
             fontSize = 31.sp,
             textAlign = TextAlign.Center,
@@ -1652,7 +1708,7 @@ private fun ForgotPasswordDialog(
 private fun SignedInQuickBanner(
     isArabic: Boolean,
     palette: AuthVisualPalette,
-    signedInState: GoogleAuthUiState.SignedIn,
+    savedAccount: SavedAuthAccount,
     onContinue: () -> Unit,
     onSignOut: () -> Unit
 ) {
@@ -1677,7 +1733,7 @@ private fun SignedInQuickBanner(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = signedInState.displayName.take(1).uppercase(),
+                    text = savedAccount.displayName.take(1).uppercase(),
                     color = palette.onAccentText,
                     fontFamily = VaultixRoundedFont,
                     fontSize = 14.sp,
@@ -1687,7 +1743,7 @@ private fun SignedInQuickBanner(
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = signedInState.displayName,
+                    text = savedAccount.displayName,
                     color = palette.textPrimary,
                     fontFamily = VaultixRoundedFont,
                     fontSize = 13.5.sp,
@@ -1695,9 +1751,9 @@ private fun SignedInQuickBanner(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (signedInState.email.isNotBlank()) {
+                if (savedAccount.email.isNotBlank()) {
                     Text(
-                        text = signedInState.email,
+                        text = savedAccount.email,
                         color = palette.textMuted,
                         fontFamily = VaultixRoundedFont,
                         fontSize = 11.5.sp,

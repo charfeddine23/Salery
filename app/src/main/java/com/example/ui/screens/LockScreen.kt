@@ -63,6 +63,8 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalAdaptiveTypography
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import com.example.ui.theme.RoseNeon
 
 @Composable
@@ -188,7 +190,7 @@ fun LockScreen(
                 // App Name (always Latin)
                 Text(
                     text = APP_NAME,
-                    color = colors.textPrimary,
+                    color = if (colors.isDark) VaultixBrandOrange else VaultixBrandOrangeLight,
                     fontSize = typo.headline,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.5.sp

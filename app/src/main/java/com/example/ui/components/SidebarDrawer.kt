@@ -73,6 +73,8 @@ import com.example.ui.theme.EmeraldNeon
 import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.RoseNeon
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import com.example.update.AppUpdateUiState
 
 @Composable
@@ -133,7 +135,7 @@ fun SidebarDrawer(
                     Spacer(modifier = Modifier.width(14.dp))
                     Text(
                         text = APP_NAME,
-                        color = colors.textPrimary,
+                        color = if (colors.isDark) VaultixBrandOrange else VaultixBrandOrangeLight,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.5.sp
@@ -448,34 +450,24 @@ fun SidebarDrawer(
                                     )
                                 }
                             }
-                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                             .testTag("drawer_developer_whatsapp_link"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Chat,
-                            contentDescription = null,
+                        WhatsAppLogoIcon(
                             tint = EmeraldNeon,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = isolateLtr(DEVELOPER_CONTACT_TITLE),
-                                color = EmeraldNeon,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = isolateLtr(DEVELOPER_CONTACT_URL),
-                                color = colors.textSecondary,
-                                fontSize = 10.5.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Text(
+                            text = isolateLtr(DEVELOPER_CONTACT_TITLE),
+                            color = EmeraldNeon,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = null,

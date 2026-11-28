@@ -104,6 +104,7 @@ import com.example.ui.components.GlassCard
 import com.example.ui.components.LiquidLanguageSegmentedControl
 import com.example.ui.components.LiquidThemeSegmentedControl
 import com.example.ui.components.VaultixLogoContainer
+import com.example.ui.components.WhatsAppLogoIcon
 import com.example.ui.components.edgeFadeVerticalContentPadding
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.i18n.APP_VERSION
@@ -122,6 +123,8 @@ import com.example.ui.theme.LocalAdaptiveDimens
 import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
 import com.example.ui.theme.ThemeEngineCatalog
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -485,9 +488,6 @@ fun AccountSettingsScreen(
             },
             onSignOutAndSwitchAccount = {
                 showSignOutDialog = false
-                if (signedIn != null) {
-                    onGoogleSignOut()
-                }
                 onSignOutToAuthScreen()
             },
             onRestoreFromCloud = {
@@ -2142,7 +2142,7 @@ fun DeveloperSettingsScreen(
 
                     Text(
                         text = APP_NAME,
-                        color = colors.textPrimary,
+                        color = if (colors.isDark) VaultixBrandOrange else VaultixBrandOrangeLight,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -2190,29 +2190,19 @@ fun DeveloperSettingsScreen(
                                 .background(EmeraldNeon.copy(alpha = 0.18f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Chat,
-                                contentDescription = null,
+                            WhatsAppLogoIcon(
                                 tint = EmeraldNeon,
-                                modifier = Modifier.size(21.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = isolateLtr(DEVELOPER_CONTACT_TITLE),
-                                color = EmeraldNeon,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = isolateLtr(DEVELOPER_CONTACT_URL),
-                                color = colors.textSecondary,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Text(
+                            text = isolateLtr(DEVELOPER_CONTACT_TITLE),
+                            color = EmeraldNeon,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                             contentDescription = if (isArabic) "فتح الرابط" else "Open link",

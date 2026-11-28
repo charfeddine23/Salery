@@ -78,6 +78,8 @@ import com.example.R
 import com.example.ui.components.GlassBackground
 import com.example.ui.i18n.APP_NAME
 import com.example.ui.theme.LiquidGlassTheme
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import com.example.ui.theme.breathingGlow
 import com.example.viewmodel.AuthTransitionKind
 import com.example.viewmodel.AuthTransitionState
@@ -147,6 +149,11 @@ fun AuthTransitionLuxuryScreen(
         animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
         label = "secondaryAccent"
     )
+    val brandOrange by animateColorAsState(
+        targetValue = if (isDark) VaultixBrandOrange else VaultixBrandOrangeLight,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "brandOrange"
+    )
     val cardBorderColor by animateColorAsState(
         targetValue = if (isCompleted) {
             appColors.successColor.copy(alpha = 0.55f)
@@ -213,6 +220,39 @@ fun AuthTransitionLuxuryScreen(
             .fillMaxSize()
             .testTag("auth_transition_luxury_screen")
     ) {
+        // Full-bleed edge-to-edge seamless atmospheric glow behind status bar & card
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val driftX = (driftPhase - 0.5f) * w * 0.03f
+            val driftY = (0.5f - driftPhase) * h * 0.025f
+            val maxDim = maxOf(w, h)
+
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0.0f to activeAccent.copy(alpha = if (isDark) 0.10f else 0.08f),
+                    0.28f to secondaryAccent.copy(alpha = if (isDark) 0.05f else 0.04f),
+                    0.62f to Color.Transparent,
+                    1.0f to Color.Transparent
+                )
+            )
+
+            val cx = w * (0.24f + blobCenterXFraction * 0.52f) + driftX
+            val cy = h * (0.30f + blobCenterYFraction * 0.36f) + driftY
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0.0f to activeAccent.copy(alpha = if (isDark) 0.20f else 0.14f),
+                    0.40f to secondaryAccent.copy(alpha = if (isDark) 0.10f else 0.07f),
+                    0.72f to brandOrange.copy(alpha = if (isDark) 0.04f else 0.025f),
+                    1.0f to Color.Transparent,
+                    center = Offset(cx, cy),
+                    radius = maxDim * 0.68f
+                ),
+                radius = maxDim * 0.68f,
+                center = Offset(cx, cy)
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -221,7 +261,7 @@ fun AuthTransitionLuxuryScreen(
                 .padding(horizontal = 24.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Centered card + behind-card morphing visual layer matching AuthWelcomeScreen
+            // Centered card + soft behind-card morphing glow matching AuthWelcomeScreen
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -239,28 +279,14 @@ fun AuthTransitionLuxuryScreen(
                     val rx = w * 0.56f
                     val ry = h * 0.44f
 
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                activeAccent.copy(alpha = if (isDark) 0.22f else 0.14f),
-                                Color.Transparent
-                            ),
-                            center = Offset(cx, cy),
-                            radius = maxOf(rx, ry) * 1.4f
-                        ),
-                        radius = maxOf(rx, ry) * 1.4f,
-                        center = Offset(cx, cy)
-                    )
-
                     rotate(degrees = blobRotation, pivot = Offset(cx, cy)) {
                         drawOval(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    activeAccent.copy(alpha = if (isDark) 0.42f else 0.30f),
-                                    secondaryAccent.copy(alpha = if (isDark) 0.36f else 0.24f)
-                                ),
-                                start = Offset(cx - rx * 0.5f, cy - ry * 0.5f),
-                                end = Offset(cx + rx * 0.5f, cy + ry * 0.5f)
+                            brush = Brush.radialGradient(
+                                0.0f to activeAccent.copy(alpha = if (isDark) 0.36f else 0.24f),
+                                0.55f to secondaryAccent.copy(alpha = if (isDark) 0.18f else 0.12f),
+                                1.0f to Color.Transparent,
+                                center = Offset(cx, cy),
+                                radius = maxOf(rx, ry) * 0.65f
                             ),
                             topLeft = Offset(cx - rx * 0.5f, cy - ry * 0.5f),
                             size = Size(rx, ry)
@@ -440,7 +466,7 @@ fun AuthTransitionLuxuryScreen(
                             // Clean brand whisper
                             Text(
                                 text = APP_NAME,
-                                color = activeAccent,
+                                color = brandOrange,
                                 fontFamily = TransitionScriptFont,
                                 fontSize = 26.sp
                             )

@@ -134,6 +134,8 @@ import com.example.ui.theme.LiquidGlassTheme
 import com.example.ui.theme.LocalBreathingGlowEnabled
 import com.example.ui.theme.LocalScreenshotProtection
 import com.example.ui.theme.RoseNeon
+import com.example.ui.theme.VaultixBrandOrange
+import com.example.ui.theme.VaultixBrandOrangeLight
 import com.example.viewmodel.AuthTransitionState
 import com.example.viewmodel.VaultixViewModel
 import kotlinx.coroutines.launch
@@ -159,6 +161,7 @@ fun MainAppScreen(
     val userSettings by viewModel.settings.collectAsState()
     val isAppLocked by viewModel.isAppLocked.collectAsState()
     val googleAuthState by viewModel.googleAuthState.collectAsState()
+    val savedAuthAccount by viewModel.savedAuthAccount.collectAsState()
     val authTransitionState by viewModel.authTransitionState.collectAsState()
 
     val isArabic = userSettings.language == "ar"
@@ -240,6 +243,7 @@ fun MainAppScreen(
                 isArabic = activeStrings is ArabicStrings,
                 isDarkTheme = isAuthDarkTheme,
                 googleAuthState = googleAuthState,
+                savedAccount = savedAuthAccount,
                 onToggleLanguage = { lang -> viewModel.setLanguage(lang) },
                 onToggleTheme = {
                     viewModel.setThemeMode(if (isAuthDarkTheme) "LIGHT" else "DARK")
@@ -256,7 +260,7 @@ fun MainAppScreen(
                 },
                 onClearAuthError = { viewModel.clearAuthError() },
                 onContinueSignedInGoogle = { viewModel.continueWithSignedInGoogleAccount() },
-                onGoogleSignOut = { viewModel.signOutGoogleAccount(context) },
+                onGoogleSignOut = { viewModel.signOutGoogleAccount(context, clearQuickResume = true) },
                 onCreateGuestAccount = { guestUsername ->
                     viewModel.activateLocalAccount(username = guestUsername)
                 }
@@ -1319,9 +1323,14 @@ fun MainTopAppBar(
             Spacer(modifier = Modifier.width(dimens.spacingSm + 2.dp))
 
             // Screen Title (weighted + ellipsis so it never overlaps right-side action buttons)
+            val resolvedTitleColor = if (title == APP_NAME) {
+                if (colors.isDark) VaultixBrandOrange else VaultixBrandOrangeLight
+            } else {
+                colors.textPrimary
+            }
             Text(
                 text = title,
-                color = colors.textPrimary,
+                color = resolvedTitleColor,
                 fontSize = typo.title,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.2.sp,

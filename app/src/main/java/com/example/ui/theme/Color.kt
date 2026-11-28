@@ -30,6 +30,10 @@ val EmeraldNeon = Color(0xFF00E676)
 val AmberNeon = Color(0xFFFFAB00)
 val RoseNeon = Color(0xFFFF1744)
 
+// Brand Logo Accent (matches the vibrant orange "X" in vaultix_brand_logo.png)
+val VaultixBrandOrange = Color(0xFFFF9500)
+val VaultixBrandOrangeLight = Color(0xFFE66A00)
+
 // Quick Action Refined Palette
 val IncomeBtnGradient = Brush.horizontalGradient(
     colors = listOf(Color(0xFF059669), Color(0xFF10B981))

@@ -163,6 +163,13 @@ sealed interface AuthTransitionState {
     ) : AuthTransitionState
 }
 
+data class SavedAuthAccount(
+    val displayName: String,
+    val email: String = "",
+    val photoUrl: String? = null,
+    val isCloudLinked: Boolean = false
+)
+
 internal fun buildTransactionDedupeKey(
     typeName: String,
     amount: Double,
@@ -484,6 +491,87 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     private val _googleAuthState = MutableStateFlow<GoogleAuthUiState>(GoogleAuthUiState.SignedOut)
     val googleAuthState: StateFlow<GoogleAuthUiState> = _googleAuthState.asStateFlow()
+
+    private val _savedQuickAccountActive = MutableStateFlow(
+        cloudPrefs.getBoolean("saved_quick_account_active", false)
+    )
+    private val _savedQuickAccountName = MutableStateFlow(
+        cloudPrefs.getString("saved_quick_account_name", "").orEmpty()
+    )
+    private val _savedQuickAccountEmail = MutableStateFlow(
+        cloudPrefs.getString("saved_quick_account_email", "").orEmpty()
+    )
+
+    val savedAuthAccount: StateFlow<SavedAuthAccount?> = combine(
+        googleAuthState,
+        settings,
+        _savedQuickAccountActive,
+        _savedQuickAccountName,
+        _savedQuickAccountEmail
+    ) { googleState, userSettings, quickActive, quickName, quickEmail ->
+        when (googleState) {
+            is GoogleAuthUiState.SignedIn -> {
+                val fullLocalName = listOf(userSettings.firstName, userSettings.lastName)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .ifBlank { userSettings.localUsername }
+                SavedAuthAccount(
+                    displayName = googleState.displayName.ifBlank { fullLocalName },
+                    email = googleState.email,
+                    photoUrl = googleState.photoUrl,
+                    isCloudLinked = true
+                )
+            }
+            else -> {
+                if (!quickActive) {
+                    null
+                } else {
+                    val settingsName = listOf(userSettings.firstName, userSettings.lastName)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
+                        .ifBlank { userSettings.localUsername }
+                    val resolvedName = quickName.ifBlank { settingsName }
+                        .ifBlank { quickEmail.substringBefore('@') }
+                    if (resolvedName.isBlank()) {
+                        null
+                    } else {
+                        SavedAuthAccount(
+                            displayName = resolvedName,
+                            email = quickEmail,
+                            photoUrl = null,
+                            isCloudLinked = false
+                        )
+                    }
+                }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private fun persistSavedQuickAccount(displayName: String, email: String = "") {
+        val cleanName = displayName.trim()
+        val cleanEmail = email.trim()
+        if (cleanName.isBlank() && cleanEmail.isBlank()) return
+        val resolvedName = cleanName.ifBlank { cleanEmail.substringBefore('@') }
+        _savedQuickAccountName.value = resolvedName
+        _savedQuickAccountEmail.value = cleanEmail
+        _savedQuickAccountActive.value = true
+        cloudPrefs.edit()
+            .putBoolean("saved_quick_account_active", true)
+            .putString("saved_quick_account_name", resolvedName)
+            .putString("saved_quick_account_email", cleanEmail)
+            .apply()
+    }
+
+    private fun clearSavedQuickAccount() {
+        _savedQuickAccountActive.value = false
+        _savedQuickAccountName.value = ""
+        _savedQuickAccountEmail.value = ""
+        cloudPrefs.edit()
+            .putBoolean("saved_quick_account_active", false)
+            .remove("saved_quick_account_name")
+            .remove("saved_quick_account_email")
+            .apply()
+    }
 
     private val _authTransitionState = MutableStateFlow<AuthTransitionState>(AuthTransitionState.None)
     val authTransitionState: StateFlow<AuthTransitionState> = _authTransitionState.asStateFlow()
@@ -2223,6 +2311,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 displayName = cleanUsername
             )
         }
+        val savedName = cleanUsername.ifEmpty { settings.value.localUsername }
+        if (savedName.isNotBlank()) {
+            persistSavedQuickAccount(displayName = savedName)
+        }
         prefsManager.updateSettings {
             val isDefaultClassic = it.classicCardHolderName.isBlank() ||
                 it.classicCardHolderName.equals("CARDHOLDER", ignoreCase = true) ||
@@ -2245,6 +2337,32 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
 
     fun signOutToAuthScreen() {
         clearAuthTransition()
+        val currentSettings = settings.value
+        val activeUser = runCatching { firebaseAuth?.currentUser }.getOrNull()
+        if (activeUser != null) {
+            updateGoogleAuthFromFirebaseUser(activeUser)
+            val resolvedName = listOf(currentSettings.firstName, currentSettings.lastName)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { currentSettings.localUsername }
+                .ifBlank { activeUser.displayName?.trim().orEmpty() }
+                .ifBlank { activeUser.email?.substringBefore('@').orEmpty() }
+            persistSavedQuickAccount(
+                displayName = resolvedName,
+                email = activeUser.email.orEmpty()
+            )
+        } else {
+            val localDisplayName = listOf(currentSettings.firstName, currentSettings.lastName)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { currentSettings.localUsername }
+            if (localDisplayName.isNotBlank()) {
+                persistSavedQuickAccount(
+                    displayName = localDisplayName,
+                    email = _savedQuickAccountEmail.value
+                )
+            }
+        }
         prefsManager.updateSettings {
             it.copy(hasLocalAccount = false)
         }
@@ -2294,6 +2412,12 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
                 .ifBlank { cleanUser }
 
             val user = firebaseAuth?.currentUser
+            if (fullDisplayName.isNotBlank()) {
+                persistSavedQuickAccount(
+                    displayName = fullDisplayName,
+                    email = user?.email.orEmpty().ifBlank { _savedQuickAccountEmail.value }
+                )
+            }
             if (user != null) {
                 if (fullDisplayName.isNotBlank()) {
                     runCatching {
@@ -2548,21 +2672,28 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun attemptSilentGoogleSignIn(context: Context) {
-        if (silentGoogleSignInAttempted) return
-        silentGoogleSignInAttempted = true
         viewModelScope.launch {
+            val auth = withContext(Dispatchers.IO) {
+                runCatching { firebaseAuth }.getOrNull()
+            }
+            val currentUser = auth?.currentUser
+            if (currentUser != null) {
+                updateGoogleAuthFromFirebaseUser(currentUser)
+                val resolvedName = currentUser.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: currentUser.email?.substringBefore('@')?.trim().orEmpty()
+                persistSavedQuickAccount(
+                    displayName = resolvedName,
+                    email = currentUser.email.orEmpty()
+                )
+                return@launch
+            }
+            if (silentGoogleSignInAttempted) return@launch
+            silentGoogleSignInAttempted = true
             delay(500L)
             val explicitSignedOut = withContext(Dispatchers.IO) {
                 cloudPrefs.getBoolean("google_explicit_signed_out", false)
             }
-            if (explicitSignedOut) return@launch
-            val auth = withContext(Dispatchers.IO) {
-                runCatching { firebaseAuth }.getOrNull()
-            } ?: return@launch
-            if (auth.currentUser != null) {
-                updateGoogleAuthFromFirebaseUser(auth.currentUser)
-                return@launch
-            }
+            if (explicitSignedOut || auth == null) return@launch
             GoogleAuthHelper.attemptAutoSignIn(
                 context = context,
                 scope = viewModelScope,
@@ -2785,6 +2916,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     ) {
         val fullName = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ")
         val resolvedHolder = (fullName.ifBlank { username }).uppercase()
+        persistSavedQuickAccount(
+            displayName = fullName.ifBlank { username },
+            email = user.email.orEmpty()
+        )
         prefsManager.updateSettings { current ->
             val isDefaultClassic = current.classicCardHolderName.isBlank() ||
                 current.classicCardHolderName.equals("CARDHOLDER", ignoreCase = true)
@@ -2805,16 +2940,28 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun continueWithSignedInGoogleAccount() {
-        val user = firebaseAuth?.currentUser ?: return
-        val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
-            ?: user.email?.substringBefore('@')?.trim().orEmpty()
+        val user = firebaseAuth?.currentUser
+        if (user != null) {
+            val resolvedName = user.displayName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: user.email?.substringBefore('@')?.trim().orEmpty()
+            triggerAuthSuccessTransition(
+                kind = AuthTransitionKind.SIGN_IN,
+                displayName = resolvedName
+            )
+            activateGoogleConnectedAccount(user)
+            viewModelScope.launch {
+                syncAfterGoogleSignIn(user, showFeedback = false)
+            }
+            return
+        }
+
+        val saved = savedAuthAccount.value ?: return
         triggerAuthSuccessTransition(
             kind = AuthTransitionKind.SIGN_IN,
-            displayName = resolvedName
+            displayName = saved.displayName
         )
-        activateGoogleConnectedAccount(user)
-        viewModelScope.launch {
-            syncAfterGoogleSignIn(user, showFeedback = false)
+        prefsManager.updateSettings { current ->
+            current.copy(hasLocalAccount = true)
         }
     }
 
@@ -2824,6 +2971,10 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         val googleLast = googleFullName.substringAfter(' ', "").trim()
         val googleName = googleFullName.takeIf { it.isNotEmpty() }
             ?: user.email?.substringBefore('@')?.trim().orEmpty()
+        persistSavedQuickAccount(
+            displayName = googleName,
+            email = user.email.orEmpty()
+        )
         prefsManager.updateSettings { current ->
             val resolvedFirst = current.firstName.ifBlank { googleFirst }
             val resolvedLast = current.lastName.ifBlank { googleLast }
@@ -2846,8 +2997,27 @@ class VaultixViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun signOutGoogleAccount(context: Context) {
+    fun signOutGoogleAccount(
+        context: Context,
+        clearQuickResume: Boolean = false
+    ) {
         val isAr = settings.value.language == "ar"
+        if (clearQuickResume) {
+            clearSavedQuickAccount()
+        }
+        val hadCloudUser = runCatching { firebaseAuth?.currentUser != null }.getOrDefault(false)
+        if (!hadCloudUser) {
+            _googleAuthState.value = GoogleAuthUiState.SignedOut
+            if (clearQuickResume) {
+                viewModelScope.launch {
+                    _toastEvent.emit(
+                        if (isAr) "تمت إزالة الحساب من شاشة الدخول • بياناتك المحلية محفوظة"
+                        else "Account removed from quick login • Local vault stays safe"
+                    )
+                }
+            }
+            return
+        }
         cloudPrefs.edit().putBoolean("google_explicit_signed_out", true).apply()
         GoogleAuthHelper.signOut(
             context = context,

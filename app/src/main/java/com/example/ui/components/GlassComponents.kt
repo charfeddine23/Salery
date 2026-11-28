@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,9 +36,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
@@ -665,5 +671,61 @@ fun GlassPill(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/**
+ * Simple minimalist WhatsApp-inspired speech bubble with handset silhouette.
+ */
+@Composable
+fun WhatsAppLogoIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = LiquidGlassTheme.colors.successColor
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = (minOf(w, h) * 0.11f).coerceAtLeast(1.6f)
+        val radius = minOf(w, h) * 0.40f
+        val cx = w * 0.52f
+        val cy = h * 0.48f
+
+        // Speech bubble ring with subtle opening toward bottom-left tail
+        drawArc(
+            color = tint,
+            startAngle = 148f,
+            sweepAngle = 326f,
+            useCenter = false,
+            topLeft = Offset(cx - radius, cy - radius),
+            size = Size(radius * 2f, radius * 2f),
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        // Bottom-left speech tail
+        val tailPath = Path().apply {
+            moveTo(cx - radius * 0.85f, cy + radius * 0.53f)
+            lineTo(w * 0.10f, h * 0.88f)
+            lineTo(cx - radius * 0.45f, cy + radius * 0.89f)
+        }
+        drawPath(
+            path = tailPath,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        // Minimalist phone handset curve inside the bubble
+        val phonePath = Path().apply {
+            moveTo(cx - radius * 0.34f, cy - radius * 0.36f)
+            cubicTo(
+                cx - radius * 0.42f, cy + radius * 0.04f,
+                cx - radius * 0.06f, cy + radius * 0.40f,
+                cx + radius * 0.36f, cy + radius * 0.34f
+            )
+        }
+        drawPath(
+            path = phonePath,
+            color = tint,
+            style = Stroke(width = stroke * 1.15f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
     }
 }
